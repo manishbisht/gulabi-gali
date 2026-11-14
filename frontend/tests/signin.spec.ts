@@ -6,7 +6,7 @@ test('signs in by name against the dev login and keeps the token for the tab', a
   await page.getByRole('button', { name: 'Dikhna hai? Login karo' }).click()
   await page.getByLabel('Aapka naam').fill('Asha')
   await page.getByRole('button', { name: 'Andar aao' }).click()
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByRole('dialog', { name: 'Gali mein apni jagah banao' })).toBeHidden()
   await expect(page.getByRole('button', { name: 'Dikhna hai? Login karo' })).toBeHidden()
   expect(await page.evaluate(() => sessionStorage.getItem('gg-dev-token'))).toBeTruthy()
 })

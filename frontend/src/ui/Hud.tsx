@@ -14,14 +14,28 @@ interface Props {
   stamps: string
   lang: Lang
   onLang: (l: Lang) => void
-  /** Present only when the visitor is signed out and sign-in exists. */
-  onSignIn?: () => void
+  /** The visibility chip; present only when sign-in exists. */
+  visibility?: ReactNode
+  /** Present only when a user is signed in. */
+  onProfile?: () => void
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
 }
 
-export function Hud({ place, snapshot, line, banner, stamps, lang, onLang, onSignIn, top, bottom }: Props) {
+export function Hud({
+  place,
+  snapshot,
+  line,
+  banner,
+  stamps,
+  lang,
+  onLang,
+  visibility,
+  onProfile,
+  top,
+  bottom,
+}: Props) {
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
@@ -40,10 +54,15 @@ export function Hud({ place, snapshot, line, banner, stamps, lang, onLang, onSig
           {t('langToggle', lang)}
         </button>
       </div>
-      {onSignIn && (
-        <button type="button" className="sign-in-button" onClick={onSignIn}>
-          {t('signInButton', lang)}
-        </button>
+      {(visibility || onProfile) && (
+        <div className="hud-identity">
+          {visibility}
+          {onProfile && (
+            <button type="button" className="hud-chip profile-button" onClick={onProfile}>
+              {t('profileOpen', lang)}
+            </button>
+          )}
+        </div>
       )}
       {line && <p className="city-line">{line}</p>}
       {banner && (

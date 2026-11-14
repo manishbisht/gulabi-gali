@@ -1,0 +1,193 @@
+import { useState, type FormEvent } from 'react'
+import { t, type Lang, type StringKey } from '../i18n/strings'
+import type { ProfileInput } from '../net/api'
+import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
+import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
+import type { AvatarLook } from '../world/types'
+import { AvatarBuilder } from './AvatarBuilder'
+import { areaLabel, HOME_AREAS } from './homeAreas'
+import { LIMITS } from './limits'
+import type { SaveOutcome } from './useMe'
+
+const HERE_FOR_LABEL: Record<HereFor, StringKey> = {
+  friends: 'hereForFriends',
+  study: 'hereForStudy',
+  work: 'hereForWork',
+  art: 'hereForArt',
+}
+
+const count = (s: string) => [...s].length
+
+interface Props {
+  me: Me
+  lang: Lang
+  onSave: (p: ProfileInput) => Promise<SaveOutcome>
+  onClose: () => void
+  onSignOut: () => void
+}
+
+export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
+  const p = me.profile
+  const [name, setName] = useState(p?.name ?? '')
+  const [look, setLook] = useState<AvatarLook>(() => (p && lookFromWire(p.look)) || loadOrCreateLook())
+  const [area, setArea] = useState<HomeArea | ''>(p?.homeArea ?? '')
+  const [status, setStatus] = useState(p?.status ?? '')
+  const [hereFor, setHereFor] = useState<HereFor | null>(p?.hereFor ?? null)
+  const [about, setAbout] = useState(p?.about ?? '')
+  const [adult, setAdult] = useState(me.complete)
+  const [pledge, setPledge] = useState(me.complete)
+  const [busy, setBusy] = useState(false)
+  const [bad, setBad] = useState<string[]>([])
+  const [failed, setFailed] = useState(false)
+
+  const trimmed = name.trim()
+  const nameOk = count(trimmed) >= LIMITS.name.min && count(trimmed) <= LIMITS.name.max
+  const lengthsOk = count(status.trim()) <= LIMITS.status && count(about.trim()) <= LIMITS.about
+  const ready = nameOk && lengthsOk && area !== '' && adult && pledge && !busy
+
+  /** Editing a field clears the server's complaint about it. */
+  const edit =
+    <T,>(field: string, set: (v: T) => void) =>
+    (v: T) => {
+      setBad((b) => b.filter((f) => f !== field))
+      set(v)
+    }
+  const invalid = (field: string) => (bad.includes(field) ? true : undefined)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!ready) return
+    setBusy(true)
+    setFailed(false)
+    const result = await onSave({
+      name: trimmed,
+      look: lookToWire(look),
+      status: status.trim(),
+      homeArea: area,
+      hereFor,
+      about: about.trim(),
+      link: null,
+      adult,
+      pledge,
+      pauseRequests: p?.pauseRequests ?? false,
+    })
+    setBusy(false)
+    if (result.ok) return onClose()
+    setBad(result.fields)
+    setFailed(result.fields.length === 0)
+  }
+
+  return (
+    <div className="auth-scrim">
+      <section
+        className="auth-sheet profile-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('profileTitle', lang)}
+      >
+        <h2>{t('profileTitle', lang)}</h2>
+        <form className="auth-form" onSubmit={submit}>
+          <label>
+            {t('profileName', lang)}
+            <input
+              data-field="name"
+              value={name}
+              autoComplete="off"
+              aria-invalid={invalid('name')}
+              onChange={(e) => edit('name', setName)(e.target.value)}
+            />
+            <small>
+              {count(name)}/{LIMITS.name.max}
+            </small>
+          </label>
+          <AvatarBuilder look={look} lang={lang} onChange={setLook} />
+          <label>
+            {t('profileArea', lang)}
+            <select
+              data-field="homeArea"
+              value={area}
+              aria-invalid={invalid('homeArea')}
+              onChange={(e) => edit('homeArea', setArea)(e.target.value as HomeArea | '')}
+            >
+              <option value="">{t('profileAreaPick', lang)}</option>
+              {HOME_AREAS.map((a) => (
+                <option key={a} value={a}>
+                  {areaLabel(a, lang)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {t('profileStatus', lang)}
+            <input
+              data-field="status"
+              value={status}
+              placeholder={t('profileStatusHint', lang)}
+              aria-invalid={invalid('status')}
+              onChange={(e) => edit('status', setStatus)(e.target.value)}
+            />
+            <small>
+              {count(status)}/{LIMITS.status}
+            </small>
+          </label>
+          <div className="pick-row" role="group" aria-label={t('profileHereFor', lang)}>
+            <span>{t('profileHereFor', lang)}</span>
+            {HERE_FOR.map((h) => (
+              <button
+                key={h}
+                type="button"
+                className="pick pick-text"
+                aria-pressed={hereFor === h}
+                onClick={() => setHereFor(hereFor === h ? null : h)}
+              >
+                {t(HERE_FOR_LABEL[h], lang)}
+              </button>
+            ))}
+          </div>
+          <label>
+            {t('profileAbout', lang)}
+            <textarea
+              data-field="about"
+              rows={3}
+              value={about}
+              aria-invalid={invalid('about')}
+              onChange={(e) => edit('about', setAbout)(e.target.value)}
+            />
+            <small>
+              {count(about)}/{LIMITS.about}
+            </small>
+          </label>
+          <label className="check">
+            <input
+              data-field="adult"
+              type="checkbox"
+              checked={adult}
+              onChange={(e) => setAdult(e.target.checked)}
+            />
+            {t('profileAdult', lang)}
+          </label>
+          <label className="check">
+            <input
+              data-field="pledge"
+              type="checkbox"
+              checked={pledge}
+              onChange={(e) => setPledge(e.target.checked)}
+            />
+            {t('profilePledge', lang)}
+          </label>
+          {bad.length > 0 && <p role="alert">{t('profileFieldsFailed', lang)}</p>}
+          {failed && <p role="alert">{t('profileSaveFailed', lang)}</p>}
+          <button type="submit" disabled={!ready}>
+            {t(busy ? 'profileSaving' : 'profileSave', lang)}
+          </button>
+        </form>
+        <button type="button" className="auth-close" onClick={onClose}>
+          {t('profileNotNow', lang)}
+        </button>
+        <button type="button" className="auth-close" onClick={onSignOut}>
+          {t('profileSignOut', lang)}
+        </button>
+      </section>
+    </div>
+  )
+}

@@ -1,0 +1,103 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { lookFromWire, lookToWire } from '../player/avatar'
+import type { AvatarLook } from '../world/types'
+import { ProfileSheet } from './ProfileSheet'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+let root: Root
+let host: HTMLElement
+beforeEach(() => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+})
+afterEach(async () => {
+  await act(async () => root.unmount())
+  host.remove()
+})
+
+const save = () => host.querySelector('button[type="submit"]') as HTMLButtonElement
+const field = (name: string) => host.querySelector(`[data-field="${name}"]`) as HTMLElement
+
+async function type(el: HTMLElement, value: string) {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+const click = (el: HTMLElement) => act(async () => el.click())
+
+type Save = Parameters<typeof ProfileSheet>[0]['onSave']
+async function mount(onSave: Save = vi.fn(async () => ({ ok: true }) as const)) {
+  await act(async () =>
+    root.render(
+      <ProfileSheet
+        me={{ id: 'u', profile: null, complete: false }}
+        lang="en"
+        onSave={onSave}
+        onClose={() => {}}
+        onSignOut={() => {}}
+      />,
+    ),
+  )
+  return onSave
+}
+
+it('save is disabled until required fields and both checkboxes', async () => {
+  await mount()
+  expect(save().disabled).toBe(true)
+  await type(field('name'), 'Asha')
+  expect(save().disabled).toBe(true)
+  const area = field('homeArea') as HTMLSelectElement
+  await act(async () => {
+    area.value = 'Raja Park'
+    area.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  expect(save().disabled).toBe(true)
+  await click(field('adult'))
+  expect(save().disabled).toBe(true)
+  await click(field('pledge'))
+  expect(save().disabled).toBe(false)
+  await click(field('adult'))
+  expect(save().disabled).toBe(true)
+})
+
+it('server field errors highlight those fields', async () => {
+  const onSave = vi.fn<Save>(async () => ({ ok: false, fields: ['name', 'about'] }))
+  await mount(onSave)
+  await type(field('name'), 'Asha')
+  const area = field('homeArea') as HTMLSelectElement
+  await act(async () => {
+    area.value = 'Raja Park'
+    area.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await click(field('adult'))
+  await click(field('pledge'))
+  await act(async () => save().click())
+  expect(onSave).toHaveBeenCalledOnce()
+  expect(field('name').getAttribute('aria-invalid')).toBe('true')
+  expect(field('about').getAttribute('aria-invalid')).toBe('true')
+  expect(field('status').getAttribute('aria-invalid')).not.toBe('true')
+  await type(field('name'), 'Asha K')
+  expect(field('name').getAttribute('aria-invalid')).not.toBe('true')
+})
+
+it('counters use the server limits', async () => {
+  await mount()
+  expect(host.textContent).toContain('0/24')
+  expect(host.textContent).toContain('0/80')
+  expect(host.textContent).toContain('0/200')
+})
+
+it('look round-trips wire format', () => {
+  const look: AvatarLook = { skin: 3, outfit: 'teal', head: 'safa' }
+  const wire = lookToWire(look)
+  expect(wire).toEqual({ skin: 3, outfit: 'teal', head: 'safa' })
+  expect(lookFromWire(wire)).toEqual(look)
+  expect(lookFromWire({ skin: 9, outfit: 'nope', head: 'x' } as never)).toBeNull()
+})

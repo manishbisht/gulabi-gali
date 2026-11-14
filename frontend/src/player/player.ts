@@ -21,7 +21,7 @@ interface Options {
 
 /** Owns the avatar and the chase camera: input, then collision, then avatar and camera. */
 export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
-  const avatar = buildAvatar(look)
+  let avatar = buildAvatar(look)
   scene.add(avatar)
   const follow = createFollowCamera(camera, occluders)
   const fwd = new THREE.Vector3()
@@ -38,6 +38,15 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     teleport(x: number, z: number) {
       pos = { x, z }
       sync(1) // dt of 1 s: the camera is effectively there too
+    },
+    /** Swaps the body for another look, standing where the old one did. */
+    setLook(next: AvatarLook) {
+      const old = avatar
+      avatar = buildAvatar(next)
+      avatar.position.copy(old.position)
+      avatar.rotation.copy(old.rotation)
+      scene.remove(old) // shared geometry and material: nothing to dispose
+      scene.add(avatar)
     },
     update(dt: number) {
       const input = controls.move()

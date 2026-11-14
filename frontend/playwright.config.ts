@@ -15,7 +15,8 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   webServer: [
     {
-      command: `npm run dev -w backend -- ${DEV_AUTH.worker}`,
+      // The local D1 needs its tables before /api/me can answer; applying them again is a no-op.
+      command: `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend && npm run dev -w backend -- ${DEV_AUTH.worker}`,
       cwd: '..',
       url: 'http://127.0.0.1:8787/health',
       reuseExistingServer: !process.env.CI,

@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
 import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
+import { ProfileSheet } from './profile/ProfileSheet'
+import { useMe } from './profile/useMe'
+import { VisibilityChip } from './ui/VisibilityChip'
+import { lookFromWire } from './player/avatar'
 import { useLang } from './i18n/lang'
 import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
@@ -64,6 +68,18 @@ export default function App() {
     trackStation,
     bind: bindTravel,
   } = useTravel()
+  const { me, save } = useMe()
+  /** The look the profile gives the player; read by the session whenever a district opens. */
+  const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
+  const profileLookRef = useRef(profileLook)
+  /** The sheet opens by itself for an incomplete profile until the visitor says "not now". */
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const profileShown = !!me && (profileOpen || (!me.complete && !dismissed))
+  const closeProfile = () => {
+    setProfileOpen(false)
+    setDismissed(true)
+  }
   const bubbleHost = useRef<HTMLDivElement>(null)
   const langRef = useRef(lang)
   useEffect(() => {
@@ -73,6 +89,12 @@ export default function App() {
   /** The city session, while the stage is up; it re-paints the sky when a new snapshot lands. */
   const session = useRef<CitySession | null>(null)
   useEffect(() => session.current?.repaint(), [snapshot])
+  const lookKey = profileLook && `${profileLook.skin}|${profileLook.outfit}|${profileLook.head}`
+  useEffect(() => {
+    profileLookRef.current = profileLook
+    if (profileLook) session.current?.setLook(profileLook)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the look's value, not its identity
+  }, [lookKey])
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
 
@@ -101,6 +123,7 @@ export default function App() {
         trackStation,
         npcCard: { step: stepNpc, tap: tapNpc, close: closeNpc, isOpen: npcOpen },
         live: { current, now, patch, freeze },
+        look: () => profileLookRef.current,
         festival: () => override ?? current().festival,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
@@ -136,6 +159,23 @@ export default function App() {
     override,
   ])
 
+  const visibility =
+    auth.mode === 'none' || !auth.ready ? undefined : !auth.signedIn ? (
+      <VisibilityChip
+        state="ghost"
+        lang={lang}
+        cta={{ label: t('signInButton', lang), onClick: auth.openSignIn }}
+      />
+    ) : me?.complete ? (
+      <VisibilityChip state="resident" lang={lang} />
+    ) : me ? (
+      <VisibilityChip
+        state="ghost"
+        lang={lang}
+        cta={{ label: t('visibilityFinish', lang), onClick: () => setProfileOpen(true) }}
+      />
+    ) : undefined
+
   if (!webgl || stageFailed) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
   return (
@@ -152,7 +192,8 @@ export default function App() {
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
-        onSignIn={auth.mode !== 'none' && auth.ready && !auth.signedIn ? auth.openSignIn : undefined}
+        visibility={visibility}
+        onProfile={auth.signedIn && me ? () => setProfileOpen(true) : undefined}
         top={
           <>
             {toast && (
@@ -190,6 +231,19 @@ export default function App() {
           </>
         }
       />
+      {profileShown && me && (
+        <ProfileSheet
+          me={me}
+          lang={lang}
+          onSave={save}
+          onClose={closeProfile}
+          onSignOut={() => {
+            setDismissed(false)
+            setProfileOpen(false)
+            void auth.signOut()
+          }}
+        />
+      )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
     </>
   )

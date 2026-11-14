@@ -13,7 +13,7 @@ import { installTestHooks } from '../testHooks'
 import { loadDistrict, type District } from './district'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
-import type { DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
+import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
 const SKY = '#BFD6DE'
@@ -53,6 +53,8 @@ export interface SessionHooks {
   live: Pick<LiveCity, 'current' | 'now' | 'patch' | 'freeze'>
   /** The festival in effect. */
   festival(): FestivalId | null
+  /** The look the player wears, when the profile has one; otherwise the visitor's own saved look. */
+  look?(): AvatarLook | null
   /** The place label: the district just entered, or null when the first one could not be opened. */
   place(def: DistrictDef | null): void
 }
@@ -72,6 +74,8 @@ export interface CitySession {
   /** The district the player is in, once one has loaded. */
   district(): District | null
   player(): Player | null
+  /** Swaps the player's avatar now, in the district it is in; later districts use `hooks.look`. */
+  setLook(look: AvatarLook): void
   /**
    * Loads `id`, then (only once it is in) leaves the current district for it, standing the player at its
    * station. If it cannot be loaded, the current district carries on and this rejects.
@@ -135,7 +139,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       scene: stage.scene,
       camera: stage.camera,
       controls,
-      look: loadOrCreateLook(),
+      look: hooks.look?.() ?? loadOrCreateLook(),
       colliders: district.colliders,
       occluders: district.occluders,
     })
@@ -190,6 +194,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
   return {
     district: () => here?.district ?? null,
     player: () => here?.player ?? null,
+    setLook: (look) => here?.player.setLook(look),
     travelTo: (id) => enter(id, 'station'),
     onEnter(cb) {
       entered = [...entered, cb]

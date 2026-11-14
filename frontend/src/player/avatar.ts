@@ -2,11 +2,12 @@ import * as THREE from 'three'
 import { storage } from '../storage'
 import { bakeHex, merge } from '../world/kit/parts'
 import { PALETTE, type PaletteKey } from '../world/palette'
+import type { AvatarLookWire } from '../net/protocol'
 import type { AvatarLook } from '../world/types'
 
-const SKINS = ['#F1C9A5', '#D9A877', '#B98055', '#8D5A3B', '#5E3A26'] as const
-const HEADS: AvatarLook['head'][] = ['none', 'safa', 'cap', 'dupatta', 'bun']
-const OUTFITS = Object.keys(PALETTE) as PaletteKey[]
+export const SKINS = ['#F1C9A5', '#D9A877', '#B98055', '#8D5A3B', '#5E3A26'] as const
+export const HEADS: AvatarLook['head'][] = ['none', 'safa', 'cap', 'dupatta', 'bun']
+export const OUTFITS = Object.keys(PALETTE) as PaletteKey[]
 const LOOK_KEY = 'gg-look'
 
 const pick = <T>(items: readonly T[], rand: () => number): T =>
@@ -31,6 +32,18 @@ function isLook(v: unknown): v is AvatarLook {
     l.outfit in PALETTE &&
     HEADS.includes(l.head as AvatarLook['head'])
   )
+}
+
+export const lookToWire = (look: AvatarLook): AvatarLookWire => ({
+  skin: look.skin,
+  outfit: look.outfit,
+  head: look.head,
+})
+
+/** A look from the server, or null when it is not one this build can draw. */
+export function lookFromWire(wire: AvatarLookWire): AvatarLook | null {
+  const look = { skin: wire.skin, outfit: wire.outfit, head: wire.head }
+  return isLook(look) ? look : null
 }
 
 /** Every visitor gets a random look on first visit and keeps it. */
