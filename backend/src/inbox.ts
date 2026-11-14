@@ -52,7 +52,7 @@ export async function openInbox(request: Request, env: Env): Promise<Response> {
   const user = await resolveUser(new Request(request.url, { headers }), env)
   if (!user || !(await loadResident(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
   return inboxOf(env, user.id).fetch('https://inbox.internal/', {
-    headers: { Upgrade: 'websocket', [WHO_HEADER]: user.id },
+    headers: { Upgrade: 'websocket', [WHO_HEADER]: encodeURIComponent(user.id) },
   })
 }
 

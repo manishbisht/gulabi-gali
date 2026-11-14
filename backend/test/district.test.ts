@@ -2,7 +2,7 @@ import { applyD1Migrations, env, evictDurableObject, runInDurableObject, SELF } 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'
-import { BENCH_POSITIONS, BENCHES, DISTRICT_IDS } from '../src/district'
+import { BENCH_POSITIONS, BENCHES, DISTRICT_IDS, LANES, readWho, whoHeader, type Who } from '../src/district'
 import { closeAll, live, login, openLive, resident, WAIT } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -62,6 +62,30 @@ describe('the live route', () => {
     await watcher.sync()
     expect(watcher.all('join').map((m) => m.p.id)).not.toContain('dev:mallory')
     ws.close(1000)
+  })
+
+  it('X-GG-Who is plain ASCII, and any name survives the trip', () => {
+    for (const name of ['अनन्या', '🌸Phool']) {
+      const who: Who = {
+        userId: 'dev:x',
+        person: { id: 'dev:x', name, look: { skin: 1, outfit: 'pink', head: 'none' }, status: 'चाय ☕' },
+      }
+      const header = whoHeader(who)
+      expect(header).toMatch(/^[\x21-\x7e]+$/)
+      expect(readWho(header)).toEqual(who)
+    }
+    expect(readWho('{"userId":"dev:x"')).toEqual({ userId: null, person: null })
+    expect(readWho('%E0%A4')).toEqual({ userId: null, person: null })
+  })
+
+  it('a Devanagari or emoji name reaches the street intact', async () => {
+    const watcher = await live('university')
+    const hindi = await live('university', { token: await resident('Hindi Naam', { name: 'अनन्या' }) })
+    const emoji = await live('university', { token: await resident('Emoji Naam', { name: '🌸Phool' }) })
+    hindi.send({ t: 'move', x: 1, z: 1, ry: 0 })
+    emoji.send({ t: 'move', x: 2, z: 1, ry: 0 })
+    expect((await watcher.next('join', (m) => m.p.id === 'dev:hindi-naam')).p.name).toBe('अनन्या')
+    expect((await watcher.next('join', (m) => m.p.id === 'dev:emoji-naam')).p.name).toBe('🌸Phool')
   })
 })
 
@@ -293,6 +317,95 @@ describe('DistrictDO', () => {
     expect(a.closes).toEqual([])
   })
 
+  /** The server end of `userId`'s open socket in `state`. */
+  const socketOf = (state: DurableObjectState, userId: string) =>
+    state
+      .getWebSockets()
+      .find(
+        (s) =>
+          (s.deserializeAttachment() as { userId?: string; closed?: boolean } | null)?.userId === userId &&
+          !(s.deserializeAttachment() as { closed?: boolean }).closed,
+      )!
+  const moveTo = (x: number) => JSON.stringify({ t: 'move', x, z: 0, ry: 0 })
+
+  it('the move lane takes 15 at once, then 12 a second', async () => {
+    expect(LANES.move).toEqual({ perSecond: 12, burst: 15 })
+    const district = stub('university')
+    const a = await live('university', { token: await resident('Lane Lata') })
+    await a.next('welcome')
+    await runInDurableObject(district, async (instance, state) => {
+      const ws = socketOf(state, 'dev:lane-lata')
+      const t = Date.now()
+      try {
+        instance.clock = () => t
+        // The 16th of a burst is one too many.
+        for (let i = 0; i < 16; i++) await instance.webSocketMessage(ws, moveTo(0))
+        // A second later (and a new flood), twelve more fit and the 13th does not.
+        instance.clock = () => t + 1001
+        for (let i = 0; i < 13; i++) await instance.webSocketMessage(ws, moveTo(0))
+      } finally {
+        instance.clock = Date.now
+      }
+    })
+    await a.sync()
+    expect(a.all('error')).toEqual([
+      { t: 'error', code: 'rate' },
+      { t: 'error', code: 'rate' },
+    ])
+  })
+
+  it('a position is written through at most once a second, and the last one still lands', async () => {
+    const district = stub('mi-road')
+    const a = await live('mi-road', { token: await resident('Saver Seema') })
+    await a.next('welcome')
+    const stored = () =>
+      runInDurableObject(
+        district,
+        (_instance, state) =>
+          (socketOf(state, 'dev:saver-seema').deserializeAttachment() as { pos: { x: number } | null }).pos
+            ?.x,
+      )
+    const t = Date.now()
+    await runInDurableObject(district, async (instance, state) => {
+      const ws = socketOf(state, 'dev:saver-seema')
+      try {
+        instance.clock = () => t
+        await instance.webSocketMessage(ws, moveTo(1)) // the first point: written at once
+        instance.clock = () => t + 100
+        await instance.webSocketMessage(ws, moveTo(1.5)) // too soon: memory only, for now
+      } finally {
+        instance.clock = Date.now
+      }
+    })
+    expect(await stored()).toBe(1)
+    // With nothing more said, the held point is written within the second.
+    await vi.waitFor(async () => expect(await stored()).toBe(1.5), WAIT)
+  })
+
+  it('a failed attachment write is logged, unless the socket is closing', async () => {
+    const district = stub('walled-city')
+    const a = await live('walled-city', { token: await resident('Heavy Hema') })
+    await a.next('welcome')
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await runInDurableObject(district, (instance, state) => {
+        const ws = socketOf(state, 'dev:heavy-hema')
+        const write = (instance as unknown as { write(ws: WebSocket, seat: unknown): void }).write.bind(
+          instance,
+        )
+        // A function cannot be serialised: the write throws on an open socket.
+        write(ws, { ...(ws.deserializeAttachment() as object), junk: () => 1 })
+        expect(logged).toHaveBeenCalledWith('district: attachment write failed', expect.anything())
+        logged.mockClear()
+        ws.close(1000, 'bye')
+        write(ws, { ...(ws.deserializeAttachment() as object), junk: () => 1 })
+        expect(logged).not.toHaveBeenCalled()
+      })
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
   it('a failed status write is logged', async () => {
     const district = stub('mi-road')
     const a = await live('mi-road', { token: await resident('Offline Omar') })
@@ -389,7 +502,7 @@ describe('DistrictDO', () => {
     first.send({ t: 'move', x: 4, z: 4, ry: 0 })
     await watcher.next('join', (m) => m.p.id === 'dev:waking-wasim')
     const from = watcher.mark()
-    const who = {
+    const who: Who = {
       userId: 'dev:waking-wasim',
       person: {
         id: 'dev:waking-wasim',
@@ -403,7 +516,7 @@ describe('DistrictDO', () => {
     const heard = await runInDurableObject(district, async (instance, state) => {
       const res = await instance.fetch(
         new Request('https://district.internal/walled-city', {
-          headers: { Upgrade: 'websocket', 'X-GG-Who': JSON.stringify(who) },
+          headers: { Upgrade: 'websocket', 'X-GG-Who': whoHeader(who) },
         }),
       )
       res.webSocket!.accept()
@@ -447,7 +560,7 @@ describe('DistrictDO', () => {
       await instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x: 2.5, z: 2, ry: 0 }))
       const res = await instance.fetch(
         new Request('https://district.internal/university', {
-          headers: { Upgrade: 'websocket', 'X-GG-Who': JSON.stringify({ userId: null, person: null }) },
+          headers: { Upgrade: 'websocket', 'X-GG-Who': whoHeader({ userId: null, person: null }) },
         }),
       )
       const client = res.webSocket!

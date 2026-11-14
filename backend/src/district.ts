@@ -65,11 +65,13 @@ export const MAX_FRAME_CHARS = 2048
 /** Bad frames in a row before the socket is closed. Any good frame clears the count. */
 export const MAX_BAD_FRAMES = 5
 /**
- * Per-socket allowances, as token buckets: a refill rate and how many may arrive at once. A client sends at
- * most 10 moves a second and a status now and then; `other` is pings, bench frames and bad frames.
+ * Per-socket allowances, as token buckets: a refill rate and how many may arrive at once. A resident's client
+ * sends at most 10 moves a second (a ghost's 2), so `move` leaves a little room for jitter and no more;
+ * `status` is the socket's own status line, which the web client does not use (see `status`); `other` is
+ * pings, bench frames and bad frames.
  */
 export const LANES = {
-  move: { perSecond: 40, burst: 20 },
+  move: { perSecond: 12, burst: 15 },
   status: { perSecond: 0.5, burst: 1 },
   /** Bench lines: one a second. */
   say: { perSecond: 1, burst: 1 },
@@ -87,6 +89,12 @@ const MAX_BENCH_ID = 64
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
 const PING = '{"t":"ping"}'
 const PONG = '{"t":"pong"}'
+/**
+ * A moving socket's point is written to its attachment at most this often; the newest one is always written
+ * within this long, and a seat change or a close writes at once. A wake from hibernation can lose at most
+ * this much of a walk, and the speed check measures on from the older point, with the time since.
+ */
+export const SAVE_MS = 1000
 
 const GHOST = { t: 'error', code: 'ghost' } as const
 const INVALID = { t: 'error', code: 'invalid' } as const
@@ -116,9 +124,15 @@ export async function openDistrict(request: Request, env: Env, id: string): Prom
   const who: Who = { userId: user?.id ?? null, person }
   // A fresh request: nothing of the client's (its token included) goes past this point but the upgrade.
   return env.DISTRICT.get(env.DISTRICT.idFromName(id)).fetch(`https://district.internal/${id}`, {
-    headers: { Upgrade: 'websocket', [WHO_HEADER]: JSON.stringify(who) },
+    headers: { Upgrade: 'websocket', [WHO_HEADER]: whoHeader(who) },
   })
 }
+
+/**
+ * `who` as an `X-GG-Who` value: JSON, percent-encoded, so a Devanagari or emoji name travels as plain ASCII
+ * (header values are bytes, and only workerd's leniency carries UTF-8 in them).
+ */
+export const whoHeader = (who: Who): string => encodeURIComponent(JSON.stringify(who))
 
 const isNum = (n: unknown, max: number): n is number =>
   typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= max
@@ -164,9 +178,10 @@ export function parseClientMsg(text: string): ClientMsg | null {
   }
 }
 
-function readWho(raw: string | null): Who {
+/** The `X-GG-Who` the Worker set (see `whoHeader`); anything else is a ghost. */
+export function readWho(raw: string | null): Who {
   try {
-    const who = JSON.parse(raw ?? '') as Partial<Who>
+    const who = JSON.parse(decodeURIComponent(raw ?? '')) as Partial<Who>
     const userId = typeof who.userId === 'string' ? who.userId : null
     const person = userId && who.person?.id === userId ? toPublic(who.person) : null
     return { userId, person }
@@ -274,6 +289,10 @@ export class DistrictDO extends DurableObject<Env> {
   private seats = new WeakMap<WebSocket, Seat>()
   private dirty = new Set<WebSocket>()
   private batch: ReturnType<typeof setTimeout> | null = null
+  /** When each socket's point was last written to its attachment, and the sockets whose newest one waits. */
+  private savedAt = new WeakMap<WebSocket, number>()
+  private unsaved = new Set<WebSocket>()
+  private saving: ReturnType<typeof setTimeout> | null = null
   /** Each bench's recent lines, oldest first (see `benchTranscript`). Memory only. */
   private transcripts = new Map<string, BenchLine[]>()
 
@@ -423,7 +442,7 @@ export class DistrictDO extends DurableObject<Env> {
       const budget = Math.min(SPEED_BURST_M, last.budget + (MAX_SPEED * Math.max(0, now - last.at)) / 1000)
       const step = Math.hypot(x - last.x, z - last.z)
       if (step > budget) {
-        this.write(ws, seat)
+        this.keep(ws, seat, now)
         return this.send(ws, { t: 'error', code: 'too-fast', x: last.x, z: last.z, ry: last.ry })
       }
       seat.pos = { x, z, ry, at: now, budget: budget - step }
@@ -437,7 +456,8 @@ export class DistrictDO extends DurableObject<Env> {
       this.write(ws, seat)
       this.send(ws, STOOD)
       this.tellBench(bench.id)
-    } else this.write(ws, seat)
+    } else if (arriving) this.write(ws, seat)
+    else this.keep(ws, seat, now)
     if (arriving) this.broadcast({ t: 'join', p: livePerson(seat) }, ws)
     else if (seat.shown) {
       this.dirty.add(ws)
@@ -445,7 +465,33 @@ export class DistrictDO extends DurableObject<Env> {
     }
   }
 
-  /** `text` is already clean (see `parseClientMsg`). The same line again is a no-op, not a broadcast. */
+  /**
+   * A moving socket's seat, written through now if its point has not been for `SAVE_MS`; otherwise it is held
+   * in memory and written by one timer for every such socket, so the newest point still lands within
+   * `SAVE_MS`.
+   */
+  private keep(ws: WebSocket, seat: Seat, now: number): void {
+    const saved = this.savedAt.get(ws)
+    if (saved === undefined || now - saved >= SAVE_MS) return this.write(ws, seat)
+    this.unsaved.add(ws)
+    this.saving ??= setTimeout(() => this.save(), SAVE_MS)
+  }
+
+  private save(): void {
+    this.saving = null
+    for (const ws of this.unsaved) {
+      const seat = this.seat(ws)
+      if (!seat.closed) this.write(ws, seat)
+    }
+    this.unsaved.clear()
+  }
+
+  /**
+   * `text` is already clean (see `parseClientMsg`). The same line again is a no-op, not a broadcast. The web
+   * client never sends it: a status is set by saving the profile, after which the client reconnects and the
+   * new socket carries the new line (see `fetch`). It is kept as a working part of the protocol, and its
+   * tight lane is what the rate tests lean on.
+   */
   private status(ws: WebSocket, seat: Seat, text: string): void {
     if (text === seat.person!.status) return
     const userId = seat.userId!
@@ -642,10 +688,15 @@ export class DistrictDO extends DurableObject<Env> {
 
   private write(ws: WebSocket, seat: Seat): void {
     this.seats.set(ws, seat)
+    this.unsaved.delete(ws)
+    if (seat.pos) this.savedAt.set(ws, this.clock())
     try {
       ws.serializeAttachment(seat)
-    } catch {
-      // A socket that has finished closing keeps no attachment; it is no longer listed either.
+    } catch (err) {
+      // A socket that is closing or closed keeps no attachment, and is no longer listed: nothing is lost. On
+      // an open socket, a failed write means a wake would bring back an older seat.
+      if (ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED)
+        console.error('district: attachment write failed', err)
     }
   }
 
