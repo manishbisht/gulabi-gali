@@ -1,9 +1,14 @@
 import { endMatch } from './chat'
 import type { Env } from './env'
 import { floating, notify, type Later } from './inbox'
-import type { PublicPerson } from './protocol'
-import { toPublic, type ProfileRow } from './profiles'
+import { firstName } from './names'
 import { refreshUser } from './refresh'
+
+/** What the block list shows of someone: an id and the first name saved when they were blocked. */
+export interface BlockedPerson {
+  id: string
+  name: string
+}
 
 const MAX_ID = 200
 /** The most blocked people `GET /api/blocks` lists: far more than anyone blocks, never an unbounded read. */
@@ -31,8 +36,13 @@ export async function blockUser(
   if (id === userId) return fail('invalid', 400)
   const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(id).first()
   if (!exists) return noContent()
-  await env.DB.prepare('INSERT OR IGNORE INTO blocks (a, b, created_at) VALUES (?, ?, ?)')
-    .bind(userId, id, now)
+  // Their first name as of now is all the list will ever show of them (never live profile data).
+  const profile = await env.DB.prepare('SELECT name FROM profiles WHERE user_id = ?')
+    .bind(id)
+    .first<{ name: string }>()
+  const name = profile ? firstName(profile.name) : ''
+  await env.DB.prepare('INSERT OR IGNORE INTO blocks (a, b, created_at, name) VALUES (?, ?, ?, ?)')
+    .bind(userId, id, now, name)
     .run()
   // Also on a repeat: it finishes what a block that stopped half way left undone.
   const matchId = await endMatch(env, userId, id, 'block', now)
@@ -49,15 +59,13 @@ export async function unblockUser(env: Env, userId: string, id: string): Promise
   return noContent()
 }
 
-/** `GET /api/blocks`: the people the caller has blocked, newest first, by first name. */
+/** `GET /api/blocks`: the people the caller has blocked, newest first: id and the first name saved at block time. */
 export async function listBlocks(env: Env, userId: string): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT p.* FROM blocks k JOIN profiles p ON p.user_id = k.b WHERE k.a = ? ORDER BY k.created_at DESC LIMIT ?`,
+    'SELECT b, name FROM blocks WHERE a = ? ORDER BY created_at DESC LIMIT ?',
   )
     .bind(userId, LIST_LIMIT)
-    .all<ProfileRow>()
-  const out: PublicPerson[] = results.map((r) =>
-    toPublic({ id: r.user_id, name: r.name, look: JSON.parse(r.look), status: r.status }),
-  )
+    .all<{ b: string; name: string }>()
+  const out: BlockedPerson[] = results.map((r) => ({ id: r.b, name: r.name || 'Someone' }))
   return Response.json(out)
 }

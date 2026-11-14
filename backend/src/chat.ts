@@ -134,6 +134,7 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
      LEFT JOIN messages l ON l.id = (
        SELECT id FROM messages WHERE match_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1)
      WHERE (m.a = ?1 OR m.b = ?1) AND ${ACTIVE}
+       AND NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.a = ?1 AND k.b = p.user_id) OR (k.b = ?1 AND k.a = p.user_id))
      ORDER BY COALESCE(l.created_at, m.created_at) DESC, m.id DESC
      LIMIT ?2`,
   )
@@ -285,7 +286,9 @@ export async function endMatch(
         ]
       : [
           env.DB.prepare(
-            'DELETE FROM requests WHERE (from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1)',
+            // Not the ignored ones: a decline or an unmatch's 14-day cooldown outlives a block and an unblock.
+            `DELETE FROM requests WHERE state != 'ignored'
+             AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,
           ).bind(userId, other),
         ]
   if (!match) {

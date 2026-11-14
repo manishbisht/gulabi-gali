@@ -9,7 +9,10 @@ ALTER TABLE users ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN muted_until INTEGER;
 
 -- `a` blocked `b`. A block works both ways: neither ever sees the other.
-CREATE TABLE blocks (a TEXT NOT NULL, b TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (a, b));
+-- `name` is `b`'s first name as it was when `a` blocked them: the block list shows only that, never live profile data.
+CREATE TABLE blocks (
+  a TEXT NOT NULL, b TEXT NOT NULL, created_at INTEGER NOT NULL, name TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (a, b));
 CREATE INDEX blocks_b ON blocks(b);
 
 -- Per-account counters for rate limits: `n` uses of `bucket` in the window that began at `window_start` (ms).

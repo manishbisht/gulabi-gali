@@ -420,6 +420,8 @@ export class DistrictDO extends DurableObject<Env> {
   private awake: ReturnType<typeof setTimeout> | null = null
   /** Each connected person's trust state, by user id (see the class note). */
   private trust = new Map<string, Trust>()
+  /** Per person, the newest `refresh` asked for (see there). */
+  private refreshSeq = new Map<string, number>()
   /** Whether `trust` holds everyone connected since this instance started; `warming` while it loads. */
   private warm = false
   private warming: Promise<boolean> | null = null
@@ -596,7 +598,11 @@ export class DistrictDO extends DurableObject<Env> {
   async refresh(userId: string, why: RefreshWhy): Promise<void> {
     if (!this.sockets().some((ws) => this.seat(ws).userId === userId)) return
     if (!(await this.ready())) throw new Error('district: trust state unavailable')
+    // Loads can finish out of order: only the newest one asked for may be applied.
+    const seq = (this.refreshSeq.get(userId) ?? 0) + 1
+    this.refreshSeq.set(userId, seq)
     const [got, person] = await Promise.all([loadTrust(this.env, [userId]), loadResident(this.env, userId)])
+    if (this.refreshSeq.get(userId) !== seq) return
     this.apply(userId, got.get(userId) ?? noTrust(), person, why)
   }
 

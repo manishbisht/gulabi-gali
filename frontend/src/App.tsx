@@ -336,30 +336,34 @@ export default function App() {
         connectionsBadge={conn.badge}
         top={
           <>
-            {toast && (
-              <div className="toast" role="status">
-                {toast}
-              </div>
-            )}
             {blockToast && (
               <div className="toast" role="status">
                 {blockToast}
               </div>
             )}
-            {replaced && (
-              <div className="toast" role="status">
-                {t('liveReplaced', lang)}
-              </div>
-            )}
-            {benchToast && (
-              <div className="toast" role="status">
-                {t(benchToast, lang)}
-              </div>
-            )}
-            {travelFailed && (
-              <div className="toast" role="status">
-                {t('metroFailed', lang, { place: DISTRICT_NAMES[travelFailed][lang] })}
-              </div>
+            {!blockToast && (
+              <>
+                {toast && (
+                  <div className="toast" role="status">
+                    {toast}
+                  </div>
+                )}
+                {replaced && (
+                  <div className="toast" role="status">
+                    {t('liveReplaced', lang)}
+                  </div>
+                )}
+                {benchToast && (
+                  <div className="toast" role="status">
+                    {t(benchToast, lang)}
+                  </div>
+                )}
+                {travelFailed && (
+                  <div className="toast" role="status">
+                    {t('metroFailed', lang, { place: DISTRICT_NAMES[travelFailed][lang] })}
+                  </div>
+                )}
+              </>
             )}
           </>
         }

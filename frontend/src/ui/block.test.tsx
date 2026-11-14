@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { LivePerson, Me, PublicPerson } from '../net/protocol'
+import type { LivePerson, Me } from '../net/protocol'
 import { ProfileSheet } from '../profile/ProfileSheet'
 import { PersonCard } from './PersonCard'
 
@@ -96,7 +96,7 @@ it('PersonCard: a failed block keeps the sheet and says so', async () => {
 })
 
 it('ProfileSheet lists the people you blocked by first name, and Unblock removes one', async () => {
-  const blocked: PublicPerson[] = [{ id: 'p9', name: 'Meera', look: ravi.look, status: '' }]
+  const blocked = [{ id: 'p9', name: 'Meera' }]
   const calls: string[] = []
   vi.stubGlobal(
     'fetch',

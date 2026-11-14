@@ -31,7 +31,7 @@ export const pairOf = (x: string, y: string): [string, string] => (x < y ? [x, y
  * inserted together, `INSERT OR IGNORE` on (a, b), so accepts at once still leave one match. Answers the match id,
  * or null when nothing could be accepted (the cron swept the row, or it expired, since it was read).
  */
-async function accept(
+export async function accept(
   env: Env,
   ids: string[],
   from: string,
@@ -48,8 +48,9 @@ async function accept(
     ),
     env.DB.prepare(
       `INSERT OR IGNORE INTO matches (id, a, b, created_at)
-       SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM requests WHERE id IN (${ids.map(() => '?').join(', ')}) AND state = 'accepted')`,
-    ).bind(crypto.randomUUID(), a, b, now, ...ids),
+       SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM requests WHERE id IN (${ids.map(() => '?').join(', ')}) AND state = 'accepted')
+         AND NOT EXISTS (SELECT 1 FROM blocks WHERE (a = ? AND b = ?) OR (a = ? AND b = ?))`,
+    ).bind(crypto.randomUUID(), a, b, now, ...ids, a, b, b, a),
   ])
   const match = await env.DB.prepare('SELECT id FROM matches WHERE a = ? AND b = ?')
     .bind(a, b)

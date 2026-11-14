@@ -10,7 +10,6 @@ import type {
   MatchView,
   Me,
   MessagePage,
-  PublicPerson,
   RequestLists,
 } from './protocol'
 
@@ -283,9 +282,15 @@ export async function unblockPerson(token: string, id: string): Promise<boolean>
   }
 }
 
+/** Someone the caller blocked: an id and the first name saved when they did. */
+export interface BlockedPerson {
+  id: string
+  name: string
+}
+
 /** The people the caller has blocked, by first name. Rejects on failure. */
-export async function getBlocks(token: string, signal?: AbortSignal): Promise<PublicPerson[]> {
+export async function getBlocks(token: string, signal?: AbortSignal): Promise<BlockedPerson[]> {
   const res = await fetch(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`blocks ${res.status}`)
-  return (await res.json()) as PublicPerson[]
+  return (await res.json()) as BlockedPerson[]
 }

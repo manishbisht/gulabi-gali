@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
-import { getBlocks, unblockPerson, type ProfileInput } from '../net/api'
-import { HERE_FOR, type HereFor, type HomeArea, type Me, type PublicPerson } from '../net/protocol'
+import { getBlocks, unblockPerson, type BlockedPerson, type ProfileInput } from '../net/api'
+import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { AvatarBuilder } from './AvatarBuilder'
@@ -46,7 +46,7 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut }: Pr
   const [wordsRefused, setWordsRefused] = useState(false)
 
   /** Whom you blocked: null while loading or when it could not load. */
-  const [blocked, setBlocked] = useState<PublicPerson[] | null>(null)
+  const [blocked, setBlocked] = useState<BlockedPerson[] | null>(null)
   const [blockedNote, setBlockedNote] = useState<'load' | 'unblock' | null>(null)
   useEffect(() => {
     if (!token || !me.complete) return
