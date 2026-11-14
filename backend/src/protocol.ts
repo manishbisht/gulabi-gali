@@ -175,9 +175,17 @@ export const BENCH_SEATS = 4
  * tab, a reconnect) and must not reconnect, or two tabs would take turns knocking each other off. `banned`: a
  * moderator banned this person (on the inbox, also hidden them): the inbox must not reconnect, and a district
  * socket that does comes back as a ghost. `full`: the district, or this address, holds as many sockets as it
- * may; try again later.
+ * may; try again later. `deleted`: this person deleted their account; they are signed out and the socket does
+ * not come back as them.
  */
-export const LIVE_CLOSE = { replaced: 4001, invalid: 4002, idle: 4003, banned: 4004, full: 4005 } as const
+export const LIVE_CLOSE = {
+  replaced: 4001,
+  invalid: 4002,
+  idle: 4003,
+  banned: 4004,
+  full: 4005,
+  deleted: 4006,
+} as const
 
 /** A chat message is 1 to 500 characters (code points) once cleaned, on at most this many lines. */
 export const MAX_MESSAGE = 500

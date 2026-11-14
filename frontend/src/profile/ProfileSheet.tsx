@@ -5,6 +5,7 @@ import { getBlocks, unblockPerson, type BlockedPerson, type ProfileInput } from 
 import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
+import { DeleteAccount } from './DeleteAccount'
 import { AvatarBuilder } from './AvatarBuilder'
 import { areaLabel, HERE_FOR_LABEL, HOME_AREAS } from './homeAreas'
 import { LIMITS } from './limits'
@@ -24,9 +25,13 @@ interface Props {
   onSave: (p: ProfileInput) => Promise<SaveOutcome>
   onClose: () => void
   onSignOut: () => void
+  /** Opens the privacy note. */
+  onPrivacy?: () => void
+  /** Erases the account (true once gone). Without it the sheet has no delete button. */
+  onDelete?: () => Promise<boolean>
 }
 
-export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut }: Props) {
+export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPrivacy, onDelete }: Props) {
   const p = me.profile
   const [name, setName] = useState(p?.name ?? '')
   const [look, setLook] = useState<AvatarLook>(() => (p && lookFromWire(p.look)) || loadOrCreateLook())
@@ -277,6 +282,12 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut }: Pr
         <button type="button" className="auth-close" onClick={onSignOut}>
           {t('profileSignOut', lang)}
         </button>
+        {onPrivacy && (
+          <button type="button" className="auth-close" onClick={onPrivacy}>
+            {t('privacyLink', lang)}
+          </button>
+        )}
+        {onDelete && me.profile && <DeleteAccount lang={lang} onDelete={onDelete} />}
       </section>
     </div>
   )

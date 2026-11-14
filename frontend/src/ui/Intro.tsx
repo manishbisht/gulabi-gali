@@ -4,9 +4,10 @@ interface Props {
   lang: Lang
   onLang: (l: Lang) => void
   onEnter: () => void
+  onPrivacy?: () => void
 }
 
-export function Intro({ lang, onLang, onEnter }: Props) {
+export function Intro({ lang, onLang, onEnter, onPrivacy }: Props) {
   return (
     <div className="intro">
       <button
@@ -22,6 +23,11 @@ export function Intro({ lang, onLang, onEnter }: Props) {
       <button type="button" className="enter" onClick={onEnter}>
         {t('enter', lang)}
       </button>
+      {onPrivacy && (
+        <button type="button" className="intro-privacy" onClick={onPrivacy}>
+          {t('privacyLink', lang)}
+        </button>
+      )}
     </div>
   )
 }

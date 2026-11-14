@@ -92,7 +92,7 @@ export function connectInbox(opts: InboxOptions): InboxConn {
         return opts.onReplaced?.()
       }
       // banned or hidden: the server would only refuse a reconnect
-      if (e.code === LIVE_CLOSE.banned) {
+      if (e.code === LIVE_CLOSE.banned || e.code === LIVE_CLOSE.deleted) {
         done = true
         return opts.onBanned?.()
       }

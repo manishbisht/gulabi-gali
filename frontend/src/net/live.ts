@@ -148,7 +148,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
         setState('closed')
         return opts.onReplaced?.()
       }
-      if (e.code === LIVE_CLOSE.banned) opts.onBanned?.()
+      if (e.code === LIVE_CLOSE.banned || e.code === LIVE_CLOSE.deleted) opts.onBanned?.()
       setState('connecting')
       backoff.dropped()
     }

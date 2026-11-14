@@ -1079,3 +1079,31 @@ small.words-hint {
   inset: 0;
   z-index: 100;
 }
+
+.intro-privacy {
+  margin-top: 16px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--sandstone);
+  font: inherit;
+  text-decoration: underline;
+}
+
+.privacy-sheet h3,
+.delete-confirm h3 {
+  margin: 14px 0 4px;
+  font-size: 1rem;
+}
+
+.privacy-sheet p,
+.delete-confirm p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.delete-go:not(:disabled) {
+  border-color: #e0707a;
+  background: rgb(224 112 122 / 0.25);
+}

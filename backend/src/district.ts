@@ -773,6 +773,12 @@ export class DistrictDO extends DurableObject<Env> {
    */
   async refresh(userId: string, why: RefreshWhy): Promise<void> {
     if (!this.sockets().some((ws) => this.seat(ws).userId === userId)) return
+    if (why === 'delete') {
+      // Gone from D1: nothing to reload. Close everything they have here and let the gate forget them.
+      for (const ws of this.sockets().filter((s) => this.seat(s).userId === userId))
+        this.drop(ws, LIVE_CLOSE.deleted, 'deleted', true)
+      return
+    }
     if (!(await this.ready())) throw new Error('district: trust state unavailable')
     // Loads can finish out of order: only the newest one asked for may be applied.
     const seq = (this.refreshSeq.get(userId) ?? 0) + 1

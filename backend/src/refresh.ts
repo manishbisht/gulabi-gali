@@ -3,7 +3,7 @@ import type { Env } from './env'
 import { inboxOf } from './inbox'
 
 /** Why someone's live state is looked at again: what changed for them in D1. */
-export type RefreshWhy = 'block' | 'ban' | 'mute' | 'hide' | 'profile'
+export type RefreshWhy = 'block' | 'ban' | 'mute' | 'hide' | 'profile' | 'delete'
 
 /** How long `refreshUser` waits before trying a failed target again. */
 export const REFRESH_RETRY_MS = 500
@@ -17,6 +17,8 @@ export const REFRESH_RETRY_MS = 500
  * - `mute`: `say` and `status` are refused with `muted` until `muted_until`.
  * - `block`: they and everyone on either side of a block stop seeing each other (and lifting it undoes that).
  * - `profile`: their new public face goes out as a `join`.
+ * - `delete`: their account is gone. Their sockets (districts and inbox) close with `LIVE_CLOSE.deleted`, and the
+ *   gate forgets them at once.
  *
  * A target that throws is tried once more after `retryMs`. It never throws itself: it answers the targets
  * (district ids, or `inbox`) that failed twice, and logs them. For those, the districts catch up on their own:
@@ -34,7 +36,7 @@ export async function refreshUser(
   const targets = new Map<string, () => Promise<void>>(
     DISTRICT_IDS.map((id) => [id, () => env.DISTRICT.get(env.DISTRICT.idFromName(id)).refresh(userId, why)]),
   )
-  targets.set('inbox', () => inboxOf(env, userId).refresh(userId))
+  targets.set('inbox', () => inboxOf(env, userId).refresh(userId, why))
   const attempt = async (names: string[]) => {
     const results = await Promise.allSettled(names.map((name) => targets.get(name)!()))
     return names.filter((_, i) => results[i]!.status === 'rejected')

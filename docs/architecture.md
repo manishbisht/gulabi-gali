@@ -1,9 +1,10 @@
 # Architecture
 
-How phases 1 and 2 fit together: a static React + Three.js site on GitHub Pages and a Cloudflare Worker that
+How phases 1 to 3 fit together: a static React + Three.js site on GitHub Pages and a Cloudflare Worker that
 serves the city's live snapshot (weather, air quality, sunrise and sunset, today's festival), signs people in,
 keeps their profiles, shows residents to one another live, and carries "milna hai" requests and one-to-one
-chat. The verified tier, reports, admin tools and the waitlist are coming in phase 3; none of them exists yet.
+chat, and, since phase 3, keeps the city safe: trust tiers, a word filter, blocks, reports, rate limits, an
+owner's admin page, a cap with a waitlist, and account deletion.
 
 For setup and secrets see [deployment.md](./deployment.md); for phone measurements see
 [device-performance.md](./device-performance.md). The design and plan live in
@@ -250,7 +251,83 @@ the line, up to `MAX_LIVE` + 10%. The page shows a dismissible card (`ui/FullScr
 and an email field, `POST /api/waitlist` (no sign-in; 5 an hour per address; stored once, always 204). No
 email is sent: the owner writes to people from the admin page's CSV.
 
-### Coming in phase 3
+## Phase 3: safety
 
-The rest of the verified tier, reports and moderation, and the admin tools are being added task by task;
-`docs/superpowers/plans/2026-11-14-phase-3-safety.md` is the source of truth until this section is rewritten.
+The plan is `docs/superpowers/plans/2026-11-14-phase-3-safety.md`; the schema is `backend/migrations/0002_trust.sql`.
+
+### Trust tiers and invites (`trust.ts`)
+
+Ghost (no complete profile), resident (visible; can sit, talk at benches, receive and accept requests) and
+verified (can also **send** requests, sees others' links, holds 2 invite codes). A person becomes verified by
+redeeming an invite code (`POST /api/invites/redeem`, one conditional `UPDATE ... WHERE used_by IS NULL`, so a
+code is won once) or by an admin's mark, which also hands out their codes. There is no phone OTP. The first
+verified member is the owner, who marks themselves on the admin page; that bootstraps every invite after.
+`users` carries `verified`, `verified_by`, `hidden`, `muted_until` and `banned`.
+
+Residency has two rules in SQL (`ACTIVE`, `VISIBLE` in `profiles.ts`): active is a complete profile and not
+banned; visible is active and not hidden. Every residency check goes through them.
+
+### Word filter (`filter/`)
+
+Names, statuses, about, request reasons, chat, bench lines and posters are checked. Text is normalised
+(lowercase, NFKC, leetspeak, repeated letters collapsed, separators stripped) and matched on whole tokens and
+known compounds from `filter/words.ts`. A hit answers `{ ok: false, reason: 'words', field }`. The client has
+the same check for a hint while typing (`filter/WordsHint`); the server has the last word.
+
+### Blocks (`blocks.ts`)
+
+Symmetric and total: the two never see each other in districts, person cards, requests or chats. A block deletes
+pending requests between them, ends any match (through `endMatch`, which holds the chat as evidence first) and
+stands the blocked person up from a shared bench. The blocked person is told nothing. The `blocks` row keeps the
+blocked person's first name from block time, so the block list never shows live profile data.
+
+### Live changes reach live sockets (`refresh.ts`)
+
+After any trust change is written to D1, `refreshUser(env, id, why)` tells each district and the person's
+inbox to reload them (`ban`, `hide`, `mute`, `block`, `profile`, `delete`). A target that fails is retried
+once; the districts' alarm re-checks everyone connected about every minute as a backstop.
+Close codes (`LIVE_CLOSE`): replaced 4001, invalid 4002, idle 4003, banned 4004, full 4005, deleted 4006.
+
+### Reports and evidence (`reports.ts`, `evidence.ts`)
+
+A report is about a person, bench, chat or poster. The server assembles the evidence itself (a client-sent
+transcript is ignored): a bench's in-memory transcript of the last 10 minutes (only if the reporter sat there),
+a chat's last 30 messages (only for its members), or a profile snapshot. Evidence is visible only to admins, and
+is deleted when the report is closed or 30 days after it was filed (the cron). When a chat ends (an unmatch, a
+block, a deletion), its last 30 messages are copied into `held_evidence` for 30 days so it can still be
+reported. Three distinct **verified** reporters within 7 days hide a person until an admin acts; residents'
+reports are queued but never count. A report the server could not confirm (a bench whose district had slept)
+is `unconfirmed` and never counts either.
+
+### Rate limits (`limits.ts`)
+
+Per address, three Workers Rate Limiting bindings (sockets 120 a minute, sign-ins 20 a minute, writes 300 a
+minute) plus an hourly invite-redemption count in D1; loopback is exempt only in dev. Per account, D1
+`counters`: requests 5 a day for an account under 7 days old and 20 after, messages 30 a minute, reports 20 a
+day. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotice.ts`).
+
+### Admin (`admin.ts`, `frontend/src/admin/`)
+
+Every `/api/admin/*` route is a 404 unless the caller's id is in `ADMIN_USER_IDS`. The page is `#/admin`,
+a lazy chunk so it is never in the city bundle. It lists the report queue with evidence, looks people up, and
+ban, unban, mute (24 hours), unmute, verify and unhide them, shows live stats and exports the waitlist as CSV.
+A ban closes sockets, hides the person and blocks writes; it is idempotent.
+
+### The gate
+
+`GateDO` and the waitlist are described under phase 2 above. In phase 3 it also lets in a recently invited
+person up to 10% over the cap, and `release(..., forget)` frees the slot and place in line at once for anyone
+banned, hidden or deleted.
+
+### Account deletion (`account.ts`)
+
+`DELETE /api/me` (a banned person gets 403 first, so it is no way out of a ban). Every match ends through
+`endMatch(..., 'delete')`, holding its last 30 messages as evidence, and the other person hears `unmatched`.
+Then one D1 batch deletes the profile, every request in either direction, the invites they own, the blocks they
+made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is kept), and deletes
+the `users` row. Blocks others made against them stay, so they still protect their owners if the id returns;
+reports about them stay until closed. The `users` row is kept as a tombstone (verified cleared) only while a
+hide or mute on it still holds. Sockets close with 4006 and the gate forgets them. The page then signs out;
+signing in again gives a blank profile. The Clerk sign-in account is not touched (see deployment.md). The
+privacy note (`ui/PrivacySheet.tsx`, linked from the intro and the profile sheet) says all of this in plain
+words.

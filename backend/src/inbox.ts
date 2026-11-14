@@ -4,6 +4,7 @@ import { allowedOrigin } from './cors'
 import { WHO_HEADER } from './district'
 import type { Env } from './env'
 import { activeRow } from './profiles'
+import type { RefreshWhy } from './refresh'
 import { LIVE_CLOSE, type InboxNotice } from './protocol'
 
 /** Open inbox sockets one person may keep (tabs, a phone and a laptop). The next one closes the oldest. */
@@ -100,7 +101,11 @@ export class InboxDO extends DurableObject<Env> {
    * no inbox, so every socket closes with `LIVE_CLOSE.banned`, which the client does not reconnect after. A
    * hidden person keeps theirs.
    */
-  async refresh(userId: string): Promise<void> {
+  async refresh(userId: string, why?: RefreshWhy): Promise<void> {
+    if (why === 'delete') {
+      for (const ws of this.sockets()) this.drop(ws, LIVE_CLOSE.deleted, 'deleted')
+      return
+    }
     if (await activeRow(this.env, userId)) return
     for (const ws of this.sockets()) this.drop(ws, LIVE_CLOSE.banned, 'not a resident')
   }

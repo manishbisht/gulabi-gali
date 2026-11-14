@@ -4,6 +4,7 @@ import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
 import { useMe } from './profile/useMe'
+import { deleteMyAccount } from './net/api'
 import { useRateNotice } from './net/useRateNotice'
 import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
@@ -38,6 +39,7 @@ import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
 import { InviteSheet } from './ui/InviteSheet'
+import { PrivacySheet } from './ui/PrivacySheet'
 import { AccountClosed } from './ui/AccountClosed'
 import { FullScreen } from './ui/FullScreen'
 
@@ -116,6 +118,7 @@ export default function App() {
     refreshMe.current = refresh
   }, [refresh])
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
   const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
   const profileLookRef = useRef(profileLook)
@@ -123,6 +126,12 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const profileShown = !!me && (profileOpen || (!me.complete && !dismissed))
+  /** Closes the profile sheet and signs out (also what a deleted account does). */
+  const leave = () => {
+    setDismissed(false)
+    setProfileOpen(false)
+    void auth.signOut()
+  }
   const closeProfile = () => {
     setProfileOpen(false)
     setDismissed(true)
@@ -344,7 +353,20 @@ export default function App() {
   /** A banned account: a plain screen over everything (the city behind it stays a ghost's). */
   const closed = banned && <AccountClosed lang={lang} onSignOut={() => void auth.signOut()} />
   if (!webgl || stageFailed) return closed || <NoWebGL lang={lang} />
-  if (!entered) return closed || <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
+  if (!entered)
+    return (
+      closed || (
+        <>
+          <Intro
+            lang={lang}
+            onLang={setLang}
+            onEnter={() => setEntered(true)}
+            onPrivacy={() => setPrivacyOpen(true)}
+          />
+          {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
+        </>
+      )
+    )
   return (
     <>
       <canvas ref={canvasRef} className="stage" />
@@ -472,13 +494,17 @@ export default function App() {
           token={auth.token}
           onSave={save}
           onClose={closeProfile}
-          onSignOut={() => {
-            setDismissed(false)
-            setProfileOpen(false)
-            void auth.signOut()
+          onSignOut={leave}
+          onPrivacy={() => setPrivacyOpen(true)}
+          onDelete={async () => {
+            const tok = await auth.token().catch(() => null)
+            if (!tok || !(await deleteMyAccount(tok))) return false
+            leave()
+            return true
           }}
         />
       )}
+      {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
       {inviteOpen && me && residentId && (
         <InviteSheet
           me={me}

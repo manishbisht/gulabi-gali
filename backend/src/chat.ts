@@ -261,12 +261,14 @@ export async function unmatch(
  *   whenever they like. It carries an empty reason (a real one is 10 to 140 characters), which is how
  *   `listRequests` knows to leave it out.
  * - `block`: every request between them goes, whatever its state; the block itself keeps them apart.
+ * - `delete`: `userId` is deleting their account. Only the match and its messages go here (after the hold);
+ *   the caller deletes all of that person's requests in its own batch.
  */
 export async function endMatch(
   env: Env,
   userId: string,
   other: string,
-  why: 'unmatch' | 'block',
+  why: 'unmatch' | 'block' | 'delete',
   now = Date.now(),
 ): Promise<string | null> {
   const [a, b] = pairOf(userId, other)
@@ -274,26 +276,28 @@ export async function endMatch(
     .bind(a, b)
     .first<{ id: string }>()
   const requests =
-    why === 'unmatch'
-      ? [
-          // Only while the match is still there: if the other side unmatched first, theirs is the block that
-          // stands.
-          env.DB.prepare(
-            `INSERT INTO requests (id, from_id, to_id, reason, created_at, state)
+    why === 'delete'
+      ? []
+      : why === 'unmatch'
+        ? [
+            // Only while the match is still there: if the other side unmatched first, theirs is the block that
+            // stands.
+            env.DB.prepare(
+              `INSERT INTO requests (id, from_id, to_id, reason, created_at, state)
              SELECT ?1, ?2, ?3, '', ?4, 'ignored' WHERE EXISTS (SELECT 1 FROM matches WHERE id = ?5)`,
-          ).bind(crypto.randomUUID(), other, userId, now, match?.id ?? ''),
-          env.DB.prepare(
-            `DELETE FROM requests WHERE state = 'accepted'
+            ).bind(crypto.randomUUID(), other, userId, now, match?.id ?? ''),
+            env.DB.prepare(
+              `DELETE FROM requests WHERE state = 'accepted'
              AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,
-          ).bind(userId, other),
-        ]
-      : [
-          env.DB.prepare(
-            // Not the ignored ones: a decline or an unmatch's 14-day cooldown outlives a block and an unblock.
-            `DELETE FROM requests WHERE state != 'ignored'
+            ).bind(userId, other),
+          ]
+        : [
+            env.DB.prepare(
+              // Not the ignored ones: a decline or an unmatch's 14-day cooldown outlives a block and an unblock.
+              `DELETE FROM requests WHERE state != 'ignored'
              AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,
-          ).bind(userId, other),
-        ]
+            ).bind(userId, other),
+          ]
   if (!match) {
     // Nothing to end, but a block still clears the requests.
     if (why === 'block') await env.DB.batch(requests)

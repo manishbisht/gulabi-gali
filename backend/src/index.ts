@@ -1,3 +1,4 @@
+import { deleteAccount } from './account'
 import { handleAdmin } from './admin'
 import { resolveUser } from './auth'
 import { blockUser, listBlocks, unblockUser } from './blocks'
@@ -159,6 +160,8 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     const slow = (await bootstrapLimit(env, request, user.id)) ?? (await bannedGate(env, user.id))
     return slow ?? Response.json(await getMe(env, user.id))
   }
+  if (pathname === '/api/me' && method === 'DELETE')
+    return (await bannedGate(env, user.id)) ?? deleteAccount(env, user.id, later)
   if (pathname === '/api/me/profile' && method === 'PUT')
     return (
       (await bootstrapLimit(env, request, user.id)) ??

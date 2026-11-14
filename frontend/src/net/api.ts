@@ -293,6 +293,16 @@ export async function blockPerson(token: string, id: string): Promise<boolean> {
   }
 }
 
+/** True once the account is deleted (the server answered 204). Never rejects. */
+export async function deleteMyAccount(token: string): Promise<boolean> {
+  try {
+    const res = await fetchNoting(`${API_BASE}/api/me`, { method: 'DELETE', headers: bearer(token) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 /** True once `id` is no longer blocked. Never rejects. */
 export async function unblockPerson(token: string, id: string): Promise<boolean> {
   try {

@@ -134,6 +134,61 @@ numbered files in `backend/migrations/`, applied with the same command.
    on Cloudflare, set that record to DNS only (grey cloud) while GitHub issues the certificate. Then tick
    "Enforce HTTPS".
 
+## 2a. Safety (phase 3): what to set and fill in
+
+**Secrets and vars**
+
+- `ADMIN_USER_IDS` (Worker secret): your own id as `clerk:user_...`, comma-separated for more than one. To find
+  it, sign in on the live site once, then Clerk dashboard, Users, your user, copy the `user_...` id and prefix
+  it with `clerk:`. Never a `dev:` id.
+- `MAX_LIVE` (var, default `"300"`): residents shown at once; the rest wait in line. `MAX_IP_SOCKETS` (var,
+  default `"24"`): live sockets from one address. Both are in `backend/wrangler.jsonc`; change and deploy.
+- Rate limits: `SOCKETS_LIMITER`, `SIGNIN_LIMITER` and `WRITES_LIMITER` use namespace ids `51001`, `51002` and
+  `51003`. They only have to be unique within the Cloudflare account; change them if something else uses them.
+
+**The first verified member.** Nobody can send requests until someone is verified, and an invite needs a
+verified member to give it. After the first deploy, sign in, open `#/admin`, look yourself up and press
+Verify. That gives you 2 invite codes, and everything after flows from invites.
+
+**Migrations.** `0002_trust.sql` is frozen once it is deployed: never edit it. New schema goes in `0003` and
+later, and stays additive.
+
+**Local dev after pulling phase 3.** Run `rm -rf backend/.wrangler/state` once (the local D1 and Durable Object
+state from phase 2 does not match the phase 3 tables), then apply the migrations again as under Local
+development.
+
+**The waitlist.** People who find the city full can leave an email. Nothing is sent from the site: download the
+CSV from the admin page and write to them by hand when there is room.
+
+**Account deletion and Clerk.** `DELETE /api/me` erases everything in Gulabi Gali, but the Clerk sign-in account
+itself is not deleted: that takes the Clerk Backend API and `CLERK_SECRET_KEY`, which the Worker holds but does
+not use this way. The privacy note tells people their Clerk login is separate and is deleted from Clerk. A
+possible later step is to call Clerk's delete-user endpoint from `deleteAccount` (`backend/src/account.ts`).
+
+**Fill in before launch**
+
+- `{OWNER_CONTACT}`: the contact line in the privacy note (`privacyContact` in
+  `frontend/src/i18n/strings.ts`, both languages). Replace it with a real email or handle; `grep -rn
+OWNER_CONTACT frontend/src` must find nothing afterwards.
+- The word list (`backend/src/filter/words.ts`) needs a review by a native Hindi and Hinglish speaker.
+
+**Pre-launch safety checklist**
+
+- [ ] `ADMIN_USER_IDS` holds only `clerk:` ids, and `#/admin` is a 404 for a second account.
+- [ ] `DEV_AUTH`, `DEV_AUTH_SECRET` and `VITE_DEV_AUTH` are set nowhere in production.
+- [ ] You verified yourself on the admin page and an invite code redeems for a second account.
+- [ ] `{OWNER_CONTACT}` is filled in and the privacy note reads correctly in both languages.
+- [ ] A native speaker has reviewed the word list.
+- [ ] File a report from a test account, see the evidence on the admin page, close it, and check the evidence is gone.
+- [ ] Block a test account both ways: neither sees the other, and a delete of one leaves the other's block intact.
+- [ ] Delete a test account, and check the sign-in then gives a blank profile.
+- [ ] `MAX_LIVE` is set to what you want, and the full-city card and waitlist work (admin CSV downloads).
+- [ ] Rate limits answer 429 with `Retry-After` on the real domain (the edge sets the connecting address).
+- [ ] **On the first real deploy, check the bench keep-awake:** two accounts sit at one bench and talk, wait
+      more than a minute, report one: the report must carry the recent lines. If the transcript is empty, the
+      district slept and the keep-awake timer is not holding it (see section 3).
+- [ ] Budget alerts are on (section 3).
+
 ## 3. Budget alerts
 
 Cloudflare dashboard, Notifications, Add:
@@ -161,6 +216,7 @@ running between the two steps works against the migrated database.
 - `npm ci` at the repo root.
 - `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend`: creates the local tables (once, and after
   each new migration).
+- After pulling phase 3, run `rm -rf backend/.wrangler/state` once, then the migrations command above.
 - `npm run dev -w backend -- --var DEV_AUTH:1`: the Worker on `http://127.0.0.1:8787`, with name-only dev
   sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health` and the live sockets,
   which then treat you as a ghost.
