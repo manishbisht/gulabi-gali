@@ -107,3 +107,23 @@ describe('createNpcs', () => {
     npcs.dispose()
   })
 })
+
+describe('freezing', () => {
+  it('freeze(true) pauses every walker and freeze(false) lets them go on', () => {
+    const scene = new THREE.Scene()
+    const def = {
+      id: 'ramesh',
+      look: { skin: 0, outfit: 'pink', head: 'none' },
+      route,
+      speed: 1,
+    } as unknown as NpcDef
+    const npcs = createNpcs([def], scene)
+    npcs.freeze(true)
+    npcs.update(1)
+    expect(npcs.entries[0]!.body.position.x).toBe(0)
+    npcs.freeze(false)
+    npcs.update(1)
+    expect(npcs.entries[0]!.body.position.x).toBeGreaterThan(0)
+    npcs.dispose()
+  })
+})

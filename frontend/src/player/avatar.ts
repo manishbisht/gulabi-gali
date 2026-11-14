@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { storage } from '../storage'
+import { bakeHex, merge } from '../world/kit/parts'
 import { PALETTE, type PaletteKey } from '../world/palette'
 import type { AvatarLook } from '../world/types'
 
@@ -41,21 +42,28 @@ export function loadOrCreateLook(): AvatarLook {
   return look
 }
 
-/** A chunky low-poly walker about 1.7 m tall, facing +z, feet on y = 0. Well under 600 triangles. */
-export function buildAvatar(look: AvatarLook): THREE.Group {
-  const group = new THREE.Group()
-  const mat = (hex: string) => new THREE.MeshLambertMaterial({ color: hex, flatShading: true })
-  const skin = mat(SKINS[look.skin])
-  const cloth = mat(PALETTE[look.outfit])
-  const dark = mat(PALETTE.road)
+export interface AvatarOptions {
+  /** Whether the body casts a shadow. True for the local player; other walkers pass false. */
+  castShadow?: boolean
+}
 
-  const add = (geo: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z = 0) => {
-    const m = new THREE.Mesh(geo, material)
-    m.position.set(x, y, z)
-    m.castShadow = true
-    group.add(m)
-    return m
+/** One vertex-coloured material for every avatar. Double-sided for the open dupatta. */
+let material: THREE.MeshLambertMaterial | null = null
+/** Merged bodies, one per distinct look; avatars with the same look share it. */
+const geometries = new Map<string, THREE.BufferGeometry>()
+
+function bodyGeometry(look: AvatarLook): THREE.BufferGeometry {
+  const key = `${look.skin}|${look.outfit}|${look.head}`
+  const cached = geometries.get(key)
+  if (cached) return cached
+  const skin = SKINS[look.skin]
+  const parts: THREE.BufferGeometry[] = []
+  const add = (geo: THREE.BufferGeometry, hex: string, x: number, y: number, z = 0) => {
+    geo.translate(x, y, z)
+    parts.push(bakeHex(geo, hex))
   }
+  const dark = PALETTE.road
+  const cloth = PALETTE[look.outfit]
 
   add(new THREE.BoxGeometry(0.22, 0.7, 0.24), dark, -0.14, 0.35)
   add(new THREE.BoxGeometry(0.22, 0.7, 0.24), dark, 0.14, 0.35)
@@ -66,23 +74,14 @@ export function buildAvatar(look: AvatarLook): THREE.Group {
 
   switch (look.head) {
     case 'safa': // turban
-      add(new THREE.CylinderGeometry(0.27, 0.3, 0.26, 10), mat(PALETTE.marigold), 0, 1.86)
-      add(new THREE.IcosahedronGeometry(0.2, 0), mat(PALETTE.marigold), 0, 2.05)
+      add(new THREE.CylinderGeometry(0.27, 0.3, 0.26, 10), PALETTE.marigold, 0, 1.86)
+      add(new THREE.IcosahedronGeometry(0.2, 0), PALETTE.marigold, 0, 2.05)
       break
     case 'cap':
-      add(new THREE.CylinderGeometry(0.22, 0.25, 0.14, 10), mat(PALETTE.white), 0, 1.9)
+      add(new THREE.CylinderGeometry(0.22, 0.25, 0.14, 10), PALETTE.white, 0, 1.9)
       break
     case 'dupatta': // scarf draped over the head and shoulders
-      add(
-        new THREE.CylinderGeometry(0.27, 0.36, 0.5, 8, 1, true),
-        new THREE.MeshLambertMaterial({
-          color: PALETTE[look.outfit],
-          flatShading: true,
-          side: THREE.DoubleSide,
-        }),
-        0,
-        1.76,
-      )
+      add(new THREE.CylinderGeometry(0.27, 0.36, 0.5, 8, 1, true), cloth, 0, 1.76)
       break
     case 'bun':
       add(new THREE.IcosahedronGeometry(0.12, 0), dark, 0, 1.97, -0.1)
@@ -90,5 +89,23 @@ export function buildAvatar(look: AvatarLook): THREE.Group {
     case 'none':
       break
   }
-  return group
+  const merged = merge(parts)
+  geometries.set(key, merged)
+  return merged
+}
+
+/**
+ * A chunky low-poly walker about 1.7 m tall, facing +z, feet on y = 0: one merged, vertex-coloured mesh,
+ * so one draw call. Under 600 triangles. Geometry and material are shared and must not be disposed by
+ * the caller.
+ */
+export function buildAvatar(look: AvatarLook, { castShadow = true }: AvatarOptions = {}): THREE.Mesh {
+  material ??= new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    flatShading: true,
+    side: THREE.DoubleSide,
+  })
+  const mesh = new THREE.Mesh(bodyGeometry(look), material)
+  mesh.castShadow = castShadow
+  return mesh
 }

@@ -73,6 +73,7 @@ test('collects a stamp at Hawa Mahal', async ({ page }) => {
 
 /** Stands the player two metres south of a character, so the fixed camera has it dead ahead. */
 async function standBeside(page: Page, id: string) {
+  await page.evaluate(() => window.__gg.freezeNpcs(true)) // a walker cannot leave the 3 m reach mid-test
   const npc = (await page.evaluate(() => window.__gg.npcs())).find((n) => n.id === id)!
   await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 2), npc)
   await expect(page.locator('.npc-bubble:not([hidden])').first()).toBeVisible()
@@ -82,7 +83,7 @@ async function standBeside(page: Page, id: string) {
 test('E opens the nearest character, who says they are not real', async ({ page }) => {
   await enterCity(page)
   await standBeside(page, 'ramesh')
-  await page.keyboard.press('e') // before he has walked out of the 3 m reach
+  await page.keyboard.press('e')
   await expect(page.locator('.npc-bubble:not([hidden])')).toContainText('Ek lassi, aur saari thakaan gayab.')
   const card = page.getByRole('region', { name: 'Ramesh ji' })
   await expect(card).toContainText('Lassiwala')

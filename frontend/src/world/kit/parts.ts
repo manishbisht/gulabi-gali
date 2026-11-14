@@ -6,9 +6,14 @@ export const FLOOR_H = 3.2
 
 /** Flat-shaded, non-indexed, uv-less piece with a single colour baked into every vertex. */
 export function bake(g: THREE.BufferGeometry, color: PaletteKey): THREE.BufferGeometry {
+  return bakeHex(g, PALETTE[color])
+}
+
+/** `bake` for a colour that is not in the palette (skin tones). */
+export function bakeHex(g: THREE.BufferGeometry, hex: string): THREE.BufferGeometry {
   const flat = g.index ? g.toNonIndexed() : g
   flat.deleteAttribute('uv')
-  const c = new THREE.Color(PALETTE[color])
+  const c = new THREE.Color(hex)
   const n = flat.getAttribute('position').count
   const colors = new Float32Array(n * 3)
   for (let i = 0; i < n; i++) c.toArray(colors, i * 3)

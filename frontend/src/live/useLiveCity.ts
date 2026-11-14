@@ -3,6 +3,8 @@ import { fallbackSnapshot, fetchCity } from '../net/api'
 import type { CitySnapshot } from '../net/protocol'
 
 const REFRESH_MS = 10 * 60 * 1000
+/** A kept live snapshot older than this yields to a stale reply: three hours of old weather is worse than none. */
+const KEEP_LIVE_MS = 3 * 60 * 60 * 1000
 
 export interface LiveCity {
   /** The latest snapshot (null until the first fetch settles); render from this. */
@@ -42,8 +44,9 @@ export function useLiveCity(): LiveCity {
     const load = () =>
       void fetchCity(controller.signal).then((s) => {
         if (controller.signal.aborted) return
-        // One failed refresh must not replace good live data with the stale default.
-        if (s.stale && latest.current && !latest.current.stale) return
+        // One failed refresh must not replace good, recent live data with the stale default.
+        const kept = latest.current
+        if (s.stale && kept && !kept.stale && Date.now() - Date.parse(kept.fetchedAt) < KEEP_LIVE_MS) return
         latest.current = s
         setSnapshot(s)
       })

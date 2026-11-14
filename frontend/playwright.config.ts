@@ -24,8 +24,9 @@ export default defineConfig({
       // on the chunk-error screen. Static hashed chunks do not do that, and
       // they are also what actually ships.
       // GG_ALLOW_LOCAL_API: this bundle talks to the local Worker on purpose.
+      // VITE_TEST_HOOKS: only this build carries window.__gg; the shipped one does not.
       command:
-        'GG_ALLOW_LOCAL_API=1 npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort',
+        'GG_ALLOW_LOCAL_API=1 VITE_TEST_HOOKS=1 npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort',
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,

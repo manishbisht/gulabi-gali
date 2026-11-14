@@ -59,6 +59,7 @@ afterEach(() => {
   stage.fail = false
   unreachable.clear()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   localStorage.clear()
   document.body.innerHTML = ''
 })
@@ -129,6 +130,7 @@ const DEFS: Record<DistrictId, DistrictDef> = {
 /** Opens the city with the test hooks on, in Hinglish, starting in the Walled City. */
 async function openCity() {
   vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  vi.stubEnv('VITE_TEST_HOOKS', '1') // the hooks are a build-time opt-in
   history.replaceState(null, '', '/?gg-test=1')
   localStorage.setItem('gg-lang', 'hi')
   localStorage.setItem('gg-district', 'walled-city')

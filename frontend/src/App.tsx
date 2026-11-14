@@ -210,6 +210,7 @@ export default function App() {
               sy: ((1 - p.y) / 2) * innerHeight,
             }
           }),
+        freezeNpcs: npcs.freeze,
         festival: festivalNow,
         sky: () => sky!,
         setSnapshot: (partial) => {

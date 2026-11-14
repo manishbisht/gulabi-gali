@@ -183,6 +183,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       window.removeEventListener('orientationchange', onOrientation)
       clearTimeout(settle)
       renderer.dispose()
+      // dispose() frees GL objects but keeps the context; a long session of remounts would run out.
+      renderer.forceContextLoss()
     },
   }
 }

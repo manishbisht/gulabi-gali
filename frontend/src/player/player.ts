@@ -56,12 +56,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       sync(dt)
     },
     dispose() {
-      scene.remove(avatar)
-      avatar.traverse((o) => {
-        if (!(o instanceof THREE.Mesh)) return
-        ;(o.geometry as THREE.BufferGeometry).dispose()
-        ;(o.material as THREE.Material).dispose()
-      })
+      scene.remove(avatar) // its geometry and material are shared with every other avatar
     },
   }
 }

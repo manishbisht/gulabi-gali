@@ -55,3 +55,20 @@ it('takes a live snapshot once it arrives after a stale first one', async () => 
   expect(out.city!.snapshot).toMatchObject({ stale: false, tempC: 28 })
   await unmount()
 })
+
+it('a live snapshot older than 3 h yields to a stale refresh', async () => {
+  const old = { ...liveSnap(31), fetchedAt: new Date(Date.now() - 3 * 3600_000 - 60_000).toISOString() }
+  const { out, refresh, unmount } = await mount([old, 'fail'])
+  expect(out.city!.snapshot).toMatchObject({ stale: false, tempC: 31 })
+  await refresh() // the refresh advances the fake clock 10 min too
+  expect(out.city!.snapshot!.stale).toBe(true)
+  await unmount()
+})
+
+it('a live snapshot just under 3 h old still wins over a stale refresh', async () => {
+  const recent = { ...liveSnap(31), fetchedAt: new Date(Date.now() - 2 * 3600_000).toISOString() }
+  const { out, refresh, unmount } = await mount([recent, 'fail'])
+  await refresh()
+  expect(out.city!.snapshot).toMatchObject({ stale: false, tempC: 31 })
+  await unmount()
+})

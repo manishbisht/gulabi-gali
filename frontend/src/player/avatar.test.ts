@@ -4,7 +4,7 @@ import { storage } from '../storage'
 import { PALETTE } from '../world/palette'
 import { buildAvatar, loadOrCreateLook, randomLook } from './avatar'
 
-function triangleCount(group: THREE.Group): number {
+function triangleCount(group: THREE.Object3D): number {
   let n = 0
   group.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return
@@ -14,7 +14,40 @@ function triangleCount(group: THREE.Group): number {
   return n
 }
 
+function drawCalls(root: THREE.Object3D): number {
+  let n = 0
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh) n++
+  })
+  return n
+}
+
 describe('avatar', () => {
+  it('an avatar is a single draw call', () => {
+    for (const head of ['none', 'safa', 'cap', 'dupatta', 'bun'] as const) {
+      const a = buildAvatar({ skin: 2, outfit: 'teal', head })
+      expect(a).toBeInstanceOf(THREE.Mesh)
+      expect(drawCalls(a)).toBe(1)
+      expect(a.getObjectByProperty('isGroup', true)).toBeUndefined()
+      expect(a.geometry.getAttribute('color')).toBeDefined()
+    }
+  })
+
+  it('two identical looks share geometry and material; different looks do not', () => {
+    const look = { skin: 1, outfit: 'pink', head: 'safa' } as const
+    const a = buildAvatar(look)
+    const b = buildAvatar({ ...look })
+    expect(b.geometry).toBe(a.geometry)
+    expect(b.material).toBe(a.material)
+    expect(buildAvatar({ ...look, skin: 3 }).geometry).not.toBe(a.geometry)
+  })
+
+  it('casts a shadow by default (the local player) and not when asked', () => {
+    const look = { skin: 0, outfit: 'pink', head: 'none' } as const
+    expect(buildAvatar(look).castShadow).toBe(true)
+    expect(buildAvatar(look, { castShadow: false }).castShadow).toBe(false)
+  })
+
   it('stays under the triangle budget for every head', () => {
     for (const head of ['none', 'safa', 'cap', 'dupatta', 'bun'] as const)
       expect(triangleCount(buildAvatar({ skin: 2, outfit: 'teal', head }))).toBeLessThan(600)

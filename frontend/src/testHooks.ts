@@ -24,6 +24,8 @@ export interface GgTestApi {
   setSnapshot(partial: Partial<CitySnapshot>): void
   /** Freezes the clock the sky runs on at an ISO instant, and repaints now. */
   setNow(iso: string): void
+  /** Pauses (or resumes) every walking character, so a test can aim at one that stands still. */
+  freezeNpcs(on: boolean): void
 }
 
 declare global {
@@ -32,8 +34,13 @@ declare global {
   }
 }
 
-/** Merges into `window.__gg`, only on pages opened with `?gg-test=1`. */
+/**
+ * Merges into `window.__gg`, only in a build made with `VITE_TEST_HOOKS=1` (the e2e build) and on pages
+ * opened with `?gg-test=1`. The build flag is checked statically, so a production build drops this body
+ * and the `__gg` name with it (scripts/check-no-test-hooks.mjs fails CI if one ever slips back in).
+ */
 export function installTestHooks(api: Partial<GgTestApi>): void {
+  if (import.meta.env.VITE_TEST_HOOKS !== '1') return
   if (new URLSearchParams(location.search).get('gg-test') !== '1') return
   window.__gg = { ...window.__gg, ...api }
 }

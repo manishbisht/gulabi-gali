@@ -14,6 +14,7 @@
     "lint": "npm run lint -w frontend",
     "test": "npm run check:protocol && npm run test --workspaces --if-present",
     "check:protocol": "node scripts/check-protocol.mjs",
+    "check:test-hooks": "node scripts/check-no-test-hooks.mjs",
     "test:device": "DEVICE_PERF=1 npm exec -w frontend -- playwright test tests/device-perf.spec.ts"
   },
   "allowScripts": {

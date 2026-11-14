@@ -54,6 +54,8 @@ export interface Npcs {
   /** Each character and its body in the scene, in the order given. */
   entries: readonly { def: NpcDef; body: THREE.Group }[]
   update(dt: number): void
+  /** Test hook: while on, every walker stands still where it is. */
+  freeze(on: boolean): void
   /** The character whose body the ray passes through, nearest first. */
   pick(ray: THREE.Raycaster): NpcDef | null
   /** The nearest character within `range` metres of `pos` on the ground. */
@@ -66,10 +68,11 @@ export function createNpcs(defs: NpcDef[], scene: THREE.Object3D): Npcs {
   const tapMaterial = new THREE.MeshBasicMaterial({ visible: false })
   const tapGeometry = new THREE.CylinderGeometry(TAP_RADIUS, TAP_RADIUS, TAP_HEIGHT, 8)
   const walkers: Walker[] = []
+  let frozen = false
   const entries = defs.map((def) => {
     const body = new THREE.Group()
     body.name = `npc-${def.id}`
-    body.add(buildAvatar(def.look))
+    body.add(buildAvatar(def.look, { castShadow: false }))
     const tap = new THREE.Mesh(tapGeometry, tapMaterial)
     tap.position.y = TAP_HEIGHT / 2
     tap.name = 'tap'
@@ -84,7 +87,11 @@ export function createNpcs(defs: NpcDef[], scene: THREE.Object3D): Npcs {
 
   return {
     entries,
+    freeze(on) {
+      frozen = on
+    },
     update(dt) {
+      if (frozen) return
       for (let i = 0; i < entries.length; i++) {
         const w = walkers[i]!
         const { def, body } = entries[i]!
@@ -120,13 +127,7 @@ export function createNpcs(defs: NpcDef[], scene: THREE.Object3D): Npcs {
     },
     dispose() {
       for (const { body } of entries) {
-        body.removeFromParent()
-        body.traverse((o) => {
-          if (!(o instanceof THREE.Mesh) || o.name === 'tap') return
-          ;(o.geometry as THREE.BufferGeometry).dispose()
-          const m = o.material as THREE.Material | THREE.Material[]
-          for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
-        })
+        body.removeFromParent() // avatar geometry and material are shared; only the tap target is ours
       }
       tapGeometry.dispose()
       tapMaterial.dispose()
