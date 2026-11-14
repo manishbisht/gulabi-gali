@@ -52,13 +52,19 @@ interface Air {
   current: { us_aqi: number | null; dust: number | null }
 }
 
-async function getJson<T>(fetcher: typeof fetch, url: string): Promise<T> {
-  const res = await fetcher(url)
+const UPSTREAM_TIMEOUT_MS = 5000
+
+async function getJson<T>(fetcher: typeof fetch, url: string, timeoutMs: number): Promise<T> {
+  const res = await fetcher(url, { signal: AbortSignal.timeout(timeoutMs) })
   if (!res.ok) throw new Error(`upstream ${res.status} for ${url}`)
   return (await res.json()) as T
 }
 
-export async function fetchSnapshot(fetcher: typeof fetch, now: Date): Promise<CitySnapshot> {
+export async function fetchSnapshot(
+  fetcher: typeof fetch,
+  now: Date,
+  timeoutMs = UPSTREAM_TIMEOUT_MS,
+): Promise<CitySnapshot> {
   const { lat, lon } = JAIPUR
   const forecastUrl =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
@@ -67,8 +73,8 @@ export async function fetchSnapshot(fetcher: typeof fetch, now: Date): Promise<C
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}` +
     '&current=us_aqi,dust&timezone=Asia%2FKolkata'
   const [forecast, air] = await Promise.all([
-    getJson<Forecast>(fetcher, forecastUrl),
-    getJson<Air>(fetcher, airUrl),
+    getJson<Forecast>(fetcher, forecastUrl, timeoutMs),
+    getJson<Air>(fetcher, airUrl, timeoutMs),
   ])
   const aqi = air.current.us_aqi ?? null
   return {
