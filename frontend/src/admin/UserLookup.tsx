@@ -43,15 +43,20 @@ export function UserSummary({ user, lang }: { user: AdminUser; lang: Lang }) {
   )
 }
 
-/** The in-sheet "Ban them?" question: a ban is the one action that never happens on a single tap. */
+/**
+ * The in-sheet "Ban them?" question: a ban is the one action that never happens on a single tap. It says what
+ * else a ban does: their `openReports` close with it, and the cron then erases the evidence they carried.
+ */
 export function ConfirmBan({
   name,
+  openReports,
   lang,
   busy,
   onYes,
   onNo,
 }: {
   name: string
+  openReports: number
   lang: Lang
   busy: boolean
   onYes(): void
@@ -59,7 +64,7 @@ export function ConfirmBan({
 }) {
   return (
     <div className="admin-confirm" role="alertdialog" aria-label={t('adminBan', lang)}>
-      <p>{t('adminBanAsk', lang, { name })}</p>
+      <p>{t('adminBanAsk', lang, { name, n: openReports })}</p>
       <div className="admin-actions">
         <button type="button" className="admin-danger" disabled={busy} onClick={onYes}>
           {t('adminBanYes', lang)}
@@ -119,6 +124,7 @@ export function UserActions({
       {asking ? (
         <ConfirmBan
           name={user.profile?.name ?? user.id}
+          openReports={user.openReports}
           lang={lang}
           busy={busy}
           onYes={() => void run('ban')}

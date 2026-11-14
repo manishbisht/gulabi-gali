@@ -309,9 +309,10 @@ export default function App() {
         onVisible={onVisible}
         onGetVerified={() => setInviteOpen(true)}
         onRequest={(person) => setComposing(person.id)}
-        onBlock={async (person) => {
+        onBlock={async (person, stay) => {
           const done = await block(person.id, person.name)
-          if (done) closePerson()
+          // `stay`: they also want to report; the card closes when the report form does
+          if (done && !stay) closePerson()
           return done
         }}
         onClose={closePerson}

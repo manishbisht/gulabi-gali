@@ -204,6 +204,10 @@ it('Close + ban asks first in the sheet, then bans and closes once, however ofte
   await click(host, 'Close + ban')
   const ask = host.querySelector('[role="alertdialog"]')!
   expect(ask.textContent).toContain('Ban Ravi Kumar?')
+  // what else a ban does, before it is done: the reports about them close, and their evidence goes
+  expect(ask.textContent).toContain(
+    'Their open reports (1) close too, and the evidence in them is erased once closed.',
+  )
   expect(calls.filter((c) => c.method === 'POST')).toEqual([])
   // A double tap on a slow network: the second finds the button disabled.
   await act(async () => {
@@ -291,6 +295,25 @@ it('the queue shows each person once, with how many open reports there are; a ba
   expect([...host.querySelectorAll('[data-report]')].map((c) => c.getAttribute('data-report'))).toEqual([
     'r-3',
   ])
+})
+
+it('a card the next page repeats is shown once', async () => {
+  stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/reports?state=open&cursor=': () => json({ reports: [chatReport], next: 'CURSOR-1' }),
+      // the queue moved between the two loads: the same report comes again
+      'GET /api/admin/reports?state=open&cursor=CURSOR-1': () =>
+        json({ reports: [chatReport, { ...chatReport, id: 'r-older' }], next: null }),
+    }),
+  )
+  const host = await render()
+  await click(host, 'Load more')
+  await settle()
+  expect([...host.querySelectorAll('[data-report]')].map((c) => c.getAttribute('data-report'))).toEqual([
+    'r-chat',
+    'r-older',
+  ])
+  expect(host.querySelectorAll('.admin-group')).toHaveLength(1)
 })
 
 it('the queue loads 20 more with the cursor it was given', async () => {
@@ -389,6 +412,9 @@ it('looks someone up and acts on them; a ban asks first', async () => {
   expect(lookup.textContent).toContain('Verified by admin')
   expect(buttons(lookup, 'Verify')).toHaveLength(0)
   await click(lookup, 'Ban')
+  expect(lookup.querySelector('[role="alertdialog"]')!.textContent).toContain(
+    'Their open reports (1) close too',
+  )
   expect(calls.some((c) => c.path.endsWith('/ban'))).toBe(false)
   await click(lookup, 'Yes, ban')
   await settle()

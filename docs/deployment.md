@@ -174,10 +174,11 @@ remembered (a ban, a hide, a mute, a 14-day request cooldown), so none of those 
 
 **Fill in before launch**
 
-- `{OWNER_CONTACT}`: the contact line in the privacy note (`privacyContact` in
-  `frontend/src/i18n/strings.ts`, both languages). Replace it with a real email or handle; `grep -n
+- `{OWNER_CONTACT}`: the contact in the privacy note and the delete step (`privacyContact`, `privacyDelete` and
+  `deleteWhat` in `frontend/src/i18n/strings.ts`, both languages). Replace it with a real email or handle; `grep -n
 OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the tests do not name it). The deploy
-  workflow's build job checks this on `main` and fails while the placeholder is still there.
+  workflow's `check` job fails on `main` while the placeholder is still there, which holds back the whole
+  release (the API and the site).
 - The word list (`backend/src/filter/words.ts`) needs a review by a native Hindi and Hinglish speaker.
 
 **Pre-launch safety checklist**

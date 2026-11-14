@@ -32,6 +32,8 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
   const [chat, setChat] = useState<MatchView | null>(null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  /** A chat blocked from inside it with "Also report?": it stays open, ended, under the report form. */
+  const [left, setLeft] = useState<string | null>(null)
   /** An ended chat being reported, from the "Ended chats" list. */
   const [reporting, setReporting] = useState<EndedChat | null>(null)
   const { keyboard, height } = useKeyboard()
@@ -52,7 +54,9 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
   // The other side ended it (an unmatch, a block, a deletion): the chat stays, saying it has ended, with a
   // Report button. Unmatched or blocked from here: back to the list (see `onUnmatch`, `onBlock`).
   const ended =
-    chat !== null && !open && (conn.ended.has(chat.id) || conn.endedChats.some((e) => e.matchId === chat.id))
+    chat !== null &&
+    !open &&
+    (left === chat.id || conn.ended.has(chat.id) || conn.endedChats.some((e) => e.matchId === chat.id))
   const showing = open ?? (ended ? chat : null)
   const style = keyboard ? ({ '--kb': `${keyboard}px`, '--vvh': `${height}px` } as CSSProperties) : undefined
 
@@ -92,9 +96,10 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
           onBack={() => setChat(null)}
           onBlock={
             onBlock &&
-            (async () => {
+            (async (stay?: boolean) => {
               const done = await onBlock(showing.person.id, showing.person.name)
-              if (done) setChat(null)
+              if (done && stay) setLeft(showing.id)
+              else if (done) setChat(null)
               return done
             })
           }

@@ -63,7 +63,7 @@ it('PersonCard: Block asks in the sheet first, and blocks only on the yes', asyn
   expect(host.querySelector('[role="alertdialog"]')).toBeNull()
   await act(async () => button(host, 'Block').click())
   await act(async () => button(host, 'Yes, block').click())
-  expect(onBlock).toHaveBeenCalledWith(ravi)
+  expect(onBlock).toHaveBeenCalledWith(ravi, false)
   expect(confirm).not.toHaveBeenCalled()
 })
 
@@ -193,7 +193,7 @@ it('ProfileSheet: Report next to Unblock files a report about the person you blo
   })
 })
 
-it('BlockConfirm: "Also report?" takes you to the report first, and blocks once it has gone', async () => {
+it('BlockConfirm: "Also report?" blocks at once, then opens the report; cancelling it leaves the block', async () => {
   const sent: unknown[] = []
   vi.stubGlobal(
     'fetch',
@@ -206,6 +206,7 @@ it('BlockConfirm: "Also report?" takes you to the report first, and blocks once 
     }),
   )
   const onBlock = vi.fn(async () => true)
+  const onClose = vi.fn()
   const host = document.body.appendChild(document.createElement('div'))
   await act(async () =>
     createRoot(host).render(
@@ -219,7 +220,7 @@ it('BlockConfirm: "Also report?" takes you to the report first, and blocks once 
         onGetVerified={() => {}}
         onRequest={() => {}}
         onBlock={onBlock}
-        onClose={() => {}}
+        onClose={onClose}
       />,
     ),
   )
@@ -228,15 +229,51 @@ it('BlockConfirm: "Also report?" takes you to the report first, and blocks once 
   const ask = host.querySelector('[role="alertdialog"]')!
   const box = [...ask.querySelectorAll('label')].find((l) => l.textContent === 'Also report?')!
   await act(async () => box.querySelector('input')!.click())
-  await act(async () => button(ask as HTMLElement, 'Next: the report').click())
-  // nothing blocked yet: the report comes first, with "Also block?" already ticked
-  expect(onBlock).not.toHaveBeenCalled()
-  const form = host.querySelector('[role="dialog"][aria-label="Report Ravi"]')!
-  const also = [...form.querySelectorAll('label')].find((l) => l.textContent === 'Also block?')!
-  expect(also.querySelector('input')!.checked).toBe(true)
-  await act(async () => button(form as HTMLElement, 'Harassing me').click())
-  await act(async () => button(form as HTMLElement, 'Send report').click())
+  // the same plain block button, ticked or not
+  await act(async () => button(ask as HTMLElement, 'Yes, block').click())
   await settle()
-  expect(sent).toEqual([{ kind: 'person', targetId: 'p2', reason: 'harassment' }])
-  expect(onBlock).toHaveBeenCalledWith(ravi)
+  // blocked first, at once, and told to keep the card up for the report
+  expect(onBlock).toHaveBeenCalledOnce()
+  expect(onBlock).toHaveBeenCalledWith(ravi, true)
+  const form = host.querySelector('[role="dialog"][aria-label="Report Ravi"]')!
+  expect(form).not.toBeNull()
+  // already blocked: no "Also block?" in the form
+  expect(form.textContent).not.toContain('Also block?')
+  // cancelled: nothing reported, the block stands (no unblock), and the card closes as a block would close it
+  await act(async () => button(form as HTMLElement, 'Never mind').click())
+  expect(sent).toEqual([])
+  expect(onBlock).toHaveBeenCalledOnce()
+  expect(onClose).toHaveBeenCalledOnce()
+})
+
+it('BlockConfirm: a block that fails opens no report form', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json({ ...ravi, homeArea: 'Raja Park', about: '', pauseRequests: false })),
+  )
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () =>
+    createRoot(host).render(
+      <PersonCard
+        person={ravi}
+        gone={false}
+        viewer="verified"
+        lang="en"
+        token={async () => 'tok'}
+        onVisible={() => {}}
+        onGetVerified={() => {}}
+        onRequest={() => {}}
+        onBlock={async () => false}
+        onClose={() => {}}
+      />,
+    ),
+  )
+  await settle()
+  await act(async () => button(host, 'Block').click())
+  const ask = host.querySelector('[role="alertdialog"]')!
+  await act(async () => [...ask.querySelectorAll('input')][0]!.click())
+  await act(async () => button(ask as HTMLElement, 'Yes, block').click())
+  await settle()
+  expect(host.textContent).toContain("Couldn't block")
+  expect(host.querySelector('[role="dialog"][aria-label="Report Ravi"]')).toBeNull()
 })

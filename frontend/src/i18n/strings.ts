@@ -357,7 +357,6 @@ export const STRINGS = {
   blockYes: { hi: 'Haan, block karo', en: 'Yes, block' },
   blockNo: { hi: 'Rehne do', en: 'Never mind' },
   blockAlsoReport: { hi: 'Report bhi karein?', en: 'Also report?' },
-  blockNext: { hi: 'Aage: report likho', en: 'Next: the report' },
   blockFailed: { hi: 'Block nahi ho paya. Dobara try karo.', en: "Couldn't block. Try again." },
   slowDown: {
     hi: 'Thoda ruko. Bahut jaldi ho raha hai, zara der baad phir try karo.',
@@ -521,8 +520,8 @@ export const STRINGS = {
   adminCloseBan: { hi: 'Band + ban', en: 'Close + ban' },
   adminBan: { hi: 'Ban', en: 'Ban' },
   adminBanAsk: {
-    hi: '{name} ko ban karein? Unke saare connection abhi band ho jayenge.',
-    en: 'Ban {name}? All their connections close right away.',
+    hi: '{name} ko ban karein? Unke saare connection abhi band ho jayenge. Unki khuli reports ({n}) bhi band hongi, aur band hone ke baad unka saboot mita diya jaata hai.',
+    en: 'Ban {name}? All their connections close right away. Their open reports ({n}) close too, and the evidence in them is erased once closed.',
   },
   adminBanYes: { hi: 'Haan, ban karo', en: 'Yes, ban' },
   adminCancel: { hi: 'Rehne do', en: 'Cancel' },

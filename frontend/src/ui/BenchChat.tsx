@@ -32,8 +32,8 @@ interface Props {
 export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand, onBlock }: Props) {
   const [text, setText] = useState('')
   const [blocking, setBlocking] = useState<{ id: string; name: string } | null>(null)
-  /** Who is being reported; `blockToo` when it came from the block question's "Also report?". */
-  const [reporting, setReporting] = useState<{ id: string; name: string; blockToo?: boolean } | null>(null)
+  /** Who is being reported; `blocked` when they were just blocked from the block question's "Also report?". */
+  const [reporting, setReporting] = useState<{ id: string; name: string; blocked?: boolean } | null>(null)
   const list = useRef<HTMLOListElement>(null)
   const { keyboard, height } = useKeyboard()
   // the newest line in view, as in any chat
@@ -79,7 +79,7 @@ export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand
             token
               ? () => {
                   setBlocking(null)
-                  setReporting({ ...blocking, blockToo: true })
+                  setReporting({ ...blocking, blocked: true })
                 }
               : undefined
           }
@@ -87,15 +87,14 @@ export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand
       )}
       {reporting && token && (
         <ReportSheet
-          key={`${reporting.id}:${reporting.blockToo ? 'block' : ''}`}
+          key={`${reporting.id}:${reporting.blocked ? 'blocked' : ''}`}
           kind="bench"
           targetId={reporting.id}
           bench={seat.bench.id}
           name={reporting.name}
           lang={lang}
           token={token}
-          onBlock={onBlock && (() => onBlock(reporting.id, reporting.name))}
-          blockToo={reporting.blockToo}
+          onBlock={reporting.blocked ? undefined : onBlock && (() => onBlock(reporting.id, reporting.name))}
           onClose={() => setReporting(null)}
         />
       )}

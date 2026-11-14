@@ -115,6 +115,7 @@ function ReportCard({
       {asking ? (
         <ConfirmBan
           name={target.profile?.name ?? target.id}
+          openReports={target.openReports}
           lang={lang}
           busy={busy}
           onYes={() => void close('action', 'ban')}
@@ -172,7 +173,12 @@ export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Tok
   const take = useCallback((out: Awaited<ReturnType<typeof getReports>>, more: boolean) => {
     setBusy(false)
     if (!out.ok) return setFailed(true)
-    setReports((was) => [...(more ? (was ?? []) : []), ...out.value.reports])
+    // A page can repeat a card the last one showed (the queue's order moves as reports close): once each.
+    setReports((was) => {
+      const kept = more ? (was ?? []) : []
+      const shown = new Set(kept.map((r) => r.id))
+      return [...kept, ...out.value.reports.filter((r) => !shown.has(r.id))]
+    })
     setNext(out.value.next)
   }, [])
   useEffect(() => {
@@ -217,7 +223,7 @@ export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Tok
           {byTarget(reports).map((group) => {
             const { target: who } = group[0]!
             return (
-              <li key={group[0]!.id} className="admin-group">
+              <li key={`${who.id}:${group[0]!.id}`} className="admin-group">
                 <h3>{t('adminGroup', lang, { name: who.profile?.name ?? who.id, n: who.openReports })}</h3>
                 <ul className="admin-list">
                   {group.map((r) => (

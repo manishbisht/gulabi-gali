@@ -19,8 +19,11 @@ interface Props {
   onBack(): void
   /** True once the match is gone. */
   onUnmatch(): Promise<boolean>
-  /** Blocks them; true once done (the parent then closes the chat). */
-  onBlock?(): Promise<boolean>
+  /**
+   * Blocks them; true once done. The parent then closes the chat, unless `stay`: the person also wants to
+   * report, so the chat stays (ended) under the report form, and closing the form goes back to the list.
+   */
+  onBlock?(stay?: boolean): Promise<boolean>
 }
 
 /** A message the server has not confirmed yet. */
@@ -65,8 +68,8 @@ export function ChatView({
 }: Props) {
   const [blocking, setBlocking] = useState(false)
   const [reporting, setReporting] = useState(false)
-  /** The report came from the block question's "Also report?": its "Also block?" starts ticked. */
-  const [blockToo, setBlockToo] = useState(false)
+  /** Blocked from here with "Also report?": the form offers no block, and closing it goes back to the list. */
+  const [blocked, setBlocked] = useState(false)
   /** The header's menu (Unmatch, Block, Report) is open. */
   const [menu, setMenu] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
@@ -219,14 +222,7 @@ export function ChatView({
               {t('blockButton', lang)}
             </button>
           )}
-          <button
-            type="button"
-            className="person-close"
-            onClick={() => {
-              setBlockToo(false)
-              pick(setReporting)
-            }}
-          >
+          <button type="button" className="person-close" onClick={() => pick(setReporting)}>
             {t('reportButton', lang)}
           </button>
         </div>
@@ -238,23 +234,19 @@ export function ChatView({
           name={person.name}
           lang={lang}
           token={token}
-          onBlock={onBlock}
-          blockToo={blockToo}
-          onClose={() => {
-            setReporting(false)
-            setBlockToo(false)
-          }}
+          onBlock={blocked || !onBlock ? undefined : () => onBlock()}
+          onClose={blocked ? onBack : () => setReporting(false)}
         />
       )}
       {blocking && onBlock && (
         <BlockConfirm
           name={person.name}
           lang={lang}
-          onConfirm={onBlock}
+          onConfirm={(stay) => onBlock(stay)}
           onCancel={() => setBlocking(false)}
           onReport={() => {
             setBlocking(false)
-            setBlockToo(true)
+            setBlocked(true)
             setReporting(true)
           }}
         />
@@ -311,7 +303,6 @@ export function ChatView({
               className="person-close"
               onClick={() => {
                 setMenu(false)
-                setBlockToo(false)
                 setReporting(true)
               }}
             >

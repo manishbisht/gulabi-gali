@@ -27,8 +27,11 @@ interface Props {
   /** A resident who is not verified yet: opens the invite code sheet. */
   onGetVerified(): void
   onRequest(person: LivePerson): void
-  /** Blocks them; true once done (the parent then closes the card). */
-  onBlock?(person: LivePerson): Promise<boolean>
+  /**
+   * Blocks them; true once done. The parent then closes the card, unless `stay`: the person also wants to
+   * report, and the card stays up for the form (it closes when the form does).
+   */
+  onBlock?(person: LivePerson, stay?: boolean): Promise<boolean>
   onClose(): void
 }
 
@@ -53,8 +56,8 @@ export function PersonCard({
 }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [reporting, setReporting] = useState(false)
-  /** The report came from the block question's "Also report?": its "Also block?" starts ticked. */
-  const [blockToo, setBlockToo] = useState(false)
+  /** Blocked from this card with "Also report?": the form offers no block, and closing it closes the card. */
+  const [blocked, setBlocked] = useState(false)
   const resident = viewer === 'resident' || viewer === 'verified'
   const [loaded, setLoaded] = useState<Loaded>(null)
   useEffect(() => {
@@ -108,13 +111,13 @@ export function PersonCard({
         <BlockConfirm
           name={name}
           lang={lang}
-          onConfirm={() => onBlock(person)}
+          onConfirm={(stay) => onBlock(person, stay)}
           onCancel={() => setConfirming(false)}
           onReport={
             resident
               ? () => {
                   setConfirming(false)
-                  setBlockToo(true)
+                  setBlocked(true)
                   setReporting(true)
                 }
               : undefined
@@ -128,12 +131,8 @@ export function PersonCard({
           name={name}
           lang={lang}
           token={token}
-          onBlock={onBlock && (() => onBlock(person))}
-          blockToo={blockToo}
-          onClose={() => {
-            setReporting(false)
-            setBlockToo(false)
-          }}
+          onBlock={blocked ? undefined : onBlock && (() => onBlock(person))}
+          onClose={blocked ? onClose : () => setReporting(false)}
         />
       )}
       <div className="person-actions">
@@ -164,14 +163,7 @@ export function PersonCard({
           </button>
         )}
         {resident && !confirming && !reporting && (
-          <button
-            type="button"
-            className="person-close"
-            onClick={() => {
-              setBlockToo(false)
-              setReporting(true)
-            }}
-          >
+          <button type="button" className="person-close" onClick={() => setReporting(true)}>
             {t('reportButton', lang)}
           </button>
         )}

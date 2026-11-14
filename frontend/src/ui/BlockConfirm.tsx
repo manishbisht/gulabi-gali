@@ -4,12 +4,15 @@ import { t, type Lang } from '../i18n/strings'
 interface Props {
   name: string
   lang: Lang
-  /** True once blocked; false shows a retry note and keeps the sheet. */
-  onConfirm(): Promise<boolean>
+  /**
+   * Blocks them; true once blocked, false shows a retry note and keeps the sheet. `thenReport`: "Also report?"
+   * was ticked, so whatever holds this stays up for the report form (`onReport`) instead of closing.
+   */
+  onConfirm(thenReport: boolean): Promise<boolean>
   onCancel(): void
   /**
-   * Offers "Also report?". Ticked, the yes goes to the report form instead (with "Also block?" ticked there),
-   * so the report is filed first and the block follows it.
+   * Offers "Also report?". The block always happens first, on the yes; only once it is done does this open the
+   * report form, so cancelling or failing the report never leaves them unblocked.
    */
   onReport?(): void
 }
@@ -20,13 +23,14 @@ export function BlockConfirm({ name, lang, onConfirm, onCancel, onReport }: Prop
   const [failed, setFailed] = useState(false)
   const [alsoReport, setAlsoReport] = useState(false)
   const yes = async () => {
-    if (alsoReport && onReport) return onReport()
+    const thenReport = alsoReport && onReport !== undefined
     setBusy(true)
     setFailed(false)
-    const done = await onConfirm().catch(() => false)
-    // on success the parent closes this; it may already be gone
+    const done = await onConfirm(thenReport).catch(() => false)
+    // on success the parent closes this (or, to report, swaps it for the form); it may already be gone
     setBusy(false)
-    if (!done) setFailed(true)
+    if (!done) return setFailed(true)
+    if (thenReport) onReport!()
   }
   return (
     <div className="chat-confirm" role="alertdialog" aria-label={t('blockButton', lang)}>
@@ -44,7 +48,7 @@ export function BlockConfirm({ name, lang, onConfirm, onCancel, onReport }: Prop
       )}
       <div className="person-actions">
         <button type="button" className="landmark-stamp" disabled={busy} onClick={() => void yes()}>
-          {t(alsoReport && onReport ? 'blockNext' : 'blockYes', lang)}
+          {t('blockYes', lang)}
         </button>
         <button type="button" className="person-close" onClick={onCancel}>
           {t('blockNo', lang)}

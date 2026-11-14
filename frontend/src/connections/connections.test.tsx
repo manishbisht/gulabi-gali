@@ -57,6 +57,7 @@ const incomingFrom = (p: PublicPerson, reason: string): RequestView => ({
 beforeEach(() => {
   FakeSocket.all = []
   calls = []
+  onBlock = undefined
   ended = []
   reports = []
   armed = false
@@ -105,6 +106,9 @@ afterEach(() => {
 
 const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))))
 
+/** What the Connections sheet's block does here: set per test. */
+let onBlock: ((id: string, name: string) => Promise<boolean>) | undefined
+
 function Probe({ sheet, user = 'u1' }: { sheet: boolean; user?: string | null }) {
   const conn = useConnections({ user, token: async () => 'tok' })
   const [open, setOpen] = useState(sheet)
@@ -113,7 +117,15 @@ function Probe({ sheet, user = 'u1' }: { sheet: boolean; user?: string | null })
       <output data-testid="badge">{conn.badge}</output>
       <output data-testid="incoming">{conn.incoming.length}</output>
       <button type="button" data-testid="open" onClick={() => setOpen(true)} />
-      {open && <Connections conn={conn} lang="en" token={async () => 'tok'} onClose={() => setOpen(false)} />}
+      {open && (
+        <Connections
+          conn={conn}
+          lang="en"
+          token={async () => 'tok'}
+          onBlock={onBlock}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   )
 }
@@ -338,4 +350,41 @@ it('an ended chat with no saved name says someone', async () => {
   await settle()
   await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
   expect(host.querySelector('[aria-label="Ended chats"]')!.textContent).toContain('Someone')
+})
+
+it('blocking from a chat with "Also report?" blocks at once and keeps the chat for the report form', async () => {
+  const blocked: string[] = []
+  onBlock = async (id) => {
+    blocked.push(id)
+    // the block ends the match on the server
+    matches = matches.filter((m) => m.id !== 'm1')
+    return true
+  }
+  const { host, q, button, click } = await mount()
+  await click(q('[data-testid=open]'))
+  await settle()
+  await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
+  await click(button(/Ravi/))
+  await settle()
+  await click(button(/^More$/))
+  await click(button(/^Block$/))
+  const ask = host.querySelector('[role=alertdialog]')!
+  await click(
+    [...ask.querySelectorAll('label')].find((l) => l.textContent === 'Also report?')!.querySelector('input')!,
+  )
+  await click(button(/^Yes, block$/))
+  await settle()
+  expect(blocked).toEqual(['p2'])
+  // the list refreshes (the match is gone), and the chat stays, ended, under the form
+  await act(async () => FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'request', id: 'x' }) }))
+  await settle()
+  const form = host.querySelector('[role=dialog][aria-label="Report Ravi"]')!
+  expect(form).not.toBeNull()
+  expect(form.textContent).not.toContain('Also block?')
+  // cancelled: no report, the block stands, back to the list
+  await click([...form.querySelectorAll('button')].find((b) => b.textContent === 'Never mind')!)
+  await settle()
+  expect(reports).toEqual([])
+  expect(blocked).toEqual(['p2'])
+  expect(host.querySelector('.conn-chat')).toBeNull()
 })
