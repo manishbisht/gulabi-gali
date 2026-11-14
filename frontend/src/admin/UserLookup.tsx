@@ -1,7 +1,16 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import type { AdminUser } from '../net/protocol'
-import { actOn, daysSince, findUsers, isMuted, when, type Token, type UserAction } from './adminApi'
+import {
+  actOn,
+  daysSince,
+  findUsers,
+  getVouched,
+  isMuted,
+  when,
+  type Token,
+  type UserAction,
+} from './adminApi'
 
 /** Who someone is to the moderator: name and id, account age, who vouched for them, and their trust state. */
 export function UserSummary({ user, lang }: { user: AdminUser; lang: Lang }) {
@@ -125,8 +134,58 @@ export function UserActions({
             </button>
           )}
           {muted ? button('adminUnmute', 'unmute') : button('adminMute', 'mute')}
-          {!user.verified && button('adminVerify', 'verify')}
+          {user.verified ? button('adminUnverify', 'unverify') : button('adminVerify', 'verify')}
           {user.hidden && button('adminUnhide', 'unhide')}
+        </div>
+      )}
+      {failed && (
+        <p className="admin-error" role="alert">
+          {t('adminFailed', lang)}
+        </p>
+      )}
+    </>
+  )
+}
+
+/**
+ * Whom someone vouched for (their invite redeemed), asked for on a tap: a ring of accounts brought in by one
+ * member shows up here, each with their account age.
+ */
+function Vouched({ user, lang, token }: { user: AdminUser; lang: Lang; token: Token }) {
+  const [list, setList] = useState<AdminUser[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const load = async () => {
+    setBusy(true)
+    setFailed(false)
+    const out = await getVouched(token, user.id)
+    setBusy(false)
+    if (out.ok) setList(out.value)
+    else setFailed(true)
+  }
+  return (
+    <>
+      {list === null && (
+        <div className="admin-actions">
+          <button type="button" disabled={busy} onClick={() => void load()}>
+            {t('adminVouched', lang)}
+          </button>
+        </div>
+      )}
+      {list && (
+        <div className="admin-vouched" aria-label={t('adminVouched', lang)}>
+          <h3>{t('adminVouched', lang)}</h3>
+          {list.length === 0 ? (
+            <p className="admin-empty">{t('adminNoResults', lang)}</p>
+          ) : (
+            <ul className="admin-list">
+              {list.map((u) => (
+                <li key={u.id}>
+                  <UserSummary user={u} lang={lang} />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {failed && (
@@ -182,6 +241,7 @@ export function UserLookup({ lang, token, onChanged }: { lang: Lang; token: Toke
             <li key={u.id} className="admin-card">
               <UserSummary user={u} lang={lang} />
               <UserActions user={u} lang={lang} token={token} onChange={replace} />
+              <Vouched user={u} lang={lang} token={token} />
             </li>
           ))}
         </ul>

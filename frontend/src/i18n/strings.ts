@@ -505,6 +505,8 @@ export const STRINGS = {
   adminMute: { hi: '24 ghante mute', en: 'Mute 24h' },
   adminUnmute: { hi: 'Unmute', en: 'Unmute' },
   adminVerify: { hi: 'Verify karo', en: 'Verify' },
+  adminUnverify: { hi: 'Verified hatao', en: 'Unverify' },
+  adminVouched: { hi: 'Inhone kise verify kiya', en: 'Whom they verified' },
   adminLookup: { hi: 'Kisi ko dhundo', en: 'Find someone' },
   adminLookupLabel: { hi: 'Naam ya id', en: 'Name or id' },
   adminSearch: { hi: 'Dhundo', en: 'Search' },

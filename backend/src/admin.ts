@@ -72,11 +72,13 @@ export async function handleAdmin(
     if (pathname === '/api/admin/hidden') return listHidden(env)
     if (pathname === '/api/admin/stats') return stats(env)
     if (pathname === '/api/admin/waitlist.csv') return waitlistCsv(env)
+    const vouched = pathname.match(/^\/api\/admin\/users\/([^/]+)\/verified$/)
+    if (vouched) return listVouched(env, decode(vouched[1]!))
   }
   if (method !== 'POST') return notFound()
   const report = pathname.match(/^\/api\/admin\/reports\/([^/]+)\/(dismiss|action)$/)
   if (report) return closeReport(env, decode(report[1]!), report[2] === 'action' ? 'actioned' : 'dismissed')
-  const act = pathname.match(/^\/api\/admin\/users\/([^/]+)\/(ban|unban|mute|unmute|verify|unhide)$/)
+  const act = pathname.match(/^\/api\/admin\/users\/([^/]+)\/(ban|unban|mute|unmute|verify|unverify|unhide)$/)
   if (act) return actOn(env, decode(act[1]!), act[2] as UserAction, later)
   return notFound()
 }
@@ -303,14 +305,17 @@ async function closeReport(env: Env, id: string, state: 'actioned' | 'dismissed'
   return Response.json(out)
 }
 
-type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unhide'
+type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unverify' | 'unhide'
 
 /**
  * `POST /api/admin/users/:id/{action}`: 200 with the person as they now are, or 404 for an id with no
- * account. Every action is idempotent: a repeat finds the state already set and answers it.
+ * account (but see `ban`). Every action is idempotent: a repeat finds the state already set and answers it.
  *
  * - `ban`: off the map and out of every list (`ACTIVE`), their district and inbox sockets closed before this
- *   answers, and `/api/me` says `banned`. `unban` restores all of it.
+ *   answers, and `/api/me` says `banned`. Their unused invite codes are deleted (a code is their word for
+ *   someone). `unban` restores the rest. An id whose account was deleted, but that a report, held chat or
+ *   block still names, gets a tombstone row that is banned, so signing in again with it is refused.
+ * - `unverify`: back to a resident (`verified_by` cleared), and their unused codes deleted.
  * - `mute`: no writes for `MUTE_MS` (see `muteGate`); a repeat while muted keeps the end it has. `unmute`.
  * - `verify`: verified by `admin`, with their 2 codes.
  * - `unhide`: back on the map, with `unhidden_at` set: auto-hide then counts only reports filed after it (see
@@ -318,16 +323,24 @@ type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unhide'
  *   open in the queue, evidence and all: unhiding is not a verdict on them.
  */
 async function actOn(env: Env, id: string, action: UserAction, later: Later): Promise<Response> {
-  const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(id).first()
-  if (!exists) return notFound()
   const now = Date.now()
+  const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(id).first()
+  if (!exists) {
+    if (action !== 'ban' || !(await named(env, id))) return notFound()
+    await env.DB.prepare('INSERT OR IGNORE INTO users (id, created_at, banned) VALUES (?, ?, 1)')
+      .bind(id, now)
+      .run()
+  }
   const set = (sql: string, ...args: unknown[]) =>
     env.DB.prepare(`UPDATE users SET ${sql} WHERE id = ?`)
       .bind(...args, id)
       .run()
   switch (action) {
     case 'ban':
-      await set('banned = 1')
+      await env.DB.batch([
+        env.DB.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(id),
+        env.DB.prepare('DELETE FROM invites WHERE owner = ? AND used_by IS NULL').bind(id),
+      ])
       // Always told again: a repeat also mends a live object that missed the first.
       await refreshUser(env, id, 'ban')
       break
@@ -350,6 +363,12 @@ async function actOn(env: Env, id: string, action: UserAction, later: Later): Pr
     case 'verify':
       await markVerified(env, id, 'admin', later)
       break
+    case 'unverify':
+      await env.DB.batch([
+        env.DB.prepare('UPDATE users SET verified = 0, verified_by = NULL WHERE id = ?').bind(id),
+        env.DB.prepare('DELETE FROM invites WHERE owner = ? AND used_by IS NULL').bind(id),
+      ])
+      break
     case 'unhide':
       // Only while hidden: a repeat leaves `unhidden_at` (and so what counts) as it was.
       await env.DB.prepare('UPDATE users SET hidden = 0, unhidden_at = ? WHERE id = ? AND hidden = 1')
@@ -359,6 +378,43 @@ async function actOn(env: Env, id: string, action: UserAction, later: Later): Pr
       break
   }
   return Response.json((await loadUsers(env, [id])).get(id))
+}
+
+/**
+ * Whether a deleted account's id is still named by something a ban should hold against: a report about them,
+ * a held chat, or a block either way. An id nothing names is one nobody has (a typo): a ban on it is a 404.
+ */
+async function named(env: Env, id: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT 1 AS x WHERE EXISTS (SELECT 1 FROM reports WHERE target_kind IN ${PERSON_KINDS} AND target_id = ?1)
+       OR EXISTS (SELECT 1 FROM held_evidence WHERE owner = ?1)
+       OR EXISTS (SELECT 1 FROM held_evidence WHERE other = ?1)
+       OR EXISTS (SELECT 1 FROM blocks WHERE a = ?1)
+       OR EXISTS (SELECT 1 FROM blocks WHERE b = ?1)`,
+  )
+    .bind(id)
+    .first()
+  return row !== null
+}
+
+/** How many people `GET /api/admin/users/:id/verified` lists. */
+const VOUCHED_LIMIT = 100
+
+/**
+ * `GET /api/admin/users/:id/verified`: up to `VOUCHED_LIMIT` people `id` verified (their invite redeemed, so
+ * `verified_by` is them), newest accounts first: a ring of accounts vouched for by one member shows here.
+ */
+async function listVouched(env: Env, id: string): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    'SELECT id FROM users WHERE verified_by = ? ORDER BY created_at DESC LIMIT ?',
+  )
+    .bind(id, VOUCHED_LIMIT)
+    .all<{ id: string }>()
+  const users = await loadUsers(
+    env,
+    results.map((r) => r.id),
+  )
+  return Response.json(results.map((r) => users.get(r.id)!))
 }
 
 /**

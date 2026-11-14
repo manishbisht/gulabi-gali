@@ -357,6 +357,40 @@ it('looks someone up and acts on them; a ban asks first', async () => {
   expect(buttons(lookup, 'Unban')).toHaveLength(1)
 })
 
+it('lists whom someone vouched for, and takes their verification away', async () => {
+  const boss = person('dev:boss', 'Boss', { verifiedBy: 'admin' })
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/users?q=Boss': () => json([boss]),
+      'GET /api/admin/users/dev%3Aboss/verified': () =>
+        json([person('dev:ring-1', 'Ring One', { verifiedBy: 'dev:boss' })]),
+      'POST /api/admin/users/dev%3Aboss/unverify': () => json({ ...boss, verified: false, verifiedBy: null }),
+    }),
+  )
+  const host = await render()
+  const lookup = [...host.querySelectorAll('section')].find((s) => s.textContent?.includes('Find someone'))!
+  const input = lookup.querySelector('input')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Boss')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await click(lookup, 'Search')
+  await settle()
+  await click(lookup, 'Whom they verified')
+  await settle()
+  const vouched = lookup.querySelector('[aria-label="Whom they verified"]')!
+  expect(vouched.textContent).toContain('Ring One')
+  expect(vouched.textContent).toContain('Verified by dev:boss')
+  await click(lookup, 'Unverify')
+  await settle()
+  expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+    '/api/admin/users/dev%3Aboss/unverify',
+  ])
+  expect(lookup.textContent).toContain('Not verified')
+  expect(buttons(lookup, 'Unverify')).toHaveLength(0)
+  expect(buttons(lookup, 'Verify')).toHaveLength(1)
+})
+
 it(`stats are asked for every ${STATS_MS / 1000} s, and only while the page is in view`, async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
   const calls = stubApi(ADMIN_ROUTES())

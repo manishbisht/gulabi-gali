@@ -91,12 +91,13 @@ const ROUTES: [string, string][] = [
   ['GET', '/api/admin/reports?state=open&cursor=abc'],
   ['POST', '/api/admin/reports/some-id/dismiss'],
   ['POST', '/api/admin/reports/some-id/action'],
-  ...['ban', 'unban', 'mute', 'unmute', 'verify', 'unhide'].map((a): [string, string] => [
+  ...['ban', 'unban', 'mute', 'unmute', 'verify', 'unverify', 'unhide'].map((a): [string, string] => [
     'POST',
     `/api/admin/users/dev%3Asomeone/${a}`,
   ]),
   ['DELETE', '/api/admin/posters/p1'],
   ['GET', '/api/admin/users?q=a'],
+  ['GET', '/api/admin/users/dev%3Asomeone/verified'],
   ['GET', '/api/admin/hidden'],
   ['GET', '/api/admin/stats'],
   ['GET', '/api/admin/waitlist.csv'],
@@ -277,6 +278,100 @@ describe('admin', () => {
     // Someone who does not exist is a 404, not a new row.
     expect((await userAction('dev:no-such-person', 'ban')).status).toBe(404)
     expect(await userRow('dev:no-such-person')).toBeNull()
+  })
+
+  it("a ban takes away the person's unused invite codes; the used ones stay as the record", async () => {
+    const founder = await SELF.fetch(`${API}/api/dev/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: 'dev:ban-inviter' }),
+    })
+    const [first, second] = ((await founder.json()) as { codes: string[] }).codes
+    const guest = await resident('Ban Invitee', {}, { verified: false })
+    expect(
+      (await api('/api/invites/redeem', guest, { method: 'POST', body: JSON.stringify({ code: first }) }))
+        .status,
+    ).toBe(200)
+    expect((await userAction('dev:ban-inviter', 'ban')).status).toBe(200)
+    const codes = (
+      await testEnv.DB.prepare('SELECT code, used_by FROM invites WHERE owner = ?')
+        .bind('dev:ban-inviter')
+        .all<{ code: string; used_by: string | null }>()
+    ).results
+    expect(codes).toEqual([{ code: first, used_by: devId('Ban Invitee') }])
+    // The spare code is gone: nobody can redeem it now.
+    const late = await resident('Ban Late Guest', {}, { verified: false })
+    const res = await api('/api/invites/redeem', late, {
+      method: 'POST',
+      body: JSON.stringify({ code: second }),
+    })
+    expect(res.status).toBe(404)
+  })
+
+  it('unverify takes the tier and the unused codes; verified lists whom someone vouched for', async () => {
+    const founder = await SELF.fetch(`${API}/api/dev/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: 'dev:ring-voucher' }),
+    })
+    const [code] = ((await founder.json()) as { codes: string[] }).codes
+    const guest = await resident('Vouched Vinay', {}, { verified: false })
+    await api('/api/invites/redeem', guest, { method: 'POST', body: JSON.stringify({ code }) })
+    await resident('Vouched Not')
+
+    const list = await asOwner(`/api/admin/users/${encodeURIComponent('dev:ring-voucher')}/verified`)
+    expect(list.status).toBe(200)
+    expect(((await list.json()) as AdminUser[]).map((u) => [u.id, u.verifiedBy])).toEqual([
+      [devId('Vouched Vinay'), 'dev:ring-voucher'],
+    ])
+    expect(await (await asOwner('/api/admin/users/dev%3Anobody-vouched/verified')).json()).toEqual([])
+
+    const guestId = devId('Vouched Vinay')
+    for (let i = 0; i < 2; i++) {
+      const res = await userAction(guestId, 'unverify')
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({ id: guestId, verified: false, verifiedBy: null })
+    }
+    expect(
+      await testEnv.DB.prepare('SELECT COUNT(*) AS n FROM invites WHERE owner = ? AND used_by IS NULL')
+        .bind(guestId)
+        .first<{ n: number }>(),
+    ).toEqual({ n: 0 })
+    // Back to a resident: no requests to strangers.
+    const asked = await api('/api/requests', guest, {
+      method: 'POST',
+      body: JSON.stringify({ to: devId('Vouched Not'), reason: 'Chalo kabhi chai pe milte hain' }),
+    })
+    expect(asked.status).toBe(403)
+    expect((await userAction('dev:no-such-person', 'unverify')).status).toBe(404)
+  })
+
+  it('a deleted account can still be banned, and signing in again with that id is refused', async () => {
+    const { a, b, aId } = await pair('Gone Ganesh', 'Stays Sita')
+    // Reported, then deleted: the reports about him stay, and so is an id the moderator can act on.
+    expect(
+      (
+        await api('/api/reports', b, {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'chat', targetId: aId, reason: 'harassment' }),
+        })
+      ).status,
+    ).toBe(201)
+    expect((await api('/api/me', a, { method: 'DELETE' })).status).toBe(204)
+    expect(await userRow(aId)).toBeNull()
+
+    const res = await userAction(aId, 'ban')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ id: aId, banned: true, profile: null })
+    // A repeat is the same.
+    expect((await userAction(aId, 'ban')).status).toBe(200)
+    // Signed in again with the same id: banned, not a fresh start.
+    const me = await api('/api/me', a)
+    expect(me.status).toBe(403)
+    expect(await me.json()).toEqual({ error: 'banned' })
+    // Every other action on an id with no account is still a 404.
+    expect((await userAction(devId('Gone Nobody'), 'ban')).status).toBe(404)
+    expect(await userRow(devId('Gone Nobody'))).toBeNull()
   })
 
   it('mute blocks writes for 24h', async () => {

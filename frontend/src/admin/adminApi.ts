@@ -44,7 +44,11 @@ export const getReports = (token: Token, state: ReportState, cursor: string | nu
   call<AdminReportPage>(token, `/api/admin/reports?state=${state}&cursor=${id(cursor ?? '')}`)
 export const findUsers = (token: Token, q: string) => call<AdminUser[]>(token, `/api/admin/users?q=${id(q)}`)
 
-export type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unhide'
+/** Everyone `userId` verified (their invite redeemed). */
+export const getVouched = (token: Token, userId: string) =>
+  call<AdminUser[]>(token, `/api/admin/users/${id(userId)}/verified`)
+
+export type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unverify' | 'unhide'
 export const actOn = (token: Token, userId: string, action: UserAction) =>
   call<AdminUser>(token, `/api/admin/users/${id(userId)}/${action}`, { method: 'POST' })
 export const closeReport = (token: Token, reportId: string, how: 'dismiss' | 'action') =>

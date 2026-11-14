@@ -90,6 +90,17 @@ export async function isVerified(env: Env, userId: string): Promise<boolean> {
   return row?.verified === 1
 }
 
+/** Whose codes still redeem, as SQL over `users`: verified and not banned. */
+const VOUCHES = 'banned = 0 AND verified = 1'
+
+/** Whether `userId`'s codes still redeem (see `VOUCHES`). */
+async function vouches(env: Env, userId: string): Promise<boolean> {
+  return (
+    (await env.DB.prepare(`SELECT 1 AS x FROM users WHERE id = ? AND ${VOUCHES}`).bind(userId).first()) !==
+    null
+  )
+}
+
 /** `GET /api/invites`: the caller's own codes, used or not. Only a resident has any. */
 export async function listInvites(env: Env, userId: string): Promise<Response> {
   if (!(await activeRow(env, userId))) return fail('ghost', 403)
@@ -110,8 +121,9 @@ export async function listInvites(env: Env, userId: string): Promise<Response> {
 }
 
 /**
- * `POST /api/invites/redeem {code}`. The code is claimed with one conditional UPDATE, so of two people
- * redeeming it at once exactly one gets `meta.changes === 1`; the verification is claimed the same way, so one
+ * `POST /api/invites/redeem {code}`. A code whose owner is banned or no longer verified is a 404 `bad-code`,
+ * like one that does not exist. The code is claimed with one conditional UPDATE (which checks the owner
+ * again), so of two people redeeming it at once exactly one gets `meta.changes === 1`; the verification is claimed the same way, so one
  * person redeeming two codes at once is verified once and the spare code is put back.
  */
 export async function redeemInvite(
@@ -130,6 +142,9 @@ export async function redeemInvite(
     .bind(code)
     .first<{ owner: string; used_by: string | null }>()
   if (!invite) return fail('bad-code', 404)
+  // A code is a verified member's word for someone: once they are banned or no longer verified, it vouches for
+  // nobody (and says no more than a wrong code would).
+  if (!(await vouches(env, invite.owner))) return fail('bad-code', 404)
   if (invite.owner === userId) return fail('own-code', 403)
   // Checked before the code is touched, so a member who is already verified never burns someone's code.
   if (await isVerified(env, userId)) return fail('already-verified', 409)
@@ -145,8 +160,9 @@ export async function redeemInvite(
     results = await env.DB.batch([
       env.DB.prepare(
         `UPDATE invites SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL
-         AND NOT EXISTS (SELECT 1 FROM users WHERE id = ? AND verified = 1)`,
-      ).bind(userId, now, code, userId),
+         AND NOT EXISTS (SELECT 1 FROM users WHERE id = ? AND verified = 1)
+         AND EXISTS (SELECT 1 FROM users WHERE id = ? AND ${VOUCHES})`,
+      ).bind(userId, now, code, userId, invite.owner),
       env.DB.prepare(
         `UPDATE users SET verified = 1, verified_by = ? WHERE id = ? AND verified = 0 AND ${won()}`,
       ).bind(invite.owner, userId, code, userId),
@@ -161,8 +177,9 @@ export async function redeemInvite(
     return fail('failed', 500)
   }
   if (results[0]!.meta.changes !== 1) {
-    // Someone else won the code, or this person was verified in the meantime.
-    return (await isVerified(env, userId)) ? fail('already-verified', 409) : fail('used', 410)
+    // Someone else won the code, this person was verified in the meantime, or its owner was banned or unverified.
+    if (await isVerified(env, userId)) return fail('already-verified', 409)
+    return (await vouches(env, invite.owner)) ? fail('used', 410) : fail('bad-code', 404)
   }
   // A freshly drawn code colliding with an existing one (1 in 10^12) leaves a short hand: top up.
   await issueCodes(env, userId).catch((err) => console.error('top-up failed', err))

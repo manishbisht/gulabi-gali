@@ -145,6 +145,32 @@ describe('invite codes', () => {
     expect((await api('/api/invites', ghost)).status).toBe(403)
   })
 
+  it("a banned or unverified owner's code redeems for nobody, and is not burnt", async () => {
+    const owner = await member('Inv Fallen Owner')
+    const ownerId = devId('Inv Fallen Owner')
+    const guest = await unverified('Inv Fallen Guest')
+    const used = async (code: string) =>
+      (
+        await testEnv.DB.prepare('SELECT used_by FROM invites WHERE code = ?')
+          .bind(code)
+          .first<{ used_by: string | null }>()
+      )?.used_by
+    // Banned (straight in D1, so the codes stay: this is the claim's own guard, not the ban's clean-up).
+    await testEnv.DB.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(ownerId).run()
+    const res = await redeem(guest, owner.codes[0])
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'bad-code' })
+    expect(await used(owner.codes[0]!)).toBeNull()
+    expect((await me(guest)).verified).toBe(false)
+    // No longer verified: the same.
+    await testEnv.DB.prepare('UPDATE users SET banned = 0, verified = 0 WHERE id = ?').bind(ownerId).run()
+    expect((await redeem(guest, owner.codes[1])).status).toBe(404)
+    expect(await used(owner.codes[1]!)).toBeNull()
+    // Verified again, the code works.
+    await testEnv.DB.prepare('UPDATE users SET verified = 1 WHERE id = ?').bind(ownerId).run()
+    expect((await redeem(guest, owner.codes[1])).status).toBe(200)
+  })
+
   it('tops up to 2 unused codes, never more', async () => {
     const owner = await member('Topup Owner')
     await issueCodes(testEnv, devId('Topup Owner'), 2)
