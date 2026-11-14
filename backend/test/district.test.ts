@@ -684,6 +684,21 @@ describe('benches', () => {
     }
   })
 
+  it('a sitter is stood up past 2.5 m from the bench, as the client does', async () => {
+    const a = await sitter('Edge Ekta', 'malviya-nagar', 4)
+    const from = a.mark()
+    a.send({ t: 'move', ...by('malviya-nagar', 4, 2.4), ry: 0 })
+    await a.sync()
+    expect(a.all('seated', from)).toEqual([])
+    a.send({ t: 'move', ...by('malviya-nagar', 4, 2.6), ry: 0 })
+    expect(await a.next('seated', undefined, from)).toEqual({
+      t: 'seated',
+      bench: null,
+      seat: null,
+      with: [],
+    })
+  })
+
   it('switching benches in place tells both benches', async () => {
     // Benches 2 and 8 in MI Road stand 3.5 m apart: one spot is in reach of both.
     const a = await live('mi-road', { token: await resident('Swap Sima') })

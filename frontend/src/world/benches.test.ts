@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BENCH_SEATS } from '../net/protocol'
-import { PLAYER_RADIUS } from '../player/player'
+import { PLAYER_RADIUS, WALK_SPEED } from '../player/player'
 import { BENCH_RANGE, benchesOf, nearestBench, seatPose } from './benches'
 import { moveWithCollision } from './collision'
 import { DISTRICTS, loadDistrict } from './district'
@@ -21,6 +21,26 @@ describe('benches', () => {
     expect(nearestBench({ x: -3.2, z: 36 }, benches)).toBe(tapri)
     expect(nearestBench({ x: -2.9, z: 36 }, benches)).toBeNull()
     expect(nearestBench(walledCity.spawn, benches)).toBeNull()
+  })
+
+  it('standing up from a Chaupar tapri seat walks off it, a frame at a time', async () => {
+    const d = await loadDistrict('walled-city')
+    // the two tapris turned 45° at Badi Chaupar: their loose boxes take in the seats in front of them
+    for (const bench of benchesOf(d.def).slice(0, 2)) {
+      expect(bench.rot % 90).not.toBe(0)
+      for (let n = 0; n < BENCH_SEATS; n++) {
+        let at: { x: number; z: number } = seatPose(bench, n)
+        const ax = at.x - bench.at.x
+        const az = at.z - bench.at.z
+        const len = Math.hypot(ax, az)
+        const frame = { x: (ax / len) * WALK_SPEED * (1 / 30), z: (az / len) * WALK_SPEED * (1 / 30) }
+        for (let i = 0; i < 30; i++) at = moveWithCollision(at, frame, d.colliders, PLAYER_RADIUS)
+        expect(Math.hypot(at.x - bench.at.x, at.z - bench.at.z), `${bench.id} seat ${n}`).toBeGreaterThan(
+          BENCH_RANGE,
+        )
+      }
+    }
+    d.dispose()
   })
 
   it('every seat is in reach of its bench, apart from the others, and never a trap', async () => {

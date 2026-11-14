@@ -19,24 +19,45 @@ function slide(pos: number, delta: number, other: number, axis: 'x' | 'z', cs: A
 
 /**
  * Circle-vs-AABB movement that slides along walls (axis by axis). Large steps are split into
- * sub-steps no longer than `radius`, so nothing tunnels through thin colliders. A collider the walker
- * already stands inside (a seat inside a turned prop's loose box, say) does not hold them: they walk out
- * of it, where snapping to its faces would throw them through to the far side.
+ * sub-steps no longer than `radius`, so nothing tunnels through thin colliders.
+ *
+ * A walker who already stands inside a collider (a seat inside a turned prop's loose box, a correction
+ * from the server) is let out by that collider's nearest face and never further in: along the axis of
+ * least penetration the step may only point outward. Snapping to the faces instead would throw them through
+ * to the far side, and simply ignoring the collider would let them walk through the building a frame at a
+ * time.
  */
-export function moveWithCollision(from: Vec2, step: Vec2, all: AABB[], radius: number): Vec2 {
-  let colliders = all
-  for (let i = 0; i < all.length; i++) {
-    if (!overlaps(from.x, from.z, radius, all[i]!)) continue
-    // Only then a new list, so an ordinary step allocates nothing.
-    colliders = all.filter((c) => !overlaps(from.x, from.z, radius, c))
-    break
+export function moveWithCollision(from: Vec2, step: Vec2, colliders: AABB[], radius: number): Vec2 {
+  let stepX = step.x
+  let stepZ = step.z
+  let solid = colliders
+  for (let i = 0; i < colliders.length; i++) {
+    const c = colliders[i]!
+    if (!overlaps(from.x, from.z, radius, c)) continue
+    const west = from.x - (c.minX - radius)
+    const east = c.maxX + radius - from.x
+    const north = from.z - (c.minZ - radius)
+    const south = c.maxZ + radius - from.z
+    const least = Math.min(west, east, north, south)
+    if (least === west) stepX = Math.min(stepX, 0)
+    else if (least === east) stepX = Math.max(stepX, 0)
+    else if (least === north) stepZ = Math.min(stepZ, 0)
+    else stepZ = Math.max(stepZ, 0)
+    // The colliders it stands inside are held by the rule above; the rest stop it as usual. Only in this
+    // case a new list, so an ordinary step allocates nothing.
+    if (solid === colliders) solid = colliders.filter((k) => !overlaps(from.x, from.z, radius, k))
   }
-  const len = Math.hypot(step.x, step.z)
+  return slideAll(from, stepX, stepZ, solid, radius)
+}
+
+/** The step, in sub-steps of at most `radius`, sliding along every collider in the way. */
+function slideAll(from: Vec2, stepX: number, stepZ: number, colliders: AABB[], radius: number): Vec2 {
+  const len = Math.hypot(stepX, stepZ)
   const n = Math.max(1, Math.ceil(len / Math.max(radius, 1e-6)))
-  const dx = step.x / n
-  const dz = step.z / n
-  const tx = from.x + step.x
-  const tz = from.z + step.z
+  const dx = stepX / n
+  const dz = stepZ / n
+  const tx = from.x + stepX
+  const tz = from.z + stepZ
   let x = from.x
   let z = from.z
   for (let i = 1; i <= n; i++) {

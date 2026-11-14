@@ -25,8 +25,13 @@ export const DISTRICT_IDS: readonly DistrictId[] = ['walled-city', 'mi-road', 'u
  */
 export const BENCHES: Record<DistrictId, number> = benches.counts
 export const BENCH_POSITIONS: Record<DistrictId, readonly { x: number; z: number }[]> = benches.positions
-/** A sitter must stand this close to the bench (by their last accepted point) to sit, and to stay seated. */
+/**
+ * A sitter must stand this close to the bench (by their last accepted point) to sit: a little more than the
+ * client's 2.5 m, for the moves still on their way.
+ */
 export const SIT_RANGE_M = 3
+/** Walking further than this from the bench stands a sitter up: the client's own reach. */
+export const STAY_RANGE_M = 2.5
 /** Each bench remembers what was said there for this long, and at most this many lines. */
 export const TRANSCRIPT_MS = 10 * 60_000
 export const TRANSCRIPT_LINES = 200
@@ -238,8 +243,8 @@ function benchAt(district: DistrictId, id: string): { x: number; z: number } | n
   return BENCH_POSITIONS[district][Number(n)] ?? null
 }
 
-const far = (p: { x: number; z: number }, b: { x: number; z: number }) =>
-  Math.hypot(p.x - b.x, p.z - b.z) > SIT_RANGE_M
+const far = (p: { x: number; z: number }, b: { x: number; z: number }, range: number) =>
+  Math.hypot(p.x - b.x, p.z - b.z) > range
 
 const round = (n: number, per: number) => Math.round(n * per) / per
 
@@ -426,7 +431,7 @@ export class DistrictDO extends DurableObject<Env> {
     const arriving = seat.person !== null && !seat.shown
     if (arriving) seat.shown = true
     const bench = seat.bench
-    if (bench && far(seat.pos, benchAt(seat.district, bench.id)!)) {
+    if (bench && far(seat.pos, benchAt(seat.district, bench.id)!, STAY_RANGE_M)) {
       // Walked off: stood up, and the bench told.
       seat.bench = null
       this.write(ws, seat)
@@ -474,7 +479,7 @@ export class DistrictDO extends DurableObject<Env> {
     const at = benchAt(seat.district, id)
     if (!at) return this.send(ws, INVALID)
     if (was?.id === id) return this.tellBench(id, ws)
-    if (!seat.pos || far(seat.pos, at)) return this.send(ws, FAR)
+    if (!seat.pos || far(seat.pos, at, SIT_RANGE_M)) return this.send(ws, FAR)
     const taken = this.sitters(id).map((s) => s.seat.bench!.seat)
     if (taken.length >= BENCH_SEATS) return this.send(ws, FULL)
     let free = 0
