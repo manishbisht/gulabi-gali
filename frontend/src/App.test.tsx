@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
+import * as THREE from 'three'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
@@ -7,7 +8,14 @@ import App from './App'
 const webgl = vi.hoisted(() => ({ available: true }))
 vi.mock('./engine/webgl', () => ({ hasWebGL: () => webgl.available }))
 vi.mock('./engine/stage', () => ({
-  createStage: () => ({ quality: 2, framesSinceRestore: () => 0, dispose: () => {} }),
+  createStage: () => ({
+    quality: 2,
+    scene: new THREE.Scene(),
+    camera: new THREE.PerspectiveCamera(),
+    onFrame: () => () => {},
+    framesSinceRestore: () => 0,
+    dispose: () => {},
+  }),
 }))
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

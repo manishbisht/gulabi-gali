@@ -130,3 +130,30 @@ button {
   display: flex;
   justify-content: center;
 }
+
+.joystick {
+  position: relative;
+  margin-right: auto;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: rgb(42 29 36 / 0.35);
+  border: 2px solid rgb(245 230 216 / 0.45);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: var(--pink);
+  opacity: 0.85;
+  pointer-events: none;
+}

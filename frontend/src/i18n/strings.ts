@@ -12,6 +12,7 @@ export const STRINGS = {
   weatherUnknown: { hi: 'Mausam ka pata nahi', en: 'Weather unavailable' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
   langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },
+  joystickLabel: { hi: 'Chalne ka joystick', en: 'Walking joystick' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

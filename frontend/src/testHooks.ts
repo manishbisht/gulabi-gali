@@ -1,9 +1,15 @@
+import type { Vec2 } from './world/types'
+
 /** What Playwright specs can ask of the running city. Grows task by task. */
 export interface GgTestApi {
   /** Current render quality tier: 2 full, 1 lower pixel ratio, 0 lowest and no shadows. */
   quality(): 0 | 1 | 2
   /** Frames drawn since the WebGL context was last restored (or since start). */
   framesSinceRestore(): number
+  /** Where the player stands, in metres. */
+  position(): Vec2
+  /** Puts the player at (x, z), skipping collision. */
+  teleport(x: number, z: number): void
 }
 
 declare global {
