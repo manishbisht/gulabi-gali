@@ -6,8 +6,8 @@ export const STRINGS = {
   stampGot: { hi: 'Jaipur Darshan · stamp mila: {place}', en: 'Stamp collected: {place}' },
   loading: { hi: 'Ruko zara, gali khul rahi hai…', en: 'One moment, the lane is opening…' },
   noWebgl: {
-    hi: 'Hukum, is phone par 3D nahi chal raha. Dusra browser try karo.',
-    en: "Sorry, 3D isn't working on this phone. Try another browser.",
+    hi: 'Is phone/browser pe 3D nahi chal raha. Chrome mein kholo — wahan chalega.',
+    en: "3D doesn't run on this phone/browser. Open in Chrome and it should work.",
   },
   weatherUnknown: { hi: 'Mausam ka pata nahi', en: 'Weather unavailable' },
   langToggle: { hi: 'English', en: 'हिन्दी' },

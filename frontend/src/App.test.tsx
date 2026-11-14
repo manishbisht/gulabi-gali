@@ -4,9 +4,16 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
 
+const webgl = vi.hoisted(() => ({ available: true }))
+vi.mock('./engine/webgl', () => ({ hasWebGL: () => webgl.available }))
+vi.mock('./engine/stage', () => ({
+  createStage: () => ({ quality: 2, framesSinceRestore: () => 0, dispose: () => {} }),
+}))
+
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
+  webgl.available = true
   vi.unstubAllGlobals()
   localStorage.clear()
   document.body.innerHTML = ''
@@ -29,5 +36,16 @@ it('shows the intro, then the HUD over a canvas after Padharo, and persists the 
   const toggle = host.querySelector<HTMLButtonElement>('.lang-toggle')!
   await act(async () => toggle.click())
   expect(localStorage.getItem('gg-lang')).toBe('en')
+  await act(async () => root.unmount())
+})
+
+it('shows the no-3D screen instead of the intro when WebGL is missing', async () => {
+  webgl.available = false
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<App />))
+  expect(host.textContent).toContain("3D doesn't run on this phone/browser")
+  expect(host.querySelector('.enter')).toBeNull()
   await act(async () => root.unmount())
 })

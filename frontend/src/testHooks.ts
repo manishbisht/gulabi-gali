@@ -1,0 +1,19 @@
+/** What Playwright specs can ask of the running city. Grows task by task. */
+export interface GgTestApi {
+  /** Current render quality tier: 2 full, 1 lower pixel ratio, 0 lowest and no shadows. */
+  quality(): 0 | 1 | 2
+  /** Frames drawn since the WebGL context was last restored (or since start). */
+  framesSinceRestore(): number
+}
+
+declare global {
+  interface Window {
+    __gg: GgTestApi
+  }
+}
+
+/** Merges into `window.__gg`, only on pages opened with `?gg-test=1`. */
+export function installTestHooks(api: Partial<GgTestApi>): void {
+  if (!location.search.includes('gg-test=1')) return
+  window.__gg = { ...window.__gg, ...api }
+}
