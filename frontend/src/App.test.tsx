@@ -4,6 +4,8 @@ import * as THREE from 'three'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
+import { AuthContext, SIGNED_OUT, type AuthState } from './auth/useAuth'
+import { buildAvatar } from './player/avatar'
 import type { DistrictId } from './net/protocol'
 import malviyaNagar from './world/districts/malviyaNagar'
 import miRoad from './world/districts/miRoad'
@@ -237,3 +239,80 @@ it('releases the shared avatar geometry and material when the city goes', async 
   expect(geo).toHaveBeenCalled()
   expect(mat).toHaveBeenCalled()
 }, 20000)
+
+const PROFILE_LOOK = { skin: 4, outfit: 'teal', head: 'safa' } as const
+const GHOST_LOOK = { skin: 0, outfit: 'pink', head: 'none' } as const
+const signedIn = (over: Partial<AuthState> = {}): AuthState => ({
+  ...SIGNED_OUT,
+  mode: 'dev',
+  signedIn: true,
+  token: async () => 'tok',
+  ...over,
+})
+const bodies = () => stage.scene.children.filter((c): c is THREE.Mesh => c instanceof THREE.Mesh)
+const wears = (look: typeof GHOST_LOOK | typeof PROFILE_LOOK) =>
+  bodies().some((m) => m.geometry === buildAvatar(look).geometry)
+
+it('signing out brings the ghost look back on the player at once', async () => {
+  const me = {
+    id: 'u',
+    complete: true,
+    profile: {
+      id: 'u',
+      name: 'Asha',
+      look: PROFILE_LOOK,
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+    },
+  }
+  vi.stubGlobal('fetch', async (url: string) =>
+    String(url).endsWith('/api/me') ? Response.json(me) : Promise.reject(new TypeError('offline')),
+  )
+  localStorage.setItem('gg-lang', 'hi')
+  localStorage.setItem('gg-look', JSON.stringify(GHOST_LOOK))
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  const render = (auth: AuthState) =>
+    act(async () =>
+      root.render(
+        <AuthContext.Provider value={auth}>
+          <App />
+        </AuthContext.Provider>,
+      ),
+    )
+  const user = signedIn()
+  await render(user)
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
+  await vi.waitFor(() => expect(wears(PROFILE_LOOK)).toBe(true))
+  expect(wears(GHOST_LOOK)).toBe(false)
+
+  await render({ ...SIGNED_OUT, mode: 'dev' })
+  expect(wears(GHOST_LOOK)).toBe(true)
+  expect(wears(PROFILE_LOOK)).toBe(false)
+  await act(async () => root.unmount())
+})
+
+it('signed in but /api/me failing: still a ghost chip, with a way to sign out', async () => {
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  localStorage.setItem('gg-lang', 'hi')
+  const signOut = vi.fn(async () => undefined)
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () =>
+    root.render(
+      <AuthContext.Provider value={signedIn({ signOut })}>
+        <App />
+      </AuthContext.Provider>,
+    ),
+  )
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  expect(host.textContent).toContain('Abhi koi tumhe dekh nahi sakta')
+  const out = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Logout karo')!
+  await act(async () => out.click())
+  expect(signOut).toHaveBeenCalledOnce()
+  await act(async () => root.unmount())
+})

@@ -5,7 +5,7 @@ import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
 import { useMe } from './profile/useMe'
 import { VisibilityChip } from './ui/VisibilityChip'
-import { lookFromWire } from './player/avatar'
+import { loadOrCreateLook, lookFromWire } from './player/avatar'
 import { useLang } from './i18n/lang'
 import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
@@ -91,8 +91,11 @@ export default function App() {
   useEffect(() => session.current?.repaint(), [snapshot])
   const lookKey = profileLook && `${profileLook.skin}|${profileLook.outfit}|${profileLook.head}`
   useEffect(() => {
+    const had = profileLookRef.current
     profileLookRef.current = profileLook
+    // signing out (or losing the profile) brings the visitor's own ghost look back at once
     if (profileLook) session.current?.setLook(profileLook)
+    else if (had) session.current?.setLook(loadOrCreateLook())
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the look's value, not its identity
   }, [lookKey])
   const [override] = useState(festivalOverride)
@@ -174,7 +177,14 @@ export default function App() {
         lang={lang}
         cta={{ label: t('visibilityFinish', lang), onClick: () => setProfileOpen(true) }}
       />
-    ) : undefined
+    ) : (
+      // signed in, but /api/me is loading or failed: still say so, and never leave them stuck
+      <VisibilityChip
+        state="ghost"
+        lang={lang}
+        cta={{ label: t('profileSignOut', lang), onClick: () => void auth.signOut() }}
+      />
+    )
 
   if (!webgl || stageFailed) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
