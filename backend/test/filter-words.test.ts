@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildList, check } from '../src/filter'
-import { DEVANAGARI, ENGLISH, HINGLISH, WORDS } from '../src/filter/words'
+import { wordsOk } from '../src/filter/server'
+import { DEVANAGARI, ENGLISH, HINGLISH, NAME_SAFE, WORDS } from '../src/filter/words'
 
 // The shipped list, unmocked. It is only measured here, never spelled out: no slur appears in a test.
 const real = buildList(WORDS)
@@ -38,5 +39,66 @@ describe('the shipped word list', () => {
       'xxxxxxxxxx and ooooh, aaaaand sooooo goooood',
     ])
       expect(check(ok, real).ok, ok).toBe(true)
+  })
+
+  it('spares real first names, in a name and anywhere else', () => {
+    for (const name of [
+      'Kamini',
+      'Kutti',
+      'Dick',
+      'Lund',
+      'Kike',
+      'Mong',
+      'Tarki',
+      'Dalli',
+      'Guro',
+      'Kanjar',
+    ]) {
+      expect(wordsOk(name, 'name'), name).toBe(true)
+      expect(wordsOk(`Hi, I am ${name}`), name).toBe(true)
+    }
+  })
+
+  it('NAME_SAFE words pass only as a name', () => {
+    for (const w of NAME_SAFE) {
+      expect(wordsOk(w, 'name'), w).toBe(true)
+      expect(wordsOk(w, 'about'), w).toBe(false)
+      expect(wordsOk(`kya ${w} hai`), w).toBe(false)
+    }
+  })
+
+  it('is not too strict for a bio, and never lists bc or mc', () => {
+    for (const ok of [
+      'sexy',
+      'nude drawing class',
+      'a blue tit',
+      'bc',
+      'mc',
+      'BC and MC',
+      'Room 455, Flat 717',
+    ])
+      expect(wordsOk(ok), ok).toBe(true)
+    for (const w of WORDS) expect(['bc', 'mc', 'sexy', 'nude', 'cum', 'tit', 'dick']).not.toContain(w)
+  })
+
+  it('has the added variants', () => {
+    for (const w of ['bsdk', 'bkl', 'भेनचोद', 'भैनचोद', 'चूतीया', 'गाँड']) {
+      expect(WORDS, w).toContain(w)
+      expect(wordsOk(w), w).toBe(false)
+    }
+  })
+
+  it('catches the shipped list dressed up', () => {
+    const w = ENGLISH.find((x) => x.length >= 5 && /^[a-z]+$/.test(x))!
+    const mid = Math.floor(w.length / 2)
+    for (const s of [
+      `${w.slice(0, mid)}-${w.slice(mid)}`,
+      `${w.slice(0, mid)}.${w.slice(mid)}`,
+      `${w.slice(0, mid)} ${w.slice(mid)}`,
+      `${w[0]}**${w.slice(3)}`,
+      `${w}${w.at(-1)}${w.at(-1)}`,
+      `${w.slice(0, 2)}\u0301${w.slice(2)}`,
+    ])
+      expect(wordsOk(s), s).toBe(false)
   })
 })

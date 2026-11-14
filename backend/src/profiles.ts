@@ -175,7 +175,7 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
   if (!parsed.ok) return Response.json({ error: 'invalid', fields: parsed.fields }, { status: 400 })
   const p = parsed.value
   // After the clean: what is stored and shown is what is checked. The link is a URL, never word-filtered.
-  const field = (['name', 'status', 'about'] as const).find((f) => !wordsOk(p[f]))
+  const field = (['name', 'status', 'about'] as const).find((f) => !wordsOk(p[f], f))
   if (field) return Response.json({ error: 'words', field }, { status: 400 })
   const now = Date.now()
   await env.DB.batch([

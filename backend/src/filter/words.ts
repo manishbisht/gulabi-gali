@@ -15,6 +15,14 @@
  *   priority is the gendered abuse that is used to harass women.
  * - DEVANAGARI is curated for this project: the same terms, in the spellings people type in Hindi script.
  *
+ * Left out on purpose, each because it is someone's name, a place, a plain word or too strict for a bio:
+ * - kamini, kutti, kuttia, dick, lund, lunds, kike, mong, guro, dalli, tarki, kanjar: first names, surnames,
+ *   a Swedish city and similar. Real people are called Kamini, Kutti, Dick, Lund and Kike.
+ * - kamina, kamine: kept, but `NAME_SAFE` exempts them from the name field.
+ * - sexy, nude, cum, tit: ordinary in a bio or a message ("cum" and "tit" are also words and birds).
+ *   Plainly abusive forms (cumshot, porn, ...) stay.
+ * - "bc" and "mc" are never listed: they are also British Columbia, "master of ceremonies" and so on.
+ *
  * Backend only. The page never gets this file: it gets SHA-1 hashes (see `./server.ts`).
  */
 
@@ -78,7 +86,6 @@ export const ENGLISH: readonly string[] = [
   'coprophilia',
   'cornhole',
   'creampie',
-  'cum',
   'cumming',
   'cumshot',
   'cumshots',
@@ -88,7 +95,6 @@ export const ENGLISH: readonly string[] = [
   'daterape',
   'deepthroat',
   'dendrophilia',
-  'dick',
   'dildo',
   'dingleberries',
   'dingleberry',
@@ -128,7 +134,6 @@ export const ENGLISH: readonly string[] = [
   'goodpoop',
   'goregasm',
   'grope',
-  'guro',
   'handjob',
   'hentai',
   'homoerotic',
@@ -143,7 +148,6 @@ export const ENGLISH: readonly string[] = [
   'jiggerboo',
   'jizz',
   'juggs',
-  'kike',
   'kinbaku',
   'kinkster',
   'kinky',
@@ -154,7 +158,6 @@ export const ENGLISH: readonly string[] = [
   'masturbating',
   'masturbation',
   'milf',
-  'mong',
   'motherfucker',
   'muffdiving',
   'nambla',
@@ -166,7 +169,6 @@ export const ENGLISH: readonly string[] = [
   'nimphomania',
   'nipple',
   'nipples',
-  'nude',
   'nutten',
   'nympho',
   'nymphomania',
@@ -213,7 +215,6 @@ export const ENGLISH: readonly string[] = [
   'sex',
   'sexcam',
   'sexo',
-  'sexy',
   'shemale',
   'shibari',
   'shit',
@@ -240,7 +241,6 @@ export const ENGLISH: readonly string[] = [
   'threesome',
   'throating',
   'thumbzilla',
-  'tit',
   'tits',
   'titties',
   'titty',
@@ -273,6 +273,8 @@ export const ENGLISH: readonly string[] = [
 ]
 
 export const HINGLISH: readonly string[] = [
+  'bsdk',
+  'bkl',
   'aandu',
   'bahanchod',
   'bahenchod',
@@ -334,7 +336,6 @@ export const HINGLISH: readonly string[] = [
   'chutiye',
   'chutiyo',
   'chutiyon',
-  'dalli',
   'gaand',
   'gaandfat',
   'gaandfattu',
@@ -364,11 +365,7 @@ export const HINGLISH: readonly string[] = [
   'kamina',
   'kamine',
   'kaminey',
-  'kamini',
-  'kanjar',
   'kutiya',
-  'kutti',
-  'kuttia',
   'kuttiya',
   'lauda',
   'laude',
@@ -378,11 +375,9 @@ export const HINGLISH: readonly string[] = [
   'lode',
   'lodey',
   'lodu',
-  'lund',
   'lundchaat',
   'lundchat',
   'lundfakir',
-  'lunds',
   'lundtopi',
   'lundure',
   'maachod',
@@ -407,14 +402,16 @@ export const HINGLISH: readonly string[] = [
   'randwi',
   'suar',
   'suwar',
-  'tarki',
   'tharak',
   'tharki',
 ]
 
 export const DEVANAGARI: readonly string[] = [
+  'भेनचोद',
+  'भैनचोद',
+  'चूतीया',
+  'गाँड',
   'कमीना',
-  'कमीनी',
   'कमीने',
   'कुतिया',
   'कुत्तिया',
@@ -486,5 +483,11 @@ export const DEVANAGARI: readonly string[] = [
   'हरामजादी',
   'हरामी',
 ]
+
+/**
+ * Words that are real names or ordinary words and so never apply to the `name` field: they are still refused
+ * in chat, bench lines, about, statuses and reasons, where they are abusive in context.
+ */
+export const NAME_SAFE: readonly string[] = ['kamina', 'kamine', 'kaminey', 'कमीना', 'कमीने']
 
 export const WORDS: readonly string[] = [...ENGLISH, ...HINGLISH, ...DEVANAGARI]

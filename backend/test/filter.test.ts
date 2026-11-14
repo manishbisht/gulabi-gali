@@ -8,7 +8,10 @@ import type { DistrictId } from '../src/protocol'
 import { closeAll, devId, live, resident, WAIT } from './helpers'
 
 // Placeholder tokens only: no real slur appears in any test. Every write path below runs against this list.
-vi.mock('../src/filter/words', () => ({ WORDS: ['badword', 'ganda', 'गंदा', 'zzzstatus'] }))
+vi.mock('../src/filter/words', () => ({
+  WORDS: ['badword', 'ganda', 'गंदा', 'zzzstatus', 'namesafe'],
+  NAME_SAFE: ['namesafe'],
+}))
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const LIST = buildList(['badword', 'ganda', 'गंदा'])
@@ -27,6 +30,92 @@ describe('normalise', () => {
     expect(normalise('zero​width')).toEqual(['zerowidth'])
     expect(normalise('one\ntwo\tthree')).toEqual(['one', 'two', 'three'])
     expect(normalise('   ')).toEqual([])
+  })
+})
+
+const ALL = buildList(['badword', 'ganda', 'गंदा', 'ass', 'tit'])
+const caught = (s: string, list = LIST) => !check(s, list).ok
+
+describe('numbers are not leetspeak', () => {
+  it('spares digits alone, still catches leet inside words', () => {
+    for (const s of ['Room 455', 'Flat 717', '4 5 5', 'call 455717', '7 1 7'])
+      expect(caught(s, ALL), s).toBe(false)
+    for (const s of ['@ss', '4ss', 'a55', 'a$s', '7!t']) expect(caught(s, ALL), s).toBe(true)
+    expect(normalise('Room 455 4ss')).toEqual(['room', '455', 'ass'])
+  })
+})
+
+describe('dressed-up spellings', () => {
+  it('joiners inside a word (placeholder tokens)', () => {
+    for (const s of [
+      'b*dword',
+      'b**word',
+      'ba-dword',
+      'bad.word',
+      'b.a.d.w.o.r.d',
+      'b_a_d_w_o_r_d',
+      "bad'word",
+      'bad~word',
+      'bad|word',
+      'b*d*w*r*d x',
+    ])
+      expect(caught(s), s).toBe(s === 'b*d*w*r*d x' ? false : true)
+    expect(caught('bad!word')).toBe(true)
+    // `!` and `|` read as `i`, so a placeholder with an i behaves like sh!t and b!tch
+    const withI = buildList(['bitword'])
+    for (const s of ['b!tword', 'b|tword', 'bi*word', 'bi-tword']) expect(caught(s, withI), s).toBe(true)
+  })
+
+  it('a sentence end is still a break, and a lone joiner is nothing', () => {
+    expect(caught('so tired.Word is out')).toBe(false)
+    expect(caught('bad ... word')).toBe(true) // a pair of neighbours, see below
+    expect(caught('wow!! great *** day')).toBe(false)
+  })
+
+  it('neighbouring tokens glue (fu ck)', () => {
+    for (const s of ['bad word', 'ba dword', 'badw ord', 'BAD   WORD', 'गं दा'])
+      expect(caught(s), s).toBe(true)
+    expect(caught('a b')).toBe(false)
+  })
+
+  it('combining marks, blanks, variation selectors and look-alike letters', () => {
+    const word = 'badword'
+    const marks = [...word].map((c) => `${c}\u0301\u0336`).join('')
+    for (const s of [
+      marks,
+      'ba\u0301dword',
+      'bad\u3164word',
+      'bad\u115Fword\u1160',
+      'b\uFFA0adword',
+      'bad\uFE0Fword\uFE0E',
+      'bаdwоrd', // Cyrillic а, о
+      'badwοrd', // Greek omicron
+      'ɑ'.length ? 'b\u0251dword' : '', // latin alpha
+    ])
+      expect(caught(s), s).toBe(true)
+    const wide = buildList(['pekvxcisy'])
+    expect(caught('рекνхсіѕу', wide)).toBe(false) // a mixed bag does not become a word by accident
+    expect(caught('pеκνхcіѕу', wide)).toBe(true) // е κ ν х і ѕ
+    expect(caught('pekvxcisу', wide)).toBe(true) // Cyrillic у
+  })
+
+  it('keeps Devanagari vowel signs, virama and nukta', () => {
+    expect(normalise('गंदा')).toEqual(['गंदा'])
+    expect(normalise('ग\u0902दा')).toEqual(['गंदा'])
+    expect(normalise('ड़')).toEqual(['ड़'.normalize('NFKC')])
+    expect(normalise('क्या सुंदर')).toEqual(['क्या', 'सुंदर'])
+    expect(caught('सुंदर')).toBe(false)
+    expect(normalise('Café Zoë')).toEqual(['cafe', 'zoe'])
+  })
+
+  it('any doubled letter: the collapsed form meets words of four letters or more', () => {
+    for (const s of ['baadword', 'baaadword', 'badwoord', 'bbaaddwwoorrdd']) expect(caught(s), s).toBe(true)
+    // a three-letter word is never loosened: only exact, or stretched (`assss`)
+    const short = buildList(['ass'])
+    expect(caught('as', short)).toBe(false)
+    expect(caught('ass', short)).toBe(true)
+    expect(caught('assss', short)).toBe(true)
+    expect(caught('aas', short)).toBe(false)
   })
 })
 
@@ -52,9 +141,10 @@ describe('the word filter', () => {
       'notbadwordatall',
       'gandalf the grey',
       'Scunthorpe',
-      'I a m here at a bad word count',
+      'I a m here at a count',
       'a b c d e f g',
-      'bad word',
+      'badly word',
+      'a bad day, word up',
       '',
     ])
       expect(flagged(s), s).toBe(false)
@@ -114,6 +204,14 @@ describe('every write path rejects with field', () => {
       expect(res.status, field).toBe(400)
       expect(await res.json()).toEqual({ error: 'words', field })
     }
+    // A word on NAME_SAFE is fine as a name, but not anywhere else.
+    expect((await put(token, { name: 'Namesafe' })).status).toBe(200)
+    expect(await (await put(token, { about: 'namesafe' })).json()).toEqual({ error: 'words', field: 'about' })
+    expect(await (await put(token, { status: 'NameSafe' })).json()).toEqual({
+      error: 'words',
+      field: 'status',
+    })
+    await put(token, { name: 'Filter Fatima' })
     // Nothing was saved, and an innocent word containing a bad one is fine; a link is never word-filtered.
     expect((await put(token, { about: 'gandalf', link: 'https://example.com/badword' })).status).toBe(200)
     const saved = (await (await api('/api/me', token)).json()) as { profile: { name: string } }
