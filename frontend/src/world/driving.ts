@@ -14,7 +14,7 @@ export interface DriveHooks {
   driving(on: boolean): void
   /** E or the exit button, with no clear place to get out: the player stays in the auto. */
   blocked(): void
-  /** Boxed in twice running: the player was set down at the station instead. */
+  /** Boxed in twice running: the player was set down where the auto stands, to walk out on foot. */
   rescued(): void
 }
 
@@ -42,8 +42,6 @@ export function createDriving(opts: {
   player: Pick<Player, 'position' | 'driving' | 'mount' | 'dismount' | 'ridePose' | 'exitPoint'>
   /** Stands the player up from a bench, if they are seated. */
   stand?: () => void
-  /** Where a player boxed in for good is set down: the district's station. */
-  station: Vec2
   hooks: DriveHooks
 }): Driving {
   const { autos, player, hooks } = opts
@@ -82,10 +80,11 @@ export function createDriving(opts: {
       const out = player.exitPoint()
       const { x, z, ry } = player.ridePose()
       if (!out && ++boxedIn < 2) return hooks.blocked()
-      // the second try with nowhere to stand (even 6 m out) sets the player down at the station: never stuck
+      // the second try with nowhere to stand (even 6 m out) sets the player down where the auto stands: on foot
+      // the walker's inside-a-collider rule lets them out by the nearest face, and no jump is needed
       autos.leave(mounted, x, z, ry)
       mounted = -1
-      player.dismount(out ?? opts.station)
+      player.dismount(out ?? { x, z })
       hooks.driving(false)
       if (!out) hooks.rescued()
     },

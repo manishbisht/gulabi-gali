@@ -4,8 +4,6 @@ import { createDriving, MOUNT_RANGE } from './driving'
 import type { ParkedAutos } from './props'
 import type { Vec2 } from './types'
 
-const STATION = { x: 50, z: 60 }
-
 function setup(exit: Vec2 | null = { x: 4, z: 0 }) {
   const log: string[] = []
   const autos: ParkedAutos = {
@@ -25,7 +23,7 @@ function setup(exit: Vec2 | null = { x: 4, z: 0 }) {
   }
   const hooks = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
   const stand = vi.fn()
-  const d = createDriving({ autos, player, stand, station: STATION, hooks })
+  const d = createDriving({ autos, player, stand, hooks })
   return { d, log, player, hooks, stand }
 }
 
@@ -74,21 +72,22 @@ describe('createDriving', () => {
     expect(hooks.rescued).not.toHaveBeenCalled()
   })
 
-  it('boxed in twice running, the player is set down at the station with a toast', () => {
+  it('boxed in twice running, the player gets out where the auto stands, with a toast and no teleport', () => {
     const { d, log, player, hooks } = setup(null)
     d.update({ x: 0, z: 0 })
     d.mount()
     d.exit()
     d.exit()
     expect(hooks.blocked).toHaveBeenCalledOnce()
-    expect(player.dismount).toHaveBeenCalledWith(STATION)
+    // ridePose is (9, 9): the player is set down right there, not somewhere else
+    expect(player.dismount).toHaveBeenCalledWith({ x: 9, z: 9 })
     expect(hooks.rescued).toHaveBeenCalledOnce()
     expect(log).toEqual(['take 0', 'leave 0 9 9 1'])
     expect(d.driving()).toBe(false)
     expect(hooks.driving).toHaveBeenLastCalledWith(false)
   })
 
-  it('a try that finds room in between starts the count again', () => {
+  it('mounting again starts the boxed-in count over', () => {
     const { d, player, hooks } = setup(null)
     const spot = { current: null as Vec2 | null }
     player.exitPoint = () => spot.current
@@ -98,7 +97,13 @@ describe('createDriving', () => {
     spot.current = { x: 4, z: 0 }
     d.exit() // out, normally
     expect(player.dismount).toHaveBeenLastCalledWith({ x: 4, z: 0 })
+    spot.current = null
+    d.update({ x: 0, z: 0 })
+    d.mount() // a new drive
+    d.exit() // boxed in once again: a toast, not a rescue (without the reset this would be the second)
+    expect(hooks.blocked).toHaveBeenCalledTimes(2)
     expect(hooks.rescued).not.toHaveBeenCalled()
+    expect(d.driving()).toBe(true)
   })
 
   it('mounting wakes the audio from the gesture; a honk on foot does nothing', () => {

@@ -254,8 +254,8 @@ export const STRINGS = {
     en: 'No room to get out here — move the auto a little first.',
   },
   driveRescued: {
-    hi: 'Auto phans gayi thi — aapko metro station pe utaar diya.',
-    en: 'The auto was stuck — we set you down at the metro station.',
+    hi: 'Auto yahin chhod diya — paidal nikal jao.',
+    en: 'Left the auto here — walk out on foot.',
   },
   soundOn: { hi: 'Awaaz: chalu', en: 'Sound: on' },
   soundOff: { hi: 'Awaaz: band', en: 'Sound: off' },

@@ -82,3 +82,18 @@ it('disposing while driving takes the auto away too', () => {
   expect(scene.children).toHaveLength(0)
   controls.dispose()
 })
+
+it('set down where a boxed-in auto stands, the walker leaves by the nearest face', () => {
+  // a solid block with the auto inside it, nearer its east face
+  const block = { minX: -6.5, maxX: 6.5, minZ: -6.5, maxZ: 6.5 }
+  const { controls, player } = drivable([block])
+  player.teleport(1, 0)
+  player.mount(1, 0, 0)
+  player.dismount({ x: 1, z: 0 }) // where it stands: no jump
+  expect(player.position()).toEqual({ x: 1, z: 0 })
+  controls.setJoystick({ x: 1, z: 0 }) // walks +x
+  for (let i = 0; i < 240; i++) player.update(1 / 60)
+  expect(player.position().x).toBeGreaterThan(block.maxX + 0.4 - 1e-6)
+  player.dispose()
+  controls.dispose()
+})
