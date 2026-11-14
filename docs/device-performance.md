@@ -109,3 +109,39 @@ build is warning-free.
 **What this cannot show:** the phone's GPU. WebGL here runs on the M3's GPU, so fill rate and shader cost
 (pixel ratio 2.6, shadows) are far cheaper than on a Mali or Adreno mid-ranger, and the frame numbers are an
 optimistic CPU story. That is what the real-device checklist is for; expect the tier to drop sooner there.
+
+### Phase 3: Clerk mode
+
+Run 2026-11-14, same machine and spec, against two builds of the same commit with test hooks on: one with no
+auth (`none` mode, what ships today without a key) and one with a test `VITE_CLERK_PUBLISHABLE_KEY`
+(`pk_test_` for the made-up host `gulabi-perf.clerk.accounts.dev`), each served by `vite preview` on port 5173
+so Playwright reuses it. The run must not reach Clerk, so `DEVICE_PERF_CLERK` stands in for its CDN:
+
+- **stub** (`DEVICE_PERF_CLERK=<dir>`): the real `clerk.browser.js` (clerk-js 6.43.1, 85 kB gzipped) and
+  `ui.browser.js` (@clerk/ui 1.42.6, 46 kB gzipped), unpacked from their npm tarballs, are served for the
+  CDN's `/npm/...` URLs, each held back for Fast 4G's latency plus its gzipped size over the throughput
+  (Playwright's fulfilled responses skip DevTools' network throttling, so the spec waits instead). Clerk's API
+  calls fail, so clerk-js downloads, parses and runs under the 6x CPU throttle and then finds no Clerk: a
+  signed-out visitor whose Clerk is slow, not a signed-in one.
+- **abort**: every request to Clerk's host fails; the app's own Clerk chunk (`clerk-*.js`, 34 kB gzipped,
+  lazily loaded) still loads and mounts.
+
+Every run confirmed the Clerk chunk loaded; every stub run served both CDN scripts. Walkable ms (first
+walkable frame from navigation), five runs each:
+
+| Build              | Runs (ms)                    | Median | Change |
+| ------------------ | ---------------------------- | -----: | -----: |
+| `none` (no key)    | 1654, 1646, 2551, 1686, 1774 |   1686 |      - |
+| Clerk, CDN stubbed | 1828, 1691, 2009, 1816, 1754 |   1816 |   +130 |
+| Clerk, CDN aborted | 1847, 3648, 1672, 1675, 1869 |   1847 |   +161 |
+
+Frames, tier and heap did not move: p50 16.7 ms, at most 2 frames over 33 ms, tier 2, heap 9 to 12 MB in every
+run. The two slow outliers (2551, 3648) had a slow FCP too (1716, 1448 ms), so they were the machine, not
+Clerk. Clerk mode costs about 0.13 s to the first walkable frame, under the 0.5 s line that would have
+deferred the Clerk mount until idle after that frame, so the mount stays as it is. What this does not cover:
+a real Clerk's `/v1/environment` and `/v1/client` round trips (they fail here at once), which happen after
+clerk-js has loaded and run, off the path to the first walkable frame.
+
+To repeat: `npm pack @clerk/clerk-js@<version> @clerk/ui@<version>` into a scratch directory, unpack them
+into `js/` and `ui/` there, build with the key into another `--outDir`, `vite preview` it on 5173, and run
+`DEVICE_PERF_CLERK=<dir> npm run test:device` from the repo root.

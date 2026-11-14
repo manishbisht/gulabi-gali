@@ -1,4 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { gzipSync } from 'node:zlib'
 import { devices, expect, test } from '@playwright/test'
 import type { CDPSession, Page } from '@playwright/test'
 
@@ -14,6 +16,17 @@ import type { CDPSession, Page } from '@playwright/test'
  * What it cannot tell you: the phone's GPU. Headless Chrome on a desktop draws
  * WebGL on the desktop's GPU (or SwiftShader), so the frame numbers are a CPU
  * story first. The real-device checklist in docs/device-performance.md covers the rest.
+ *
+ * Clerk mode: against a build with a (test) VITE_CLERK_PUBLISHABLE_KEY, set
+ * DEVICE_PERF_CLERK to how Clerk's CDN is stood in for, since the run must not
+ * reach Clerk:
+ * - `abort`: every request to Clerk's host fails. The app's Clerk chunk still
+ *   loads and mounts; clerk-js itself never arrives.
+ * - a directory: the real clerk-js and ui bundles, unpacked from their npm
+ *   tarballs into `<dir>/js/package` and `<dir>/ui/package`, are served for
+ *   the CDN's `/npm/...` URLs, held back as long as Fast 4G would take
+ *   (latency plus gzipped size over the throughput), and Clerk's API calls
+ *   fail. So clerk-js downloads, parses and runs, and then finds no Clerk.
  */
 
 test.skip(!process.env.DEVICE_PERF, 'Measurement, not a test: set DEVICE_PERF=1 to run it.')
@@ -46,6 +59,33 @@ interface Result {
   people: number
   heapMB: number
   renderer: string
+  /** Clerk mode only: what of Clerk the page fetched. */
+  clerk?: { mode: string; chunk: boolean; cdn: string[] }
+}
+
+/** Clerk's CDN, stood in for (see the header). Answers the CDN URLs it was asked for. */
+async function standInForClerk(page: Page, mode: string): Promise<string[]> {
+  const cdn: string[] = []
+  await page.route(
+    (url) => url.hostname.endsWith('.clerk.accounts.dev') || url.hostname.startsWith('clerk.'),
+    async (route) => {
+      const url = new URL(route.request().url())
+      const m = url.pathname.match(/^\/npm\/@clerk\/(clerk-js|ui)@[^/]+\/dist\/([\w.-]+\.js)$/)
+      const file =
+        m && mode !== 'abort' ? join(mode, m[1] === 'ui' ? 'ui' : 'js', 'package/dist', m[2]) : null
+      if (!file || !existsSync(file)) return route.abort()
+      const body = readFileSync(file)
+      cdn.push(url.pathname)
+      const ms = FAST_4G.latency + (gzipSync(body).length / FAST_4G.downloadThroughput) * 1000
+      await new Promise((r) => setTimeout(r, ms))
+      await route.fulfill({
+        body,
+        contentType: 'application/javascript',
+        headers: { 'access-control-allow-origin': '*' },
+      })
+    },
+  )
+  return cdn
 }
 
 async function throttle(page: Page): Promise<CDPSession> {
@@ -101,6 +141,8 @@ const percentile = (sorted: number[], p: number) =>
 test('the walled city on a throttled Pixel 7', async ({ page }) => {
   test.setTimeout(240000)
   await instrument(page)
+  const clerkMode = process.env.DEVICE_PERF_CLERK
+  const cdn = clerkMode ? await standInForClerk(page, clerkMode) : []
   const cdp = await throttle(page)
 
   // Load: a cold visit, past the intro, to the first walkable frame.
@@ -158,6 +200,12 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     heapMB: heap / 2 ** 20,
     renderer,
   }
+  if (clerkMode) {
+    const chunk = await page.evaluate(() =>
+      performance.getEntriesByType('resource').some((e) => /\/assets\/clerk-[\w-]+\.js$/.test(e.name)),
+    )
+    result.clerk = { mode: clerkMode === 'abort' ? 'abort' : 'stub', chunk, cdn }
+  }
   mkdirSync('test-results', { recursive: true })
   writeFileSync('test-results/device-perf.json', JSON.stringify(result, null, 2))
   const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
@@ -168,5 +216,6 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     `| ${ms(result.fcp)} | ${ms(result.lcp)} | ${ms(result.walkable)} | ${result.frames.count} | ${result.frames.p50.toFixed(1)} | ${result.frames.p95.toFixed(1)} | ${result.frames.p99.toFixed(1)} | ${result.frames.max.toFixed(0)} | ${result.frames.over33} | ${result.qualityAfter} | ${result.people} | ${result.heapMB.toFixed(1)} |`,
   )
   console.log(`\nRenderer: ${result.renderer}`)
+  if (result.clerk) console.log(`Clerk: ${JSON.stringify(result.clerk)}`)
   expect(frames.length).toBeGreaterThan(0)
 })
