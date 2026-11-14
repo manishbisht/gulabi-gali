@@ -36,6 +36,16 @@ function fakeLimiter(limit: number) {
 }
 const NO_LIMIT = Number.MAX_SAFE_INTEGER
 
+/**
+ * The test env with some bindings replaced. Defined as own properties (not assigned): assigning through a
+ * derived object would reach the shared env's setter and change it for every later test.
+ */
+const withEnv = (over: Record<string, unknown>) =>
+  Object.create(
+    testEnv,
+    Object.fromEntries(Object.entries(over).map(([k, value]) => [k, { value, enumerable: true }])),
+  ) as Env
+
 /** The Worker with its limiters replaced, called directly (as its other tests do) so the bindings can differ. */
 function call(
   path: string,
@@ -47,11 +57,10 @@ function call(
   if (ip) h.set('CF-Connecting-IP', ip)
   // Limiters a test does not name never refuse (the real bindings would count every test together).
   const open = () => fakeLimiter(NO_LIMIT).binding
-  const withLimiters = Object.assign(
-    Object.create(testEnv),
-    { SOCKETS_LIMITER: open(), SIGNIN_LIMITER: open(), WRITES_LIMITER: open() },
-    limiters,
-  ) as Env
+  const withLimiters = withEnv({
+    ...{ SOCKETS_LIMITER: open(), SIGNIN_LIMITER: open(), WRITES_LIMITER: open() },
+    ...limiters,
+  })
   return worker.fetch(new Request(`https://api.test${path}`, { ...rest, headers: h }), withLimiters)
 }
 const authed = (token: string, extra: HeadersInit = {}) => ({
@@ -133,7 +142,7 @@ describe('per-address limits', () => {
     expect((await login()).status).toBe(200)
     const third = await login()
     expect(third.status).toBe(429)
-    expect(await third.json()).toEqual({ error: 'rate' })
+    expect(await third.json()).toEqual({ error: 'rate', scope: 'ip' })
     expect(third.headers.get('Retry-After')).toBe('60')
 
     // A fresh account's first /api/me counts, and is refused without making the account.
@@ -210,6 +219,38 @@ describe('per-address limits', () => {
   })
 })
 
+describe('no usable address', () => {
+  const bare = new Request('https://api.test/')
+  const loop = new Request('https://api.test/', { headers: { 'CF-Connecting-IP': '127.0.0.1' } })
+
+  it('is counted under one shared key when DEV_AUTH is not on', () => {
+    for (const dev of [undefined, '0', '']) {
+      expect(clientKey(bare, { DEV_AUTH: dev })).toBe('noip')
+      expect(clientKey(loop, { DEV_AUTH: dev })).toBe('noip')
+    }
+  })
+
+  it('is exempt when DEV_AUTH=1', () => {
+    expect(clientKey(bare, { DEV_AUTH: '1' })).toBeNull()
+    expect(clientKey(loop, { DEV_AUTH: '1' })).toBeNull()
+  })
+
+  it('reaches the limiter end to end when DEV_AUTH is off', async () => {
+    const writes = fakeLimiter(1)
+    const prod = withEnv({
+      DEV_AUTH: undefined,
+      WRITES_LIMITER: writes.binding,
+    })
+    const post = () =>
+      worker.fetch(new Request('https://api.test/api/blocks', { method: 'POST', body: '{}' }), prod)
+    expect((await post()).status).toBe(401)
+    const over = await post()
+    expect(over.status).toBe(429)
+    expect(await over.json()).toEqual({ error: 'rate', scope: 'ip' })
+    expect(writes.seen).toEqual(['noip', 'noip'])
+  })
+})
+
 describe('loopback and spoofing', () => {
   it('loopback exempt in dev: no address, 127.x, ::1 and mapped loopback never reach a limiter', async () => {
     const all = {
@@ -255,7 +296,8 @@ describe('loopback and spoofing', () => {
   })
 
   it('keys by the connecting address only, one key per IPv6 /64', () => {
-    const key = (headers: Record<string, string>) => clientKey(new Request('https://api.test/', { headers }))
+    const key = (headers: Record<string, string>) =>
+      clientKey(new Request('https://api.test/', { headers }), { DEV_AUTH: '1' })
     expect(key({ 'X-Forwarded-For': '203.0.113.1' })).toBeNull()
     expect(key({ 'CF-Connecting-IP': '203.0.113.1', 'X-Forwarded-For': '127.0.0.1' })).toBe('203.0.113.1')
     expect(key({ 'CF-Connecting-IP': '2001:db8:1:2:aaaa::1' })).toBe(

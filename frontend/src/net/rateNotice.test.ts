@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { blockPerson, putProfile, sendMeetRequest, unblockPerson, unmatch } from './api'
+import { blockPerson, putProfile, sendMeetRequest, sendMessage, unblockPerson, unmatch } from './api'
 import { onRateLimited } from './rateNotice'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -32,4 +32,13 @@ it('a success or another error stays quiet, and a stopped listener hears nothing
   tooMany()
   await blockPerson('t', 'x')
   expect(heard).not.toHaveBeenCalled()
+})
+
+it('a chat 429 from the address ceiling is told apart from the one-a-second limit', async () => {
+  const answer = (scope: string) =>
+    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ error: 'rate', scope }, { status: 429 })))
+  answer('ip')
+  expect(await sendMessage('t', 'm', 'hi')).toEqual({ ok: false, error: 'slow' })
+  answer('account')
+  expect(await sendMessage('t', 'm', 'hi')).toEqual({ ok: false, error: 'rate' })
 })

@@ -44,9 +44,9 @@ database and two Durable Objects; the Durable Object classes are created by the 
    `routes: [{ pattern: "api.gulabi-gali.manishbisht.me", custom_domain: true }]`. Cloudflare creates the DNS
    record and certificate itself, but only if the **`manishbisht.me` zone is on Cloudflare** (the domain's
    nameservers point at Cloudflare). If it is not yet, the first `wrangler deploy` fails on the route. Until
-   the zone is moved, comment the `routes` line out, deploy, and use the `workers.dev` URL the deploy prints
+   the zone is moved, comment the `routes` line out, set `"workers_dev": true` in `backend/wrangler.jsonc` (it is `false` on purpose), deploy, and use the `workers.dev` URL the deploy prints
    (`https://gulabi-gali-api.<account>.workers.dev`) as `VITE_API_BASE_URL` below. The site's CSP is built
-   from `VITE_API_BASE_URL`, so it follows. CORS is keyed on the site's origin (not the API's), so it needs no
+   from `VITE_API_BASE_URL`, so it follows. Rate limits still apply there (the edge sets the connecting address on workers.dev too). CORS is keyed on the site's origin (not the API's), so it needs no
    change.
 5. Check it: `curl https://api.gulabi-gali.manishbisht.me/health` returns `{"ok":true}`, and
    `/api/city` returns the snapshot. The 15-minute cron fills KV; until its first run `/api/city` fetches live.

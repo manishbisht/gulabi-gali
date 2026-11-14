@@ -196,7 +196,8 @@ export async function getMessages(
   return (await res.json()) as MessagePage
 }
 
-export type SendResult = { ok: true; message: ChatMessage } | { ok: false; error: ChatError | 'failed' }
+export type SendResult =
+  { ok: true; message: ChatMessage } | { ok: false; error: ChatError | 'slow' | 'failed' }
 
 /** Never rejects: a 201 gives the message, the rest a typed error (`rate` is the one a person can wait out). */
 export async function sendMessage(token: string, matchId: string, body: string): Promise<SendResult> {
@@ -207,7 +208,10 @@ export async function sendMessage(token: string, matchId: string, body: string):
       body: JSON.stringify({ body }),
     })
     if (res.ok) return { ok: true, message: (await res.json()) as ChatMessage }
-    const err = ((await res.json().catch(() => null)) as { error?: string } | null)?.error
+    const reply = (await res.json().catch(() => null)) as { error?: string; scope?: string } | null
+    const err = reply?.error
+    // The per-address ceiling is not "one a second": it gets the general slow-down line.
+    if (err === 'rate' && reply?.scope === 'ip') return { ok: false, error: 'slow' }
     return {
       ok: false,
       error: err === 'rate' || err === 'not-found' || err === 'invalid' || err === 'words' ? err : 'failed',

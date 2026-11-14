@@ -105,21 +105,22 @@ async function readJson(request: Request): Promise<unknown> {
  * without one) is what counts against the address's sign-in limit. Null while within it, or when the account exists.
  */
 async function bootstrapLimit(env: Env, request: Request, userId: string): Promise<Response | null> {
-  return (await userExists(env, userId)) ? null : ipLimit(env.SIGNIN_LIMITER, request)
+  return (await userExists(env, userId)) ? null : ipLimit(env, env.SIGNIN_LIMITER, request)
 }
 
 async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
   const { method } = request
   const { pathname } = url
-  // Every write counts against its address, whoever signed it (dev login included).
+  // Every write counts against its address, whoever signed it (dev login included): a flood ceiling, not a
+  // per-person quota (many people share one carrier address), so it is roomy.
   if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
-    const slow = await ipLimit(env.WRITES_LIMITER, request)
+    const slow = await ipLimit(env, env.WRITES_LIMITER, request)
     if (slow) return slow
   }
   if (pathname === '/api/dev/login') {
     if (env.DEV_AUTH !== '1' || method !== 'POST')
       return Response.json({ error: 'not found' }, { status: 404 })
-    const slow = await ipLimit(env.SIGNIN_LIMITER, request)
+    const slow = await ipLimit(env, env.SIGNIN_LIMITER, request)
     if (slow) return slow
     return devLogin(env, await readJson(request))
   }
@@ -215,7 +216,7 @@ export default {
     const live = pathname.match(/^\/api\/districts\/([^/]+)\/live$/)
     if (live || pathname === '/api/inbox') {
       // Every socket open counts, ghosts and reconnects included.
-      const slow = await ipLimit(env.SOCKETS_LIMITER, request)
+      const slow = await ipLimit(env, env.SOCKETS_LIMITER, request)
       if (slow) return slow
       return live ? openDistrict(request, env, live[1]) : openInbox(request, env)
     }

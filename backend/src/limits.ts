@@ -110,7 +110,9 @@ export async function messageLimit(env: Env, userId: string, now = Date.now()): 
  * Trust assumption: `CF-Connecting-IP` is set by Cloudflare's edge on every request that reaches this Worker
  * in production, replacing anything the client sent, and a client cannot reach the Worker any other way. So
  * it is the connecting address, and no other header (`X-Forwarded-For`, `X-Real-IP`) is ever read. A request
- * with none, or with a loopback one, did not come through the edge: only `wrangler dev`, tests and CI.
+ * with none, or with a loopback one, did not come through the edge: only `wrangler dev`, tests and CI, all of
+ * which run with DEV_AUTH=1. So that is the only place it is exempt; anywhere else it all counts under one
+ * shared `noip` key, so a misrouted deploy (a route that skips the edge) is throttled, never unlimited.
  */
 
 /** How long a refused address is told to wait: the longest period of any binding in wrangler.jsonc. */
@@ -135,35 +137,49 @@ function normalise(ip: string): string {
     .join(':')}::/64`
 }
 
-/** The key a request counts against, or null when it never counts (loopback, or no edge address). */
-export function clientKey(request: Request): string | null {
+/** The one key every request without a usable edge address shares, outside dev. */
+export const NO_IP_KEY = 'noip'
+
+/** The key a request counts against, or null when it never counts (loopback or no address, in dev only). */
+export function clientKey(request: Request, env: Pick<Env, 'DEV_AUTH'>): string | null {
   const ip = request.headers.get('CF-Connecting-IP')?.trim()
-  if (!ip || LOOPBACK.test(ip)) return null
+  if (!ip || LOOPBACK.test(ip)) return env.DEV_AUTH === '1' ? null : NO_IP_KEY
   return normalise(ip)
 }
 
 /** The 429 for a per-address limit. */
 export const ipRateLimited = (): Response =>
-  Response.json({ error: 'rate' }, { status: 429, headers: { 'Retry-After': String(IP_RETRY_AFTER_S) } })
+  Response.json(
+    { error: 'rate', scope: 'ip' },
+    { status: 429, headers: { 'Retry-After': String(IP_RETRY_AFTER_S) } },
+  )
 
 /** Whether `request`'s address is over `limiter`. An absent binding limits nothing. */
-export async function overLimit(limiter: RateLimit | undefined, request: Request): Promise<boolean> {
-  const key = clientKey(request)
+export async function overLimit(
+  env: Env,
+  limiter: RateLimit | undefined,
+  request: Request,
+): Promise<boolean> {
+  const key = clientKey(request, env)
   if (!limiter || key === null) return false
   const { success } = await limiter.limit({ key })
   return !success
 }
 
 /** Null while within `limiter`, else the 429. */
-export async function ipLimit(limiter: RateLimit | undefined, request: Request): Promise<Response | null> {
-  return (await overLimit(limiter, request)) ? ipRateLimited() : null
+export async function ipLimit(
+  env: Env,
+  limiter: RateLimit | undefined,
+  request: Request,
+): Promise<Response | null> {
+  return (await overLimit(env, limiter, request)) ? ipRateLimited() : null
 }
 
 export const INVITE_IP_LIMIT = { perWindow: 10, windowMs: 3600_000, bucket: 'redeem-ip' } as const
 
 /** Invite redemptions per address, 10 an hour, in addition to the per-person limit. Null while within it. */
 export async function inviteIpLimit(env: Env, request: Request, now = Date.now()): Promise<Response | null> {
-  const key = clientKey(request)
+  const key = clientKey(request, env)
   if (key === null) return null
   const { perWindow, windowMs, bucket } = INVITE_IP_LIMIT
   return (await allow(env, `ip:${key}`, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)

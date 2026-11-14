@@ -25,7 +25,7 @@ interface Props {
 
 /** A message the server has not confirmed yet. */
 type Line = ChatMessage & { pending?: boolean }
-type Note = 'rate' | 'failed' | 'load' | 'unmatch' | 'words' | null
+type Note = 'rate' | 'slow' | 'failed' | 'load' | 'unmatch' | 'words' | null
 
 const byTime = (a: Line, b: Line) =>
   a.pending !== b.pending ? (a.pending ? 1 : -1) : a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
@@ -39,6 +39,7 @@ function merge(was: Line[], more: ChatMessage[]): Line[] {
 
 const NOTE_TEXT: Record<Exclude<Note, null>, StringKey> = {
   rate: 'chatRate',
+  slow: 'slowDown',
   failed: 'chatFailed',
   load: 'chatLoadFailed',
   unmatch: 'chatUnmatchFailed',
@@ -159,7 +160,11 @@ export function ChatView({
     } else {
       // keep what they wrote, unless they have started something new meanwhile
       setText((now) => now || body)
-      setNote(out && !out.ok && (out.error === 'rate' || out.error === 'words') ? out.error : 'failed')
+      setNote(
+        out && !out.ok && (out.error === 'rate' || out.error === 'slow' || out.error === 'words')
+          ? out.error
+          : 'failed',
+      )
     }
   }
 
