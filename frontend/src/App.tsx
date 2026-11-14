@@ -129,18 +129,22 @@ export default function App() {
   }, [lookKey])
   /**
    * Who the live socket connects as: a resident's token, or nobody (a ghost). Read by the session on every
-   * connect; when it changes, the session reconnects so the visitor appears or vanishes without a reload.
+   * connect. The district learns a resident's face (name, look, status) only when a socket opens, so when who
+   * they are or that face changes (a sign-in, a sign-out, a saved profile) the session reconnects, and
+   * everyone sees the change without a reload.
    */
   const residentId = auth.signedIn && me?.complete ? me.id : null
+  const shown = residentId && me?.profile
+  const liveKey = shown ? JSON.stringify([residentId, shown.name, lookKey, shown.status]) : null
   const liveToken = useRef<() => Promise<string | null>>(async () => null)
   const liveAs = useRef<string | null>(null)
   const [replaced, setReplaced] = useState(false)
   useEffect(() => {
-    liveToken.current = residentId ? auth.token : async () => null
-    if (liveAs.current === residentId) return
-    liveAs.current = residentId
+    liveToken.current = liveKey ? auth.token : async () => null
+    if (liveAs.current === liveKey) return
+    liveAs.current = liveKey
     session.current?.reconnectLive()
-  }, [residentId, auth.token])
+  }, [liveKey, auth.token])
   const conn = useConnections({ user: residentId, token: auth.token })
   const [connOpen, setConnOpen] = useState(false)
   // signing out shuts the sheet, so the next resident does not find it open

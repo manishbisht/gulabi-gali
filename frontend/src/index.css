@@ -638,6 +638,16 @@ button {
   width: 24px;
 }
 
+/* a toggle with a line saying what it does */
+.auth-form .check span {
+  display: grid;
+  gap: 2px;
+}
+
+.auth-form .check span small {
+  justify-self: start;
+}
+
 .auth-form button:disabled {
   opacity: 0.45;
 }

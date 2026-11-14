@@ -29,6 +29,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
   const [about, setAbout] = useState(p?.about ?? '')
   const [adult, setAdult] = useState(me.complete)
   const [pledge, setPledge] = useState(me.complete)
+  const [paused, setPaused] = useState(p?.pauseRequests ?? false)
   const [busy, setBusy] = useState(false)
   const [bad, setBad] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
@@ -62,7 +63,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
       link: null,
       adult,
       pledge,
-      pauseRequests: p?.pauseRequests ?? false,
+      pauseRequests: paused,
     })
     setBusy(false)
     if (result.ok) return onClose()
@@ -167,6 +168,18 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
               onChange={(e) => setPledge(e.target.checked)}
             />
             {t('profilePledge', lang)}
+          </label>
+          <label className="check">
+            <input
+              data-field="pauseRequests"
+              type="checkbox"
+              checked={paused}
+              onChange={(e) => setPaused(e.target.checked)}
+            />
+            <span>
+              {t('profilePause', lang)}
+              <small>{t('profilePauseHint', lang)}</small>
+            </span>
           </label>
           {bad.length > 0 && <p role="alert">{t('profileFieldsFailed', lang)}</p>}
           {failed && <p role="alert">{t('profileSaveFailed', lang)}</p>}

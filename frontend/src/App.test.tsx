@@ -389,6 +389,72 @@ it('the live socket follows who you are, and says so when another tab takes over
   expect(liveNow()).toHaveLength(0)
 })
 
+it('saving a new name, look or status reconnects the live socket, so others see it; other edits do not', async () => {
+  let me = {
+    id: 'u',
+    complete: true,
+    profile: {
+      id: 'u',
+      name: 'Asha',
+      look: PROFILE_LOOK,
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+    },
+  }
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith('/api/me/profile') && init?.method === 'PUT') {
+      const sent = JSON.parse(String(init.body)) as typeof me.profile
+      me = { ...me, profile: { ...me.profile, ...sent, id: 'u' } }
+      return Response.json(me)
+    }
+    return String(url).endsWith('/api/me') ? Response.json(me) : Promise.reject(new TypeError('offline'))
+  })
+  localStorage.setItem('gg-lang', 'hi')
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () =>
+    root.render(
+      <AuthContext.Provider value={signedIn()}>
+        <App />
+      </AuthContext.Provider>,
+    ),
+  )
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
+  await vi.waitFor(async () => expect(await liveNow()[0]?.opts.token()).toBe('tok'))
+  const edit = async (field: string, value: string) => {
+    await act(async () => button(host, 'Profile')!.click())
+    const el = host.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-field="${field}"]`)!
+    const proto =
+      el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, value)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => button(host, 'Save karo')!.click())
+    await vi.waitFor(() => expect(host.querySelector('.profile-sheet')).toBeNull())
+  }
+
+  const before = sockets.length
+  await edit('status', 'chai pe milo')
+  await vi.waitFor(() => expect(sockets.length).toBe(before + 1))
+  expect(liveNow()).toHaveLength(1)
+  expect(await liveNow()[0]!.opts.token()).toBe('tok')
+
+  // the about line is not on the map: no reconnect for it
+  await edit('about', 'Painter, slow walker.')
+  await act(async () => void (await new Promise((r) => setTimeout(r, 50))))
+  expect(sockets.length).toBe(before + 1)
+
+  await edit('name', 'Asha Rathore')
+  await vi.waitFor(() => expect(sockets.length).toBe(before + 2))
+  expect(liveNow()).toHaveLength(1)
+  await act(async () => root.unmount())
+})
+
 /** The Walled City's tapri by Johari Bazaar, and the city's one live socket. */
 const tapri = benchesOf(walledCity)[4]!
 const server = (m: ServerMsg) => act(() => liveNow()[0]!.opts.onMsg(m))

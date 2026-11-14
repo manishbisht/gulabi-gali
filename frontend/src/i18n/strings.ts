@@ -85,6 +85,11 @@ export const STRINGS = {
     hi: 'Sab ki izzat karunga/karungi. Koi harassment, hate ya spam nahi.',
     en: "I'll treat everyone with respect. No harassment, hate or spam.",
   },
+  profilePause: { hi: 'Abhi requests band', en: 'Pause requests' },
+  profilePauseHint: {
+    hi: 'Koi tumhe nayi request nahi bhej payega. Jo chats chal rahi hain, chalti rahengi.',
+    en: 'Nobody can send you a new request. Chats you already have carry on.',
+  },
   profileSave: { hi: 'Save karo', en: 'Save' },
   profileSaving: { hi: 'Save ho raha hai…', en: 'Saving…' },
   profileNotNow: { hi: 'Baad mein', en: 'Not now' },

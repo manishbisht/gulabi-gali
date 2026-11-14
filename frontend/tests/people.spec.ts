@@ -56,3 +56,20 @@ test('signing out leaves the street without a reload', async ({ browser }) => {
   await expect(a.page.getByText('Abhi koi tumhe dekh nahi sakta')).toBeVisible()
   await expect.poll(() => seen(b.page)).not.toContain(a.id)
 })
+
+test('a saved status reaches the street without a reload', async ({ browser }) => {
+  const [a, b] = await twoPeople(browser)
+  await expect.poll(() => seen(b.page)).toContain(a.id)
+  const label = b.page.locator('.person-label', { hasText: a.name })
+  await expect(label).toBeVisible()
+  await expect(label.locator('.person-status')).toBeHidden() // no status yet
+
+  await a.page.getByRole('button', { name: 'Profile' }).click()
+  const sheet = a.page.getByRole('dialog', { name: 'Apni pehchaan banao' })
+  await sheet.getByLabel('Status').fill('Hawa Mahal ke saamne chai?')
+  await sheet.getByRole('button', { name: 'Save karo' }).click()
+  await expect(sheet).toBeHidden()
+
+  await expect(label.locator('.person-status')).toHaveText('Hawa Mahal ke saamne chai?')
+  await expect.poll(() => seen(b.page)).toEqual([a.id])
+})

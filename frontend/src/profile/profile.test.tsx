@@ -101,3 +101,43 @@ it('look round-trips wire format', () => {
   expect(lookFromWire(wire)).toEqual(look)
   expect(lookFromWire({ skin: 9, outfit: 'nope', head: 'x' } as never)).toBeNull()
 })
+
+it('a resident can pause requests, and un-pause them, with the rest of the profile', async () => {
+  const onSave = vi.fn<Save>(async () => ({ ok: true }) as const)
+  const profile = {
+    id: 'u',
+    name: 'Asha',
+    look: { skin: 1, outfit: 'teal', head: 'none' },
+    status: '',
+    homeArea: 'Raja Park',
+    hereFor: null,
+    about: '',
+    pauseRequests: false,
+  } as const
+  const render = (pauseRequests: boolean) =>
+    act(async () =>
+      root.render(
+        <ProfileSheet
+          key={String(pauseRequests)}
+          me={{ id: 'u', profile: { ...profile, pauseRequests }, complete: true }}
+          lang="en"
+          onSave={onSave}
+          onClose={() => {}}
+          onSignOut={() => {}}
+        />,
+      ),
+    )
+  await render(false)
+  const pause = field('pauseRequests') as HTMLInputElement
+  expect(pause.checked).toBe(false)
+  expect(pause.closest('label')!.textContent).toContain('Pause requests')
+  await click(pause)
+  await act(async () => save().click())
+  expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ pauseRequests: true }))
+
+  await render(true)
+  expect((field('pauseRequests') as HTMLInputElement).checked).toBe(true)
+  await click(field('pauseRequests'))
+  await act(async () => save().click())
+  expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ pauseRequests: false }))
+})
