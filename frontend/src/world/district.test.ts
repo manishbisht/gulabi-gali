@@ -6,6 +6,7 @@ import { footprint } from './kit'
 import { CAST } from './cast'
 import { DISTRICT_NAMES } from './districtNames'
 import { TOTAL_STAMPS } from './stamps'
+import BENCHES from './benches.json'
 import type { AABB, LandmarkDef, Vec2 } from './types'
 
 const PLAYER_RADIUS = 0.4
@@ -347,5 +348,18 @@ describe('Malviya Nagar', () => {
 
   it('is where Farhan and Neha live', async () => {
     expect(ids((await load('malviya-nagar')).def.npcs)).toEqual(['farhan', 'neha'])
+  })
+})
+
+describe('benches', () => {
+  it("every district's tapris and benches are the ones the server knows", async () => {
+    for (const id of DISTRICTS) {
+      const props = (await load(id)).def.props.filter((p) => p.kind === 'tapri' || p.kind === 'bench')
+      expect(props.length, id).toBe(BENCHES.counts[id])
+      expect(
+        props.map((p) => p.at),
+        id,
+      ).toEqual(BENCHES.positions[id])
+    }
   })
 })

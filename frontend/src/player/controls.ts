@@ -14,6 +14,12 @@ const BACK = ['KeyS', 'ArrowDown']
 const LEFT = ['KeyA', 'ArrowLeft']
 const RIGHT = ['KeyD', 'ArrowRight']
 
+/** A text field, which keeps its keys to itself. */
+function typing(t: EventTarget | null): boolean {
+  const el = t as { tagName?: string; isContentEditable?: boolean } | null
+  return !!el && (el.isContentEditable === true || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName ?? ''))
+}
+
 export function createControls(target: Window): Controls {
   const down = new Set<string>()
   let joystick: Vec2 = { x: 0, z: 0 }
@@ -23,6 +29,8 @@ export function createControls(target: Window): Controls {
     (positive.some((k) => down.has(k)) ? 1 : 0) - (negative.some((k) => down.has(k)) ? 1 : 0)
 
   const onKeyDown = (e: Event) => {
+    // Typing a line (bench chat, the profile) is not walking, nor pressing E.
+    if (typing(e.target)) return
     const code = (e as KeyboardEvent).code
     if (code === 'KeyE' && !down.has(code)) interactQueued = true
     down.add(code)

@@ -11,6 +11,7 @@ import { loadOrCreateLook } from '../player/avatar'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
+import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
@@ -73,6 +74,8 @@ export interface SessionHooks {
    * `replaced(false)` clears that once a socket is welcomed again.
    */
   presence?: { token(): Promise<string | null>; replaced(on: boolean): void }
+  /** Tapris and benches: what the sitting system tells React (see useBench). Needs `presence`. */
+  bench?: BenchHooks
 }
 
 export interface CitySessionOptions {
@@ -112,6 +115,12 @@ export interface CitySession {
    * visitor is changes (sign-in, a finished profile, sign-out), so they appear or vanish without a reload.
    */
   reconnectLive(): void
+  /** Asks to sit at the bench in reach ("Baitho"); the server's answer seats the player. */
+  sit(): void
+  /** Gets up from the bench ("Utho"). */
+  stand(): void
+  /** Says a line at the player's bench; false when not seated or the line is blank. */
+  say(text: string): boolean
   /** Leaves the district and stops; a district still loading is disposed when it arrives. */
   dispose(): void
 }
@@ -129,6 +138,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     player: Player
     systems: DistrictSystem[]
     presence: Presence | null
+    sitting: Sitting | null
   } | null = null
   let repaint = () => {}
   let disposed = false
@@ -177,20 +187,37 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     const sky = createSky(stage, district, hooks)
     // made here, not in the presence, so taps and E can reach the people too
     const people = hooks.presence ? createPeople(stage.scene) : null
+    // sits and lines go out on the live socket, which opens below
+    let presence: Presence | null = null
+    const sitting =
+      hooks.presence && hooks.bench
+        ? createSitting({ def: district.def, player, hooks: hooks.bench, send: (m) => presence?.send(m) })
+        : null
     const systems: DistrictSystem[] = [
       npcs,
       sky,
       createLights(stage, district),
-      createInteraction(canvas, stage, controls, district, npcs, people, hooks),
+      createInteraction(canvas, stage, controls, district, npcs, people, sitting, hooks),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
     ]
     // one live socket per tab: `leave` above closed the last district's before this one opens
-    const presence =
+    presence =
       hooks.presence && people
-        ? createPresence(stage, district, player, bubbleHost, people, hooks.presence, opts.WebSocketImpl)
+        ? createPresence(
+            stage,
+            district,
+            player,
+            bubbleHost,
+            people,
+            sitting,
+            hooks.presence,
+            opts.WebSocketImpl,
+          )
         : null
     if (presence) systems.push(presence)
-    here = { district, player, systems, presence }
+    // disposed first (systems go in reverse), so the bench chat closes before the socket does
+    if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
+    here = { district, player, systems, presence, sitting }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -246,6 +273,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     },
     repaint: () => repaint(),
     reconnectLive: () => here?.presence?.reconnect(),
+    sit: () => here?.sitting?.sit(),
+    stand: () => here?.sitting?.stand(),
+    say: (text) => here?.sitting?.say(text) ?? false,
     dispose() {
       if (disposed) return
       disposed = true
@@ -314,9 +344,9 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 }
 
 /**
- * E and taps: a landmark's stamp, the metro, the character card and the person card, in that order of
- * priority, one card at a time. A tap, not
- * a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
+ * E and taps: a landmark's stamp, the metro, a bench, the character card and the person card, in that order
+ * of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
+ * the landmark and metro wait until they do. A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
  */
 function createInteraction(
@@ -326,6 +356,7 @@ function createInteraction(
   district: District,
   npcs: Npcs,
   people: People | null,
+  sitting: Sitting | null,
   hooks: SessionHooks,
 ): DistrictSystem {
   const ray = new THREE.Raycaster()
@@ -356,16 +387,24 @@ function createInteraction(
       const chatting = hooks.npcCard.isOpen()
       const meeting = hooks.personCard.isOpen()
       const card = chatting || meeting
-      landmarkNear = hooks.track(pos, district.def.landmarks, pressed && !card) !== null
+      const seated = sitting?.seated() ?? false
+      landmarkNear = hooks.track(pos, district.def.landmarks, pressed && !card && !seated) !== null
       // E by the station opens the metro, unless a landmark's or a character's card has it
-      const metro = hooks.trackStation(pos, district.def.station, pressed && !landmarkNear && !card)
-      hooks.npcCard.step(pos, npcs, pressed && !meeting && (chatting || !metro), landmarkNear)
+      const metro = hooks.trackStation(
+        pos,
+        district.def.station,
+        pressed && !landmarkNear && !card && !seated,
+      )
+      // E by a bench sits there (seated, it stands up), unless a card or the metro has it
+      const bench = !!sitting && pressed && !card && (seated || (!landmarkNear && !metro && sitting.near()))
+      if (bench) sitting.toggle()
+      hooks.npcCard.step(pos, npcs, pressed && !meeting && !bench && (chatting || !metro), landmarkNear)
       // a character that just opened (or closed on this very E) keeps the key from the person card
       if (people)
         hooks.personCard.step(
           pos,
           people,
-          pressed && !chatting && (meeting || (!metro && !hooks.npcCard.isOpen())),
+          pressed && !chatting && !bench && (meeting || (!metro && !hooks.npcCard.isOpen())),
           landmarkNear,
         )
     },
@@ -392,7 +431,7 @@ function createBubbleSystem(
   }
 }
 
-type Presence = DistrictSystem & { reconnect(): void }
+type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void }
 
 /**
  * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
@@ -405,6 +444,7 @@ function createPresence(
   player: Player,
   host: HTMLElement,
   people: People,
+  sitting: Sitting | null,
   hooks: NonNullable<SessionHooks['presence']>,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
@@ -423,8 +463,10 @@ function createPresence(
   const onMsg = (m: ServerMsg) => {
     if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
     people.apply(m)
+    sitting?.apply(m)
     if (m.t === 'welcome') {
       hooks.replaced(false)
+      sitting?.reset() // a new socket: the server stood the old one up
       sendMove(player.position())
     }
   }
@@ -459,8 +501,10 @@ function createPresence(
     },
     reconnect() {
       conn.close()
+      sitting?.reset() // the closed socket's seat goes with it
       conn = connect()
     },
+    send: (m) => conn.send(m),
     dispose() {
       conn.close()
       offQuality()

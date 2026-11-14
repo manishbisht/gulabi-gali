@@ -1,0 +1,142 @@
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { t, type Lang } from '../i18n/strings'
+import { MAX_BENCH_LINE, type BenchLine } from '../net/protocol'
+import type { BenchSeat } from '../world/benches'
+import type { BenchNotice } from '../world/useBench'
+
+/** Below this, a shorter visual viewport is browser chrome, not a keyboard. */
+const KEYBOARD_PX = 80
+
+interface Props {
+  seat: BenchSeat
+  lines: BenchLine[]
+  /** The viewer's id, so their own lines read "You". */
+  me: string | null
+  notice: BenchNotice | null
+  lang: Lang
+  /** Sends a line; false keeps what was typed (too soon, or nowhere to send it). */
+  onSay(text: string): boolean
+  onStand(): void
+}
+
+/**
+ * The panel for whoever sits at one tapri or bench: who else is there, what has been said since you sat, a
+ * line to say, and Utho. It sits beside the joystick; while the phone keyboard is up it spans the screen just
+ * above the keyboard instead (the joystick is under the keyboard then anyway).
+ */
+export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand }: Props) {
+  const [text, setText] = useState('')
+  const list = useRef<HTMLOListElement>(null)
+  const { keyboard, height } = useKeyboard()
+  // the newest line in view, as in any chat
+  useLayoutEffect(() => {
+    const el = list.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines.length, keyboard])
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (text.trim() && onSay(text)) setText('')
+  }
+  const title = t(seat.bench.kind === 'tapri' ? 'benchAtTapri' : 'benchAtBench', lang)
+  const style = keyboard ? ({ '--kb': `${keyboard}px`, '--vvh': `${height}px` } as CSSProperties) : undefined
+
+  return (
+    <section
+      className="landmark-card bench-chat"
+      data-kb={keyboard ? '' : undefined}
+      style={style}
+      aria-label={title}
+    >
+      <div className="bench-head">
+        <h2>{title}</h2>
+        <button type="button" className="person-close" onClick={onStand}>
+          {t('benchStand', lang)}
+        </button>
+      </div>
+      <p className="bench-with">
+        {seat.with.length ? t('benchWith', lang, { names: seat.with.join(', ') }) : t('benchAlone', lang)}
+      </p>
+      <ol className="bench-lines" ref={list} aria-live="polite">
+        {lines.length === 0 ? (
+          <li className="bench-empty">{t('benchEmpty', lang)}</li>
+        ) : (
+          lines.map((l, i) => (
+            <li key={i}>
+              <b>{l.from === me ? t('benchYou', lang) : l.name}</b> {l.text}
+            </li>
+          ))
+        )}
+      </ol>
+      {notice === 'rate' && <p className="bench-note">{t('benchRate', lang)}</p>}
+      <form className="bench-say" onSubmit={submit}>
+        <input
+          aria-label={t('benchSay', lang)}
+          placeholder={t('benchSayHint', lang)}
+          value={text}
+          maxLength={MAX_BENCH_LINE}
+          enterKeyHint="send"
+          autoComplete="off"
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button type="submit" className="landmark-stamp">
+          {t('benchSend', lang)}
+        </button>
+      </form>
+      <p className="bench-footer">{t('benchFooter', lang)}</p>
+    </section>
+  )
+}
+
+/** The "be seen first" card, for a ghost who tried to sit. */
+export function BenchGhost({
+  lang,
+  cta,
+  onVisible,
+  onClose,
+}: {
+  lang: Lang
+  cta: string
+  onVisible(): void
+  onClose(): void
+}) {
+  return (
+    <section className="landmark-card" role="status">
+      <p>{t('benchGhost', lang)}</p>
+      <div className="person-actions">
+        <button type="button" className="landmark-stamp" onClick={onVisible}>
+          {cta}
+        </button>
+        <button type="button" className="person-close" onClick={onClose}>
+          {t('benchNoticeClose', lang)}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * How much of the layout viewport the on-screen keyboard covers (0 when it is down), and the height left
+ * above it. Read from `visualViewport`, which shrinks for the keyboard where the page does not.
+ */
+function useKeyboard(): { keyboard: number; height: number } {
+  const [vp, setVp] = useState({ keyboard: 0, height: 0 })
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const measure = () => {
+      const covered = Math.round(window.innerHeight - vv.height - vv.offsetTop)
+      const keyboard = covered > KEYBOARD_PX ? covered : 0
+      const height = Math.round(vv.height)
+      setVp((was) => (was.keyboard === keyboard && was.height === height ? was : { keyboard, height }))
+    }
+    measure()
+    vv.addEventListener('resize', measure)
+    vv.addEventListener('scroll', measure)
+    return () => {
+      vv.removeEventListener('resize', measure)
+      vv.removeEventListener('scroll', measure)
+    }
+  }, [])
+  return vp
+}

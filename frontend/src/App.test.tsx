@@ -7,7 +7,8 @@ import App from './App'
 import { AuthContext, SIGNED_OUT, type AuthState } from './auth/useAuth'
 import { buildAvatar } from './player/avatar'
 import type { LiveOptions } from './net/live'
-import type { DistrictId } from './net/protocol'
+import type { ClientMsg, DistrictId, ServerMsg } from './net/protocol'
+import { benchesOf } from './world/benches'
 import malviyaNagar from './world/districts/malviyaNagar'
 import miRoad from './world/districts/miRoad'
 import university from './world/districts/university'
@@ -56,13 +57,13 @@ vi.mock('./world/district', async (importOriginal) => {
 })
 
 /** Every district socket the city opens, and what it was opened with; nothing goes over the network. */
-const sockets = vi.hoisted(() => [] as { opts: LiveOptions; closed: boolean }[])
+const sockets = vi.hoisted(() => [] as { opts: LiveOptions; closed: boolean; sent: ClientMsg[] }[])
 vi.mock('./net/live', () => ({
   connectLive: (opts: LiveOptions) => {
-    const conn = { opts, closed: false }
+    const conn = { opts, closed: false, sent: [] as ClientMsg[] }
     sockets.push(conn)
     return {
-      send() {},
+      send: (m: ClientMsg) => void (m.t !== 'move' && conn.sent.push(m)),
       close: () => void (conn.closed = true),
       state: () => (conn.closed ? 'closed' : 'open'),
     }
@@ -386,4 +387,79 @@ it('the live socket follows who you are, and says so when another tab takes over
   expect(liveNow()).toHaveLength(1)
   await act(async () => root.unmount())
   expect(liveNow()).toHaveLength(0)
+})
+
+/** The Walled City's tapri by Johari Bazaar, and the city's one live socket. */
+const tapri = benchesOf(walledCity)[4]!
+const server = (m: ServerMsg) => act(() => liveNow()[0]!.opts.onMsg(m))
+const sentNow = () => liveNow()[0]!.sent
+const button = (host: HTMLElement, label: string) =>
+  [...host.querySelectorAll('button')].find((b) => b.textContent === label)
+
+it('Baitho appears near a bench and not elsewhere', async () => {
+  const { host, root } = await openCity()
+  await tick()
+  expect(button(host, 'Baitho')).toBeUndefined() // at the spawn
+  act(() => window.__gg.teleport(tapri.at.x + 2, tapri.at.z))
+  await tick()
+  expect(button(host, 'Baitho')).toBeDefined()
+  act(() => window.__gg.teleport(tapri.at.x + 3, tapri.at.z))
+  await tick()
+  expect(button(host, 'Baitho')).toBeUndefined()
+  await act(async () => root.unmount())
+})
+
+it("Baitho sits on the server's word and opens the bench chat; Utho stands up", async () => {
+  const { host, root } = await openCity()
+  act(() => window.__gg.teleport(tapri.at.x + 2, tapri.at.z))
+  await tick()
+  await act(async () => button(host, 'Baitho')!.click())
+  expect(sentNow()).toEqual([{ t: 'sit', bench: 'walled-city:4' }])
+  expect(host.querySelector('.bench-chat')).toBeNull()
+
+  await server({ t: 'seated', bench: 'walled-city:4', seat: 0, with: ['Ravi'] })
+  const chat = host.querySelector<HTMLElement>('.bench-chat')!
+  expect(chat.textContent).toContain('Ravi')
+  expect(chat.textContent).toContain('Jo is bench pe baithe hain wahi padh sakte hain. Kuch save nahi hota.')
+  expect(button(host, 'Baitho')).toBeUndefined()
+
+  const input = chat.querySelector('input')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'ek cutting?')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => chat.querySelector('form')!.requestSubmit())
+  expect(sentNow().at(-1)).toEqual({ t: 'say', text: 'ek cutting?' })
+  expect(input.value).toBe('')
+  await server({
+    t: 'bench',
+    bench: 'walled-city:4',
+    from: 'dev:ravi',
+    name: 'Ravi',
+    text: 'haan, do',
+    at: 1,
+  })
+  expect(chat.textContent).toContain('haan, do')
+
+  await act(async () => button(host, 'Utho')!.click())
+  expect(sentNow().at(-1)).toEqual({ t: 'sit', bench: null })
+  expect(host.querySelector('.bench-chat')).toBeNull()
+  expect(button(host, 'Baitho')).toBeDefined()
+  await act(async () => root.unmount())
+})
+
+it('a ghost who tries to sit is told to be seen first, with a way in', async () => {
+  const { host, root } = await openCity()
+  act(() => window.__gg.teleport(tapri.at.x + 2, tapri.at.z))
+  await tick()
+  await act(async () => button(host, 'Baitho')!.click())
+  await server({ t: 'error', code: 'ghost' })
+  expect(host.textContent).toContain('Baithne ke liye pehle dikhna padega')
+  expect(button(host, 'Dikhna hai? Login karo')).toBeDefined()
+  expect(host.querySelector('.bench-chat')).toBeNull()
+  // walking away puts the notice away
+  act(() => window.__gg.teleport(tapri.at.x + 4, tapri.at.z))
+  await tick()
+  expect(host.textContent).not.toContain('Baithne ke liye pehle dikhna padega')
+  await act(async () => root.unmount())
 })

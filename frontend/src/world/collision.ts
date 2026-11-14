@@ -19,9 +19,18 @@ function slide(pos: number, delta: number, other: number, axis: 'x' | 'z', cs: A
 
 /**
  * Circle-vs-AABB movement that slides along walls (axis by axis). Large steps are split into
- * sub-steps no longer than `radius`, so nothing tunnels through thin colliders.
+ * sub-steps no longer than `radius`, so nothing tunnels through thin colliders. A collider the walker
+ * already stands inside (a seat inside a turned prop's loose box, say) does not hold them: they walk out
+ * of it, where snapping to its faces would throw them through to the far side.
  */
-export function moveWithCollision(from: Vec2, step: Vec2, colliders: AABB[], radius: number): Vec2 {
+export function moveWithCollision(from: Vec2, step: Vec2, all: AABB[], radius: number): Vec2 {
+  let colliders = all
+  for (let i = 0; i < all.length; i++) {
+    if (!overlaps(from.x, from.z, radius, all[i]!)) continue
+    // Only then a new list, so an ordinary step allocates nothing.
+    colliders = all.filter((c) => !overlaps(from.x, from.z, radius, c))
+    break
+  }
   const len = Math.hypot(step.x, step.z)
   const n = Math.max(1, Math.ceil(len / Math.max(radius, 1e-6)))
   const dx = step.x / n

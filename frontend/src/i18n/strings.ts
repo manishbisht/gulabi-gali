@@ -112,6 +112,42 @@ export const STRINGS = {
   personGone: { hi: 'Ye yahan se chale gaye.', en: 'They have left this street.' },
   personHereFor: { hi: 'Yahan: {what}', en: 'Here for: {what}' },
   personSoon: { hi: 'Jald aa raha hai', en: 'Coming soon' },
+  benchSit: { hi: 'Baitho', en: 'Sit here' },
+  benchStand: { hi: 'Utho', en: 'Get up' },
+  benchAtTapri: { hi: 'Tapri pe', en: 'At the tapri' },
+  benchAtBench: { hi: 'Bench pe', en: 'On the bench' },
+  benchWith: { hi: 'Saath mein: {names}', en: 'Here with you: {names}' },
+  benchAlone: {
+    hi: 'Abhi yahan sirf tum ho. Koi aake baithega toh yahin dikhega.',
+    en: "It's just you here for now. Whoever sits down next shows up here.",
+  },
+  benchEmpty: {
+    hi: 'Abhi tak kisi ne kuch nahi kaha. Pehli chuski ki tarah, pehli baat bhi tumhari.',
+    en: 'Nobody has said a word yet. Like the first sip of chai, the first line is yours.',
+  },
+  benchYou: { hi: 'Tum', en: 'You' },
+  benchSay: { hi: 'Bench pe kuch kaho', en: 'Say something on the bench' },
+  benchSayHint: { hi: 'Kuch kaho…', en: 'Say something…' },
+  benchSend: { hi: 'Bhejo', en: 'Send' },
+  benchFooter: {
+    hi: 'Jo is bench pe baithe hain wahi padh sakte hain. Kuch save nahi hota.',
+    en: 'Only people on this bench can read this. Nothing is saved.',
+  },
+  benchGhost: {
+    hi: 'Baithne ke liye pehle dikhna padega',
+    en: 'To sit down here, you need to be visible first',
+  },
+  benchFull: {
+    hi: 'Yahan saari jagah bhar gayi hai. Thodi der mein aana.',
+    en: 'Every seat here is taken. Come back in a bit.',
+  },
+  benchFar: { hi: 'Thoda aur paas aao, phir baitho.', en: 'Come a little closer, then sit.' },
+  benchFailed: {
+    hi: 'Abhi baith nahi paaye. Dobara try karo.',
+    en: "Couldn't sit down just now. Try again.",
+  },
+  benchRate: { hi: 'Zara aaram se: ek second mein ek baat.', en: 'Easy does it: one line a second.' },
+  benchNoticeClose: { hi: 'Theek hai', en: 'OK' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

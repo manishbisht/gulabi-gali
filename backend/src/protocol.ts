@@ -110,11 +110,23 @@ export type ServerMsg =
   | { t: 'moves'; m: [id: string, x: number, z: number, ry: number][] }
   | { t: 'status'; id: string; text: string }
   | { t: 'bench'; bench: string; from: string; name: string; text: string; at: number }
-  | { t: 'seated'; bench: string | null; with: string[] }
-  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' }
+  /**
+   * Where you sit, and the first names of the others on that bench by seat. Sent to a sitter when they sit or
+   * stand, and again whenever someone else joins or leaves their bench. `seat` is null exactly when `bench` is.
+   */
+  | { t: 'seated'; bench: string | null; seat: number | null; with: string[] }
+  /** `far`: a sit from further than the server allows from the bench, by the last point it accepted. */
+  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' }
   /** A refused step carries the last point the server accepted: the client goes back there. */
   | { t: 'error'; code: 'too-fast'; x: number; z: number; ry: number }
   | { t: 'pong' }
+
+/** A line said at a bench, as each sitter hears it (and as the district keeps it, in memory only). */
+export type BenchLine = Omit<Extract<ServerMsg, { t: 'bench' }>, 't' | 'bench'>
+/** A bench line is at most this many characters (code points), once cleaned. */
+export const MAX_BENCH_LINE = 200
+/** Seats at a bench or tapri: any more sitters are told `full`. */
+export const BENCH_SEATS = 4
 
 /**
  * How the server may end a district socket. A replaced socket lost to a newer one for the same person (another

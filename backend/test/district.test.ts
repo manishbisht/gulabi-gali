@@ -2,6 +2,7 @@ import { applyD1Migrations, env, evictDurableObject, runInDurableObject, SELF } 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'
+import { BENCH_POSITIONS, BENCHES, DISTRICT_IDS } from '../src/district'
 import { closeAll, live, login, openLive, resident, WAIT } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -199,12 +200,6 @@ describe('DistrictDO', () => {
       { t: 'error', code: 'ghost' },
       { t: 'error', code: 'ghost' },
     ])
-    // Benches arrive later; for now a resident is told they are not a thing yet.
-    const r = await live('university', { token: await resident('Bench Early') })
-    r.send({ t: 'sit', bench: 'university:0' })
-    r.send({ t: 'say', text: 'hi' })
-    await r.sync()
-    expect(r.all('error').map((e) => e.code)).toEqual(['invalid', 'invalid'])
   })
 
   it('status is broadcast and written through to the profile', async () => {
@@ -538,5 +533,259 @@ describe('DistrictDO', () => {
     const a = await live('walled-city')
     a.send({ t: 'ping' })
     expect(await a.next('pong')).toEqual({ t: 'pong' })
+  })
+})
+
+describe('benches', () => {
+  /** A point `off` metres east of bench `i` in `district`: within reach of it unless `off` says otherwise. */
+  const by = (district: DistrictId, i: number, off = 1.5) => {
+    const at = BENCH_POSITIONS[district][i]!
+    return { x: at.x + off, z: at.z }
+  }
+
+  /** A resident standing by bench `i`, seated there. */
+  async function sitter(name: string, district: DistrictId, i: number) {
+    const c = await live(district, { token: await resident(name) })
+    c.send({ t: 'move', ...by(district, i), ry: 0 })
+    c.send({ t: 'sit', bench: `${district}:${i}` })
+    await c.next('seated', (m) => m.bench === `${district}:${i}`)
+    return c
+  }
+
+  it('bench ids cover every district', () => {
+    for (const id of DISTRICT_IDS) expect(BENCH_POSITIONS[id]).toHaveLength(BENCHES[id])
+  })
+
+  it('only sitters receive bench lines', async () => {
+    const a = await sitter('Bench Asha', 'walled-city', 2)
+    const b = await sitter('Bench Bilal', 'walled-city', 2)
+    // C stands right there but has not sat; G is a ghost by the bench.
+    const c = await live('walled-city', { token: await resident('Bench Chandu') })
+    c.send({ t: 'move', ...by('walled-city', 2, -1), ry: 0 })
+    const g = await live('walled-city')
+    g.send({ t: 'move', ...by('walled-city', 2, 1), ry: 0 })
+    await c.sync()
+    await g.sync()
+
+    // A hears B arrive; B was told who was already there.
+    expect(b.all('seated').at(-1)).toEqual({ t: 'seated', bench: 'walled-city:2', seat: 1, with: ['Bench'] })
+    expect(await a.next('seated', (m) => m.with.length === 1)).toEqual({
+      t: 'seated',
+      bench: 'walled-city:2',
+      seat: 0,
+      with: ['Bench'],
+    })
+
+    a.send({ t: 'say', text: '  chai​ peeoge?\n ' })
+    const heard = await b.next('bench')
+    expect(heard).toEqual({
+      t: 'bench',
+      bench: 'walled-city:2',
+      from: 'dev:bench-asha',
+      name: 'Bench',
+      text: 'chai peeoge?',
+      at: expect.any(Number),
+    })
+    expect(await a.next('bench')).toEqual(heard)
+    await c.sync()
+    await g.sync()
+    expect(c.all('bench')).toEqual([])
+    expect(g.all('bench')).toEqual([])
+
+    // Someone not seated cannot talk, and a line past 200 characters is refused.
+    c.send({ t: 'say', text: 'mujhe bhi' })
+    expect(await c.next('error')).toEqual({ t: 'error', code: 'invalid' })
+    const from = b.mark()
+    a.send({ t: 'say', text: 'x'.repeat(201) })
+    expect(await a.next('error')).toEqual({ t: 'error', code: 'invalid' })
+    await b.sync()
+    expect(b.all('bench', from)).toEqual([])
+  })
+
+  it('a ghost cannot sit', async () => {
+    const g = await live('university')
+    g.send({ t: 'move', ...by('university', 0), ry: 0 })
+    g.send({ t: 'sit', bench: 'university:0' })
+    g.send({ t: 'say', text: 'koi hai?' })
+    await g.sync()
+    expect(g.all('error')).toEqual([
+      { t: 'error', code: 'ghost' },
+      { t: 'error', code: 'ghost' },
+    ])
+    expect(g.all('seated')).toEqual([])
+  })
+
+  it('fifth sitter gets full', async () => {
+    const four = []
+    for (const name of ['Full Anu', 'Full Babu', 'Full Chini', 'Full Dolly'])
+      four.push(await sitter(name, 'mi-road', 0))
+    expect(four[3]!.all('seated').at(-1)).toMatchObject({ seat: 3, with: ['Full', 'Full', 'Full'] })
+    const fifth = await live('mi-road', { token: await resident('Full Eshan') })
+    fifth.send({ t: 'move', ...by('mi-road', 0), ry: 0 })
+    fifth.send({ t: 'sit', bench: 'mi-road:0' })
+    expect(await fifth.next('error')).toEqual({ t: 'error', code: 'full' })
+    expect(fifth.all('seated')).toEqual([])
+    // A seat that frees up is taken again, lowest first.
+    four[1]!.send({ t: 'sit', bench: null })
+    expect(await four[1]!.next('seated', (m) => m.bench === null)).toEqual({
+      t: 'seated',
+      bench: null,
+      seat: null,
+      with: [],
+    })
+    fifth.send({ t: 'sit', bench: 'mi-road:0' })
+    expect(await fifth.next('seated')).toMatchObject({ bench: 'mi-road:0', seat: 1 })
+    // Asking again for the seat you have is answered to you alone.
+    await four[0]!.next('seated', (m) => m.with.length === 3)
+    const others = four[0]!.mark()
+    fifth.send({ t: 'sit', bench: 'mi-road:0' })
+    await vi.waitFor(() => expect(fifth.all('seated')).toHaveLength(2), WAIT)
+    await four[0]!.sync()
+    expect(four[0]!.all('seated', others)).toEqual([])
+  })
+
+  it('sitting needs the bench to be real and within 3 m', async () => {
+    const a = await live('malviya-nagar', { token: await resident('Far Farhan') })
+    a.send({ t: 'sit', bench: 'malviya-nagar:1' }) // has not said where it stands
+    a.send({ t: 'move', ...by('malviya-nagar', 1, 4), ry: 0 })
+    a.send({ t: 'sit', bench: 'malviya-nagar:1' })
+    a.send({ t: 'sit', bench: 'malviya-nagar:5' })
+    a.send({ t: 'sit', bench: 'walled-city:1' })
+    a.send({ t: 'sit', bench: 'malviya-nagar:01' })
+    await a.sync()
+    expect(a.all('error').map((e) => e.code)).toEqual(['far', 'far', 'invalid', 'invalid', 'invalid'])
+  })
+
+  it('sitting at another bench leaves the first, and walking off unseats', async () => {
+    const a = await sitter('Hop Hema', 'walled-city', 7)
+    const b = await sitter('Hop Bobby', 'walled-city', 7)
+    // Bench 8 is 19 m west: walked there in hops the speed check allows, a second apart.
+    const start = Date.now() + 1000
+    try {
+      for (const [i, x] of [6, 1, -4, -8].entries()) {
+        await runInDurableObject(stub('walled-city'), (instance) => {
+          instance.clock = () => start + i * 1000
+        })
+        a.send({ t: 'move', x, z: -14, ry: 0 })
+        await a.sync()
+      }
+      // On the way, past 3 m from bench 7, A was stood up and B told so.
+      expect(await a.next('seated', (m) => m.bench === null)).toMatchObject({ bench: null })
+      expect(await b.next('seated', (m) => m.with.length === 0)).toMatchObject({ bench: 'walled-city:7' })
+      const from = b.mark()
+      a.send({ t: 'sit', bench: 'walled-city:8' })
+      expect(await a.next('seated', (m) => m.bench === 'walled-city:8')).toMatchObject({ seat: 0, with: [] })
+      await b.sync()
+      expect(b.all('seated', from)).toEqual([])
+    } finally {
+      await runInDurableObject(stub('walled-city'), (instance) => {
+        instance.clock = Date.now
+      })
+    }
+  })
+
+  it('switching benches in place tells both benches', async () => {
+    // Benches 2 and 8 in MI Road stand 3.5 m apart: one spot is in reach of both.
+    const a = await live('mi-road', { token: await resident('Swap Sima') })
+    const b = await sitter('Swap Bunty', 'mi-road', 2)
+    const c = await sitter('Swap Chotu', 'mi-road', 8)
+    a.send({ t: 'move', x: -58.2, z: 43.3, ry: 0 })
+    a.send({ t: 'sit', bench: 'mi-road:2' })
+    await b.next('seated', (m) => m.with.length === 1)
+    a.send({ t: 'sit', bench: 'mi-road:8' })
+    expect(await a.next('seated', (m) => m.bench === 'mi-road:8')).toMatchObject({ with: ['Swap'] })
+    await b.next('seated', (m) => m.with.length === 0)
+    await c.next('seated', (m) => m.with.length === 1)
+  })
+
+  it('say is limited to a line a second', async () => {
+    const a = await sitter('Fast Fatima', 'university', 1)
+    a.send({ t: 'say', text: 'ek' })
+    a.send({ t: 'say', text: 'do' })
+    await a.sync()
+    expect(a.all('bench').map((m) => m.text)).toEqual(['ek'])
+    expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
+  })
+
+  it('transcript keeps only the last 10 minutes', async () => {
+    const district = stub('university')
+    const a = await sitter('Note Nandini', 'university', 2)
+    const b = await sitter('Note Bhanu', 'university', 2)
+    await a.sync()
+    await b.sync()
+    const start = Date.now() + 60_000
+    const at = async (ms: number) =>
+      runInDurableObject(district, (instance) => {
+        instance.clock = () => start + ms
+      })
+    try {
+      await at(0)
+      a.send({ t: 'say', text: 'pehli' })
+      await a.next('bench', (m) => m.text === 'pehli')
+      await at(6 * 60_000)
+      b.send({ t: 'say', text: 'doosri' })
+      await a.next('bench', (m) => m.text === 'doosri')
+      await at(11 * 60_000)
+      a.send({ t: 'say', text: 'teesri' })
+      await a.next('bench', (m) => m.text === 'teesri')
+      const kept = await runInDurableObject(district, (instance) => instance.benchTranscript('university:2'))
+      expect(kept).toEqual([
+        { from: 'dev:note-bhanu', name: 'Note', text: 'doosri', at: start + 6 * 60_000 },
+        { from: 'dev:note-nandini', name: 'Note', text: 'teesri', at: start + 11 * 60_000 },
+      ])
+      await at(22 * 60_000)
+      expect(await runInDurableObject(district, (i) => i.benchTranscript('university:2'))).toHaveLength(0)
+      expect(await runInDurableObject(district, (i) => i.benchTranscript('university:3'))).toEqual([])
+
+      // Never more than 200 lines, however busy the bench.
+      const lines = await runInDurableObject(district, async (instance, state) => {
+        const [ws] = state
+          .getWebSockets()
+          .filter(
+            (s) => (s.deserializeAttachment() as { userId?: string } | null)?.userId === 'dev:note-nandini',
+          )
+        for (let i = 0; i < 205; i++) {
+          const now = start + 30 * 60_000 + i * 1000
+          instance.clock = () => now
+          await instance.webSocketMessage(ws!, JSON.stringify({ t: 'say', text: `line ${i}` }))
+        }
+        return instance.benchTranscript('university:2')
+      })
+      expect(lines).toHaveLength(200)
+      expect(lines[0]!.text).toBe('line 5')
+      expect(lines.at(-1)!.text).toBe('line 204')
+    } finally {
+      await runInDurableObject(district, (instance) => {
+        instance.clock = Date.now
+      })
+    }
+  })
+
+  it('closing the socket unseats', async () => {
+    const a = await sitter('Bye Bina', 'walled-city', 3)
+    const b = await sitter('Bye Bhola', 'walled-city', 3)
+    const from = b.mark()
+    a.close()
+    expect(await b.next('seated', undefined, from)).toEqual({
+      t: 'seated',
+      bench: 'walled-city:3',
+      seat: 1,
+      with: [],
+    })
+    // A socket that takes over for the same person stands them up too.
+    const token = await resident('Bye Bhola')
+    const again = await live('walled-city', { token })
+    await again.next('welcome')
+    const c = await sitter('Bye Chetna', 'walled-city', 3)
+    expect(c.all('seated').at(-1)).toMatchObject({ seat: 0, with: [] })
+  })
+
+  it('bench seats survive the object hibernating', async () => {
+    const a = await sitter('Deep Dimple', 'malviya-nagar', 3)
+    await evictDurableObject(stub('malviya-nagar'))
+    const b = await sitter('Deep Bablu', 'malviya-nagar', 3)
+    expect(b.all('seated').at(-1)).toMatchObject({ seat: 1, with: ['Deep'] })
+    b.send({ t: 'say', text: 'jaag gaye?' })
+    expect(await a.next('bench')).toMatchObject({ text: 'jaag gaye?', name: 'Deep' })
   })
 })

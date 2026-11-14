@@ -26,6 +26,24 @@ describe('createControls', () => {
     expect(v.z).toBeGreaterThan(0)
   })
 
+  it('ignores keys typed into a text field (a bench chat line is not a walk)', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    for (const [code, tagName] of [
+      ['KeyW', 'INPUT'],
+      ['KeyE', 'TEXTAREA'],
+    ]) {
+      const e = new Event('keydown') as Event & { code: string }
+      e.code = code!
+      Object.defineProperty(e, 'target', { value: { tagName } })
+      w.dispatchEvent(e)
+    }
+    expect(c.move()).toEqual({ x: 0, z: 0 })
+    expect(c.interact()).toBe(false)
+    press(w, 'KeyE') // and outside one, E still works
+    expect(c.interact()).toBe(true)
+  })
+
   it('maps WASD and arrows, and releasing a key stops it', () => {
     const w = fakeWindow()
     const c = (controls = createControls(w))

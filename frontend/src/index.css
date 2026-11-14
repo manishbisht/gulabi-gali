@@ -362,6 +362,96 @@ button {
   font-weight: 700;
 }
 
+/* Tapri and bench chat: beside the joystick, or spanning the screen above the phone keyboard. */
+.bench-chat {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+}
+
+.bench-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.landmark-card.bench-chat h2 {
+  margin: 0;
+}
+
+.landmark-card .bench-with {
+  margin: 0 0 6px;
+  opacity: 0.8;
+}
+
+.bench-lines {
+  min-height: 0;
+  max-height: 26vh;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.bench-empty {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.landmark-card .bench-note {
+  margin: 0 0 6px;
+  font-style: italic;
+}
+
+.bench-say {
+  display: flex;
+  gap: 8px;
+}
+
+.bench-say input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 999px;
+  background: rgb(245 230 216 / 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* any smaller and iOS zooms the page on focus */
+}
+
+.landmark-card .bench-footer {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.bench-chat[data-kb] {
+  position: fixed;
+  left: calc(10px + env(safe-area-inset-left));
+  right: calc(10px + env(safe-area-inset-right));
+  bottom: calc(var(--kb) + 8px);
+  max-width: none;
+  max-height: calc(var(--vvh) - 16px);
+  margin: 0;
+  animation: none;
+}
+
+.bench-chat[data-kb] .bench-lines {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
 .travel-sheet ul {
   margin: 0 0 10px;
   padding: 0;

@@ -1,11 +1,17 @@
 import { readFileSync } from 'node:fs'
 
-const backend = readFileSync(new URL('../backend/src/protocol.ts', import.meta.url), 'utf8')
-const frontend = readFileSync(new URL('../frontend/src/net/protocol.ts', import.meta.url), 'utf8')
+/** Files the backend owns and the frontend carries a byte-for-byte copy of. */
+const COPIES = [
+  ['backend/src/protocol.ts', 'frontend/src/net/protocol.ts'],
+  ['backend/src/benches.json', 'frontend/src/world/benches.json'],
+]
 
-if (backend !== frontend) {
-  console.error(
-    'protocol.ts copies differ: edit backend/src/protocol.ts and copy it to frontend/src/net/protocol.ts',
-  )
-  process.exit(1)
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+
+let failed = false
+for (const [backend, frontend] of COPIES) {
+  if (read(backend) === read(frontend)) continue
+  console.error(`${backend} and ${frontend} differ: edit ${backend} and copy it to ${frontend}`)
+  failed = true
 }
+if (failed) process.exit(1)

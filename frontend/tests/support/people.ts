@@ -1,4 +1,10 @@
-import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type BrowserContextOptions,
+  type Page,
+} from '@playwright/test'
 import { enterCity } from './city'
 
 /** A signed-in visitor with a finished profile, and the id the live socket knows them by. */
@@ -12,8 +18,8 @@ let made = 0
 /** Contexts made here outlive a test unless closed: their sockets would keep people in the districts. */
 const open: BrowserContext[] = []
 
-async function newPage(browser: Browser): Promise<Page> {
-  const context = await browser.newContext()
+async function newPage(browser: Browser, options?: BrowserContextOptions): Promise<Page> {
+  const context = await browser.newContext(options)
   open.push(context)
   return context.newPage()
 }
@@ -24,8 +30,8 @@ export async function closePeople() {
 }
 
 /** A visitor who never signs in, in the city. */
-export async function ghost(browser: Browser): Promise<Page> {
-  const page = await newPage(browser)
+export async function ghost(browser: Browser, options?: BrowserContextOptions): Promise<Page> {
+  const page = await newPage(browser, options)
   await enterCity(page)
   return page
 }
@@ -34,10 +40,14 @@ export async function ghost(browser: Browser): Promise<Page> {
 const devId = (name: string) => `dev:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
 /** A new browser context, dev-logged in under a fresh name, profile finished: visible to everyone. */
-export async function resident(browser: Browser, first: string): Promise<Resident> {
+export async function resident(
+  browser: Browser,
+  first: string,
+  options?: BrowserContextOptions,
+): Promise<Resident> {
   // Unique per run: the local D1 outlives the test run, and the live districts outlive a test.
   const name = `${first}${Date.now() % 100000}${made++}`
-  const page = await ghost(browser)
+  const page = await ghost(browser, options)
   await page.getByRole('button', { name: 'Dikhna hai? Login karo' }).click()
   await page.getByLabel('Aapka naam').fill(name)
   await page.getByRole('button', { name: 'Andar aao' }).click()
@@ -70,4 +80,20 @@ export async function walk(page: Page, key: string, ms: number) {
   await page.keyboard.down(key)
   await page.waitForTimeout(ms)
   await page.keyboard.up(key)
+}
+
+/**
+ * Moves the player to (x, z) in hops of at most 6 m, a little over a second apart: the server's speed check
+ * lets a standing player cover 8 m at once, so each hop is accepted where one long teleport would be refused.
+ */
+export async function hopTo(page: Page, x: number, z: number) {
+  for (;;) {
+    const at = await page.evaluate(() => window.__gg.position())
+    const d = Math.hypot(x - at.x, z - at.z)
+    if (d < 0.01) return
+    const k = Math.min(1, 6 / d)
+    const to = { x: at.x + (x - at.x) * k, z: at.z + (z - at.z) * k }
+    await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), to)
+    await page.waitForTimeout(1100)
+  }
 }

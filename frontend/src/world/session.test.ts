@@ -8,6 +8,7 @@ import type { Controls } from '../player/controls'
 import type { District } from './district'
 import miRoad from './districts/miRoad'
 import walledCity from './districts/walledCity'
+import { benchesOf, seatPose } from './benches'
 import { createCitySession, type SessionHooks } from './session'
 import type { DistrictDef } from './types'
 
@@ -229,7 +230,11 @@ function openLive(token: () => Promise<string | null> = async () => null) {
   const s = fakeStage()
   const canvas = document.body.appendChild(document.createElement('canvas'))
   const bubbleHost = document.body.appendChild(document.createElement('div'))
-  const h: SessionHooks = { ...hooks(), presence: { token, replaced: vi.fn() } }
+  const h: SessionHooks = {
+    ...hooks(),
+    presence: { token, replaced: vi.fn() },
+    bench: { near: vi.fn(), seated: vi.fn(), line: vi.fn(), refused: vi.fn() },
+  }
   const session = createCitySession({
     stage: s.stage,
     controls,
@@ -382,4 +387,113 @@ it('E reaches the person card only when no character card or metro has the key',
   expect(step.mock.calls.at(-1)![2]).toBe(false)
   pressed.mockRestore()
   live.session.dispose()
+})
+
+/** A live Walled City, welcomed, with the player standing 2 m in front of its tapri by Johari Bazaar. */
+async function byTapri() {
+  const live = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  ws.say({ t: 'welcome', you: { id: 'dev:asha', visible: true }, people: [] })
+  const tapri = benchesOf(walledCity)[4]! // (-5.6, 36), facing +x
+  live.session.player()!.teleport(tapri.at.x + 2, tapri.at.z)
+  live.tick(1 / 30)
+  const sent = () => ws.sent.map((m) => JSON.parse(m) as { t: string }).filter((m) => m.t !== 'move')
+  return { ...live, ws, tapri, sent, bench: live.hooks.bench! }
+}
+
+it("sits only on the server's word, snaps to the seat, hears the bench, and walking off stands up", async () => {
+  const { session, ws, tapri, sent, bench, tick } = await byTapri()
+  expect(bench.near).toHaveBeenLastCalledWith(tapri)
+  session.sit()
+  expect(sent()).toEqual([{ t: 'sit', bench: 'walled-city:4' }])
+  // nothing moves until the server answers
+  expect(session.player()!.position()).toEqual({ x: tapri.at.x + 2, z: tapri.at.z })
+  expect(bench.seated).not.toHaveBeenCalled()
+
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 2, with: ['Ravi'] })
+  const pose = seatPose(tapri, 2)
+  expect(session.player()!.position()).toEqual({ x: pose.x, z: pose.z })
+  expect(session.player()!.heading()).toBeCloseTo(pose.ry)
+  expect(bench.seated).toHaveBeenLastCalledWith({ bench: tapri, seat: 2, with: ['Ravi'] })
+
+  ws.say({ t: 'bench', bench: 'walled-city:4', from: 'dev:ravi', name: 'Ravi', text: 'chai?', at: 5 })
+  ws.say({ t: 'bench', bench: 'walled-city:9', from: 'dev:x', name: 'X', text: 'elsewhere', at: 6 })
+  expect(bench.line).toHaveBeenCalledTimes(1)
+  expect(bench.line).toHaveBeenCalledWith({ from: 'dev:ravi', name: 'Ravi', text: 'chai?', at: 5 })
+  expect(session.say('  haan, do cutting  ')).toBe(true)
+  expect(session.say('   ')).toBe(false)
+  expect(sent().at(-1)).toEqual({ t: 'say', text: 'haan, do cutting' })
+
+  // someone else sits down: the list changes, the player stays put
+  session.player()!.teleport(pose.x + 0.3, pose.z)
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 2, with: ['Ravi', 'Meena'] })
+  expect(session.player()!.position()).toEqual({ x: pose.x + 0.3, z: pose.z })
+  expect(bench.seated).toHaveBeenLastCalledWith({ bench: tapri, seat: 2, with: ['Ravi', 'Meena'] })
+
+  // walking off stands the player up, once
+  session.player()!.teleport(tapri.at.x + 2.6, tapri.at.z)
+  tick(1 / 30)
+  tick(1 / 30)
+  expect(sent().filter((m) => m.t === 'sit')).toEqual([
+    { t: 'sit', bench: 'walled-city:4' },
+    { t: 'sit', bench: null },
+  ])
+  expect(bench.seated).toHaveBeenLastCalledWith(null)
+  session.dispose()
+})
+
+it('a refused sit is reported; a new socket or leaving the district stands the sitter up', async () => {
+  const { session, ws, sent, bench, tick } = await byTapri()
+  session.sit()
+  ws.say({ t: 'error', code: 'ghost' })
+  expect(bench.refused).toHaveBeenLastCalledWith('ghost')
+  session.sit()
+  ws.say({ t: 'error', code: 'full' })
+  expect(bench.refused).toHaveBeenLastCalledWith('full')
+  // an error with no sit waiting on it is not about benches
+  ws.say({ t: 'error', code: 'invalid' })
+  expect(bench.refused).toHaveBeenCalledTimes(2)
+  // seated, a line too soon is the server's `rate`
+  session.sit()
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 0, with: [] })
+  ws.say({ t: 'error', code: 'rate' })
+  expect(bench.refused).toHaveBeenLastCalledWith('rate')
+  // and not seated, a say goes nowhere
+  ws.say({ t: 'seated', bench: null, seat: null, with: [] })
+  expect(bench.seated).toHaveBeenLastCalledWith(null)
+  expect(session.say('hello?')).toBe(false)
+  expect(sent().filter((m) => m.t === 'say')).toEqual([])
+
+  session.sit()
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 0, with: [] })
+  ws.say({ t: 'welcome', you: { id: 'dev:asha', visible: true }, people: [] }) // a fresh socket
+  expect(bench.seated).toHaveBeenLastCalledWith(null)
+  tick(1 / 30)
+  expect(bench.near).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'walled-city:4' }))
+  session.sit()
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 0, with: [] })
+  session.dispose()
+  expect(bench.seated).toHaveBeenLastCalledWith(null)
+  expect(bench.near).toHaveBeenLastCalledWith(null)
+})
+
+it('E sits at a bench in reach and stands up again, unless a card has the key', async () => {
+  const { session, ws, sent, hooks: h, tick } = await byTapri()
+  const pressed = vi.spyOn(controls, 'interact').mockReturnValue(true)
+  const person = vi.spyOn(h.personCard, 'step')
+  vi.spyOn(h.npcCard, 'isOpen').mockReturnValue(true) // a character's card has E: it closes that
+  tick(1 / 30)
+  expect(sent()).toEqual([])
+  vi.spyOn(h.npcCard, 'isOpen').mockReturnValue(false)
+  tick(1 / 30)
+  expect(sent()).toEqual([{ t: 'sit', bench: 'walled-city:4' }])
+  expect(person.mock.calls.at(-1)![2]).toBe(false) // the bench took the key from the person card
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 1, with: [] })
+  tick(1 / 30)
+  expect(sent().at(-1)).toEqual({ t: 'sit', bench: null })
+  pressed.mockRestore()
+  session.dispose()
 })

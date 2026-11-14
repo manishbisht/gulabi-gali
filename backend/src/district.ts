@@ -2,9 +2,13 @@ import { DurableObject } from 'cloudflare:workers'
 import { resolveUser } from './auth'
 import { allowedOrigin } from './cors'
 import type { Env } from './env'
+import benches from './benches.json'
 import { cleanText, loadResident, MAX_STATUS, toPublic } from './profiles'
 import {
+  BENCH_SEATS,
   LIVE_CLOSE,
+  MAX_BENCH_LINE,
+  type BenchLine,
   type ClientMsg,
   type DistrictId,
   type LivePerson,
@@ -13,6 +17,19 @@ import {
 } from './protocol'
 
 export const DISTRICT_IDS: readonly DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar']
+
+/**
+ * Every tapri and bench prop, by district: bench `${district}:${n}` is the n-th of them in the district's
+ * `props`, standing at `BENCH_POSITIONS[district][n]`. The same file is copied to the frontend, whose
+ * district defs are tested against it (scripts/check-protocol.mjs keeps the copies equal).
+ */
+export const BENCHES: Record<DistrictId, number> = benches.counts
+export const BENCH_POSITIONS: Record<DistrictId, readonly { x: number; z: number }[]> = benches.positions
+/** A sitter must stand this close to the bench (by their last accepted point) to sit, and to stay seated. */
+export const SIT_RANGE_M = 3
+/** Each bench remembers what was said there for this long, and at most this many lines. */
+export const TRANSCRIPT_MS = 10 * 60_000
+export const TRANSCRIPT_LINES = 200
 
 /**
  * Who a socket belongs to, as the Worker resolved it. The object trusts this header because only the Worker
@@ -49,6 +66,8 @@ export const MAX_BAD_FRAMES = 5
 export const LANES = {
   move: { perSecond: 40, burst: 20 },
   status: { perSecond: 0.5, burst: 1 },
+  /** Bench lines: one a second. */
+  say: { perSecond: 1, burst: 1 },
   other: { perSecond: 10, burst: 20 },
 } as const
 type Lane = keyof typeof LANES
@@ -67,6 +86,9 @@ const PONG = '{"t":"pong"}'
 const GHOST = { t: 'error', code: 'ghost' } as const
 const INVALID = { t: 'error', code: 'invalid' } as const
 const RATE = { t: 'error', code: 'rate' } as const
+const FULL = { t: 'error', code: 'full' } as const
+const FAR = { t: 'error', code: 'far' } as const
+const STOOD: ServerMsg = { t: 'seated', bench: null, seat: null, with: [] }
 
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
 
@@ -120,8 +142,10 @@ export function parseClientMsg(text: string): ClientMsg | null {
         : null
     }
     case 'say': {
-      const { text } = m
-      return typeof text === 'string' ? { t: 'say', text } : null
+      // One line: newlines become spaces before the clean. Empty or too long is a bad frame.
+      const text =
+        typeof m.text === 'string' ? cleanText(m.text.replace(/[\r\n]+/g, ' '), MAX_BENCH_LINE) : null
+      return text ? { t: 'say', text } : null
     }
     case 'status': {
       // Cleaned here, so a line that is too long is a bad frame like any other.
@@ -162,6 +186,8 @@ interface Bucket {
 
 /** What a socket carries through hibernation. */
 interface Seat {
+  /** The district this object is: the socket's own copy, since a woken object is told nothing else. */
+  district: DistrictId
   userId: string | null
   person: PublicPerson | null
   /** Listed: a resident who has moved at least once on this socket (or the one it replaced). */
@@ -179,17 +205,22 @@ interface Seat {
   lanes: Record<Lane, Bucket>
   /** The flood under way, if any: when it began and when the last frame was refused. */
   flood: { since: number; at: number } | null
+  /** The bench this person sits at, and which of its seats. Kept here, so it survives hibernation. */
+  bench: { id: string; seat: number } | null
 }
 
 const fullLanes = (now: number): Record<Lane, Bucket> => ({
   move: { tokens: LANES.move.burst, at: now },
   status: { tokens: LANES.status.burst, at: now },
+  say: { tokens: LANES.say.burst, at: now },
   other: { tokens: LANES.other.burst, at: now },
 })
 
-/** Spends one token from `bucket`, refilled for the time since it was last touched. False when it is empty. */
-function take(bucket: Bucket, lane: Lane, now: number): boolean {
+/** Spends one token from the lane's bucket, refilled for the time since it was last touched. False when empty. */
+function take(lanes: Record<Lane, Bucket>, lane: Lane, now: number): boolean {
   const { perSecond, burst } = LANES[lane]
+  // A socket from before a lane existed starts that lane full.
+  const bucket = (lanes[lane] ??= { tokens: burst, at: now })
   bucket.tokens = Math.min(burst, bucket.tokens + (perSecond * Math.max(0, now - bucket.at)) / 1000)
   bucket.at = now
   if (bucket.tokens < 1) return false
@@ -198,7 +229,17 @@ function take(bucket: Bucket, lane: Lane, now: number): boolean {
 }
 
 const laneOf = (msg: ClientMsg | null): Lane =>
-  msg?.t === 'move' ? 'move' : msg?.t === 'status' ? 'status' : 'other'
+  msg?.t === 'move' || msg?.t === 'status' || msg?.t === 'say' ? msg.t : 'other'
+
+/** Where bench `id` stands, when it is one of `district`'s; null for anything else. */
+function benchAt(district: DistrictId, id: string): { x: number; z: number } | null {
+  const n = id.startsWith(`${district}:`) ? id.slice(district.length + 1) : ''
+  if (!/^(0|[1-9]\d{0,2})$/.test(n)) return null
+  return BENCH_POSITIONS[district][Number(n)] ?? null
+}
+
+const far = (p: { x: number; z: number }, b: { x: number; z: number }) =>
+  Math.hypot(p.x - b.x, p.z - b.z) > SIT_RANGE_M
 
 const round = (n: number, per: number) => Math.round(n * per) / per
 
@@ -216,6 +257,11 @@ function livePerson(seat: Seat): LivePerson {
  * write ten times a second for the same effect. The alarm is kept for the idle sweep, which must run while
  * the object sleeps; it is set for the earliest moment any socket could go idle, and not at all once the
  * last socket has gone.
+ *
+ * Benches: who sits where lives in each socket's attachment, so it survives hibernation like the rest. What
+ * is said there lives only in `transcripts`, in memory, and is never written to storage: an object that
+ * hibernates forgets it. That is the design (bench chat is ephemeral), and a bench where people are talking
+ * keeps its object awake anyway.
  */
 export class DistrictDO extends DurableObject<Env> {
   /** Now, in ms. A test swaps it to step past `IDLE_MS` without waiting. */
@@ -223,6 +269,8 @@ export class DistrictDO extends DurableObject<Env> {
   private seats = new WeakMap<WebSocket, Seat>()
   private dirty = new Set<WebSocket>()
   private batch: ReturnType<typeof setTimeout> | null = null
+  /** Each bench's recent lines, oldest first (see `benchTranscript`). Memory only. */
+  private transcripts = new Map<string, BenchLine[]>()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -232,6 +280,8 @@ export class DistrictDO extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket')
       return new Response('expected websocket', { status: 426 })
+    const district = new URL(request.url).pathname.slice(1) as DistrictId
+    if (!DISTRICT_IDS.includes(district)) return notFound()
     const who = readWho(request.headers.get(WHO_HEADER))
     const now = this.clock()
     // Newest socket wins: the old one closes, and the new one stands where it stood.
@@ -241,8 +291,7 @@ export class DistrictDO extends DurableObject<Env> {
         const seat = this.seat(ws)
         if (seat.userId !== who.userId) continue
         before = seat
-        this.dirty.delete(ws)
-        this.write(ws, { ...seat, shown: false, closed: true })
+        this.retire(ws)
         try {
           ws.close(LIVE_CLOSE.replaced, 'replaced')
         } catch {
@@ -254,6 +303,7 @@ export class DistrictDO extends DurableObject<Env> {
     const [client, server] = [pair[0], pair[1]]
     this.ctx.acceptWebSocket(server)
     const seat: Seat = {
+      district,
       userId: who.userId,
       person: who.person,
       shown: who.person !== null && before?.shown === true,
@@ -262,6 +312,7 @@ export class DistrictDO extends DurableObject<Env> {
       bad: 0,
       lanes: fullLanes(now),
       flood: null,
+      bench: null,
     }
     this.write(server, seat)
     this.send(server, {
@@ -299,9 +350,9 @@ export class DistrictDO extends DurableObject<Env> {
       case 'status':
         return seat.person ? this.status(ws, seat, msg.text) : this.send(ws, GHOST)
       case 'sit':
+        return seat.person ? this.sit(ws, seat, msg.bench) : this.send(ws, GHOST)
       case 'say':
-        // Benches arrive with their own task; until then only a ghost hears why not.
-        return this.send(ws, seat.person ? INVALID : GHOST)
+        return seat.person ? this.say(ws, seat, msg.text, now) : this.send(ws, GHOST)
     }
   }
 
@@ -320,7 +371,7 @@ export class DistrictDO extends DurableObject<Env> {
    * an object cannot hibernate mid-flood, and one that wakes simply starts the socket on full buckets.
    */
   private allow(ws: WebSocket, seat: Seat, lane: Lane, now: number): boolean {
-    if (take(seat.lanes[lane], lane, now)) return true
+    if (take(seat.lanes, lane, now)) return true
     const flood = seat.flood
     if (!flood || now - flood.at > FLOOD_GAP_MS) {
       seat.flood = { since: now, at: now }
@@ -374,7 +425,14 @@ export class DistrictDO extends DurableObject<Env> {
     } else seat.pos = { x, z, ry, at: now, budget: SPEED_BURST_M }
     const arriving = seat.person !== null && !seat.shown
     if (arriving) seat.shown = true
-    this.write(ws, seat)
+    const bench = seat.bench
+    if (bench && far(seat.pos, benchAt(seat.district, bench.id)!)) {
+      // Walked off: stood up, and the bench told.
+      seat.bench = null
+      this.write(ws, seat)
+      this.send(ws, STOOD)
+      this.tellBench(bench.id)
+    } else this.write(ws, seat)
     if (arriving) this.broadcast({ t: 'join', p: livePerson(seat) }, ws)
     else if (seat.shown) {
       this.dirty.add(ws)
@@ -397,6 +455,88 @@ export class DistrictDO extends DurableObject<Env> {
         .run()
         .catch((err: unknown) => console.error('district: status write failed', err)),
     )
+  }
+
+  /**
+   * Sits at `id` (leaving any other bench), or stands up for null. Answered with `seated` either way; a
+   * bench that is not this district's is `invalid`, one too far from the last accepted point `far`, and
+   * one with every seat taken `full` (and the sitter stays where they were).
+   */
+  private sit(ws: WebSocket, seat: Seat, id: string | null): void {
+    const was = seat.bench
+    if (id === null) {
+      seat.bench = null
+      this.write(ws, seat)
+      this.send(ws, STOOD)
+      if (was) this.tellBench(was.id)
+      return
+    }
+    const at = benchAt(seat.district, id)
+    if (!at) return this.send(ws, INVALID)
+    if (was?.id === id) return this.tellBench(id, ws)
+    if (!seat.pos || far(seat.pos, at)) return this.send(ws, FAR)
+    const taken = this.sitters(id).map((s) => s.seat.bench!.seat)
+    if (taken.length >= BENCH_SEATS) return this.send(ws, FULL)
+    let free = 0
+    while (taken.includes(free)) free++
+    seat.bench = { id, seat: free }
+    this.write(ws, seat)
+    if (was) this.tellBench(was.id)
+    this.tellBench(id)
+  }
+
+  /** A seated resident's line, to everyone on that bench (the speaker too), and into its transcript. */
+  private say(ws: WebSocket, seat: Seat, text: string, now: number): void {
+    const bench = seat.bench
+    if (!bench) return this.send(ws, INVALID)
+    const line: BenchLine = { from: seat.userId!, name: seat.person!.name, text, at: now }
+    const lines = this.transcript(bench.id, now)
+    lines.push(line)
+    if (lines.length > TRANSCRIPT_LINES) lines.splice(0, lines.length - TRANSCRIPT_LINES)
+    this.transcripts.set(bench.id, lines)
+    const out = JSON.stringify({ t: 'bench', bench: bench.id, ...line } satisfies ServerMsg)
+    for (const s of this.sitters(bench.id)) this.sendRaw(s.ws, out)
+  }
+
+  /**
+   * What was said at `bench` in the last `TRANSCRIPT_MS`, oldest first, at most `TRANSCRIPT_LINES`: for phase
+   * 3's reports, over RPC. Empty after the object has hibernated (see the class note).
+   */
+  benchTranscript(bench: string): BenchLine[] {
+    return [...this.transcript(bench, this.clock())]
+  }
+
+  /** The bench's live list, with lines older than `TRANSCRIPT_MS` dropped. */
+  private transcript(bench: string, now: number): BenchLine[] {
+    const lines = this.transcripts.get(bench) ?? []
+    const keep = lines.findIndex((l) => now - l.at <= TRANSCRIPT_MS)
+    if (keep !== 0) lines.splice(0, keep === -1 ? lines.length : keep)
+    if (lines.length) this.transcripts.set(bench, lines)
+    else this.transcripts.delete(bench)
+    return lines
+  }
+
+  /** Who sits at `bench`, by seat. */
+  private sitters(bench: string): { ws: WebSocket; seat: Seat }[] {
+    const out: { ws: WebSocket; seat: Seat }[] = []
+    for (const ws of this.sockets()) {
+      const seat = this.seat(ws)
+      if (seat.bench?.id === bench) out.push({ ws, seat })
+    }
+    return out.sort((a, b) => a.seat.bench!.seat - b.seat.bench!.seat)
+  }
+
+  /** Tells everyone at `bench` (or just `only`) where they sit and who with. */
+  private tellBench(bench: string, only?: WebSocket): void {
+    const all = this.sitters(bench)
+    for (const { ws, seat } of all)
+      if (!only || ws === only)
+        this.send(ws, {
+          t: 'seated',
+          bench,
+          seat: seat.bench!.seat,
+          with: all.filter((s) => s.ws !== ws).map((s) => s.seat.person!.name),
+        })
   }
 
   /** One `moves` frame per socket that has anyone moving near it. Each mover is serialised once. */
@@ -443,15 +583,22 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /**
-   * A socket is done: forget its moves, mark it closed (in its attachment too, so a wake cannot bring it back)
-   * and, if it was listed, tell everyone it left. Runs once per socket.
+   * A socket is done: forget its moves, mark it closed (in its attachment too, so a wake cannot bring it back),
+   * stand it up from its bench and, if it was listed, tell everyone it left. Runs once per socket.
    */
   private depart(ws: WebSocket): void {
     const seat = this.seat(ws)
     if (seat.closed) return
-    this.dirty.delete(ws)
-    this.write(ws, { ...seat, shown: false, closed: true })
+    this.retire(ws)
     if (seat.shown && seat.userId) this.broadcast({ t: 'leave', id: seat.userId })
+  }
+
+  /** Marks a socket closed and unlisted, and tells its bench (if any) that it got up. */
+  private retire(ws: WebSocket): void {
+    const seat = this.seat(ws)
+    this.dirty.delete(ws)
+    this.write(ws, { ...seat, shown: false, closed: true, bench: null })
+    if (seat.bench) this.tellBench(seat.bench.id)
   }
 
   /** Everyone listed, but `except` (the asker themself). */
@@ -472,6 +619,7 @@ export class DistrictDO extends DurableObject<Env> {
     let seat = this.seats.get(ws)
     if (!seat) {
       seat = (ws.deserializeAttachment() as Seat | null) ?? {
+        district: 'walled-city',
         userId: null,
         person: null,
         shown: false,
@@ -480,6 +628,7 @@ export class DistrictDO extends DurableObject<Env> {
         bad: 0,
         lanes: fullLanes(0),
         flood: null,
+        bench: null,
       }
       this.seats.set(ws, seat)
     }

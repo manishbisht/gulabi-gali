@@ -15,6 +15,7 @@ import { disposeAvatarCache } from './player/avatar'
 import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
+import { useBench, type BenchNotice } from './world/useBench'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
 import { DISTRICT_NAMES } from './world/districtNames'
@@ -29,6 +30,14 @@ import { NpcCard } from './ui/NpcCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
 import { NoWebGL } from './ui/NoWebGL'
 import { TravelSheet } from './ui/TravelSheet'
+import { BenchChat, BenchGhost } from './ui/BenchChat'
+
+/** The bench notices that are a passing toast (`ghost` is a card, `rate` a line in the bench panel). */
+const BENCH_TOASTS: Partial<Record<BenchNotice, StringKey>> = {
+  full: 'benchFull',
+  far: 'benchFar',
+  failed: 'benchFailed',
+}
 
 const FESTIVALS: Record<FestivalId, StringKey> = {
   sankranti: 'festivalSankranti',
@@ -66,6 +75,8 @@ export default function App() {
     isOpen: personOpen,
     step: stepPerson,
   } = usePersonCard()
+  const bench = useBench()
+  const { hooks: benchHooks, bind: bindBench } = bench
   /** Until the request composer lands, "Milna hai" says so in a toast. */
   const [soon, setSoon] = useState(false)
   useEffect(() => {
@@ -160,6 +171,7 @@ export default function App() {
         look: () => profileLookRef.current,
         festival: () => override ?? current().festival,
         presence: { token: () => liveToken.current(), replaced: setReplaced },
+        bench: benchHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -168,8 +180,10 @@ export default function App() {
     })
     session.current = city
     bindTravel(city.travelTo)
+    bindBench(city)
 
     return () => {
+      bindBench(null)
       bindTravel(null)
       session.current = null
       city.dispose()
@@ -191,6 +205,8 @@ export default function App() {
     stepPerson,
     trackStation,
     bindTravel,
+    benchHooks,
+    bindBench,
     current,
     now,
     patch,
@@ -200,6 +216,23 @@ export default function App() {
 
   const viewer: Viewer = !auth.signedIn ? 'ghost' : me?.complete ? 'resident' : 'incomplete'
   const openProfile = () => void (me && setProfileOpen(true))
+  const onVisible = auth.signedIn ? openProfile : auth.openSignIn
+  const benchToast = bench.notice && BENCH_TOASTS[bench.notice]
+  /** A character's or a person's card, when one is up. */
+  const card =
+    (talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />) ||
+    (meeting && (
+      <PersonCard
+        person={meeting.person}
+        gone={meeting.gone}
+        viewer={viewer}
+        lang={lang}
+        token={auth.token}
+        onVisible={onVisible}
+        onRequest={() => setSoon(true)}
+        onClose={closePerson}
+      />
+    ))
   const visibility =
     auth.mode === 'none' || !auth.ready ? undefined : !auth.signedIn ? (
       <VisibilityChip
@@ -259,6 +292,11 @@ export default function App() {
                 {t('liveReplaced', lang)}
               </div>
             )}
+            {benchToast && (
+              <div className="toast" role="status">
+                {t(benchToast, lang)}
+              </div>
+            )}
             {travelFailed && (
               <div className="toast" role="status">
                 {t('metroFailed', lang, { place: DISTRICT_NAMES[travelFailed][lang] })}
@@ -269,12 +307,30 @@ export default function App() {
         bottom={
           <>
             <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />
-            {nearStation && !near && !sheetOpen && (
+            {nearStation && !near && !sheetOpen && !bench.seat && (
               <button type="button" className="metro-button" onClick={openSheet}>
                 {t('metro', lang)}
               </button>
             )}
-            {near ? (
+            {bench.near && !bench.seat && !near && !sheetOpen && (
+              <button type="button" className="metro-button bench-button" onClick={bench.sit}>
+                {t('benchSit', lang)}
+              </button>
+            )}
+            {bench.seat ? (
+              // seated, the bench panel holds the bottom; a tapped character or person shows over it
+              card || (
+                <BenchChat
+                  seat={bench.seat}
+                  lines={bench.lines}
+                  me={me?.id ?? null}
+                  notice={bench.notice}
+                  lang={lang}
+                  onSay={bench.say}
+                  onStand={bench.stand}
+                />
+              )
+            ) : near ? (
               <LandmarkCard
                 landmark={near}
                 lang={lang}
@@ -284,17 +340,13 @@ export default function App() {
             ) : sheetOpen ? (
               <TravelSheet here={here} lang={lang} onPick={travelTo} onClose={closeSheet} />
             ) : (
-              (talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />) ||
-              (meeting && (
-                <PersonCard
-                  person={meeting.person}
-                  gone={meeting.gone}
-                  viewer={viewer}
+              card ||
+              (bench.notice === 'ghost' && (
+                <BenchGhost
                   lang={lang}
-                  token={auth.token}
-                  onVisible={auth.signedIn ? openProfile : auth.openSignIn}
-                  onRequest={() => setSoon(true)}
-                  onClose={closePerson}
+                  cta={t(viewer === 'incomplete' ? 'visibilityFinish' : 'signInButton', lang)}
+                  onVisible={onVisible}
+                  onClose={bench.dismiss}
                 />
               ))
             )}
