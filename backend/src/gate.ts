@@ -165,6 +165,16 @@ export class GateDO extends DurableObject<Env> {
   }
 
   /**
+   * `userId` no longer exists (they deleted their account): every slot, hold and place in line of theirs goes at
+   * once, whether or not a district still holds a socket for them. Calling it again changes nothing.
+   */
+  forget(userId: string): void {
+    this.sql.exec('DELETE FROM slots WHERE user_id = ?', userId)
+    if (this.run('DELETE FROM queue WHERE user_id = ?', userId) > 0) this.ctx.waitUntil(this.tellPlaces())
+    this.ctx.waitUntil(this.schedule())
+  }
+
+  /**
    * From each district's alarm: who it holds as residents (`residents`) and who waits there (`waiting`), so
    * neither is swept as stale. Answers where each of those waiting stands, and which of them hold a slot
    * already (let in at another district, or in another tab) and so may be seen here too.

@@ -112,7 +112,8 @@ it('the privacy note carries the report line word for word and the contact place
     await act(async () => root.render(<PrivacySheet lang={lang} onClose={() => {}} />))
     const text = host.textContent!
     expect(text).toContain(STRINGS.profilePrivacy[lang])
-    expect(text).toContain('{OWNER_CONTACT}')
+    expect(text).toContain(STRINGS.privacyContact[lang])
+    expect(text).toMatch(/30/)
   }
   expect(STRINGS.profilePrivacy.en).toBe(
     'If someone reports a conversation, the moderator can read its recent messages.',

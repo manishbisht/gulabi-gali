@@ -165,11 +165,16 @@ itself is not deleted: that takes the Clerk Backend API and `CLERK_SECRET_KEY`, 
 not use this way. The privacy note tells people their Clerk login is separate and is deleted from Clerk. A
 possible later step is to call Clerk's delete-user endpoint from `deleteAccount` (`backend/src/account.ts`).
 
+**Chats and deletion.** When a chat ends (an unmatch, a block, or either person deleting their account), its last
+30 messages are held for 30 days so the other person can still report it, then the cron erases them. The privacy
+note and the delete screen say so. Deleting an account also keeps a small tombstone row where something must be
+remembered (a ban, a hide, a mute, a 14-day request cooldown), so none of those can be escaped by deleting.
+
 **Fill in before launch**
 
 - `{OWNER_CONTACT}`: the contact line in the privacy note (`privacyContact` in
-  `frontend/src/i18n/strings.ts`, both languages). Replace it with a real email or handle; `grep -rn
-OWNER_CONTACT frontend/src` must find nothing afterwards.
+  `frontend/src/i18n/strings.ts`, both languages). Replace it with a real email or handle; `grep -n
+OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the tests do not name it).
 - The word list (`backend/src/filter/words.ts`) needs a review by a native Hindi and Hinglish speaker.
 
 **Pre-launch safety checklist**
