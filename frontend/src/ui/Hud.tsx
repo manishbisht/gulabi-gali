@@ -8,6 +8,8 @@ interface Props {
   snapshot: CitySnapshot | null
   /** One line of city small talk, shown under the chips. */
   line?: string
+  /** A festival greeting, already in the current language. */
+  banner?: string
   /** Stamp progress as `N/9`. */
   stamps: string
   lang: Lang
@@ -17,7 +19,7 @@ interface Props {
   bottom?: ReactNode
 }
 
-export function Hud({ place, snapshot, line, stamps, lang, onLang, top, bottom }: Props) {
+export function Hud({ place, snapshot, line, banner, stamps, lang, onLang, top, bottom }: Props) {
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
@@ -37,6 +39,11 @@ export function Hud({ place, snapshot, line, stamps, lang, onLang, top, bottom }
         </button>
       </div>
       {line && <p className="city-line">{line}</p>}
+      {banner && (
+        <p className="festival-banner" role="status">
+          {banner}
+        </p>
+      )}
       {top}
       <div className="hud-bottom">{bottom}</div>
     </div>

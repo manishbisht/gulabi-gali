@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import { createStage, type QualityTier } from './engine/stage'
 import { hasWebGL } from './engine/webgl'
 import { useLang } from './i18n/lang'
-import { t } from './i18n/strings'
+import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
 import { applySky, skyParams, type SkyParams } from './live/sky'
 import { useLiveCity } from './live/useLiveCity'
+import { createFestivalFx, festivalSky } from './live/festivalFx'
 import { createWeatherFx } from './live/weatherFx'
 import { createControls, type Controls } from './player/controls'
 import { loadOrCreateLook } from './player/avatar'
@@ -14,6 +15,7 @@ import { createPlayer } from './player/player'
 import { loadDistrict } from './world/district'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
+import type { FestivalId } from './net/protocol'
 import type { DistrictDef } from './world/types'
 import { Hud } from './ui/Hud'
 import { Intro } from './ui/Intro'
@@ -26,6 +28,21 @@ import { installTestHooks } from './testHooks'
 const SKY = '#BFD6DE'
 /** The sun moves slowly; the sky is recomputed from the clock this often. */
 const SKY_REFRESH_MS = 30_000
+const FESTIVALS: Record<FestivalId, StringKey> = {
+  sankranti: 'festivalSankranti',
+  holi: 'festivalHoli',
+  gangaur: 'festivalGangaur',
+  teej: 'festivalTeej',
+  diwali: 'festivalDiwali',
+  jlf: 'festivalJlf',
+}
+
+/** `?gg-festival=<id>` stands in for the live festival, in test mode only. */
+function festivalOverride(): FestivalId | null {
+  const q = new URLSearchParams(location.search)
+  const id = q.get('gg-festival')
+  return q.get('gg-test') === '1' && id && id in FESTIVALS ? (id as FestivalId) : null
+}
 
 export default function App() {
   const [lang, setLang] = useLang()
@@ -39,6 +56,8 @@ export default function App() {
   /** Re-paints the sky from the current snapshot and clock; set once the district is in. */
   const repaint = useRef<() => void>(() => {})
   useEffect(() => repaint.current(), [snapshot])
+  const [override] = useState(festivalOverride)
+  const festival = override ?? snapshot?.festival ?? null
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -57,7 +76,10 @@ export default function App() {
         // Shadows are the first thing a slow phone gives up.
         const shadows = (q: QualityTier) => void (district.lights.sun.castShadow = q === 2)
         shadows(stage.quality)
-        const offQuality = stage.onQuality(shadows)
+        const offQuality = stage.onQuality((q) => {
+          shadows(q)
+          festivalFx.set(festivalNow(), q)
+        })
         const player = createPlayer({
           scene: stage.scene,
           camera: stage.camera,
@@ -68,11 +90,14 @@ export default function App() {
         })
         player.teleport(district.def.spawn.x, district.def.spawn.z)
         const fx = createWeatherFx(stage)
+        const festivalFx = createFestivalFx(stage, district)
+        const festivalNow = () => override ?? current().festival
         let sky: SkyParams | null = null
         const paint = () => {
-          sky = skyParams(current(), now())
+          sky = festivalSky(skyParams(current(), now()), festivalNow(), current().sunset, now())
           applySky(stage, district, sky)
           fx.set(sky)
+          festivalFx.set(festivalNow(), stage.quality)
         }
         repaint.current = paint
         paint()
@@ -80,6 +105,7 @@ export default function App() {
         const offFrame = stage.onFrame((dt) => {
           player.update(dt)
           fx.update(dt)
+          festivalFx.update(dt)
           district.focus(player.position())
           track(player.position(), district.def.landmarks, controls)
         })
@@ -90,6 +116,7 @@ export default function App() {
           position: player.position,
           teleport: player.teleport,
           district: () => district.def.id,
+          festival: festivalNow,
           sky: () => sky!,
           setSnapshot: (partial) => {
             patch(partial)
@@ -104,6 +131,7 @@ export default function App() {
           clearInterval(skyTimer)
           repaint.current = () => {}
           fx.dispose()
+          festivalFx.dispose()
           offFrame()
           offQuality()
           player.dispose()
@@ -122,7 +150,7 @@ export default function App() {
       controlsRef.current = null
       stage.dispose()
     }
-  }, [entered, track, current, now, patch, freeze])
+  }, [entered, track, current, now, patch, freeze, override])
 
   if (!webgl) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
@@ -135,6 +163,7 @@ export default function App() {
         }
         snapshot={snapshot}
         line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
+        banner={festival ? t(FESTIVALS[festival], lang) : undefined}
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}

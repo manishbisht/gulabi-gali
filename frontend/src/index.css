@@ -234,3 +234,21 @@ button {
   color: var(--cream);
   font-size: 0.85rem;
 }
+
+.festival-banner {
+  position: absolute;
+  top: 118px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgb(42 29 36 / 0.78);
+  border: 2px solid var(--gold, #f2a81d);
+  color: var(--cream);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+}

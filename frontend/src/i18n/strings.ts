@@ -19,6 +19,15 @@ export const STRINGS = {
   weatherUnknown: { hi: '—', en: '—' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
   langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },
+  festivalSankranti: {
+    hi: 'Makar Sankranti mubarak! Aasmaan dekho 🪁',
+    en: 'Happy Makar Sankranti! Look up 🪁',
+  },
+  festivalHoli: { hi: 'Holi mubarak! Rang barse 🎨', en: 'Happy Holi! Colours in the air 🎨' },
+  festivalGangaur: { hi: 'Gangaur ki shubhkamnayein! 🌸', en: 'Happy Gangaur! 🌸' },
+  festivalTeej: { hi: 'Teej ki shubhkamnayein! 🌿', en: 'Happy Teej! 🌿' },
+  festivalDiwali: { hi: 'Diwali mubarak! Diye jagmagaye 🪔', en: 'Happy Diwali! The diyas are lit 🪔' },
+  festivalJlf: { hi: 'Jaipur Literature Festival ki dhoom! 📚', en: 'Jaipur Literature Festival is on! 📚' },
   joystickLabel: { hi: 'Chalne ka joystick', en: 'Walking joystick' },
 } as const satisfies Record<string, Record<Lang, string>>
 

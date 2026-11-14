@@ -1,5 +1,5 @@
 import type { SkyParams } from './live/sky'
-import type { CitySnapshot, DistrictId } from './net/protocol'
+import type { CitySnapshot, DistrictId, FestivalId } from './net/protocol'
 import type { Vec2 } from './world/types'
 
 /** What Playwright specs can ask of the running city. Grows task by task. */
@@ -16,6 +16,8 @@ export interface GgTestApi {
   district(): DistrictId
   /** The sky as last painted. */
   sky(): SkyParams
+  /** The festival in effect (the `gg-festival` override, else the snapshot's). */
+  festival(): FestivalId | null
   /** Merges into the city snapshot and repaints the sky now. */
   setSnapshot(partial: Partial<CitySnapshot>): void
   /** Freezes the clock the sky runs on at an ISO instant, and repaints now. */

@@ -102,3 +102,11 @@ test('paints a hazy dusk with the lamps on', async ({ page }) => {
   expect(sky.fogDensity).toBe(0.03)
   expect(sky.nightLights).toBe(true)
 })
+
+test('kite sky on Sankranti', async ({ page }) => {
+  await page.goto('/?gg-test=1&gg-festival=sankranti')
+  await page.getByRole('button', { name: 'Padharo!' }).click()
+  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  expect(await page.evaluate(() => window.__gg.festival())).toBe('sankranti')
+  await expect(page.getByText('Makar Sankranti mubarak! Aasmaan dekho')).toBeVisible()
+})
