@@ -1,0 +1,261 @@
+import * as THREE from 'three'
+import type { LivePerson, ServerMsg } from '../net/protocol'
+import { buildAvatar, lookFromWire } from '../player/avatar'
+import type { AvatarLook, Vec2 } from './types'
+
+/** How quickly a body catches up with where its person last said they were: a time constant, in seconds. */
+const FOLLOW_S = 0.12
+/** Further than this from where a body is drawn, it jumps instead of gliding (a rejoin, a missed stretch). */
+const SNAP_M = 20
+/** The invisible tap target around each body, as for the characters. */
+const TAP_RADIUS = 0.75
+const TAP_HEIGHT = 2.2
+/** For a look this build cannot draw (a newer client's outfit, say). */
+const PLAIN: AvatarLook = { skin: 2, outfit: 'sandstone', head: 'none' }
+
+/** One remote person: what the server said about them, and the body that follows it. */
+export interface Remote {
+  /** Their public face; `x`, `z` and `ry` are where the body is heading, not where it is drawn. */
+  readonly person: LivePerson
+  readonly body: THREE.Group
+  /** Bumped whenever the name or status changes, so labels rewrite their text only then. */
+  readonly ver: number
+}
+
+export interface People {
+  apply(m: ServerMsg): void
+  update(dt: number): void
+  pick(ray: THREE.Raycaster): LivePerson | null
+  /** Everyone listed, where they are drawn now. */
+  list(): LivePerson[]
+  /** Everyone listed, without copying: replaced when someone joins or leaves, never mutated. */
+  entries(): readonly Remote[]
+  setShadows(on: boolean): void
+  dispose(): void
+}
+
+interface Entry extends Remote {
+  person: LivePerson
+  avatar: THREE.Mesh
+  tap: THREE.Mesh
+  look: string
+  ver: number
+}
+
+const lookKey = (p: LivePerson) => `${p.look.skin}|${p.look.outfit}|${p.look.head}`
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
+
+/**
+ * The other people in the district, as the live socket describes them. Each is one avatar (shared geometry,
+ * one draw call) and an invisible tap target; a frame eases every body toward its last reported point and
+ * allocates nothing.
+ */
+export function createPeople(scene: THREE.Object3D): People {
+  const tapMaterial = new THREE.MeshBasicMaterial({ visible: false })
+  const tapGeometry = new THREE.CylinderGeometry(TAP_RADIUS, TAP_RADIUS, TAP_HEIGHT, 8)
+  const byId = new Map<string, Entry>()
+  let all: Entry[] = []
+  let taps: THREE.Object3D[] = []
+  let shadows = false
+  /** The viewer, as the server knows them: never drawn as someone else. */
+  let self: string | null = null
+
+  const reindex = () => {
+    all = [...byId.values()]
+    taps = all.map((e) => e.tap)
+  }
+
+  function dress(e: Entry, p: LivePerson) {
+    const key = lookKey(p)
+    if (e.look === key) return
+    e.avatar.removeFromParent() // shared geometry and material: nothing to dispose
+    e.avatar = buildAvatar(lookFromWire(p.look) ?? PLAIN, { castShadow: shadows })
+    e.body.add(e.avatar)
+    e.look = key
+  }
+
+  /** Adds `p`, or (someone already listed, back on a new socket) updates them in place. */
+  function upsert(p: LivePerson): boolean {
+    if (p.id === self) return false
+    const had = byId.get(p.id)
+    if (had) {
+      if (had.person.name !== p.name || had.person.status !== p.status) had.ver++
+      dress(had, p)
+      had.person = { ...p }
+      const { position } = had.body
+      if (Math.hypot(p.x - position.x, p.z - position.z) > SNAP_M) position.set(p.x, 0, p.z)
+      return false
+    }
+    const body = new THREE.Group()
+    body.name = `person-${p.id}`
+    const avatar = buildAvatar(lookFromWire(p.look) ?? PLAIN, { castShadow: shadows })
+    const tap = new THREE.Mesh(tapGeometry, tapMaterial)
+    tap.name = 'tap'
+    tap.position.y = TAP_HEIGHT / 2
+    body.add(avatar, tap)
+    body.position.set(p.x, 0, p.z)
+    body.rotation.y = p.ry
+    scene.add(body)
+    byId.set(p.id, { person: { ...p }, body, avatar, tap, look: lookKey(p), ver: 0 })
+    return true
+  }
+
+  function remove(id: string): boolean {
+    const e = byId.get(id)
+    if (!e) return false
+    e.body.removeFromParent()
+    byId.delete(id)
+    return true
+  }
+
+  const drawn = (e: Entry): LivePerson => ({
+    ...e.person,
+    x: e.body.position.x,
+    z: e.body.position.z,
+    ry: e.body.rotation.y,
+  })
+
+  return {
+    apply(m) {
+      switch (m.t) {
+        case 'welcome': {
+          self = m.you.id
+          const listed = new Set(m.people.map((p) => p.id))
+          let changed = false
+          for (const id of [...byId.keys()])
+            if (!listed.has(id) || id === self) changed = remove(id) || changed
+          for (const p of m.people) changed = upsert(p) || changed
+          if (changed) reindex()
+          return
+        }
+        case 'join':
+          if (upsert(m.p)) reindex()
+          return
+        case 'leave':
+          if (remove(m.id)) reindex()
+          return
+        case 'moves':
+          for (const [id, x, z, ry] of m.m) {
+            const e = byId.get(id)
+            if (!e) continue
+            e.person.x = x
+            e.person.z = z
+            e.person.ry = ry
+          }
+          return
+        case 'status': {
+          const e = byId.get(m.id)
+          if (e && e.person.status !== m.text) {
+            e.person.status = m.text
+            e.ver++
+          }
+          return
+        }
+      }
+    },
+    update(dt) {
+      // Exponential easing: each frame closes the same share of the gap, so a body never passes its target.
+      const k = Math.exp(-dt / FOLLOW_S)
+      for (let i = 0; i < all.length; i++) {
+        const { person, body } = all[i]!
+        const pos = body.position
+        pos.x = person.x - (person.x - pos.x) * k
+        pos.z = person.z - (person.z - pos.z) * k
+        body.rotation.y = wrap(person.ry - wrap(person.ry - body.rotation.y) * k)
+      }
+    },
+    pick(ray) {
+      for (let i = 0; i < all.length; i++) all[i]!.body.updateMatrixWorld(true)
+      const hit = ray.intersectObjects(taps, false)[0]
+      const e = hit && all.find((x) => x.body === hit.object.parent)
+      return e ? drawn(e) : null
+    },
+    list: () => all.map(drawn),
+    entries: () => all,
+    setShadows(on) {
+      shadows = on
+      for (let i = 0; i < all.length; i++) all[i]!.avatar.castShadow = on
+    },
+    dispose() {
+      for (const e of all) e.body.removeFromParent()
+      byId.clear()
+      all = []
+      taps = []
+      tapGeometry.dispose()
+      tapMaterial.dispose()
+    },
+  }
+}
+
+/** Labels show only for people this close to the player, in metres. */
+export const LABEL_RANGE = 15
+/** Labels drawn at once: the nearest people get them. */
+const LABELS = 6
+const ABOVE_HEAD = 2.5
+
+/**
+ * Name and status over the nearest people's heads, as a few pooled DOM nodes inside `host` (the same idea as
+ * the characters' bubbles, without their badge: these are real people). Text is rewritten only when a slot
+ * changes hands or its person changes their status, so a frame costs a few transforms.
+ */
+export function createPeopleLabels(host: HTMLElement) {
+  const v = new THREE.Vector3()
+  const pool = Array.from({ length: LABELS }, () => {
+    const el = document.createElement('div')
+    el.className = 'person-label'
+    el.hidden = true
+    const name = document.createElement('strong')
+    name.className = 'person-name'
+    const status = document.createElement('span')
+    status.className = 'person-status'
+    el.append(name, status)
+    host.append(el)
+    return { el, name, status, who: null as Remote | null, ver: -1 }
+  })
+  /** The nearest people in range this frame, nearest first, and how far each is. */
+  const near: (Remote | null)[] = new Array(LABELS).fill(null)
+  const dist = new Float64Array(LABELS)
+
+  return {
+    update(camera: THREE.Camera, people: Pick<People, 'entries'>, from: Vec2) {
+      const w = window.innerWidth
+      const h = window.innerHeight
+      let n = 0
+      for (const r of people.entries()) {
+        const d = Math.hypot(r.body.position.x - from.x, r.body.position.z - from.z)
+        if (d > LABEL_RANGE || (n === LABELS && d >= dist[LABELS - 1]!)) continue
+        let i = n < LABELS ? n++ : LABELS - 1
+        for (; i > 0 && dist[i - 1]! > d; i--) {
+          dist[i] = dist[i - 1]!
+          near[i] = near[i - 1]!
+        }
+        dist[i] = d
+        near[i] = r
+      }
+      for (let i = 0; i < LABELS; i++) {
+        const slot = pool[i]!
+        const r = i < n ? near[i]! : null
+        near[i] = null
+        if (r) v.set(r.body.position.x, ABOVE_HEAD, r.body.position.z).project(camera)
+        if (!r || v.z > 1) {
+          // nobody for this slot, or they are behind the camera; let go of whoever it showed
+          slot.el.hidden = true
+          slot.who = null
+          continue
+        }
+        if (slot.who !== r || slot.ver !== r.ver) {
+          slot.who = r
+          slot.ver = r.ver
+          slot.name.textContent = r.person.name
+          slot.status.textContent = r.person.status
+          slot.status.hidden = !r.person.status
+        }
+        slot.el.hidden = false
+        slot.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`
+      }
+    },
+    dispose() {
+      for (const { el } of pool) el.remove()
+    },
+  }
+}

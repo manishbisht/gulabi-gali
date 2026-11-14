@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Stage } from '../engine/stage'
 import { fallbackSnapshot } from '../net/api'
-import type { DistrictId } from '../net/protocol'
+import type { DistrictId, ServerMsg } from '../net/protocol'
 import type { Controls } from '../player/controls'
 import type { District } from './district'
 import miRoad from './districts/miRoad'
@@ -169,4 +169,152 @@ it('says the city failed to open when the first district cannot load', async () 
   expect(h.place).toHaveBeenCalledWith(null)
   expect(session.district()).toBeNull()
   session.dispose()
+})
+
+it('a throwing onLeave never skips disposal, and a throwing onEnter never fails a travel', async () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { session } = open()
+  const first = fakeDistrict(walledCity)
+  loads[0]!.resolve(first)
+  await settle()
+  const later = vi.fn()
+  session.onLeave(() => {
+    throw new Error('leave listener broke')
+  })
+  session.onLeave(later)
+  session.onEnter(() => {
+    throw new Error('enter listener broke')
+  })
+  session.onEnter(later)
+  const second = fakeDistrict(miRoad)
+  const trip = session.travelTo('mi-road')
+  loads[1]!.resolve(second)
+  await expect(trip).resolves.toBeUndefined()
+  expect(first.dispose).toHaveBeenCalled()
+  expect(session.district()).toBe(second)
+  expect(later).toHaveBeenCalledTimes(2) // the listeners after the broken ones still ran
+  expect(errors).toHaveBeenCalledTimes(2)
+  session.dispose()
+  expect(second.dispose).toHaveBeenCalled()
+  errors.mockRestore()
+})
+
+/** A socket the test plays the server for. */
+class FakeSocket {
+  static all: FakeSocket[] = []
+  sent: string[] = []
+  closed = false
+  onopen: (() => void) | null = null
+  onmessage: ((e: { data: unknown }) => void) | null = null
+  onclose: ((e: { code: number }) => void) | null = null
+  url: string
+  constructor(url: string) {
+    this.url = url
+    FakeSocket.all.push(this)
+  }
+  send(text: string) {
+    this.sent.push(text)
+  }
+  close() {
+    this.closed = true
+  }
+  say(m: ServerMsg) {
+    this.onmessage?.({ data: JSON.stringify(m) })
+  }
+}
+
+function openLive(token: () => Promise<string | null> = async () => null) {
+  FakeSocket.all = []
+  const s = fakeStage()
+  const canvas = document.body.appendChild(document.createElement('canvas'))
+  const bubbleHost = document.body.appendChild(document.createElement('div'))
+  const h: SessionHooks = { ...hooks(), presence: { token, replaced: vi.fn() } }
+  const session = createCitySession({
+    stage: s.stage,
+    controls,
+    canvas,
+    bubbleHost,
+    start: 'walled-city',
+    hooks: h,
+    WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+  })
+  return { ...s, session, hooks: h }
+}
+
+const sockets = () => FakeSocket.all
+const openSockets = () => FakeSocket.all.filter((ws) => !ws.closed)
+
+it('keeps one live socket per tab: travel closes the old district before opening the next', async () => {
+  const { session } = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  expect(openSockets().map((ws) => ws.url)).toEqual([expect.stringContaining('/districts/walled-city/live')])
+  const trip = session.travelTo('mi-road')
+  loads[1]!.resolve(fakeDistrict(miRoad))
+  await trip
+  await settle()
+  expect(sockets()).toHaveLength(2)
+  expect(openSockets().map((ws) => ws.url)).toEqual([expect.stringContaining('/districts/mi-road/live')])
+  session.dispose()
+  expect(openSockets()).toEqual([])
+})
+
+it('says where it stands right after welcome, and snaps back when a step was too fast', async () => {
+  const { session, hooks: h } = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  const at = session.player()!.position()
+  ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [] })
+  expect(ws.sent.map((s) => JSON.parse(s))).toEqual([{ t: 'move', x: at.x, z: at.z, ry: 0 }])
+  expect(h.presence!.replaced).toHaveBeenLastCalledWith(false)
+  ws.say({ t: 'error', code: 'too-fast', x: 7, z: 8, ry: 1 })
+  expect(session.player()!.position()).toEqual({ x: 7, z: 8 })
+  expect(session.player()!.heading()).toBe(1)
+  ws.onclose?.({ code: 4001 }) // another tab of the same person took over
+  expect(h.presence!.replaced).toHaveBeenLastCalledWith(true)
+  session.dispose()
+})
+
+it('reconnects the live socket when who you are changes, with the token the getter now gives', async () => {
+  let token: string | null = null
+  const { session } = openLive(async () => token)
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  expect(sockets()[0]!.url).not.toContain('token=')
+  token = 'dev.asha.1'
+  session.reconnectLive()
+  await settle()
+  expect(sockets()[0]!.closed).toBe(true)
+  expect(openSockets()).toHaveLength(1)
+  expect(openSockets()[0]!.url).toContain('token=dev.asha.1')
+  session.dispose()
+})
+
+it('shows remote people from the live socket and drops them with the district', async () => {
+  const { session, stage, tick } = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  ws.say({
+    t: 'welcome',
+    you: { id: null, visible: false },
+    people: [
+      {
+        id: 'dev:asha',
+        name: 'Asha',
+        look: { skin: 1, outfit: 'teal', head: 'none' },
+        status: '',
+        x: 1,
+        z: 2,
+        ry: 0,
+      },
+    ],
+  })
+  tick(1 / 30)
+  expect(stage.scene.getObjectByName('person-dev:asha')).toBeDefined()
+  session.dispose()
+  expect(stage.scene.getObjectByName('person-dev:asha')).toBeUndefined()
 })

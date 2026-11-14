@@ -94,6 +94,10 @@ export const STRINGS = {
   visibilityGhost: { hi: 'Abhi koi tumhe dekh nahi sakta', en: 'Nobody can see you yet' },
   visibilityResident: { hi: 'Jaipur tumhe dekh sakta hai', en: 'Jaipur can see you' },
   visibilityFinish: { hi: 'Profile poora karo', en: 'Finish your profile' },
+  liveReplaced: {
+    hi: 'Tum ek aur tab mein bhi khule ho. Log tumhe ab wahin dekhenge, yahan se nahi.',
+    en: "You're open in another tab too. People see you there now, not here.",
+  },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

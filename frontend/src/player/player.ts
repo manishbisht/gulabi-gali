@@ -35,8 +35,12 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
 
   return {
     position: (): Vec2 => ({ ...pos }),
-    teleport(x: number, z: number) {
+    /** Which way the avatar faces, in radians about y (0 faces +z). */
+    heading: (): number => avatar.rotation.y,
+    /** Stands the player at (x, z), facing `ry` if given. */
+    teleport(x: number, z: number, ry?: number) {
       pos = { x, z }
+      if (ry !== undefined) avatar.rotation.y = ry
       sync(1) // dt of 1 s: the camera is effectively there too
     },
     /** Swaps the body for another look, standing where the old one did. */

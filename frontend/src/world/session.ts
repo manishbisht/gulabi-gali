@@ -5,7 +5,8 @@ import { createFestivalFx, festivalSky } from '../live/festivalFx'
 import { applySky, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
-import type { DistrictId, FestivalId } from '../net/protocol'
+import { connectLive, type LiveConn } from '../net/live'
+import type { ClientMsg, DistrictId, FestivalId, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
@@ -13,6 +14,7 @@ import { installTestHooks } from '../testHooks'
 import { loadDistrict, type District } from './district'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
+import { createPeople, createPeopleLabels } from './people'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
@@ -57,6 +59,13 @@ export interface SessionHooks {
   look?(): AvatarLook | null
   /** The place label: the district just entered, or null when the first one could not be opened. */
   place(def: DistrictDef | null): void
+  /**
+   * The live district: other people, and being seen by them. Without it the session stays offline.
+   * `token` is read on every (re)connect: a resident's token, or null to come in as a ghost.
+   * `replaced(true)` says another tab of the same person took over, and this one will not reconnect;
+   * `replaced(false)` clears that once a socket is welcomed again.
+   */
+  presence?: { token(): Promise<string | null>; replaced(on: boolean): void }
 }
 
 export interface CitySessionOptions {
@@ -68,6 +77,8 @@ export interface CitySessionOptions {
   /** The district the city opens in. */
   start: DistrictId
   hooks: SessionHooks
+  /** Tests hand in a fake socket. */
+  WebSocketImpl?: typeof WebSocket
 }
 
 export interface CitySession {
@@ -89,6 +100,11 @@ export interface CitySession {
   onFrame(cb: (dt: number, pos: Vec2) => void): () => void
   /** Re-paints the sky from the live city and clock now (e.g. when a new snapshot arrives). */
   repaint(): void
+  /**
+   * Drops the live socket and opens a fresh one, reading `hooks.presence.token` again: call it when who the
+   * visitor is changes (sign-in, a finished profile, sign-out), so they appear or vanish without a reload.
+   */
+  reconnectLive(): void
   /** Leaves the district and stops; a district still loading is disposed when it arrives. */
   dispose(): void
 }
@@ -101,7 +117,12 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
   let entered: ((d: District) => void)[] = []
   let left: ((d: District) => void)[] = []
   let frames: ((dt: number, pos: Vec2) => void)[] = []
-  let here: { district: District; player: Player; systems: DistrictSystem[] } | null = null
+  let here: {
+    district: District
+    player: Player
+    systems: DistrictSystem[]
+    presence: Presence | null
+  } | null = null
   let repaint = () => {}
   let disposed = false
 
@@ -120,7 +141,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     if (!was) return
     here = null
     repaint = () => {}
-    for (const cb of left) cb(was.district)
+    for (const cb of left) guard('onLeave', cb, was.district)
     for (let i = was.systems.length - 1; i >= 0; i--) was.systems[i]!.dispose()
     was.player.dispose()
     was.district.dispose()
@@ -154,7 +175,12 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       createInteraction(canvas, stage, controls, district, npcs, hooks),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
     ]
-    here = { district, player, systems }
+    // one live socket per tab: `leave` above closed the last district's before this one opens
+    const presence = hooks.presence
+      ? createPresence(stage, district, player, bubbleHost, hooks.presence, opts.WebSocketImpl)
+      : null
+    if (presence) systems.push(presence)
+    here = { district, player, systems, presence }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -186,7 +212,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         sky.paint()
       },
     })
-    for (const cb of entered) cb(district)
+    for (const cb of entered) guard('onEnter', cb, district)
   }
 
   enter(opts.start, 'spawn').catch(() => {}) // `hooks.place(null)` already said it failed
@@ -209,6 +235,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       return () => void (frames = frames.filter((f) => f !== cb))
     },
     repaint: () => repaint(),
+    reconnectLive: () => here?.presence?.reconnect(),
     dispose() {
       if (disposed) return
       disposed = true
@@ -218,6 +245,18 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       left = []
       frames = []
     },
+  }
+}
+
+/**
+ * A listener that throws is logged and passed over: one broken listener must not skip a district's disposal,
+ * starve the listeners after it, or make a travel that worked look failed.
+ */
+function guard(what: string, cb: (d: District) => void, d: District) {
+  try {
+    cb(d)
+  } catch (err) {
+    console.error(`session: an ${what} listener threw`, err)
   }
 }
 
@@ -322,5 +361,83 @@ function createBubbleSystem(
   return {
     update: (_dt, pos) => bubbles.update(stage.camera, npcs, pos, hooks.lang()),
     dispose: bubbles.dispose,
+  }
+}
+
+type Presence = DistrictSystem & { reconnect(): void }
+
+/**
+ * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
+ * read them. The player's own position goes out every frame (the socket throttles it), and straight after
+ * every welcome, since a socket that has not said where it stands hears nobody move.
+ */
+function createPresence(
+  stage: Stage,
+  district: District,
+  player: Player,
+  host: HTMLElement,
+  hooks: NonNullable<SessionHooks['presence']>,
+  WebSocketImpl?: typeof WebSocket,
+): Presence {
+  const people = createPeople(stage.scene)
+  const labels = createPeopleLabels(host)
+  const shadows = (q: QualityTier) => people.setShadows(q === 2)
+  shadows(stage.quality)
+  const offQuality = stage.onQuality(shadows)
+  /** Reused for every frame's move: the socket copies what it sends. */
+  const move = { t: 'move', x: 0, z: 0, ry: 0 } satisfies ClientMsg
+  const sendMove = (pos: Vec2) => {
+    move.x = pos.x
+    move.z = pos.z
+    move.ry = player.heading()
+    conn.send(move)
+  }
+  const onMsg = (m: ServerMsg) => {
+    if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
+    people.apply(m)
+    if (m.t === 'welcome') {
+      hooks.replaced(false)
+      sendMove(player.position())
+    }
+  }
+  const connect = (): LiveConn =>
+    connectLive({
+      district: district.def.id,
+      token: hooks.token,
+      onMsg,
+      onReplaced: () => hooks.replaced(true),
+      WebSocketImpl,
+    })
+  let conn = connect()
+  installTestHooks({
+    liveState: () => conn.state(),
+    people: () =>
+      people.entries().map(({ person, body }) => {
+        const p = body.position.clone().setY(1.2).project(stage.camera)
+        return {
+          id: person.id,
+          x: body.position.x,
+          z: body.position.z,
+          sx: ((p.x + 1) / 2) * innerWidth,
+          sy: ((1 - p.y) / 2) * innerHeight,
+        }
+      }),
+  })
+  return {
+    update(dt, pos) {
+      sendMove(pos)
+      people.update(dt)
+      labels.update(stage.camera, people, pos)
+    },
+    reconnect() {
+      conn.close()
+      conn = connect()
+    },
+    dispose() {
+      conn.close()
+      offQuality()
+      labels.dispose()
+      people.dispose()
+    },
   }
 }

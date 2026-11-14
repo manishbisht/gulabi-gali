@@ -42,6 +42,8 @@ interface Result {
   entered: number | null
   frames: { count: number; p50: number; p95: number; p99: number; max: number; over33: number }
   qualityAfter: number | null
+  /** Other people drawn at the end of the walk (the stress check runs scripts/fake-residents.mjs alongside). */
+  people: number
   heapMB: number
   renderer: string
 }
@@ -136,6 +138,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     (a, b) => a - b,
   )
   const qualityAfter = await page.evaluate(() => window.__gg.quality())
+  const people = await page.evaluate(() => window.__gg.people().length)
   const { metrics } = await cdp.send('Performance.getMetrics')
   const heap = metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? 0
 
@@ -151,15 +154,18 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
       over33: frames.filter((f) => f > 33.4).length,
     },
     qualityAfter,
+    people,
     heapMB: heap / 2 ** 20,
     renderer,
   }
   mkdirSync('test-results', { recursive: true })
   writeFileSync('test-results/device-perf.json', JSON.stringify(result, null, 2))
   const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
-  console.log('\n| FCP ms | LCP ms | Walkable ms | Frames | p50 | p95 | p99 | max | >33ms | Tier | Heap MB |')
   console.log(
-    `| ${ms(result.fcp)} | ${ms(result.lcp)} | ${ms(result.walkable)} | ${result.frames.count} | ${result.frames.p50.toFixed(1)} | ${result.frames.p95.toFixed(1)} | ${result.frames.p99.toFixed(1)} | ${result.frames.max.toFixed(0)} | ${result.frames.over33} | ${result.qualityAfter} | ${result.heapMB.toFixed(1)} |`,
+    '\n| FCP ms | LCP ms | Walkable ms | Frames | p50 | p95 | p99 | max | >33ms | Tier | People | Heap MB |',
+  )
+  console.log(
+    `| ${ms(result.fcp)} | ${ms(result.lcp)} | ${ms(result.walkable)} | ${result.frames.count} | ${result.frames.p50.toFixed(1)} | ${result.frames.p95.toFixed(1)} | ${result.frames.p99.toFixed(1)} | ${result.frames.max.toFixed(0)} | ${result.frames.over33} | ${result.qualityAfter} | ${result.people} | ${result.heapMB.toFixed(1)} |`,
   )
   console.log(`\nRenderer: ${result.renderer}`)
   expect(frames.length).toBeGreaterThan(0)

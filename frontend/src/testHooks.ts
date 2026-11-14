@@ -1,4 +1,5 @@
 import type { SkyParams } from './live/sky'
+import type { LiveState } from './net/live'
 import type { CitySnapshot, DistrictId, FestivalId } from './net/protocol'
 import type { Vec2 } from './world/types'
 
@@ -26,6 +27,10 @@ export interface GgTestApi {
   setNow(iso: string): void
   /** Pauses (or resumes) every walking character, so a test can aim at one that stands still. */
   freezeNpcs(on: boolean): void
+  /** The district socket: `connecting` (also while waiting to retry), `open`, or `closed` for good. */
+  liveState(): LiveState
+  /** Each other person in the district: where their body is drawn (metres) and their chest on the page (CSS px). */
+  people(): { id: string; x: number; z: number; sx: number; sy: number }[]
 }
 
 declare global {

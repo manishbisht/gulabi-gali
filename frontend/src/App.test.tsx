@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
 import { AuthContext, SIGNED_OUT, type AuthState } from './auth/useAuth'
 import { buildAvatar } from './player/avatar'
+import type { LiveOptions } from './net/live'
 import type { DistrictId } from './net/protocol'
 import malviyaNagar from './world/districts/malviyaNagar'
 import miRoad from './world/districts/miRoad'
@@ -54,9 +55,25 @@ vi.mock('./world/district', async (importOriginal) => {
   }
 })
 
+/** Every district socket the city opens, and what it was opened with; nothing goes over the network. */
+const sockets = vi.hoisted(() => [] as { opts: LiveOptions; closed: boolean }[])
+vi.mock('./net/live', () => ({
+  connectLive: (opts: LiveOptions) => {
+    const conn = { opts, closed: false }
+    sockets.push(conn)
+    return {
+      send() {},
+      close: () => void (conn.closed = true),
+      state: () => (conn.closed ? 'closed' : 'open'),
+    }
+  },
+}))
+const liveNow = () => sockets.filter((c) => !c.closed)
+
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
+  sockets.length = 0
   webgl.available = true
   stage.fail = false
   unreachable.clear()
@@ -315,4 +332,58 @@ it('signed in but /api/me failing: still a ghost chip, with a way to sign out', 
   await act(async () => out.click())
   expect(signOut).toHaveBeenCalledOnce()
   await act(async () => root.unmount())
+})
+
+it('the live socket follows who you are, and says so when another tab takes over', async () => {
+  const me = {
+    id: 'u',
+    complete: true,
+    profile: {
+      id: 'u',
+      name: 'Asha',
+      look: PROFILE_LOOK,
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+    },
+  }
+  vi.stubGlobal('fetch', async (url: string) =>
+    String(url).endsWith('/api/me') ? Response.json(me) : Promise.reject(new TypeError('offline')),
+  )
+  localStorage.setItem('gg-lang', 'hi')
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  const render = (auth: AuthState) =>
+    act(async () =>
+      root.render(
+        <AuthContext.Provider value={auth}>
+          <App />
+        </AuthContext.Provider>,
+      ),
+    )
+  await render({ ...SIGNED_OUT, mode: 'dev' })
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  await vi.waitFor(() => expect(liveNow()).toHaveLength(1))
+  expect(await liveNow()[0]!.opts.token()).toBeNull() // a ghost
+
+  // signing in with a finished profile: a fresh socket, as a resident, and only one
+  await render(signedIn())
+  await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
+  await vi.waitFor(async () => expect(await liveNow()[0]?.opts.token()).toBe('tok'))
+  expect(liveNow()).toHaveLength(1)
+
+  // another tab took over: no reconnect, and a notice
+  await act(async () => liveNow()[0]!.opts.onReplaced!())
+  expect(host.textContent).toContain('Tum ek aur tab mein bhi khule ho.')
+
+  // signing out: a ghost again, without a reload
+  const before = sockets.length
+  await render({ ...SIGNED_OUT, mode: 'dev' })
+  await vi.waitFor(() => expect(sockets.length).toBe(before + 1))
+  expect(await liveNow()[0]!.opts.token()).toBeNull()
+  expect(liveNow()).toHaveLength(1)
+  await act(async () => root.unmount())
+  expect(liveNow()).toHaveLength(0)
 })

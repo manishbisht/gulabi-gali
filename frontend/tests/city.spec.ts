@@ -1,6 +1,11 @@
 import { devices, expect, test, type Page } from '@playwright/test'
 import { enterCity } from './support/city'
 
+// These specs are about the city itself, and they place the player with `__gg.teleport`. A live district
+// rightly refuses a jump like that (the speed check) and pulls the player back, so here the district socket
+// goes to a mock that never answers: the city runs as it does offline. tests/people.spec.ts covers the live part.
+test.beforeEach(({ page }) => page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {}))
+
 test('shows the no-3D screen without WebGL', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext

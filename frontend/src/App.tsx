@@ -98,6 +98,20 @@ export default function App() {
     else if (had) session.current?.setLook(loadOrCreateLook())
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the look's value, not its identity
   }, [lookKey])
+  /**
+   * Who the live socket connects as: a resident's token, or nobody (a ghost). Read by the session on every
+   * connect; when it changes, the session reconnects so the visitor appears or vanishes without a reload.
+   */
+  const residentId = auth.signedIn && me?.complete ? me.id : null
+  const liveToken = useRef<() => Promise<string | null>>(async () => null)
+  const liveAs = useRef<string | null>(null)
+  const [replaced, setReplaced] = useState(false)
+  useEffect(() => {
+    liveToken.current = residentId ? auth.token : async () => null
+    if (liveAs.current === residentId) return
+    liveAs.current = residentId
+    session.current?.reconnectLive()
+  }, [residentId, auth.token])
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
 
@@ -128,6 +142,7 @@ export default function App() {
         live: { current, now, patch, freeze },
         look: () => profileLookRef.current,
         festival: () => override ?? current().festival,
+        presence: { token: () => liveToken.current(), replaced: setReplaced },
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -209,6 +224,11 @@ export default function App() {
             {toast && (
               <div className="toast" role="status">
                 {toast}
+              </div>
+            )}
+            {replaced && (
+              <div className="toast" role="status">
+                {t('liveReplaced', lang)}
               </div>
             )}
             {travelFailed && (

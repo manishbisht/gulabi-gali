@@ -277,6 +277,33 @@ button {
   display: none;
 }
 
+.person-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 170px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgb(42 29 36 / 0.82);
+  color: var(--cream);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  text-align: center;
+  will-change: transform;
+}
+
+.person-label[hidden],
+.person-status[hidden] {
+  display: none;
+}
+
+.person-name {
+  color: var(--pink);
+}
+
 .npc-badge {
   color: var(--pink);
   font-weight: 700;
