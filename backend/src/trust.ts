@@ -83,6 +83,13 @@ export async function isVerified(env: Env, userId: string): Promise<boolean> {
 /** `GET /api/invites`: the caller's own codes, used or not. Only a resident has any. */
 export async function listInvites(env: Env, userId: string): Promise<Response> {
   if (!(await activeRow(env, userId))) return fail('ghost', 403)
+  // A verified member who never got their codes (an admin's mark that failed halfway) gets them now.
+  if (await isVerified(env, userId)) {
+    const any = await env.DB.prepare('SELECT 1 AS x FROM invites WHERE owner = ? LIMIT 1')
+      .bind(userId)
+      .first()
+    if (!any) await issueCodes(env, userId)
+  }
   const rows = await env.DB.prepare(
     'SELECT code, used_by FROM invites WHERE owner = ? ORDER BY created_at, code LIMIT 50',
   )
@@ -118,25 +125,58 @@ export async function redeemInvite(
   if (await isVerified(env, userId)) return fail('already-verified', 409)
   if (invite.used_by !== null) return fail('used', 410)
 
-  const claimed = await env.DB.prepare(
-    'UPDATE invites SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL',
-  )
-    .bind(userId, now, code)
-    .run()
-  if (claimed.meta.changes !== 1) return fail('used', 410)
-  const verified = await env.DB.prepare(
-    'UPDATE users SET verified = 1, verified_by = ? WHERE id = ? AND verified = 0',
-  )
-    .bind(invite.owner, userId)
-    .run()
-  if (verified.meta.changes !== 1) {
-    // Verified in the meantime (another code of theirs won): this one goes back to its owner.
-    await env.DB.prepare('UPDATE invites SET used_by = NULL, used_at = NULL WHERE code = ? AND used_by = ?')
-      .bind(code, userId)
-      .run()
-    return fail('already-verified', 409)
+  // One transaction: claim the code, verify the redeemer and give them their codes. Each statement is guarded
+  // by the claim (`used_by = me`), and the claim by the redeemer not being verified yet, so any failure rolls
+  // the lot back (no burnt code, no verified member without codes) and a lost race changes nothing.
+  const fresh = Array.from({ length: CODES_HELD }, generateCode)
+  const won = () => 'EXISTS (SELECT 1 FROM invites WHERE code = ? AND used_by = ?)'
+  let results: D1Result[]
+  try {
+    results = await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE invites SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL
+         AND NOT EXISTS (SELECT 1 FROM users WHERE id = ? AND verified = 1)`,
+      ).bind(userId, now, code, userId),
+      env.DB.prepare(
+        `UPDATE users SET verified = 1, verified_by = ? WHERE id = ? AND verified = 0 AND ${won()}`,
+      ).bind(invite.owner, userId, code, userId),
+      ...fresh.map((c) =>
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO invites (code, owner, created_at) SELECT ?, ?, ? WHERE ${won()}`,
+        ).bind(c, userId, now, code, userId),
+      ),
+    ])
+  } catch (err) {
+    console.error('redeem failed', err)
+    return fail('failed', 500)
   }
-  await issueCodes(env, userId)
+  if (results[0]!.meta.changes !== 1) {
+    // Someone else won the code, or this person was verified in the meantime.
+    return (await isVerified(env, userId)) ? fail('already-verified', 409) : fail('used', 410)
+  }
+  // A freshly drawn code colliding with an existing one (1 in 10^12) leaves a short hand: top up.
+  await issueCodes(env, userId).catch((err) => console.error('top-up failed', err))
   later(refreshUser(env, userId, 'profile'))
   return Response.json(await getMe(env, userId))
+}
+
+/**
+ * `POST /api/dev/verify {userId}`, DEV_AUTH only (the caller has checked the flag, like `devLogin`): makes the
+ * user (created if need be) verified, as an admin would, and answers their unused codes so an e2e test can
+ * hand one over.
+ */
+export async function devVerify(env: Env, raw: unknown): Promise<Response> {
+  const userId = (raw as { userId?: unknown } | null)?.userId
+  if (typeof userId !== 'string' || !userId || userId.length > 200) return fail('invalid', 400)
+  await env.DB.prepare('INSERT OR IGNORE INTO users (id, created_at) VALUES (?, ?)')
+    .bind(userId, Date.now())
+    .run()
+  await markVerified(env, userId, 'dev')
+  await issueCodes(env, userId)
+  const rows = await env.DB.prepare(
+    'SELECT code FROM invites WHERE owner = ? AND used_by IS NULL ORDER BY code',
+  )
+    .bind(userId)
+    .all<{ code: string }>()
+  return Response.json({ codes: rows.results.map((r) => r.code) })
 }

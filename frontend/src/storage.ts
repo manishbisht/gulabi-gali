@@ -20,6 +20,15 @@ export const storage = {
       // memory already has it
     }
   },
+  /** Forgets everything, the page-lifetime map included. For tests: `localStorage.clear()` alone leaves the map. */
+  clear(): void {
+    memory.clear()
+    try {
+      localStorage.clear()
+    } catch {
+      // nothing stored to clear
+    }
+  },
   getJSON<T>(key: string, fallback: T): T {
     const raw = storage.get(key)
     if (raw === null) return fallback

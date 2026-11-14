@@ -112,14 +112,19 @@ it('a verified member sees their codes, and share hands over the bilingual text'
   const { host, button } = await mount(true)
   expect(host.querySelector('input')).toBeNull()
   await act(async () => button('Share').click())
-  expect(share).toHaveBeenCalledWith({ text: 'Come to Gulabi Gali — my invite code: AAAA-1111' })
+  expect(share).toHaveBeenCalledWith({
+    text: 'Come to Gulabi Gali — my invite code: AAAA-1111',
+    url: 'https://gulabi-gali.manishbisht.me',
+  })
 })
 
 it('share falls back to the clipboard, and says when both fail', async () => {
   const writeText = vi.fn(async () => undefined)
   vi.stubGlobal('navigator', { clipboard: { writeText } })
   expect(await shareCode('AAAA1111', 'hi')).toBe('copied')
-  expect(writeText).toHaveBeenCalledWith('Gulabi Gali pe aao — mera invite code: AAAA-1111')
+  expect(writeText).toHaveBeenCalledWith(
+    'Gulabi Gali pe aao — mera invite code: AAAA-1111 https://gulabi-gali.manishbisht.me',
+  )
 
   vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => Promise.reject(new Error('no'))) } })
   expect(await shareCode('AAAA1111', 'en')).toBe('failed')

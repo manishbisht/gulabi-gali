@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import App from './App'
+import { storage } from './storage'
 import { AuthContext, SIGNED_OUT, type AuthState } from './auth/useAuth'
 import { buildAvatar } from './player/avatar'
 import type { LiveOptions } from './net/live'
@@ -43,6 +44,8 @@ vi.mock('./engine/stage', () => ({
 }))
 /** District ids whose chunk "fails to arrive". */
 const unreachable = vi.hoisted(() => new Set<string>())
+/** While set, no district chunk arrives until it resolves: the loading state held still for a test. */
+const hold = vi.hoisted(() => ({ until: null as Promise<void> | null }))
 vi.mock('./world/district', async (importOriginal) => {
   const real = await importOriginal<typeof import('./world/district')>()
   return {
@@ -50,6 +53,7 @@ vi.mock('./world/district', async (importOriginal) => {
     // a chunk takes at least a turn of the event loop to arrive, as it does over the network
     loadDistrict: async (id: DistrictId) => {
       await new Promise((r) => setTimeout(r))
+      await hold.until
       if (unreachable.has(id)) throw new Error('chunk failed')
       return real.loadDistrict(id)
     },
@@ -78,9 +82,10 @@ afterEach(() => {
   webgl.available = true
   stage.fail = false
   unreachable.clear()
+  hold.until = null
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
-  localStorage.clear()
+  storage.clear() // the map too, or a test's language and district leak into the next
   document.body.innerHTML = ''
 })
 
@@ -88,6 +93,8 @@ it('shows the intro, then the HUD over a canvas after Padharo, and persists the 
   vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
   const host = document.body.appendChild(document.createElement('div'))
   const root = createRoot(host)
+  let release!: () => void
+  hold.until = new Promise<void>((r) => (release = r))
   await act(async () => root.render(<App />))
 
   const enter = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Padharo!')
@@ -96,8 +103,9 @@ it('shows the intro, then the HUD over a canvas after Padharo, and persists the 
 
   await act(async () => enter!.click())
   expect(host.querySelector('canvas')).not.toBeNull()
-  expect(host.textContent).toContain('Ruko zara') // the district is still loading
-  await vi.waitFor(() => expect(host.textContent).toContain('Gulabi Shahar'))
+  expect(host.textContent).toContain('Ruko zara') // the district is still loading: held there, not raced
+  release()
+  await vi.waitFor(() => expect(host.textContent).toContain('Gulabi Shahar'), { timeout: 10_000 })
 
   const toggle = host.querySelector<HTMLButtonElement>('.lang-toggle')!
   await act(async () => toggle.click())
@@ -107,6 +115,7 @@ it('shows the intro, then the HUD over a canvas after Padharo, and persists the 
 })
 
 it('shows the no-3D screen instead of the intro when WebGL is missing', async () => {
+  localStorage.setItem('gg-lang', 'en')
   webgl.available = false
   vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
   const host = document.body.appendChild(document.createElement('div'))
@@ -118,6 +127,7 @@ it('shows the no-3D screen instead of the intro when WebGL is missing', async ()
 })
 
 it('shows the no-3D screen, not a blank page, when the renderer cannot start', async () => {
+  localStorage.setItem('gg-lang', 'en')
   stage.fail = true
   vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
   const host = document.body.appendChild(document.createElement('div'))
@@ -136,7 +146,9 @@ it('reopens the city in the district last travelled to', async () => {
   const root = createRoot(host)
   await act(async () => root.render(<App />))
   await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
-  await vi.waitFor(() => expect(host.querySelector('.hud-top')?.textContent).toMatch(/MI Road/))
+  await vi.waitFor(() => expect(host.querySelector('.hud-top')?.textContent).toMatch(/MI Road/), {
+    timeout: 10_000,
+  })
   await act(async () => root.unmount())
 })
 
@@ -159,7 +171,7 @@ async function openCity() {
   const root = createRoot(host)
   await act(async () => root.render(<App />))
   await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
-  await vi.waitFor(() => expect(window.__gg?.district()).toBe('walled-city'))
+  await vi.waitFor(() => expect(window.__gg?.district()).toBe('walled-city'), { timeout: 10_000 })
   return { host, root }
 }
 

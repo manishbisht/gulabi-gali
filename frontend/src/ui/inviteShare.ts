@@ -3,6 +3,9 @@ import { t, type Lang } from '../i18n/strings'
 /** `ABCD1234` as people read it out: `ABCD-1234`. */
 export const showCode = (code: string) => `${code.slice(0, 4)}-${code.slice(4)}`
 
+/** Where a recipient finds the app. */
+export const SITE_URL = 'https://gulabi-gali.manishbisht.me'
+
 export type ShareOutcome = 'shared' | 'copied' | 'cancelled' | 'failed'
 
 /**
@@ -13,7 +16,7 @@ export async function shareCode(code: string, lang: Lang): Promise<ShareOutcome>
   const text = t('inviteShareText', lang, { code: showCode(code) })
   if (typeof navigator.share === 'function') {
     try {
-      await navigator.share({ text })
+      await navigator.share({ text, url: SITE_URL })
       return 'shared'
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return 'cancelled'
@@ -21,7 +24,7 @@ export async function shareCode(code: string, lang: Lang): Promise<ShareOutcome>
     }
   }
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(`${text} ${SITE_URL}`)
     return 'copied'
   } catch {
     return 'failed'

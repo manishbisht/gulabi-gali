@@ -7,7 +7,7 @@ import { purgeEvidence } from './evidence'
 import { floating, openInbox, type Later } from './inbox'
 import { purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
-import { listInvites, redeemInvite } from './trust'
+import { devVerify, listInvites, redeemInvite } from './trust'
 import { activeRow, devLogin, getMe, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
@@ -104,6 +104,11 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     if (env.DEV_AUTH !== '1' || method !== 'POST')
       return Response.json({ error: 'not found' }, { status: 404 })
     return devLogin(env, await readJson(request))
+  }
+  if (pathname === '/api/dev/verify') {
+    if (env.DEV_AUTH !== '1' || method !== 'POST')
+      return Response.json({ error: 'not found' }, { status: 404 })
+    return devVerify(env, await readJson(request))
   }
   const user = await resolveUser(request, env)
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })

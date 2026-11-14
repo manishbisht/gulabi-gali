@@ -2,7 +2,8 @@ import { applyD1Migrations, env } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { Env } from '../src/env'
 import type { Me } from '../src/protocol'
-import { CODE_LENGTH, generateCode, issueCodes, normaliseCode } from '../src/trust'
+import worker from '../src/index'
+import { CODE_LENGTH, generateCode, issueCodes, normaliseCode, redeemInvite } from '../src/trust'
 import { api, closeAll, devId, live, resident, verify } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -161,6 +162,98 @@ describe('invite codes', () => {
     const res = await redeem(guest, 'ZZZZZZZZ')
     expect(res.status).toBe(429)
     expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0)
+  })
+})
+
+/** An env whose `batch` runs the real one with its last statement broken: a failure after the claim. */
+function failingLast(): Env {
+  const DB = new Proxy(testEnv.DB, {
+    get(target, key) {
+      if (key === 'batch')
+        return (stmts: D1PreparedStatement[]) =>
+          target.batch([...stmts.slice(0, -1), target.prepare('INSERT INTO no_such_table VALUES (1)')])
+      const v = Reflect.get(target, key) as unknown
+      return typeof v === 'function' ? v.bind(target) : v
+    },
+  })
+  return { ...testEnv, DB } as unknown as Env
+}
+
+describe('redeeming is one transaction', () => {
+  it('a failure after the claim leaves the code unclaimed and the user unverified, never a burnt code', async () => {
+    const owner = await member('Atomic Owner')
+    const guest = await unverified('Atomic Guest')
+    const res = await redeemInvite(failingLast(), devId('Atomic Guest'), { code: owner.codes[0] })
+    expect(res.status).toBe(500)
+    expect((await invites(owner.token)).filter((c) => c.used)).toEqual([])
+    expect((await me(guest)).verified).toBe(false)
+    expect(await invites(guest)).toEqual([])
+    // and the same code still works afterwards
+    expect((await redeem(guest, owner.codes[0])).status).toBe(200)
+  })
+
+  it('a batch that is refused outright changes nothing either', async () => {
+    const owner = await member('Refused Owner')
+    const guest = await unverified('Refused Guest')
+    const DB = new Proxy(testEnv.DB, {
+      get(target, key) {
+        if (key === 'batch') return async () => Promise.reject(new Error('D1 down'))
+        const v = Reflect.get(target, key) as unknown
+        return typeof v === 'function' ? v.bind(target) : v
+      },
+    })
+    const res = await redeemInvite({ ...testEnv, DB } as unknown as Env, devId('Refused Guest'), {
+      code: owner.codes[0],
+    })
+    expect(res.status).toBe(500)
+    expect((await invites(owner.token)).filter((c) => c.used)).toEqual([])
+    expect((await me(guest)).verified).toBe(false)
+  })
+
+  it('a verified member with no invite rows at all gets 2 codes when they list', async () => {
+    const token = await unverified('Lazy Topup')
+    await verify('Lazy Topup') // marked verified, but the codes never came
+    expect(
+      await testEnv.DB.prepare('SELECT 1 FROM invites WHERE owner = ?').bind(devId('Lazy Topup')).first(),
+    ).toBeNull()
+    const listed = await invites(token)
+    expect(listed).toHaveLength(2)
+    expect(await invites(token)).toEqual(listed) // and only once
+  })
+
+  it('a member whose codes are all spent is not topped up again', async () => {
+    const owner = await member('Spent Owner')
+    const a = await unverified('Spent A')
+    const b = await unverified('Spent B')
+    expect((await redeem(a, owner.codes[0])).status).toBe(200)
+    expect((await redeem(b, owner.codes[1])).status).toBe(200)
+    expect((await invites(owner.token)).filter((c) => !c.used)).toEqual([])
+  })
+})
+
+describe('POST /api/dev/verify', () => {
+  const call = (e: Env, userId: string) =>
+    worker.fetch(
+      new Request('https://x.test/api/dev/verify', { method: 'POST', body: JSON.stringify({ userId }) }),
+      e,
+    )
+
+  it('is a 404 without DEV_AUTH, and changes nothing', async () => {
+    const off = { ...testEnv, DEV_AUTH: undefined } as unknown as Env
+    expect((await call(off, 'dev:seeded-off')).status).toBe(404)
+    expect(
+      await testEnv.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind('dev:seeded-off').first(),
+    ).toBeNull()
+  })
+
+  it('with DEV_AUTH, verifies the user and answers their codes', async () => {
+    const res = await call(testEnv, 'dev:seeded-on')
+    expect(res.status).toBe(200)
+    const { codes } = (await res.json()) as { codes: string[] }
+    expect(codes).toHaveLength(2)
+    expect(await (await call(testEnv, 'dev:seeded-on')).json()).toEqual({ codes })
+    const guest = await unverified('Seeded Guest')
+    expect((await redeem(guest, codes[0])).status).toBe(200)
   })
 })
 
