@@ -14,12 +14,14 @@ import { useLang } from './i18n/lang'
 import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
 import { useLiveCity } from './live/useLiveCity'
+import { setSoundOn, soundOn } from './audio/horn'
 import { createControls, type Controls } from './player/controls'
 import { disposeAvatarCache } from './player/avatar'
 import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
 import { useBench, type BenchNotice } from './world/useBench'
+import { useDrive } from './world/useDrive'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
@@ -31,6 +33,7 @@ import type { DistrictDef } from './world/types'
 import { Hud } from './ui/Hud'
 import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
+import { DriveButtons } from './ui/DriveButtons'
 import { Joystick } from './ui/Joystick'
 import { NpcCard } from './ui/NpcCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
@@ -93,6 +96,10 @@ export default function App() {
     step: stepPerson,
   } = usePersonCard()
   const bench = useBench()
+  /** Driving a parked auto: one in reach, at the wheel, and "no room to get out". */
+  const drive = useDrive()
+  const { hooks: driveHooks, bind: bindDrive } = drive
+  const [sound, setSound] = useState(soundOn)
   /** The line for room when the city is full (`MAX_LIVE`): this resident waits in it as a ghost. */
   const queue = useQueue()
   const { queued } = queue
@@ -237,6 +244,7 @@ export default function App() {
         },
         bench: benchHooks,
         posters: posterHooks,
+        drive: driveHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -247,8 +255,10 @@ export default function App() {
     bindTravel(city.travelTo)
     bindBench(city)
     bindPosters(city)
+    bindDrive(city)
 
     return () => {
+      bindDrive(null)
       bindPosters(null)
       bindBench(null)
       bindTravel(null)
@@ -276,6 +286,8 @@ export default function App() {
     bindBench,
     posterHooks,
     bindPosters,
+    driveHooks,
+    bindDrive,
     current,
     now,
     patch,
@@ -424,6 +436,13 @@ export default function App() {
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
+        sound={{
+          on: sound,
+          onToggle: () => {
+            setSoundOn(!sound)
+            setSound(!sound)
+          },
+        }}
         visibility={visibility}
         onProfile={auth.signedIn && me ? () => setProfileOpen(true) : undefined}
         onInvite={residentId ? () => setInviteOpen(true) : undefined}
@@ -458,6 +477,11 @@ export default function App() {
                     {t('liveReplaced', lang)}
                   </div>
                 )}
+                {drive.stuck && (
+                  <div className="toast" role="status">
+                    {t('driveStuck', lang)}
+                  </div>
+                )}
                 {benchToast && (
                   <div className="toast" role="status">
                     {t(benchToast, lang)}
@@ -475,62 +499,74 @@ export default function App() {
         bottom={
           <>
             <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />
-            {nearStation && !near && !sheetOpen && !bench.seat && (
-              <button type="button" className="metro-button" onClick={openSheet}>
-                {t('metro', lang)}
-              </button>
-            )}
-            {bench.near && !bench.seat && !near && !sheetOpen && (
-              <button type="button" className="metro-button bench-button" onClick={bench.sit}>
-                {t('benchSit', lang)}
-              </button>
-            )}
-            {posters.near && !bench.near && !bench.seat && !near && !sheetOpen && !card && (
-              <button type="button" className="metro-button poster-button" onClick={posters.compose}>
-                {t('posterPin', lang)}
-              </button>
-            )}
-            {bench.seat ? (
-              // seated, the bench panel holds the bottom; a tapped character or person shows over it
-              card || (
-                <BenchChat
-                  seat={bench.seat}
-                  lines={bench.lines}
-                  me={me?.id ?? null}
-                  notice={bench.notice}
-                  lang={lang}
-                  token={auth.token}
-                  onSay={bench.say}
-                  onStand={bench.stand}
-                  onBlock={async (id, name) => {
-                    const done = await block(id, name)
-                    if (done) bench.forget(id)
-                    return done
-                  }}
-                />
-              )
-            ) : near ? (
-              <LandmarkCard
-                landmark={near}
-                lang={lang}
-                stamped={have.includes(near.id)}
-                onCollect={collectHere}
-              />
-            ) : sheetOpen ? (
-              <TravelSheet here={here} lang={lang} onPick={travelTo} onClose={closeSheet} />
+            {drive.driving ? (
+              // at the wheel the stick drives; nothing else opens until the player gets out
+              <DriveButtons lang={lang} onHorn={drive.honk} onExit={drive.exit} />
             ) : (
-              card ||
-              (bench.notice === 'ghost' && (
-                <BenchGhost
-                  lang={lang}
-                  cta={t(viewer === 'incomplete' ? 'visibilityFinish' : 'signInButton', lang)}
-                  onVisible={onVisible}
-                  onClose={bench.dismiss}
-                />
-              )) ||
-              (queue.card && queue.position !== null && (
-                <FullScreen position={queue.position} lang={lang} onClose={queue.dismiss} />
-              ))
+              <>
+                {drive.near && !near && !sheetOpen && !card && (bench.seat || !bench.near) && (
+                  <button type="button" className="metro-button drive-button" onClick={drive.mount}>
+                    {t('driveMount', lang)}
+                  </button>
+                )}
+                {nearStation && !near && !sheetOpen && !bench.seat && (
+                  <button type="button" className="metro-button" onClick={openSheet}>
+                    {t('metro', lang)}
+                  </button>
+                )}
+                {bench.near && !bench.seat && !near && !sheetOpen && (
+                  <button type="button" className="metro-button bench-button" onClick={bench.sit}>
+                    {t('benchSit', lang)}
+                  </button>
+                )}
+                {posters.near && !bench.near && !bench.seat && !near && !sheetOpen && !card && (
+                  <button type="button" className="metro-button poster-button" onClick={posters.compose}>
+                    {t('posterPin', lang)}
+                  </button>
+                )}
+                {bench.seat ? (
+                  // seated, the bench panel holds the bottom; a tapped character or person shows over it
+                  card || (
+                    <BenchChat
+                      seat={bench.seat}
+                      lines={bench.lines}
+                      me={me?.id ?? null}
+                      notice={bench.notice}
+                      lang={lang}
+                      token={auth.token}
+                      onSay={bench.say}
+                      onStand={bench.stand}
+                      onBlock={async (id, name) => {
+                        const done = await block(id, name)
+                        if (done) bench.forget(id)
+                        return done
+                      }}
+                    />
+                  )
+                ) : near ? (
+                  <LandmarkCard
+                    landmark={near}
+                    lang={lang}
+                    stamped={have.includes(near.id)}
+                    onCollect={collectHere}
+                  />
+                ) : sheetOpen ? (
+                  <TravelSheet here={here} lang={lang} onPick={travelTo} onClose={closeSheet} />
+                ) : (
+                  card ||
+                  (bench.notice === 'ghost' && (
+                    <BenchGhost
+                      lang={lang}
+                      cta={t(viewer === 'incomplete' ? 'visibilityFinish' : 'signInButton', lang)}
+                      onVisible={onVisible}
+                      onClose={bench.dismiss}
+                    />
+                  )) ||
+                  (queue.card && queue.position !== null && (
+                    <FullScreen position={queue.position} lang={lang} onClose={queue.dismiss} />
+                  ))
+                )}
+              </>
             )}
           </>
         }

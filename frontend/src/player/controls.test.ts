@@ -93,4 +93,29 @@ describe('createControls', () => {
     press(w, 'KeyW')
     expect(c.move()).toEqual({ x: 0, z: 0 })
   })
+
+  it('Space is the horn, once per press', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    expect(c.horn()).toBe(false)
+    press(w, 'Space')
+    press(w, 'Space') // held: the key repeats
+    expect(c.horn()).toBe(true)
+    expect(c.horn()).toBe(false)
+  })
+
+  it('drive() keeps the keyboard diagonal at full throttle and full lock, and reuses its answer', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    press(w, 'KeyW')
+    press(w, 'KeyD')
+    const a = c.drive()
+    expect(a).toEqual({ x: 1, z: 1 })
+    expect(c.drive()).toBe(a) // no allocation per frame
+    c.setJoystick({ x: 0, z: 0.7 })
+    expect(c.drive().z).toBe(1) // two thirds up is already full throttle
+    c.setJoystick({ x: 0.3, z: -0.2 })
+    expect(c.drive().z).toBeCloseTo(-0.3)
+    expect(c.drive().x).toBeCloseTo(0.3)
+  })
 })

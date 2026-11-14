@@ -35,6 +35,7 @@ function fakeDistrict(def: DistrictDef, log: string[] = []): District {
     def: { ...def, npcs: [] },
     root,
     colliders: [],
+    autos: { nearest: () => -1, pose: () => ({ x: 0, z: 0, ry: 0 }), take() {}, leave() {} },
     occluders: [],
     lights: { hemi, sun },
     focus: () => {},
@@ -63,6 +64,8 @@ function fakeStage() {
 const controls: Controls = {
   move: () => ({ x: 0, z: 0 }),
   interact: () => false,
+  horn: () => false,
+  drive: () => ({ x: 0, z: 0 }),
   setJoystick() {},
   dispose() {},
 }

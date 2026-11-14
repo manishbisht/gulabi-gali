@@ -200,3 +200,47 @@ test.describe('by metro', () => {
     await expect(page.locator('.hud-top')).toContainText('MI Road–Raja Park')
   })
 })
+
+test('mounts a parked auto, drives it, and gets out', async ({ page }) => {
+  await enterCity(page)
+  // the walled city's auto at (24, -4.6), nose to +x; the player stands a couple of metres off its side
+  await page.evaluate(() => window.__gg.teleport(24, -2.5))
+  const mount = page.getByRole('button', { name: 'Auto chalao' })
+  const exit = page.getByRole('button', { name: 'Utro' })
+  await expect(mount).toBeVisible()
+  await expect(exit).toBeHidden()
+
+  await page.keyboard.press('e')
+  await expect(exit).toBeVisible()
+  await expect(mount).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Horn bajao' })).toBeVisible()
+
+  // at the wheel a second of throttle covers far more than a walk's 4 m
+  const from = await page.evaluate(() => window.__gg.position())
+  await page.keyboard.down('w')
+  await page.waitForTimeout(1200)
+  await page.keyboard.up('w')
+  const to = await page.evaluate(() => window.__gg.position())
+  expect(Math.hypot(to.x - from.x, to.z - from.z)).toBeGreaterThan(5)
+
+  // E gets out, and the player is walking again, a little way from the auto they left
+  await page.keyboard.press('e')
+  await expect(exit).toBeHidden()
+  const out = await page.evaluate(() => window.__gg.position())
+  expect(Math.hypot(out.x - to.x, out.z - to.z)).toBeGreaterThan(1)
+  expect(Math.hypot(out.x - to.x, out.z - to.z)).toBeLessThan(3.5)
+  await page.keyboard.down('d')
+  await page.waitForTimeout(500)
+  await page.keyboard.up('d')
+  const walked = await page.evaluate(() => window.__gg.position())
+  expect(Math.hypot(walked.x - out.x, walked.z - out.z)).toBeLessThan(3)
+})
+
+test('the sound switch is remembered', async ({ page }) => {
+  await enterCity(page)
+  const sound = page.getByRole('button', { name: 'Awaaz chalu ya band karo' })
+  await expect(sound).toHaveAttribute('aria-pressed', 'true')
+  await sound.click()
+  await expect(sound).toHaveAttribute('aria-pressed', 'false')
+  expect(await page.evaluate(() => localStorage.getItem('gg-sound'))).toBe('off')
+})

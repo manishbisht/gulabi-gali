@@ -14,6 +14,8 @@ interface Props {
   stamps: string
   lang: Lang
   onLang: (l: Lang) => void
+  /** The sound switch (the horn is the only sound so far): whether it is on, and how to flip it. */
+  sound?: { on: boolean; onToggle: () => void }
   /** The visibility chip; present only when sign-in exists. */
   visibility?: ReactNode
   /** Present only when a user is signed in. */
@@ -36,6 +38,7 @@ export function Hud({
   stamps,
   lang,
   onLang,
+  sound,
   visibility,
   onProfile,
   onInvite,
@@ -61,6 +64,18 @@ export function Hud({
         >
           {t('langToggle', lang)}
         </button>
+        {sound && (
+          <button
+            type="button"
+            className="hud-chip sound-toggle"
+            aria-label={t('soundToggleLabel', lang)}
+            aria-pressed={sound.on}
+            title={t(sound.on ? 'soundOn' : 'soundOff', lang)}
+            onClick={sound.onToggle}
+          >
+            {sound.on ? '🔊' : '🔇'}
+          </button>
+        )}
       </div>
       {(visibility || onProfile || onInvite || onConnections) && (
         <div className="hud-identity">

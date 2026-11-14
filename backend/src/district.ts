@@ -20,6 +20,7 @@ import {
   type PosterView,
   type PublicPerson,
   type ServerMsg,
+  type Vehicle,
 } from './protocol'
 
 export const DISTRICT_IDS: readonly DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar']
@@ -88,6 +89,12 @@ export const MAX_SPEED = 8
  * The average still never beats `MAX_SPEED`; the most anyone gains is one 8 m hop after standing still.
  */
 export const SPEED_BURST_M = MAX_SPEED
+/**
+ * A move that says `v: 'auto'` gets this pace and burst instead (three times walking speed). The flag is the
+ * client's word: one that lies gets 1.5x the walking allowance, an accepted cost.
+ */
+export const AUTO_MAX_SPEED = 12
+export const AUTO_BURST_M = AUTO_MAX_SPEED
 /** A socket with no move or ping for this long is closed, and its person leaves. */
 export const IDLE_MS = 30_000
 export const MAX_FRAME_CHARS = 2048
@@ -189,10 +196,11 @@ export function parseClientMsg(text: string): ClientMsg | null {
   const m = parsed as Record<string, unknown>
   switch (m.t) {
     case 'move': {
-      const { x, z, ry } = m
-      return isNum(x, MAX_COORD) && isNum(z, MAX_COORD) && isNum(ry, MAX_TURN)
-        ? { t: 'move', x, z, ry }
-        : null
+      const { x, z, ry, v } = m
+      // absent, or exactly 'auto': null, a number or any other word is a bad frame
+      if ('v' in m && v !== 'auto') return null
+      if (!isNum(x, MAX_COORD) || !isNum(z, MAX_COORD) || !isNum(ry, MAX_TURN)) return null
+      return v === 'auto' ? { t: 'move', x, z, ry, v } : { t: 'move', x, z, ry }
     }
     case 'sit': {
       const { bench } = m
@@ -318,6 +326,8 @@ interface Point {
   x: number
   z: number
   ry: number
+  /** Driving an auto, as of this point. */
+  v?: Vehicle
   at: number
   budget: number
 }
@@ -410,8 +420,8 @@ const far = (p: { x: number; z: number }, b: { x: number; z: number }, range: nu
 const round = (n: number, per: number) => Math.round(n * per) / per
 
 function livePerson(seat: Seat): LivePerson {
-  const { x, z, ry } = seat.pos!
-  return { ...toPublic(seat.person!), x, z, ry }
+  const { x, z, ry, v } = seat.pos!
+  return { ...toPublic(seat.person!), x, z, ry, ...(v && { v }) }
 }
 
 /**
@@ -1025,15 +1035,17 @@ export class DistrictDO extends DurableObject<Env> {
     const z = round(m.z, 100)
     const ry = round(m.ry, 1000)
     const last = seat.pos
+    const { v } = m
+    const [pace, burst] = v === 'auto' ? [AUTO_MAX_SPEED, AUTO_BURST_M] : [MAX_SPEED, SPEED_BURST_M]
     if (last) {
-      const budget = Math.min(SPEED_BURST_M, last.budget + (MAX_SPEED * Math.max(0, now - last.at)) / 1000)
+      const budget = Math.min(burst, last.budget + (pace * Math.max(0, now - last.at)) / 1000)
       const step = Math.hypot(x - last.x, z - last.z)
       if (step > budget) {
         this.keep(ws, seat, now)
         return this.send(ws, { t: 'error', code: 'too-fast', x: last.x, z: last.z, ry: last.ry })
       }
-      seat.pos = { x, z, ry, at: now, budget: budget - step }
-    } else seat.pos = { x, z, ry, at: now, budget: SPEED_BURST_M }
+      seat.pos = { x, z, ry, at: now, budget: budget - step, ...(v && { v }) }
+    } else seat.pos = { x, z, ry, at: now, budget: burst, ...(v && { v }) }
     const arriving = seat.person !== null && !seat.shown
     if (arriving) seat.shown = true
     const bench = seat.bench
@@ -1330,7 +1342,8 @@ export class DistrictDO extends DurableObject<Env> {
     for (const ws of this.dirty) {
       const { userId, shown, pos, closed } = this.seat(ws)
       if (closed || !shown || !pos || !userId) continue
-      movers.push({ id: userId, x: pos.x, z: pos.z, json: JSON.stringify([userId, pos.x, pos.z, pos.ry]) })
+      const tuple = pos.v ? [userId, pos.x, pos.z, pos.ry, pos.v] : [userId, pos.x, pos.z, pos.ry]
+      movers.push({ id: userId, x: pos.x, z: pos.z, json: JSON.stringify(tuple) })
     }
     this.dirty.clear()
     if (!movers.length) return

@@ -124,10 +124,24 @@ export type RequestError =
   'invalid' | 'ghost' | 'no-such-person' | 'already' | 'paused' | 'not-found' | 'expired'
 
 /** A person on the live map: their public face and where they stand. */
-export type LivePerson = PublicPerson & { x: number; z: number; ry: number }
+export type LivePerson = PublicPerson & {
+  x: number
+  z: number
+  ry: number
+  /** Present only while driving an auto. */
+  v?: Vehicle
+}
+
+/** What a person is riding, when they are riding anything. Absent means on foot. */
+export type Vehicle = 'auto'
 
 export type ClientMsg =
-  | { t: 'move'; x: number; z: number; ry: number }
+  /**
+   * `v: 'auto'` says the sender is driving one: they may then go 12 m/s (a 12 m burst) instead of walking
+   * pace, and the others draw an auto under them. Absent means on foot; any other value is a bad frame. A
+   * client can claim an auto it is not in; the cost is a 1.5x speed allowance, which is accepted.
+   */
+  | { t: 'move'; x: number; z: number; ry: number; v?: Vehicle }
   | { t: 'sit'; bench: string | null }
   | { t: 'say'; text: string }
   | { t: 'status'; text: string }
@@ -144,7 +158,8 @@ export type ServerMsg =
   /** Also sent again for someone already listed, when they come back on a new socket: treat it as an upsert. */
   | { t: 'join'; p: LivePerson }
   | { t: 'leave'; id: string }
-  | { t: 'moves'; m: [id: string, x: number, z: number, ry: number][] }
+  /** The fifth element is there only for someone driving an auto. */
+  | { t: 'moves'; m: [id: string, x: number, z: number, ry: number, v?: Vehicle][] }
   | { t: 'status'; id: string; text: string }
   | { t: 'bench'; bench: string; from: string; name: string; text: string; at: number }
   /**

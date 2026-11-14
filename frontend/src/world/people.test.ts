@@ -190,3 +190,37 @@ it('labels the nearest people with name and status, from a fixed pool, without t
   expect(host.children).toHaveLength(0)
   people.dispose()
 })
+
+const autos = (scene: THREE.Scene) =>
+  scene.children.find((c): c is THREE.InstancedMesh => c instanceof THREE.InstancedMesh)
+
+it('remote auto flag renders an auto, and the instance goes when the flag drops', () => {
+  const scene = new THREE.Scene()
+  const people = createPeople(scene)
+  const ride = { ...asha, v: 'auto' as const, x: 3, z: 4, ry: 1 }
+  people.apply(welcome([ride, ravi]))
+  people.update(1 / 60, HERE)
+  const mesh = autos(scene)!
+  expect(mesh).toBeDefined()
+  expect(mesh.count).toBe(1) // ravi is on foot
+  const m = new THREE.Matrix4()
+  mesh.getMatrixAt(0, m)
+  const at = new THREE.Vector3().setFromMatrixPosition(m)
+  expect([at.x, at.z]).toEqual([3, 4])
+  expect(people.list().find((p) => p.id === ride.id)!.v).toBe('auto')
+
+  // the flag drops with a move that carries none
+  people.apply({ t: 'moves', m: [[ride.id, 3, 4, 1]] })
+  people.update(1 / 60, HERE)
+  expect(mesh.count).toBe(0)
+  // and comes back with one that does
+  people.apply({ t: 'moves', m: [[ride.id, 3, 4, 1, 'auto']] })
+  people.update(1 / 60, HERE)
+  expect(mesh.count).toBe(1)
+
+  // someone out of draw range is not drawn in an auto either
+  people.update(1 / 60, { x: 500, z: 500 })
+  expect(mesh.count).toBe(0)
+  people.dispose()
+  expect(autos(scene)).toBeUndefined()
+})

@@ -26,3 +26,59 @@ it('setLook swaps the avatar in place, leaving exactly one body in the scene', (
   expect(scene.children).toHaveLength(0)
   controls.dispose()
 })
+
+function drivable(colliders: { minX: number; maxX: number; minZ: number; maxZ: number }[] = []) {
+  const scene = new THREE.Scene()
+  const controls = createControls(new EventTarget() as unknown as Window)
+  const player = createPlayer({
+    scene,
+    camera: new THREE.PerspectiveCamera(),
+    controls,
+    look: { skin: 0, outfit: 'pink', head: 'none' },
+    colliders,
+  })
+  return { scene, controls, player }
+}
+
+it('mounting puts an auto under the driver, and dismounting takes it away and sets them down', () => {
+  const { scene, controls, player } = drivable()
+  player.teleport(5, 5)
+  expect(scene.children).toHaveLength(1)
+  player.mount(5, 5, 0)
+  expect(player.driving()).toBe(true)
+  expect(scene.children).toHaveLength(2) // the avatar and the auto
+  const avatar = scene.children[0]!
+  expect(avatar.position.y).toBeGreaterThan(0) // seated
+  player.dismount({ x: 8, z: 5 })
+  expect(player.driving()).toBe(false)
+  expect(scene.children).toHaveLength(1)
+  expect(player.position()).toEqual({ x: 8, z: 5 })
+  expect(avatar.position.y).toBe(0)
+  player.dispose()
+  controls.dispose()
+})
+
+it('at the wheel the stick drives: forward goes where the auto faces, and a wall stops it', () => {
+  const wall = { minX: -10, maxX: 10, minZ: 30, maxZ: 32 }
+  const { controls, player } = drivable([wall])
+  player.teleport(0, 0)
+  player.mount(0, 0, 0) // facing +z
+  controls.setJoystick({ x: 0, z: 1 })
+  for (let i = 0; i < 90; i++) player.update(1 / 60)
+  const at = player.position()
+  expect(at.z).toBeGreaterThan(8) // well over walking pace (4 m/s) in 1.5 s
+  expect(Math.abs(at.x)).toBeLessThan(1e-9)
+  for (let i = 0; i < 300; i++) player.update(1 / 60)
+  // stopped a driving radius short of the wall, and never through it
+  expect(player.position().z).toBeCloseTo(30 - 1.2, 1)
+  player.dispose()
+  controls.dispose()
+})
+
+it('disposing while driving takes the auto away too', () => {
+  const { scene, controls, player } = drivable()
+  player.mount(0, 0, 0)
+  player.dispose()
+  expect(scene.children).toHaveLength(0)
+  controls.dispose()
+})

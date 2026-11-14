@@ -26,8 +26,17 @@ function slide(pos: number, delta: number, other: number, axis: 'x' | 'z', cs: A
  * least penetration the step may only point outward. Snapping to the faces instead would throw them through
  * to the far side, and simply ignoring the collider would let them walk through the building a frame at a
  * time.
+ *
+ * With `out` the answer is written there (it may be `from` itself) and returned: a frame loop then allocates
+ * nothing on an ordinary step.
  */
-export function moveWithCollision(from: Vec2, step: Vec2, colliders: AABB[], radius: number): Vec2 {
+export function moveWithCollision(
+  from: Vec2,
+  step: Vec2,
+  colliders: AABB[],
+  radius: number,
+  out?: Vec2,
+): Vec2 {
   let stepX = step.x
   let stepZ = step.z
   let solid = colliders
@@ -47,11 +56,18 @@ export function moveWithCollision(from: Vec2, step: Vec2, colliders: AABB[], rad
     // case a new list, so an ordinary step allocates nothing.
     if (solid === colliders) solid = colliders.filter((k) => !overlaps(from.x, from.z, radius, k))
   }
-  return slideAll(from, stepX, stepZ, solid, radius)
+  return slideAll(from, stepX, stepZ, solid, radius, out)
 }
 
 /** The step, in sub-steps of at most `radius`, sliding along every collider in the way. */
-function slideAll(from: Vec2, stepX: number, stepZ: number, colliders: AABB[], radius: number): Vec2 {
+function slideAll(
+  from: Vec2,
+  stepX: number,
+  stepZ: number,
+  colliders: AABB[],
+  radius: number,
+  out?: Vec2,
+): Vec2 {
   const len = Math.hypot(stepX, stepZ)
   const n = Math.max(1, Math.ceil(len / Math.max(radius, 1e-6)))
   const dx = stepX / n
@@ -67,5 +83,8 @@ function slideAll(from: Vec2, stepX: number, stepZ: number, colliders: AABB[], r
     const sz = i === n && Math.abs(tz - z) <= Math.abs(dz) * 1.0001 ? tz - z : dz
     z = slide(z, sz, x, 'z', colliders, radius)
   }
-  return { x, z }
+  if (!out) return { x, z }
+  out.x = x
+  out.z = z
+  return out
 }

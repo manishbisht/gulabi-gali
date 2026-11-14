@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { LivePerson, ServerMsg } from '../net/protocol'
 import { buildAvatar, lookFromWire } from '../player/avatar'
+import { buildAutoGeometry } from './props'
 import type { AvatarLook, Vec2 } from './types'
 
 /** How quickly a body catches up with where its person last said they were: a time constant, in seconds. */
@@ -16,6 +17,10 @@ export const DRAW_RANGE = 55
 /** The invisible tap target around each body, as for the characters. */
 const TAP_RADIUS = 0.75
 const TAP_HEIGHT = 2.2
+/** Most autos drawn under other people at once; more drivers than this go on foot in view. */
+const MAX_RIDES = 48
+/** A driver sits this far up in the auto's seat. */
+const SEAT_Y = 0.35
 /** For a look this build cannot draw (a newer client's outfit, say). */
 const PLAIN: AvatarLook = { skin: 2, outfit: 'sandstone', head: 'none' }
 
@@ -66,6 +71,22 @@ export function createPeople(scene: THREE.Object3D): People {
   let all: Entry[] = []
   let taps: THREE.Object3D[] = []
   let shadows = false
+  /** One mesh for every auto under a remote driver: merged geometry, one instance each, none until needed. */
+  const rides = new THREE.InstancedMesh(
+    buildAutoGeometry(),
+    new THREE.MeshLambertMaterial({ vertexColors: true }),
+    MAX_RIDES,
+  )
+  rides.name = 'remote-autos'
+  rides.count = 0
+  rides.frustumCulled = false // its instances move every frame; the bounds computed at the start would not follow
+  rides.castShadow = false
+  scene.add(rides)
+  const ride = new THREE.Matrix4()
+  const turned = new THREE.Quaternion()
+  const up = new THREE.Vector3(0, 1, 0)
+  const spot = new THREE.Vector3()
+  const unit = new THREE.Vector3(1, 1, 1)
   /** The viewer, as the server knows them: never drawn as someone else. */
   let self: string | null = null
 
@@ -144,12 +165,15 @@ export function createPeople(scene: THREE.Object3D): People {
           if (remove(m.id)) reindex()
           return
         case 'moves':
-          for (const [id, x, z, ry] of m.m) {
+          for (const [id, x, z, ry, v] of m.m) {
             const e = byId.get(id)
             if (!e) continue
             e.person.x = x
             e.person.z = z
             e.person.ry = ry
+            // a move without the flag is one on foot
+            if (v === 'auto') e.person.v = v
+            else delete e.person.v
           }
           return
         case 'status': {
@@ -166,8 +190,9 @@ export function createPeople(scene: THREE.Object3D): People {
       // Exponential easing: each frame closes the same share of the gap, so a body never passes its target.
       const k = Math.exp(-dt / FOLLOW_S)
       const range = DRAW_RANGE * DRAW_RANGE
+      let riding = 0
       for (let i = 0; i < all.length; i++) {
-        const { person, body } = all[i]!
+        const { person, body, avatar } = all[i]!
         const pos = body.position
         pos.x = person.x - (person.x - pos.x) * k
         pos.z = person.z - (person.z - pos.z) * k
@@ -175,7 +200,16 @@ export function createPeople(scene: THREE.Object3D): People {
         const dx = pos.x - from.x
         const dz = pos.z - from.z
         body.visible = dx * dx + dz * dz <= range
+        // a driver sits in an auto: one instance under them, and their body a little higher
+        const driving = body.visible && person.v === 'auto' && riding < MAX_RIDES
+        avatar.position.y = driving ? SEAT_Y : 0
+        if (driving) {
+          turned.setFromAxisAngle(up, body.rotation.y)
+          rides.setMatrixAt(riding++, ride.compose(spot.set(pos.x, 0, pos.z), turned, unit))
+        }
       }
+      rides.count = riding
+      rides.instanceMatrix.needsUpdate = true
     },
     pick(ray) {
       for (let i = 0; i < all.length; i++) all[i]!.body.updateMatrixWorld(true)
@@ -201,6 +235,10 @@ export function createPeople(scene: THREE.Object3D): People {
       byId.clear()
       all = []
       taps = []
+      rides.removeFromParent()
+      rides.geometry.dispose()
+      ;(rides.material as THREE.Material).dispose()
+      rides.dispose()
       tapGeometry.dispose()
       tapMaterial.dispose()
     },

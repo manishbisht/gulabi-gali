@@ -73,6 +73,8 @@ export function connectLive(opts: LiveOptions): LiveConn {
   let sentX = NaN
   let sentZ = NaN
   let sentRy = NaN
+  /** Whether the last move sent said "driving": getting in or out is news even if nobody moved. */
+  let sentV: string | undefined
 
   function raw(text: string) {
     try {
@@ -127,6 +129,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
       lastSend = Date.now()
       sentAt = -Infinity
       sentX = sentZ = sentRy = NaN
+      sentV = undefined
       armPing(PING_MS)
     }
     sock.onmessage = (e: MessageEvent) => {
@@ -164,11 +167,12 @@ export function connectLive(opts: LiveOptions): LiveConn {
         if (now - sentAt < moveMs) return
         const moved = Math.hypot(m.x - sentX, m.z - sentZ)
         // NaN (nothing sent yet) compares false both ways, so the first move always goes
-        if (moved <= MOVE_MIN_M && turn(m.ry, sentRy) <= MOVE_MIN_TURN) return
+        if (moved <= MOVE_MIN_M && turn(m.ry, sentRy) <= MOVE_MIN_TURN && m.v === sentV) return
         sentAt = now
         sentX = m.x
         sentZ = m.z
         sentRy = m.ry
+        sentV = m.v
       }
       raw(JSON.stringify(m))
     },

@@ -213,6 +213,41 @@ describe('DistrictDO', () => {
     expect(moves.m).toEqual([['dev:speedy-sona', 3.5, 4, 0]])
   })
 
+  it('an auto moves at 12 m/s with a 12 m burst; walking stays at 8, and v is validated strictly', async () => {
+    const a = await live('mi-road', { token: await resident('Auto Anil') })
+    const b = await live('mi-road', { token: await resident('Auto Watcher') })
+    const walker = await live('mi-road', { token: await resident('Walk Wasim') })
+    // the first point of a socket gets a full burst of its own pace
+    a.send({ t: 'move', x: 0, z: 0, ry: 0, v: 'auto' })
+    b.send({ t: 'move', x: 5, z: 0, ry: 0 })
+    walker.send({ t: 'move', x: 10, z: 0, ry: 0 })
+    for (const c of [a, b, walker]) await c.sync()
+    const from = b.mark()
+
+    // 10 m at once: past a walker's 8 m burst, inside an auto's 12 m
+    walker.send({ t: 'move', x: 20, z: 0, ry: 0 })
+    expect((await walker.next('error')).code).toBe('too-fast')
+    a.send({ t: 'move', x: 10, z: 0, ry: 0, v: 'auto' })
+    const moved = await b.next('moves', (m) => m.m.some(([id]) => id === 'dev:auto-anil'), from)
+    // the flag rides along, so the others can draw an auto under the driver
+    expect(moved.m.find(([id]) => id === 'dev:auto-anil')).toEqual(['dev:auto-anil', 10, 0, 0, 'auto'])
+
+    // and the auto's allowance still ends at 12 m
+    a.send({ t: 'move', x: 30, z: 0, ry: 0, v: 'auto' })
+    expect(await a.next('error')).toEqual({ t: 'error', code: 'too-fast', x: 10, z: 0, ry: 0 })
+
+    // anything but absent or 'auto' is a bad frame
+    for (const v of ['bike', null, true, 12]) a.raw(JSON.stringify({ t: 'move', x: 10, z: 0, ry: 0, v }))
+    await a.sync()
+    expect(a.all('error').filter((e) => e.code === 'invalid')).toHaveLength(4)
+
+    // stepping out drops the flag from the next relay
+    const out = b.mark()
+    a.send({ t: 'move', x: 10.5, z: 0, ry: 0 })
+    const after = await b.next('moves', (m) => m.m.some(([id]) => id === 'dev:auto-anil'), out)
+    expect(after.m.find(([id]) => id === 'dev:auto-anil')).toEqual(['dev:auto-anil', 10.5, 0, 0])
+  })
+
   it('a ghost cannot status/sit/say', async () => {
     const ghost = await live('university')
     await ghost.next('welcome')

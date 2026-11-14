@@ -247,3 +247,25 @@ it('pings exactly {"t":"ping"} every 10 s while idle', async () => {
   await vi.advanceTimersByTimeAsync(60_000)
   expect(ws.sent).toHaveLength(3)
 })
+
+it('getting into or out of an auto is news even when nobody moved, and the flag goes out with the move', async () => {
+  const { conn } = live(vi.fn(), vi.fn(), async () => 'dev.asha.1')
+  await vi.advanceTimersByTimeAsync(0)
+  const ws = last()
+  ws.open()
+  const moves = () => ws.sent.map((s) => JSON.parse(s)).filter((m) => m.t === 'move')
+  conn.send({ t: 'move', x: 1, z: 0, ry: 0 })
+  await vi.advanceTimersByTimeAsync(200)
+  conn.send({ t: 'move', x: 1, z: 0, ry: 0 }) // same place, nothing new
+  expect(moves()).toHaveLength(1)
+  conn.send({ t: 'move', x: 1, z: 0, ry: 0, v: 'auto' }) // mounted where they stood
+  expect(moves()).toHaveLength(2)
+  expect(moves()[1]).toEqual({ t: 'move', x: 1, z: 0, ry: 0, v: 'auto' })
+  await vi.advanceTimersByTimeAsync(200)
+  conn.send({ t: 'move', x: 1, z: 0, ry: 0, v: 'auto' })
+  expect(moves()).toHaveLength(2)
+  conn.send({ t: 'move', x: 1, z: 0, ry: 0 }) // and out again
+  expect(moves()).toHaveLength(3)
+  expect('v' in moves()[2]).toBe(false)
+  conn.close()
+})

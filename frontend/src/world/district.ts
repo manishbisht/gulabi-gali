@@ -3,7 +3,7 @@ import type { DistrictId } from '../net/protocol'
 import { buildBlock } from './kit'
 import { bake, merge } from './kit/parts'
 import { PALETTE } from './palette'
-import { buildProps } from './props'
+import { buildProps, type ParkedAutos } from './props'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
 /** The four districts, in the order the metro lists them. */
@@ -23,6 +23,8 @@ export interface District {
   root: THREE.Group
   /** Buildings, landmark footprints, props and an outer boundary. */
   colliders: AABB[]
+  /** The parked autos, which can be driven away. */
+  autos: ParkedAutos
   /** The tall colliders (buildings and landmarks): the chase camera pulls in rather than enter them. */
   occluders: AABB[]
   /** One sky/ground fill and one sun. The live sky drives both; the sun casts shadows only at tier 2. */
@@ -89,6 +91,7 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
     def,
     root,
     colliders,
+    autos: props.autos,
     occluders,
     lights: { hemi, sun },
     focus(p) {

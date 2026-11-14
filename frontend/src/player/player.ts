@@ -1,12 +1,16 @@
 import * as THREE from 'three'
 import { moveWithCollision } from '../world/collision'
 import type { AABB, AvatarLook, Vec2 } from '../world/types'
+import { buildAutoGeometry } from '../world/props'
 import { buildAvatar } from './avatar'
 import type { Controls } from './controls'
 import { createFollowCamera } from './camera'
+import { AUTO_RADIUS, createVehicle } from './vehicle'
 
 export const WALK_SPEED = 4
 export const PLAYER_RADIUS = 0.4
+/** The driver sits this far up in the auto's seat. */
+const SEAT_Y = 0.35
 
 interface Options {
   scene: THREE.Scene
@@ -26,9 +30,18 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
   const follow = createFollowCamera(camera, occluders)
   const fwd = new THREE.Vector3()
   let pos: Vec2 = { x: 0, z: 0 }
+  // driving: the vehicle holds the speed and the heading; this file holds the body, and the collisions
+  const vehicle = createVehicle('auto')
+  let driving = false
+  /** The auto under the driver, made on the first mount and kept for the player's life. */
+  let ride: THREE.Mesh | null = null
 
   function sync(dt: number) {
-    avatar.position.set(pos.x, 0, pos.z)
+    avatar.position.set(pos.x, driving ? SEAT_Y : 0, pos.z)
+    if (driving && ride) {
+      ride.position.set(pos.x, 0, pos.z)
+      ride.rotation.y = vehicle.heading
+    }
     follow.update(avatar.position, dt)
   }
   sync(0)
@@ -41,7 +54,36 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     teleport(x: number, z: number, ry?: number) {
       pos = { x, z }
       if (ry !== undefined) avatar.rotation.y = ry
+      // a correction from the server stops a driven auto where it is put
+      if (driving) vehicle.reset(x, z, avatar.rotation.y)
       sync(1) // dt of 1 s: the camera is effectively there too
+    },
+    driving: (): boolean => driving,
+    /** Gets into an auto standing at (x, z) and facing `ry`. */
+    mount(x: number, z: number, ry: number) {
+      if (driving) return
+      driving = true
+      pos = { x, z }
+      vehicle.reset(x, z, ry)
+      avatar.rotation.y = vehicle.heading
+      if (!ride) {
+        ride = new THREE.Mesh(buildAutoGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }))
+        ride.castShadow = true
+      }
+      scene.add(ride)
+      sync(1)
+    },
+    /** Where the auto stands now, for leaving it there. */
+    ridePose: () => ({ x: vehicle.x, z: vehicle.z, ry: vehicle.heading }),
+    /** Somewhere clear to step out, or null when boxed in (see `Vehicle.exitPoint`). */
+    exitPoint: (): Vec2 | null => (driving ? vehicle.exitPoint(colliders, PLAYER_RADIUS) : null),
+    /** Steps out at `to`, on foot again, facing the way the auto did. */
+    dismount(to: Vec2) {
+      if (!driving) return
+      driving = false
+      ride?.removeFromParent()
+      pos = { x: to.x, z: to.z }
+      sync(1)
     },
     /** Swaps the body for another look, standing where the old one did. */
     setLook(next: AvatarLook) {
@@ -53,8 +95,15 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       scene.add(avatar)
     },
     update(dt: number) {
-      const input = controls.move()
-      if (input.x !== 0 || input.z !== 0) {
+      if (driving) {
+        // the stick is the wheel and the pedal here, not a direction on the street
+        const want = vehicle.update(controls.drive(), dt)
+        moveWithCollision(pos, want, colliders, AUTO_RADIUS, pos)
+        vehicle.commit(pos.x, pos.z)
+        avatar.rotation.y = vehicle.heading
+      } else {
+        const input = controls.move()
+        if (input.x === 0 && input.z === 0) return sync(dt)
         // Input is relative to the screen: rotate it by where the camera is looking on the ground.
         camera.getWorldDirection(fwd)
         const flen = Math.hypot(fwd.x, fwd.z) || 1
@@ -69,6 +118,12 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       sync(dt)
     },
     dispose() {
+      if (ride) {
+        ride.removeFromParent()
+        ride.geometry.dispose()
+        ;(ride.material as THREE.Material).dispose()
+        ride = null
+      }
       scene.remove(avatar) // its geometry and material are shared with every other avatar
     },
   }

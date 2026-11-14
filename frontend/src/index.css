@@ -1163,3 +1163,19 @@ small.words-hint {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+/* Driving: the horn and the way out, beside the joystick that is the wheel and the pedal. */
+.drive-buttons {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.horn-button {
+  min-width: 52px;
+  padding: 0;
+  font-size: 1.5rem;
+  background: var(--cream);
+}

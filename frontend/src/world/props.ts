@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { PALETTE } from './palette'
 import { archOpening, bake, box, cylinder, merge } from './kit/parts'
-import type { AABB, PropSpec } from './types'
+import type { AABB, PropSpec, Vec2 } from './types'
 
 type Kind = PropSpec['kind']
 
@@ -99,6 +99,9 @@ const MODELS: Record<Kind, () => THREE.BufferGeometry> = {
     ]),
 }
 
+/** The auto's model on its own: a fresh geometry (and so the caller's to dispose) for a driven or remote auto. */
+export const buildAutoGeometry = (): THREE.BufferGeometry => MODELS.auto()
+
 /** Glowing bits, drawn apart from the vertex-coloured model so they can light up after dark. */
 const BULBS: Partial<Record<Kind, () => THREE.BufferGeometry>> = {
   lamp: () => new THREE.BoxGeometry(0.36, 0.45, 0.36).translate(0, 4.225, 0),
@@ -127,8 +130,27 @@ function turnedBox(s: PropSpec): AABB {
   return { minX: s.at.x - hx, maxX: s.at.x + hx, minZ: s.at.z - hz, maxZ: s.at.z + hz }
 }
 
+/**
+ * The parked autos, which can be driven off. Taking one hides its instance and parks its collider far
+ * away; leaving it where it was driven to puts both back there. Only this client's view: nobody else
+ * is told.
+ */
+export interface ParkedAutos {
+  /** The index of the nearest parked auto within `range` of `pos`, or -1. A driven one is not parked. */
+  nearest(pos: Vec2, range: number): number
+  /** Where parked auto `i` stands (x, z) and faces (radians about y, 0 faces +z). */
+  pose(i: number): { x: number; z: number; ry: number }
+  /** Auto `i` is driven away: hidden, and no longer in anyone's way. */
+  take(i: number): void
+  /** Auto `i` is left at this pose: drawn there, and solid there. */
+  leave(i: number, x: number, z: number, ry: number): void
+}
+
+/** Where a taken auto's collider waits: nowhere near anything. */
+const FAR_AWAY = 1e9
+
 /** Street furniture, one InstancedMesh (one draw call) per kind, plus a collider per prop. */
-export function buildProps(props: PropSpec[]): { group: THREE.Group; colliders: AABB[] } {
+export function buildProps(props: PropSpec[]): { group: THREE.Group; colliders: AABB[]; autos: ParkedAutos } {
   const group = new THREE.Group()
   const byKind = new Map<Kind, PropSpec[]>()
   for (const p of props) byKind.set(p.kind, [...(byKind.get(p.kind) ?? []), p])
@@ -162,5 +184,60 @@ export function buildProps(props: PropSpec[]): { group: THREE.Group; colliders: 
     }
     group.add(mesh)
   }
-  return { group, colliders: props.map(turnedBox) }
+  const colliders = props.map(turnedBox)
+  return { group, colliders, autos: parkedAutos(props, colliders, byKind.get('auto') ?? [], group) }
+}
+
+function parkedAutos(
+  props: PropSpec[],
+  colliders: AABB[],
+  list: PropSpec[],
+  group: THREE.Group,
+): ParkedAutos {
+  const mesh = group.children.find((c): c is THREE.InstancedMesh => c.name === 'auto')
+  // the collider of each auto, by its place in the instanced mesh (the order of `byKind`)
+  const solid = list.map((p) => colliders[props.indexOf(p)]!)
+  const spot = list.map((p) => ({ x: p.at.x, z: p.at.z, ry: -THREE.MathUtils.degToRad(p.rot ?? 0) }))
+  const taken = list.map(() => false)
+  const m = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const up = new THREE.Vector3(0, 1, 0)
+  const at = new THREE.Vector3()
+  const one = new THREE.Vector3(1, 1, 1)
+  const nothing = new THREE.Vector3(0, 0, 0)
+  const write = (i: number, shown: boolean) => {
+    const { x, z, ry } = spot[i]!
+    q.setFromAxisAngle(up, ry)
+    mesh?.setMatrixAt(i, m.compose(at.set(x, 0, z), q, shown ? one : nothing))
+    if (mesh) mesh.instanceMatrix.needsUpdate = true
+  }
+  return {
+    nearest(pos, range) {
+      let best = -1
+      let bestD = range
+      for (let i = 0; i < spot.length; i++) {
+        if (taken[i]) continue
+        const d = Math.hypot(spot[i]!.x - pos.x, spot[i]!.z - pos.z)
+        if (d <= bestD) {
+          best = i
+          bestD = d
+        }
+      }
+      return best
+    },
+    pose: (i) => spot[i]!,
+    take(i) {
+      taken[i] = true
+      write(i, false)
+      Object.assign(solid[i]!, { minX: FAR_AWAY, maxX: FAR_AWAY, minZ: FAR_AWAY, maxZ: FAR_AWAY })
+    },
+    leave(i, x, z, ry) {
+      taken[i] = false
+      spot[i] = { x, z, ry }
+      write(i, true)
+      mesh?.computeBoundingSphere() // it may stand outside the old one, and would be culled there
+      // the turn the collider is built with is in degrees, clockwise from above: the model turns by -rot
+      Object.assign(solid[i]!, turnedBox({ kind: 'auto', at: { x, z }, rot: (-ry * 180) / Math.PI }))
+    },
+  }
 }

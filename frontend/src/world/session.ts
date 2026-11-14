@@ -9,11 +9,13 @@ import { getPosters } from '../net/api'
 import { connectLive, type LiveConn, type LiveState } from '../net/live'
 import type { ClientMsg, DistrictId, FestivalId, LivePerson, PosterView, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
+import { closeAudio } from '../audio/horn'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
 import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
+import { createDriving, type Driving, type DriveHooks } from './driving'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
 import { createPeople, createPeopleLabels, type People } from './people'
@@ -96,6 +98,8 @@ export interface SessionHooks {
   bench?: BenchHooks
   /** The poster walls: what they tell React (see usePosters). Read with the presence token when there is one. */
   posters?: SessionPosterHooks
+  /** Driving a parked auto: what it tells React (see useDrive). */
+  drive?: DriveHooks
 }
 
 export interface CitySessionOptions {
@@ -141,6 +145,12 @@ export interface CitySession {
   stand(): void
   /** Says a line at the player's bench; false when not seated or the line is blank. */
   say(text: string): boolean
+  /** Gets into the parked auto in reach ("Auto chalao"), standing up from a bench first. */
+  mount(): void
+  /** Gets out of the auto, at a clear spot beside it; with none, stays in and says so. */
+  exitAuto(): void
+  /** The horn: only while driving, at most twice a second, and only heard here. */
+  honk(): void
   /** A poster this page just pinned goes up on its wall at once (the socket's word on it may lag). */
   pinned(p: PosterView): void
   /** One of this page's own posters came down. */
@@ -166,6 +176,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     presence: Presence | null
     sitting: Sitting | null
     posters: Posters | null
+    driving: Driving
   } | null = null
   let repaint = () => {}
   let disposed = false
@@ -230,11 +241,18 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           load: async (signal) => getPosters(id, (await hooks.presence?.token()) ?? null, signal),
         })
       : null
+    const driving = createDriving({
+      autos: district.autos,
+      player,
+      stand: () => sitting?.stand(),
+      hooks: hooks.drive ?? { near() {}, driving() {}, blocked() {} },
+    })
     const systems: DistrictSystem[] = [
       npcs,
       sky,
       createLights(stage, district),
-      createInteraction(canvas, stage, controls, district, npcs, people, sitting, posters, hooks),
+      { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
+      createInteraction(canvas, stage, controls, district, npcs, people, sitting, posters, driving, hooks),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
     ]
     if (posters)
@@ -265,7 +283,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, sitting, posters }
+    here = { district, player, systems, presence, sitting, posters, driving }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -336,6 +354,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sit: () => here?.sitting?.sit(),
     stand: () => here?.sitting?.stand(),
     say: (text) => here?.sitting?.say(text) ?? false,
+    mount: () => here?.driving.mount(),
+    exitAuto: () => here?.driving.exit(),
+    honk: () => here?.driving.honk(),
     pinned: (p) => here?.posters?.upsert(p),
     unpinned: (id) => here?.posters?.remove(id),
     refreshPosters: () => here?.posters?.refresh(),
@@ -343,6 +364,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       if (disposed) return
       disposed = true
       leave()
+      closeAudio()
       offFrame()
       entered = []
       left = []
@@ -421,6 +443,7 @@ function createInteraction(
   people: People | null,
   sitting: Sitting | null,
   posters: Posters | null,
+  drive: Driving,
   hooks: SessionHooks,
 ): DistrictSystem {
   const ray = new THREE.Raycaster()
@@ -431,6 +454,8 @@ function createInteraction(
   const onUp = (e: PointerEvent) => {
     const d = down
     down = null
+    // at the wheel nothing opens: not a character, a person or a poster
+    if (drive.driving()) return
     if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP || e.timeStamp - d.at > TAP_MS) return
     const r = canvas.getBoundingClientRect()
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
@@ -453,7 +478,12 @@ function createInteraction(
   canvas.addEventListener('pointerup', onUp)
   return {
     update(_dt, pos) {
-      const pressed = controls.interact()
+      const key = controls.interact()
+      // at the wheel E means get out, and nothing else hears it; Space is the horn
+      const driving = drive.driving()
+      if (controls.horn()) drive.honk()
+      if (driving && key) drive.exit()
+      const pressed = key && !driving
       const chatting = hooks.npcCard.isOpen()
       const meeting = hooks.personCard.isOpen()
       const card = chatting || meeting
@@ -479,10 +509,13 @@ function createInteraction(
         posters?.near() != null &&
         !hooks.posters!.isOpen()
       if (wall) hooks.posters!.compose()
+      // E by a parked auto drives it, unless anything above has the key
+      const auto = pressed && !card && !seated && !landmarkNear && !metro && !bench && !wall && drive.near()
+      if (auto) drive.mount()
       hooks.npcCard.step(
         pos,
         npcs,
-        pressed && !meeting && !bench && !wall && (chatting || !metro),
+        pressed && !meeting && !bench && !wall && !auto && (chatting || !metro),
         landmarkNear,
       )
       // a character that just opened (or closed on this very E) keeps the key from the person card
@@ -490,7 +523,12 @@ function createInteraction(
         hooks.personCard.step(
           pos,
           people,
-          pressed && !chatting && !bench && !wall && (meeting || (!metro && !hooks.npcCard.isOpen())),
+          pressed &&
+            !chatting &&
+            !bench &&
+            !wall &&
+            !auto &&
+            (meeting || (!metro && !hooks.npcCard.isOpen())),
           landmarkNear,
         )
     },
@@ -542,11 +580,13 @@ function createPresence(
   shadows(stage.quality)
   const offQuality = stage.onQuality(shadows)
   /** Reused for every frame's move: the socket copies what it sends. */
-  const move = { t: 'move', x: 0, z: 0, ry: 0 } satisfies ClientMsg
+  const move: Extract<ClientMsg, { t: 'move' }> = { t: 'move', x: 0, z: 0, ry: 0 }
   const sendMove = (pos: Vec2) => {
     move.x = pos.x
     move.z = pos.z
     move.ry = player.heading()
+    // at the wheel the others draw an auto under us, and the server allows the faster pace
+    move.v = player.driving() ? 'auto' : undefined
     conn.send(move)
   }
   const onMsg = (m: ServerMsg) => {
