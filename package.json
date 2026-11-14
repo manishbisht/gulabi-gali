@@ -1,0 +1,25 @@
+{
+  "name": "gulabi-gali",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w frontend",
+    "build": "npm run build -w frontend",
+    "lint": "npm run lint -w frontend",
+    "test": "npm run check:protocol && npm run test --workspaces --if-present",
+    "check:protocol": "node scripts/check-protocol.mjs",
+    "test:device": "DEVICE_PERF=1 npm exec -w frontend -- playwright test tests/device-perf.spec.ts"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": true,
+    "workerd@1.20260815.1": true,
+    "workerd@1.20260911.1": true
+  }
+}

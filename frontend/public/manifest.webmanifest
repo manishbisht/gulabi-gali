@@ -1,0 +1,10 @@
+{
+  "name": "Gulabi Gali — Jaipur ke log",
+  "short_name": "Gulabi Gali",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2a1d24",
+  "theme_color": "#2a1d24",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

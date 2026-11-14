@@ -1,0 +1,187 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys queue behind each other and never cancel; a pull request only checks,
+# so a newer push to it replaces the run still going.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('check-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Everything a change has to pass before either half of the site ships. It
+  # names no environment, so it runs on pull requests (and forks) without any
+  # secret, and both deploys below wait on it: a failing backend test keeps the
+  # frontend that talks to it from going out too.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check protocol copies match
+        run: npm run check:protocol
+
+      - name: Lint
+        run: npm run lint -w frontend
+
+      - name: Test frontend
+        run: npm run test -w frontend
+
+      - name: Test and typecheck backend
+        run: npm run test -w backend && npm run typecheck -w backend
+
+  # The browser half of the gate: every Playwright spec against
+  # the real Worker under `wrangler dev` and the built site under `vite preview`,
+  # both started by playwright.config.ts's webServer. No secrets, like `check`.
+  #
+  # It runs inside the official Playwright image, browsers and system fonts
+  # included. The tag must match @playwright/test in package-lock.json; a step
+  # below checks.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001 --ipc=host
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        # Wrangler needs Node 22 or later.
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check the image matches Playwright
+        # The image carries the browsers; a version bump without a new image
+        # would fail every test, so say so up front.
+        working-directory: frontend
+        run: |
+          installed="$(node -p "require('@playwright/test/package.json').version")"
+          if [ "$installed" != "1.63.0" ]; then
+            echo "::error::@playwright/test is $installed but the e2e image is v1.63.0: update the image tag in deploy.yml."
+            exit 1
+          fi
+
+      - name: Run end-to-end tests
+        working-directory: frontend
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        # --pass-with-no-tests until the first spec lands.
+        run: npx playwright test --pass-with-no-tests
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
+
+  build:
+    needs: [check, e2e]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Configure GitHub Pages
+        # Custom domain: jaipur.manishbisht.me, set in repository Settings > Pages.
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for GitHub Pages
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          VITE_API_URL: ${{ secrets.VITE_API_BASE_URL }}
+          # Stamped on client error reports, so a log line names the deploy it came from.
+          VITE_RELEASE: ${{ github.sha }}
+        run: npm run build -w frontend -- --base "${PAGES_BASE_PATH}/"
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
+
+  deploy-api:
+    needs: [check, e2e]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # The Cloudflare token is a secret of this environment, and a job only sees
+    # an environment's secrets when it names that environment.
+    environment: backend
+    # Mapped at job level so the deploy step can ask whether they exist: secrets
+    # are empty on forks and on repos that never configured Cloudflare.
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy Worker
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: backend
+        run: npx wrangler deploy
