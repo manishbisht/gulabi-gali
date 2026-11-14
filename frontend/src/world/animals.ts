@@ -56,6 +56,10 @@ export const COW_LINES = 4
 
 const FOLLOW_SPEED = 4.4 // a little over walking, so it keeps up
 const HOME_SPEED = 2.5
+/** A follower this long without headway (while well behind) is set down behind the player, in seconds. */
+const STUCK_SNAP = 2
+/** A tap picks an animal only this close to the player: nearer than a far one the ray happens to cross. */
+const PICK_RANGE = 3.5
 /** Room an animal needs: its body radius, and the margin for choosing places to wander to. */
 const RADIUS = 0.3
 const MARGIN = 0.45
@@ -248,8 +252,8 @@ export interface Animals {
   update(dt: number, player: Vec2): void
   /** The animal (visible, and not the follower) nearest within `range` of `pos`. */
   nearest(pos: Vec2, range: number): AnimalInfo | null
-  /** The animal a ray passes by, nearest first: for taps. */
-  pick(ray: THREE.Raycaster): AnimalInfo | null
+  /** The animal a ray passes by, nearest first, within reach of `near` (the player): for taps. */
+  pick(ray: THREE.Raycaster, near: Vec2): AnimalInfo | null
   /**
    * Calls the animal `id` (or the nearest) if it is within reach of `pos`. A dog or cat becomes the follower
    * and the last follower goes home; the cow answers with a line and stays.
@@ -355,6 +359,8 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       a.mode = 'follow'
       a.stuck = 0
     }
+    refreshVisible() // tier 0 hides every second animal, and who follows is shown whatever its slot
+    write()
     hooks?.following(a ? a.info : null)
   }
   const isVisible = (a: Animal) => quality > 0 || a === follower || a.slot % 2 === 0
@@ -391,22 +397,25 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
     }
   }
 
+  /** Sets `a` down just behind the player, on the side it came from. */
+  const snapBehind = (a: Animal, p: Vec2, dx: number, dz: number, d: number) => {
+    const ux = d > 0 ? dx / d : 0
+    const uz = d > 0 ? dz / d : -1
+    a.x = p.x
+    a.z = p.z
+    step.x = ux * FOLLOW_GAP
+    step.z = uz * FOLLOW_GAP
+    moveWithCollision(a, step, colliders, RADIUS, a)
+    a.moving = false
+    a.stuck = 0
+  }
+
   const stepFollow = (a: Animal, dt: number, p: Vec2) => {
     const dx = a.x - p.x
     const dz = a.z - p.z
     const d = Math.hypot(dx, dz)
-    if (d > SNAP_FROM) {
-      // far behind (a lift in an auto, a long stall): set down just behind the player, on the side it came from
-      const ux = d > 0 ? dx / d : 0
-      const uz = d > 0 ? dz / d : -1
-      a.x = p.x
-      a.z = p.z
-      step.x = ux * FOLLOW_GAP
-      step.z = uz * FOLLOW_GAP
-      moveWithCollision(a, step, colliders, RADIUS, a)
-      a.moving = false
-      return
-    }
+    // far behind (a lift in an auto, a long stall): set down behind the player
+    if (d > SNAP_FROM) return snapBehind(a, p, dx, dz, d)
     if (d < CROWDING) {
       // walked into: back off along the line from the player
       const ux = d > 0 ? dx / d : 0
@@ -419,7 +428,15 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       return
     }
     const speed = d > TROT_FROM ? FOLLOW_SPEED * 2 : FOLLOW_SPEED
+    const px = a.x
+    const pz = a.z
     a.moving = stepToward(a, p.x, p.z, FOLLOW_GAP, speed, dt, colliders, step)
+    // pinned on a wall while the player is round the corner: without headway for a couple of seconds, it is
+    // set down behind the player like one that fell too far behind
+    if (d > FOLLOW_GAP + 1 && Math.hypot(a.x - px, a.z - pz) < speed * dt * 0.3) {
+      a.stuck += dt
+      if (a.stuck > STUCK_SNAP) snapBehind(a, p, dx, dz, d)
+    } else a.stuck = 0
   }
 
   const stepWander = (a: Animal, dt: number) => {
@@ -460,7 +477,7 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
     }
   }
 
-  const write = () => {
+  function write() {
     const counts = { dog: 0, cat: 0, cow: 0 }
     for (const a of animals) {
       const i = counts[a.info.kind]++
@@ -492,6 +509,16 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
   return {
     update(dt, player) {
       for (const a of animals) {
+        if (!a.visible && a.mode !== 'follow') {
+          // hidden at tier 0: nothing to see, so no wandering or collision; one sent home is home
+          if (a.mode === 'home') {
+            a.x = a.home.x
+            a.z = a.home.z
+            a.mode = 'wander'
+          }
+          a.moving = false
+          continue
+        }
         if (a.mode === 'follow') stepFollow(a, dt, player)
         else if (a.mode === 'home') stepHome(a, dt)
         else stepWander(a, dt)
@@ -506,11 +533,11 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       }
     },
     nearest: (pos, range) => nearestAnimal(pos, range)?.info ?? null,
-    pick(ray) {
+    pick(ray, near) {
       let best: Animal | null = null
       let bestD = Infinity
       for (const a of animals) {
-        if (!a.visible) continue
+        if (!a.visible || Math.hypot(a.x - near.x, a.z - near.z) > PICK_RANGE) continue
         position.set(a.x, a.info.kind === 'cow' ? 0.9 : 0.35, a.z)
         const radius = a.info.kind === 'cow' ? TAP_RADIUS + 0.4 : TAP_RADIUS
         const d2 = ray.ray.distanceSqToPoint(position)

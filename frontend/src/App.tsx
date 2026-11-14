@@ -547,7 +547,8 @@ export default function App() {
                     {t('posterPin', lang)}
                   </button>
                 )}
-                {!drive.near &&
+                {animals.near &&
+                  !drive.near &&
                   !nearStation &&
                   !bench.near &&
                   !bench.seat &&
@@ -555,19 +556,15 @@ export default function App() {
                   !near &&
                   !sheetOpen &&
                   !card && (
-                    <>
-                      {animals.near && (
-                        <button type="button" className="metro-button animal-button" onClick={animals.call}>
-                          {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
-                        </button>
-                      )}
-                      {animals.following && (
-                        <button type="button" className="metro-button animal-button" onClick={animals.home}>
-                          {t('animalHome', lang)}
-                        </button>
-                      )}
-                    </>
+                    <button type="button" className="metro-button animal-button" onClick={animals.call}>
+                      {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                    </button>
                   )}
+                {animals.following && !bench.seat && !near && !sheetOpen && !card && (
+                  <button type="button" className="metro-button animal-button" onClick={animals.home}>
+                    {t('animalHome', lang)}
+                  </button>
+                )}
                 {bench.seat ? (
                   // seated, the bench panel holds the bottom; a tapped character or person shows over it
                   card || (

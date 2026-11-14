@@ -550,7 +550,7 @@ function createInteraction(
     }
     // last: an animal, unless a card is up, a landmark has the screen or the player is seated
     if (landmarkNear || hooks.npcCard.isOpen() || hooks.personCard.isOpen() || sitting?.seated()) return
-    const pet = animals.pick(ray)
+    const pet = animals.pick(ray, at)
     if (pet) animals.call(at, pet.id)
   }
   canvas.addEventListener('pointerdown', onDown)

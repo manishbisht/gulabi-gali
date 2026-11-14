@@ -110,6 +110,21 @@ describe('street animals', () => {
     a.dispose()
   })
 
+  it('a follower pinned on a wall is set down behind the player within a couple of seconds', () => {
+    // a long wall between the dog and the player, who walks round the end of it and stands still
+    const wallBox: AABB = { minX: 1.5, maxX: 2.5, minZ: -30, maxZ: 3 }
+    const { a } = make({ colliders: [wallBox] })
+    const me = { x: 1, z: 0 }
+    a.call(me)
+    const id = a.following()!
+    me.x = 6 // across the wall, the dog on its other face
+    me.z = 0
+    a.update(FRAME, me)
+    walk(a, me, me, 2.5)
+    expect(dist(where(a, id), me)).toBeLessThan(3)
+    a.dispose()
+  })
+
   it('never lets a follower into a collider', () => {
     const wallBox: AABB = { minX: 10, maxX: 12, minZ: -50, maxZ: 50 }
     const { a } = make({ colliders: [wallBox] })
@@ -245,6 +260,24 @@ describe('street animals', () => {
     expect(a.list().find((e) => e.id === id)!.visible).toBe(true)
     a.setQuality(2)
     expect(a.visibleCount()).toBe(7)
+    a.dispose()
+  })
+
+  it('stays at half at tier 0 after the follower is sent home', () => {
+    const { a } = make()
+    a.call({ x: 4, z: 0 }) // the dog in slot 1, hidden at tier 0 unless it follows
+    a.setQuality(0)
+    expect(a.visibleCount()).toBe(5)
+    a.sendHome()
+    expect(a.visibleCount()).toBe(4)
+    a.dispose()
+  })
+
+  it('does not pick an animal a tap crosses from far away', () => {
+    const { a } = make()
+    const ray = new THREE.Raycaster(new THREE.Vector3(0, 0.35, -20), new THREE.Vector3(0, 0, 1))
+    expect(a.pick(ray, { x: 0, z: 0 })?.kind).toBe('dog')
+    expect(a.pick(ray, { x: 0, z: -20 })).toBeNull()
     a.dispose()
   })
 
