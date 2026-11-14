@@ -77,7 +77,7 @@ describe('travelTo', () => {
     expect(swap).toHaveBeenLastCalledWith('mi-road')
   })
 
-  it('remembers nothing when the new district fails to load, and can try again', async () => {
+  it('remembers nothing when the new district fails to load, says so, and can try again', async () => {
     vi.useFakeTimers()
     const travel = mount()
     travel.bind(() => Promise.reject(new Error('offline')))
@@ -86,6 +86,9 @@ describe('travelTo', () => {
     await act(() => trip)
     expect(localStorage.getItem('gg-district')).toBeNull()
     expect(travel.fading).toBe(false)
+    expect(travel.failed).toBe('university')
+    await act(() => vi.advanceTimersByTimeAsync(5000))
+    expect(travel.failed).toBeNull() // the message goes away by itself
     const swap = vi.fn(async () => {})
     travel.bind(swap)
     const again = travel.travelTo('university')
@@ -93,6 +96,20 @@ describe('travelTo', () => {
     await act(() => again)
     expect(swap).toHaveBeenCalled()
   })
+})
+
+it('remembers nothing when the city closes mid-trip', async () => {
+  vi.useFakeTimers()
+  const travel = mount()
+  let arrive = () => {}
+  travel.bind(() => new Promise<void>((r) => (arrive = r)))
+  const trip = travel.travelTo('university')
+  await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+  travel.bind(null) // App unmounted while the district was loading
+  arrive()
+  await act(() => trip)
+  expect(localStorage.getItem('gg-district')).toBeNull()
+  expect(travel.failed).toBeNull()
 })
 
 describe('trackStation', () => {

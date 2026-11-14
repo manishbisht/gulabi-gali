@@ -38,6 +38,10 @@ export const STRINGS = {
   metro: { hi: 'Metro', en: 'Metro' },
   metroTitle: { hi: 'Kahan chalein?', en: 'Where to?' },
   metroClose: { hi: 'Band karo', en: 'Close' },
+  metroFailed: {
+    hi: '{place} tak nahi pahunch paaye. Dobara try karo.',
+    en: "Couldn't get to {place}. Try again.",
+  },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

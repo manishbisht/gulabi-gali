@@ -18,6 +18,7 @@ import { createNpcs } from './world/npcs'
 import { useNpcCard } from './world/useNpcCard'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
+import { DISTRICT_NAMES } from './world/districtNames'
 import { savedDistrict, useTravel } from './world/useTravel'
 import type { DistrictId, FestivalId } from './net/protocol'
 import type { DistrictDef } from './world/types'
@@ -65,6 +66,7 @@ export default function App() {
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
   const {
     fading,
+    failed: travelFailed,
     nearStation,
     sheetOpen,
     openSheet,
@@ -95,17 +97,19 @@ export default function App() {
     let cancelled = false
     let leave = () => {}
 
-    /** Leaves the district the player is in for `id`, standing them at its spawn or (by metro) its station. */
+    /**
+     * Loads `id`, then (only once it is in) leaves the district the player is in for it, standing them at
+     * its spawn or (by metro) its station. If it cannot be loaded, the old district carries on and this
+     * rejects; with no old district, the HUD says the city failed to open.
+     */
     const enter = async (id: DistrictId, at: 'spawn' | 'station') => {
-      leave()
-      leave = () => {}
-      setPlace('loading')
       const district = await loadDistrict(id).catch(() => null)
       if (cancelled) return district?.dispose()
       if (!district) {
-        setPlace('failed')
+        if (at === 'spawn') setPlace('failed')
         throw new Error(`Could not load ${id}`)
       }
+      leave()
       stage.scene.add(district.root)
       // Shadows are the first thing a slow phone gives up.
       const shadows = (q: QualityTier) => void (district.lights.sun.castShadow = q === 2)
@@ -269,11 +273,18 @@ export default function App() {
         lang={lang}
         onLang={setLang}
         top={
-          toast && (
-            <div className="toast" role="status">
-              {toast}
-            </div>
-          )
+          <>
+            {toast && (
+              <div className="toast" role="status">
+                {toast}
+              </div>
+            )}
+            {travelFailed && (
+              <div className="toast" role="status">
+                {t('metroFailed', lang, { place: DISTRICT_NAMES[travelFailed][lang] })}
+              </div>
+            )}
+          </>
         }
         bottom={
           <>

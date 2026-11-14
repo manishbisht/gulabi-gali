@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DistrictId } from '../net/protocol'
 import { storage } from '../storage'
 import { DISTRICTS } from './district'
@@ -9,6 +9,8 @@ const KEY = 'gg-district'
 export const STATION_RANGE = 4
 /** How long the screen takes to fade to black before the district is swapped; the CSS fade matches. */
 export const FADE_MS = 300
+/** How long the "couldn't get there" message stays up. */
+const FAILED_MS = 4000
 
 /** Where the city reopens: the district last travelled to, or the Walled City. */
 export function savedDistrict(): DistrictId {
@@ -16,7 +18,10 @@ export function savedDistrict(): DistrictId {
   return DISTRICTS.find((d) => d === id) ?? 'walled-city'
 }
 
-/** Disposes the district the player is in, loads `id` and stands them at its station. */
+/**
+ * Loads `id` and, once it is in, swaps it for the district the player is in, standing them at its
+ * station. Rejects, with the old district still running, if `id` cannot be loaded.
+ */
 export type Swap = (id: DistrictId) => Promise<void>
 
 /**
@@ -27,6 +32,10 @@ export function useTravel() {
   const [fading, setFading] = useState(false)
   const [nearStation, setNearStation] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
+  /** Where the last trip was headed, if its district could not be loaded. Clears itself. */
+  const [failed, setFailed] = useState<DistrictId | null>(null)
+  const failedTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(failedTimer.current), [])
   const swap = useRef<Swap | null>(null)
   const busy = useRef(false)
   const nearRef = useRef(false)
@@ -42,7 +51,10 @@ export function useTravel() {
 
   const bind = useCallback((fn: Swap | null) => void (swap.current = fn), [])
 
-  /** A trip already under way ignores further requests. A failed swap reports itself; nothing is saved. */
+  /**
+   * A trip already under way ignores further requests. Only a trip that arrives is remembered: not one
+   * whose district failed to load (that raises `failed`), nor one cut short by the city closing.
+   */
   const travelTo = useCallback(
     async (id: DistrictId) => {
       const go = swap.current
@@ -50,12 +62,18 @@ export function useTravel() {
       busy.current = true
       showSheet(false)
       setFading(true)
+      setFailed(null)
+      const bound = () => swap.current === go
       try {
         await new Promise((r) => setTimeout(r, FADE_MS))
+        if (!bound()) return
         await go(id)
-        storage.set(KEY, id)
+        if (bound()) storage.set(KEY, id)
       } catch {
-        // the swap has already shown its failure; stay unsaved so a reload opens where it worked
+        if (!bound()) return
+        setFailed(id)
+        clearTimeout(failedTimer.current)
+        failedTimer.current = setTimeout(() => setFailed(null), FAILED_MS)
       } finally {
         busy.current = false
         setFading(false)
@@ -82,5 +100,5 @@ export function useTravel() {
     [showSheet],
   )
 
-  return { fading, nearStation, sheetOpen, openSheet, closeSheet, travelTo, trackStation, bind }
+  return { fading, failed, nearStation, sheetOpen, openSheet, closeSheet, travelTo, trackStation, bind }
 }
