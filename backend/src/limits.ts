@@ -175,15 +175,31 @@ export async function ipLimit(
   return (await overLimit(env, limiter, request)) ? ipRateLimited() : null
 }
 
+/** A per-address allowance counted in D1, for windows the bindings cannot take (see above). */
+export interface IpWindow {
+  perWindow: number
+  windowMs: number
+  bucket: string
+}
+
+/** One use of `limit` by `request`'s address, counted under `ip:<address>`. Null while within it, else the 429. */
+export async function ipWindowLimit(
+  env: Env,
+  request: Request,
+  limit: IpWindow,
+  now = Date.now(),
+): Promise<Response | null> {
+  const key = clientKey(request, env)
+  if (key === null) return null
+  const { perWindow, windowMs, bucket } = limit
+  return (await allow(env, `ip:${key}`, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
+}
+
 export const INVITE_IP_LIMIT = { perWindow: 10, windowMs: 3600_000, bucket: 'redeem-ip' } as const
 
 /** Invite redemptions per address, 10 an hour, in addition to the per-person limit. Null while within it. */
-export async function inviteIpLimit(env: Env, request: Request, now = Date.now()): Promise<Response | null> {
-  const key = clientKey(request, env)
-  if (key === null) return null
-  const { perWindow, windowMs, bucket } = INVITE_IP_LIMIT
-  return (await allow(env, `ip:${key}`, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
-}
+export const inviteIpLimit = (env: Env, request: Request, now = Date.now()): Promise<Response | null> =>
+  ipWindowLimit(env, request, INVITE_IP_LIMIT, now)
 
 /**
  * A moderator's mute (`users.muted_until`, ms): while it lasts, everything a person writes for others to read

@@ -1,5 +1,6 @@
 import { DISTRICT_IDS } from './district'
 import type { Env } from './env'
+import { GATE_NAME } from './gate'
 import { floating, type Later } from './inbox'
 import { firstName } from './names'
 import type {
@@ -429,12 +430,19 @@ async function listHidden(env: Env): Promise<Response> {
 }
 
 /**
- * `GET /api/admin/stats`: each district's live sockets (null for one that could not be asked), the open
- * reports and the hidden. `queue` (people waiting for room) is null until the city has a cap (Task 7).
+ * `GET /api/admin/stats`: each district's live sockets (null for one that could not be asked), everyone the
+ * cap counts and everyone waiting for room (null when the gate could not be asked), the open reports and the
+ * hidden.
  */
 async function stats(env: Env): Promise<Response> {
-  const [counts, open, hidden] = await Promise.all([
+  const [counts, gate, open, hidden] = await Promise.all([
     Promise.allSettled(DISTRICT_IDS.map((id) => env.DISTRICT.get(env.DISTRICT.idFromName(id)).counts())),
+    env.GATE.get(env.GATE.idFromName(GATE_NAME))
+      .stats()
+      .catch((err: unknown) => {
+        console.error('admin: gate stats failed', err)
+        return null
+      }),
     env.DB.prepare("SELECT COUNT(*) AS n FROM reports WHERE state = 'open'").first<{ n: number }>(),
     env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE hidden = 1').first<{ n: number }>(),
   ])
@@ -445,7 +453,8 @@ async function stats(env: Env): Promise<Response> {
         ? { id, residents: c.value.residents, ghosts: c.value.ghosts }
         : { id, residents: null, ghosts: null }
     }),
-    queue: null,
+    live: gate?.live ?? null,
+    queue: gate?.queue ?? null,
     openReports: open?.n ?? 0,
     hidden: hidden?.n ?? 0,
   }

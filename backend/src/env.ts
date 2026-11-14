@@ -1,4 +1,5 @@
 import type { DistrictDO } from './district'
+import type { GateDO } from './gate'
 import type { InboxDO } from './inbox'
 
 export interface Env {
@@ -6,6 +7,8 @@ export interface Env {
   DB: D1Database
   DISTRICT: DurableObjectNamespace<DistrictDO>
   INBOX: DurableObjectNamespace<InboxDO>
+  /** The city's one cap on residents (see `GateDO`), named `GATE_NAME`. */
+  GATE: DurableObjectNamespace<GateDO>
   /** Per-address Workers Rate Limiting bindings (wrangler.jsonc `ratelimits`); absent ones limit nothing. */
   SOCKETS_LIMITER?: RateLimit
   SIGNIN_LIMITER?: RateLimit
@@ -24,4 +27,6 @@ export interface Env {
   MAX_DISTRICT_SOCKETS?: string
   /** The most sockets one district holds from one address (an IPv6 /64). A number; 24 when unset. */
   MAX_IP_SOCKETS?: string
+  /** The most residents seen at once across the city (see `GateDO`). A number; 300 when unset. */
+  MAX_LIVE?: string
 }

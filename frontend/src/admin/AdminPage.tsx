@@ -36,6 +36,7 @@ function Stats({ stats, lang }: { stats: AdminStats; lang: Lang }) {
       <p>
         <span>{t('adminOpenReports', lang, { n: stats.openReports })}</span>
         <span>{t('adminHiddenCount', lang, { n: stats.hidden })}</span>
+        {stats.live !== null && <span>{t('adminLiveTotal', lang, { n: stats.live })}</span>}
         {stats.queue !== null && <span>{t('adminWaiting', lang, { n: stats.queue })}</span>}
       </p>
     </section>

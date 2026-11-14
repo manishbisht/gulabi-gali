@@ -41,6 +41,8 @@ CREATE INDEX matches_b ON matches(b);
 CREATE TABLE invites (
   code TEXT PRIMARY KEY, owner TEXT NOT NULL, used_by TEXT, used_at INTEGER, created_at INTEGER NOT NULL);
 CREATE INDEX invites_owner ON invites(owner);
+-- "Redeemed one in the last 24 hours?", asked on every resident's district connect (it skips the line for room).
+CREATE INDEX invites_used_by ON invites(used_by, used_at) WHERE used_by IS NOT NULL;
 
 -- A report: `reporter` says `target_id` (always a person's id; for a bench or a chat, whoever it is about)
 -- did wrong, in a `target_kind` place. `evidence` is JSON the server put together itself (a profile

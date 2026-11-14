@@ -101,6 +101,11 @@ numbered files in `backend/migrations/`, applied with the same command.
    > local name-only sign-in. The Worker ignores `dev:` ids unless `DEV_AUTH=1` as a second guard, but the
    > secret must only ever hold `clerk:` ids.
 
+   **The cap and the waitlist.** `MAX_LIVE` in `backend/wrangler.jsonc` (default `"300"`) is how many residents
+   the whole city shows at once; anyone more waits in line as a ghost and can leave an email. No email is ever
+   sent by the site: when there is room, download the list from the admin page (Download waitlist CSV) and
+   write to people yourself. Raise the cap by editing the var and deploying.
+
 6. **A production instance needs DNS.** Clerk's development instance works anywhere, but a production
    instance only starts once its DNS records are in place: Clerk, Configure, Domains lists them. They are the
    **Frontend API** `CNAME` (`clerk.gulabi-gali.manishbisht.me` pointing at Clerk), the **email DKIM**

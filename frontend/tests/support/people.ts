@@ -39,11 +39,15 @@ export async function ghost(browser: Browser, options?: BrowserContextOptions): 
 /** The dev login's id for a name: `dev:` and the name's slug. */
 const devId = (name: string) => `dev:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
-/** A new browser context, dev-logged in under a fresh name, profile finished: visible to everyone. */
+/**
+ * A new browser context, dev-logged in under a fresh name, profile finished: visible to everyone, unless
+ * `visible` is false (a full city puts them in line instead, and this waits only for the profile to save).
+ */
 export async function resident(
   browser: Browser,
   first: string,
   options?: BrowserContextOptions,
+  { visible = true }: { visible?: boolean } = {},
 ): Promise<Resident> {
   // Unique per run: the local D1 outlives the test run, and the live districts outlive a test.
   const name = `${first}${Date.now() % 100000}${made++}`
@@ -57,7 +61,8 @@ export async function resident(
   await sheet.getByLabel('Main 18 saal ya usse bada/badi hoon').check()
   await sheet.getByLabel('Sab ki izzat karunga/karungi. Koi harassment, hate ya spam nahi.').check()
   await sheet.getByRole('button', { name: 'Save karo' }).click()
-  await expect(page.getByText('Jaipur tumhe dekh sakta hai')).toBeVisible()
+  if (visible) await expect(page.getByText('Jaipur tumhe dekh sakta hai')).toBeVisible()
+  else await expect(sheet).toBeHidden()
   return { page, id: devId(name), name }
 }
 

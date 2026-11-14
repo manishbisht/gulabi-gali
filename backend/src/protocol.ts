@@ -134,7 +134,13 @@ export type ClientMsg =
   | { t: 'ping' }
 
 export type ServerMsg =
-  | { t: 'welcome'; you: { id: string | null; visible: boolean }; people: LivePerson[] }
+  /**
+   * `queued`: the city has as many residents as it may (`MAX_LIVE`), so this resident waits in line as a ghost,
+   * at that position (1 is next). Sent again, with `visible` true, when they get in.
+   */
+  | { t: 'welcome'; you: { id: string | null; visible: boolean; queued?: number }; people: LivePerson[] }
+  /** A waiting resident's new position in line. */
+  | { t: 'queued'; position: number }
   /** Also sent again for someone already listed, when they come back on a new socket: treat it as an upsert. */
   | { t: 'join'; p: LivePerson }
   | { t: 'leave'; id: string }
@@ -325,9 +331,14 @@ export interface AdminHidden {
   reports: Omit<AdminReport, 'target' | 'evidence' | 'note'>[]
 }
 
-/** `GET /api/admin/stats`. A district that could not be asked has null counts; `queue` is null until the gate exists. */
+/**
+ * `GET /api/admin/stats`. A district that could not be asked has null counts. `live` is everyone the city's cap
+ * counts (residents across districts, one each), `queue` everyone waiting for room; both null when the gate
+ * could not be asked.
+ */
 export interface AdminStats {
   districts: { id: DistrictId; residents: number | null; ghosts: number | null }[]
+  live: number | null
   queue: number | null
   openReports: number
   hidden: number

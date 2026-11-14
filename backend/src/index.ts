@@ -6,6 +6,7 @@ import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
 import { purgeEvidence } from './evidence'
+import { GATE_NAME, joinWaitlist } from './gate'
 import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, muteGate, purgeCounters, readLimit } from './limits'
@@ -109,6 +110,18 @@ async function bootstrapLimit(env: Env, request: Request, userId: string): Promi
   return (await userExists(env, userId)) ? null : ipLimit(env, env.SIGNIN_LIMITER, request)
 }
 
+/**
+ * `POST /api/dev/gate {maxLive, clear?}`, DEV_AUTH only: sets the city's cap (null: back to `MAX_LIVE`) and,
+ * with `clear`, empties the gate. For the e2e run, whose other specs need more than one resident at a time.
+ */
+async function devGate(env: Env, raw: unknown): Promise<Response> {
+  const { maxLive, clear } = (raw ?? {}) as { maxLive?: unknown; clear?: unknown }
+  if (!(maxLive === null || (typeof maxLive === 'number' && Number.isInteger(maxLive) && maxLive >= 0)))
+    return Response.json({ error: 'invalid' }, { status: 400 })
+  const gate = env.GATE.get(env.GATE.idFromName(GATE_NAME))
+  return Response.json(await gate.configure({ maxLive, clear: clear === true }))
+}
+
 async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
   const { method } = request
   const { pathname } = url
@@ -130,6 +143,14 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
       return Response.json({ error: 'not found' }, { status: 404 })
     return devVerify(env, await readJson(request))
   }
+  if (pathname === '/api/dev/gate') {
+    if (env.DEV_AUTH !== '1' || method !== 'POST')
+      return Response.json({ error: 'not found' }, { status: 404 })
+    return devGate(env, await readJson(request))
+  }
+  // No sign-in: someone the full city turned away may have no account (see `joinWaitlist`).
+  if (pathname === '/api/waitlist' && method === 'POST')
+    return joinWaitlist(env, request, await readJson(request))
   const user = await resolveUser(request, env)
   // Before the 401: signed out, signed in or not an admin, the console is a plain 404 (see `handleAdmin`).
   if (pathname.startsWith('/api/admin/')) return handleAdmin(request, env, url, user, later)
@@ -210,6 +231,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
 
 export { DistrictDO } from './district'
 export { InboxDO } from './inbox'
+export { GateDO } from './gate'
 
 export default {
   /** `ctx` is missing only when a test calls this directly; then notices just run (see `floating`). */

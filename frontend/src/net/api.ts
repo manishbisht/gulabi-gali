@@ -342,3 +342,23 @@ export async function sendReport(token: string, input: ReportInput): Promise<Rep
     return { ok: false, error: 'failed' }
   }
 }
+
+/** `invalid`: not an email address. `failed` covers the rest (a 429 included): try again later. */
+export type WaitlistOutcome = 'ok' | 'invalid' | 'failed'
+
+/**
+ * Leaves an email for when the full city has room. No sign-in: someone waiting may have no account. Already
+ * listed or not, a good address is `ok` (the server never says which). Never rejects.
+ */
+export async function joinWaitlist(email: string): Promise<WaitlistOutcome> {
+  try {
+    const res = await fetch(`${API_BASE}/api/waitlist`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: email.trim() }),
+    })
+    return res.ok ? 'ok' : res.status === 400 ? 'invalid' : 'failed'
+  } catch {
+    return 'failed'
+  }
+}

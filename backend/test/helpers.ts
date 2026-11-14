@@ -1,5 +1,5 @@
 import { env, SELF } from 'cloudflare:test'
-import { expect, vi } from 'vitest'
+import { afterAll, expect, vi } from 'vitest'
 import type { ClientMsg, DistrictId, InboxMsg, ServerMsg } from '../src/protocol'
 
 /** Long enough for a 100 ms move batch under a busy suite, short enough to fail fast. */
@@ -135,6 +135,19 @@ export async function live(district: DistrictId, opts: { token?: string } = {}):
 export function closeAll(): void {
   for (const client of open.splice(0)) client.close()
 }
+
+/** How long a file's end waits for the districts to finish with the sockets its last test closed. */
+const SETTLE_MS = 250
+
+/**
+ * A socket closed by the last test reaches its district, and that district's release reaches the gate, after
+ * the test has finished; an object woken while the file's runtime shuts down is reported as an unhandled
+ * error. So every file that uses these helpers waits a moment at its end.
+ */
+afterAll(async () => {
+  closeAll()
+  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
+})
 
 export function openInbox(
   opts: { token?: string; headers?: Record<string, string> } = {},

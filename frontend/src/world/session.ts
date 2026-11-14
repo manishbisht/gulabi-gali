@@ -83,6 +83,11 @@ export interface SessionHooks {
     replaced(on: boolean): void
     /** The socket was closed for a ban (4004): the page should ask the server who it is now. */
     banned?(): void
+    /**
+     * The line for room in a full city: on every welcome (`visible` as it says, `position` null unless this
+     * resident waits as a ghost) and on every new position (see useQueue).
+     */
+    queued?(position: number | null, visible: boolean): void
   }
   /** Tapris and benches: what the sitting system tells React (see useBench). Needs `presence`. */
   bench?: BenchHooks
@@ -474,9 +479,11 @@ function createPresence(
   }
   const onMsg = (m: ServerMsg) => {
     if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
+    if (m.t === 'queued') return hooks.queued?.(m.position, false)
     people.apply(m)
     sitting?.apply(m)
     if (m.t === 'welcome') {
+      hooks.queued?.(m.you.queued ?? null, m.you.visible)
       hooks.replaced(false)
       sitting?.reset() // a new socket: the server stood the old one up
       sendMove(player.position())

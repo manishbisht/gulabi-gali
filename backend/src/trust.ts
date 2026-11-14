@@ -10,6 +10,8 @@ export const CODE_LENGTH = 8
 export const CODES_HELD = 2
 /** Crockford base32: no I, L, O or U, so a code read aloud or off a screenshot is hard to get wrong. */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+/** Someone who redeemed an invite this recently skips the line for room in the city (see `GateDO`). */
+export const INVITE_SKIP_MS = 24 * 3600_000
 /** Redeeming is guessable, so each person gets this many attempts (right or wrong) per window. */
 export const REDEEM_LIMIT = { perWindow: 10, windowMs: 3600_000, bucket: 'redeem' } as const
 
@@ -71,6 +73,14 @@ export async function markVerified(
   await issueCodes(env, userId)
   later(refreshUser(env, userId, 'profile'))
   return true
+}
+
+/** Whether `userId` redeemed an invite in the last `INVITE_SKIP_MS`. */
+export async function recentInvite(env: Env, userId: string, now = Date.now()): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 AS x FROM invites WHERE used_by = ? AND used_at > ? LIMIT 1')
+    .bind(userId, now - INVITE_SKIP_MS)
+    .first()
+  return row !== null
 }
 
 export async function isVerified(env: Env, userId: string): Promise<boolean> {

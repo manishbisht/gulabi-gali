@@ -232,7 +232,7 @@ function openLive(token: () => Promise<string | null> = async () => null) {
   const bubbleHost = document.body.appendChild(document.createElement('div'))
   const h: SessionHooks = {
     ...hooks(),
-    presence: { token, replaced: vi.fn() },
+    presence: { token, replaced: vi.fn(), queued: vi.fn() },
     bench: { near: vi.fn(), seated: vi.fn(), line: vi.fn(), refused: vi.fn() },
   }
   const session = createCitySession({
@@ -280,6 +280,26 @@ it('says where it stands right after welcome, and snaps back when a step was too
   expect(session.player()!.heading()).toBe(1)
   ws.onclose?.({ code: 4001 }) // another tab of the same person took over
   expect(h.presence!.replaced).toHaveBeenLastCalledWith(true)
+  session.dispose()
+})
+
+it('tells the page where it waits in line for room, and when it gets in', async () => {
+  const { session, hooks: h } = openLive(async () => 'dev.asha.1')
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  const queued = h.presence!.queued as ReturnType<typeof vi.fn>
+  ws.say({ t: 'welcome', you: { id: 'dev:asha', visible: false, queued: 3 }, people: [] })
+  expect(queued).toHaveBeenLastCalledWith(3, false)
+  ws.say({ t: 'queued', position: 2 })
+  expect(queued).toHaveBeenLastCalledWith(2, false)
+  ws.say({ t: 'welcome', you: { id: 'dev:asha', visible: true }, people: [] })
+  expect(queued).toHaveBeenLastCalledWith(null, true)
+  // A welcome always says it, so a reconnect as a ghost (signed out) clears the line too.
+  ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [] })
+  expect(queued).toHaveBeenLastCalledWith(null, false)
+  expect(queued).toHaveBeenCalledTimes(4)
   session.dispose()
 })
 

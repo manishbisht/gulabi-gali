@@ -24,11 +24,14 @@
     "bindings": [
       { "name": "DISTRICT", "class_name": "DistrictDO" },
       { "name": "INBOX", "class_name": "InboxDO" },
+      // One object for the whole city: the cap on residents and the line for room (src/gate.ts).
+      { "name": "GATE", "class_name": "GateDO" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["DistrictDO"] },
     { "tag": "v2", "new_sqlite_classes": ["InboxDO"] },
+    { "tag": "v3", "new_sqlite_classes": ["GateDO"] },
   ],
   // Per-address brakes (see src/limits.ts; loopback never counts). Periods may only be 10 or 60 seconds, so the
   // hourly invite limit is counted in D1 instead. `namespace_id` is any integer unique within the account.
@@ -42,6 +45,7 @@
     { "name": "WRITES_LIMITER", "namespace_id": "51003", "simple": { "limit": 300, "period": 60 } },
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
-  // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64.
-  "vars": { "MAX_DISTRICT_SOCKETS": "400", "MAX_IP_SOCKETS": "24" },
+  // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64; and the most
+  // residents seen at once across the city (anyone more waits in line as a ghost, see src/gate.ts).
+  "vars": { "MAX_DISTRICT_SOCKETS": "400", "MAX_IP_SOCKETS": "24", "MAX_LIVE": "300" },
 }

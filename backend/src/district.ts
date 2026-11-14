@@ -4,8 +4,10 @@ import { allowedOrigin } from './cors'
 import type { Env } from './env'
 import benches from './benches.json'
 import { wordsOk } from './filter/server'
+import { GATE_NAME, type Admit, type GateDO } from './gate'
 import { cleanText, loadResident, MAX_STATUS, toPublic } from './profiles'
 import type { RefreshWhy } from './refresh'
+import { recentInvite } from './trust'
 import {
   BENCH_SEATS,
   LIVE_CLOSE,
@@ -49,6 +51,8 @@ export interface Who {
   person: PublicPerson | null
   /** The address the socket came from (`CF-Connecting-IP`), for the per-address cap; null when unknown. */
   ip: string | null
+  /** A resident who redeemed an invite in the last 24 hours: they skip the line for room (see `GateDO`). */
+  skip?: true
 }
 
 /** A district holds at most this many sockets, ghosts and residents alike, unless `MAX_DISTRICT_SOCKETS` says. */
@@ -145,9 +149,15 @@ export async function openDistrict(request: Request, env: Env, id: string): Prom
   const headers = new Headers(request.headers)
   headers.delete(WHO_HEADER)
   const user = await resolveUser(new Request(request.url, { headers }), env)
-  // A database hiccup makes this visit a ghost one rather than no visit at all.
-  const person = user ? await loadResident(env, user.id).catch(() => null) : null
+  // A database hiccup makes this visit a ghost one rather than no visit at all (and a lost invite, one in line).
+  const [person, skip] = user
+    ? await Promise.all([
+        loadResident(env, user.id).catch(() => null),
+        recentInvite(env, user.id).catch(() => false),
+      ])
+    : [null, false]
   const who: Who = { userId: user?.id ?? null, person, ip: request.headers.get('CF-Connecting-IP') }
+  if (person && skip) who.skip = true
   // A fresh request: nothing of the client's (its token included) goes past this point but the upgrade.
   return env.DISTRICT.get(env.DISTRICT.idFromName(id)).fetch(`https://district.internal/${id}`, {
     headers: { Upgrade: 'websocket', [WHO_HEADER]: whoHeader(who) },
@@ -211,7 +221,7 @@ export function readWho(raw: string | null): Who {
     const userId = typeof who.userId === 'string' ? who.userId : null
     const person = userId && who.person?.id === userId ? toPublic(who.person) : null
     const ip = typeof who.ip === 'string' && who.ip.length <= 64 ? who.ip : null
-    return { userId, person, ip }
+    return person && who.skip === true ? { userId, person, ip, skip: true } : { userId, person, ip }
   } catch {
     return { userId: null, person: null, ip: null }
   }
@@ -338,6 +348,13 @@ interface Seat {
   bench: { id: string; seat: number } | null
   /** Where the socket came from, for the per-address cap (see `Who`). */
   ip?: string | null
+  /**
+   * A resident waiting in line for room in the city (see `GateDO`): their face, kept for when they get in. Until
+   * then `person` is null, and they are a ghost in every way.
+   */
+  wait?: PublicPerson | null
+  /** And the position in line they were last told. */
+  place?: number
 }
 
 const fullLanes = (now: number): Record<Lane, Bucket> => ({
@@ -416,6 +433,11 @@ function livePerson(seat: Seat): LivePerson {
  * cap): after a wake the first frame, or the alarm, loads it for everyone still connected before anything is
  * relayed (`ready`). Two people blocked either way never hear of each other: no join, leave, move, status or
  * bench line about one reaches the other.
+ *
+ * The city's cap (`GateDO`): a resident is seen only once the gate admits them. Over the cap they wait in line
+ * on a ghost socket, their face kept in its attachment (`wait`) until the gate `promote`s them; their last
+ * resident or waiting socket here closing `release`s them, and the alarm vouches for everyone here
+ * (`heartbeat`).
  */
 export class DistrictDO extends DurableObject<Env> {
   /** Now, in ms. A test swaps it to step past `IDLE_MS` without waiting. */
@@ -467,8 +489,15 @@ export class DistrictDO extends DurableObject<Env> {
     // Blocks and mutes, theirs and everyone's already here, before anyone is told of anyone.
     if (!(await this.ready()) || (who.userId && !(await this.load([who.userId]))))
       return new Response('try again', { status: 503 })
-    // Others may have come in while D1 answered.
-    if (this.crowded(who)) return this.turnAway(who.userId)
+    // Seen, or waiting in line for room: the city's cap, asked before anyone hears of them.
+    const pass = who.person ? await this.admit(who.userId!, district, who.skip === true) : null
+    // Others may have come in while D1 and the gate answered.
+    if (this.crowded(who)) {
+      if (pass) this.releaseIfGone(who.userId!, district)
+      return this.turnAway(who.userId)
+    }
+    const person = pass?.ok ? who.person : null
+    const wait = pass && !pass.ok ? who.person : null
     const now = this.clock()
     // Newest socket wins: the old one closes, and the new one stands where it stood.
     let before: Seat | null = null
@@ -491,8 +520,8 @@ export class DistrictDO extends DurableObject<Env> {
     const seat: Seat = {
       district,
       userId: who.userId,
-      person: who.person,
-      shown: who.person !== null && before?.shown === true,
+      person,
+      shown: person !== null && before?.shown === true,
       pos: before?.pos ?? null,
       seen: now,
       bad: 0,
@@ -500,15 +529,21 @@ export class DistrictDO extends DurableObject<Env> {
       flood: null,
       bench: null,
       ip: who.ip === null ? null : ipKey(who.ip),
+      ...(pass && !pass.ok ? { wait, place: pass.position } : {}),
     }
     this.write(server, seat)
     this.send(server, {
       t: 'welcome',
-      you: { id: who.userId, visible: who.person !== null },
+      you:
+        seat.place === undefined
+          ? { id: who.userId, visible: person !== null }
+          : { id: who.userId, visible: false, queued: seat.place },
       people: this.people(who.userId),
     })
     if (seat.shown) this.broadcast({ t: 'join', p: livePerson(seat) }, who.userId, server)
     else if (before?.shown) this.broadcast({ t: 'leave', id: who.userId! }, who.userId, server)
+    // The socket this one replaced held a slot (or a place in line) this one does not.
+    if (!person && !wait && (before?.person || before?.wait)) this.releaseIfGone(who.userId!, district)
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(now + IDLE_MS)
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -544,6 +579,119 @@ export class DistrictDO extends DurableObject<Env> {
     server.send(JSON.stringify(FULL))
     server.close(LIVE_CLOSE.full, 'full')
     return new Response(null, { status: 101, webSocket: client })
+  }
+
+  /** The gate's stub, kept: calls made on one stub arrive in the order they were made (a release, then an admit). */
+  private gateStub: DurableObjectStub<GateDO> | null = null
+  private gate(): DurableObjectStub<GateDO> {
+    return (this.gateStub ??= this.env.GATE.get(this.env.GATE.idFromName(GATE_NAME)))
+  }
+
+  /** Whether `userId` may be seen here (see `GateDO.admit`). Null when the gate could not be asked: a ghost visit. */
+  private async admit(userId: string, district: DistrictId, skip: boolean): Promise<Admit | null> {
+    try {
+      return await this.gate().admit(userId, district, skip)
+    } catch (err) {
+      console.error('district: gate admit failed', err)
+      return null
+    }
+  }
+
+  /** Tells the gate `userId` holds nothing here any more, unless another socket of theirs here still does. */
+  private releaseIfGone(userId: string, district: DistrictId): void {
+    for (const ws of this.sockets()) {
+      const seat = this.seat(ws)
+      if (seat.userId === userId && (seat.person || seat.wait)) return
+    }
+    this.ctx.waitUntil(
+      this.gate()
+        .release(userId, district)
+        .catch((err: unknown) => console.error('district: gate release failed', err)),
+    )
+  }
+
+  /**
+   * RPC, from the gate: `userId` may be seen now. Their waiting socket here becomes a resident (see `letIn`).
+   * True when it did, or they are a resident here already; false when nobody of theirs waits here.
+   */
+  async promote(userId: string): Promise<boolean> {
+    // So the join skips anyone blocked.
+    if (!(await this.ready())) return false
+    const mine = this.sockets().filter((ws) => this.seat(ws).userId === userId)
+    if (mine.some((ws) => this.seat(ws).person)) return true
+    const ws = mine.find((s) => this.seat(s).wait)
+    if (!ws) return false
+    this.letIn(ws)
+    return true
+  }
+
+  /** A waiting socket gets in: told it is seen, and shown to everyone where it stands, if it has stepped yet. */
+  private letIn(ws: WebSocket): void {
+    const seat = this.seat(ws)
+    const userId = seat.userId!
+    const next: Seat = { ...seat, person: seat.wait!, wait: null, place: undefined, shown: seat.pos !== null }
+    this.write(ws, next)
+    this.send(ws, { t: 'welcome', you: { id: userId, visible: true }, people: this.people(userId) })
+    if (next.shown) this.broadcast({ t: 'join', p: livePerson(next) }, userId, ws)
+  }
+
+  /** RPC, from the gate: where these people now stand in line. A waiting socket hears of any change. */
+  place(at: Record<string, number>): void {
+    for (const ws of this.sockets()) {
+      const seat = this.seat(ws)
+      const position =
+        seat.wait && seat.userId && Object.hasOwn(at, seat.userId) ? at[seat.userId] : undefined
+      if (position === undefined || position === seat.place) continue
+      this.write(ws, { ...seat, place: position })
+      this.send(ws, { t: 'queued', position })
+    }
+  }
+
+  /**
+   * A ghost socket whose person may be seen again (an unhide): the gate is asked first, as on a connect, and
+   * they are told what it said.
+   */
+  private async enterLive(ws: WebSocket, person: PublicPerson): Promise<void> {
+    const { userId, district } = this.seat(ws)
+    const pass = await this.admit(userId!, district, false)
+    const seat = this.seat(ws)
+    if (seat.closed || seat.person || seat.wait) {
+      if (pass) this.releaseIfGone(userId!, district)
+      return
+    }
+    if (!pass) return
+    const you = pass.ok
+      ? { id: userId, visible: true }
+      : { id: userId, visible: false, queued: pass.position }
+    this.write(ws, pass.ok ? { ...seat, person } : { ...seat, wait: person, place: pass.position })
+    this.send(ws, { t: 'welcome', you, people: this.people(userId) })
+  }
+
+  /**
+   * Vouches to the gate for everyone here, residents and waiting (see `GateDO.heartbeat`), from the alarm; tells
+   * the waiting where they stand, and lets in any who hold a slot after all.
+   */
+  private async beat(): Promise<void> {
+    let district: DistrictId | null = null
+    const residents = new Set<string>()
+    const waiting = new Set<string>()
+    for (const ws of this.sockets()) {
+      const seat = this.seat(ws)
+      district = seat.district
+      if (seat.userId && seat.person) residents.add(seat.userId)
+      else if (seat.userId && seat.wait) waiting.add(seat.userId)
+    }
+    if (!district || (!residents.size && !waiting.size)) return
+    try {
+      const { places, admit } = await this.gate().heartbeat(district, [...residents], [...waiting])
+      this.place(places)
+      for (const id of admit) {
+        const ws = this.sockets().find((s) => this.seat(s).userId === id && this.seat(s).wait)
+        if (ws) this.letIn(ws)
+      }
+    } catch (err) {
+      console.error('district: gate heartbeat failed', err)
+    }
   }
 
   /**
@@ -631,8 +779,9 @@ export class DistrictDO extends DurableObject<Env> {
    * Acts on `userId`'s fresh trust state `t`: a ban closes their sockets with `LIVE_CLOSE.banned`; blocks made
    * or lifted take people out of, or put them back into, each other's view; a mute is simply kept (see
    * `muted`). With their public face (`person`, null when others may no longer see them): someone hidden is
-   * taken off the map and told they are a ghost, someone visible again is told so (their next move lists them),
-   * and a changed face (or `why` = `profile`) goes out as a `join`. Without it (`undefined`, from the alarm's
+   * taken off the map and told they are a ghost (out of the line, if waiting in it), someone visible again goes
+   * through the gate first and is told what it said (admitted: their next move lists them), a waiting person's
+   * new face is kept for when they get in, and a changed face (or `why` = `profile`) goes out as a `join`. Without it (`undefined`, from the alarm's
    * backstop) a hide still makes them a ghost, and nothing else about their face changes.
    */
   private apply(
@@ -723,21 +872,29 @@ export class DistrictDO extends DurableObject<Env> {
   private reface(ws: WebSocket, person: PublicPerson | null, why: RefreshWhy | null): void {
     const seat = this.seat(ws)
     const userId = seat.userId!
+    if (seat.wait) {
+      // In line: a new face is kept for when they get in. Hidden, they drop out of the running, and are told.
+      if (person) return this.write(ws, { ...seat, wait: person })
+      this.write(ws, { ...seat, wait: null, place: undefined })
+      this.releaseIfGone(userId, seat.district)
+      return this.send(ws, { t: 'welcome', you: { id: userId, visible: false }, people: this.people(userId) })
+    }
     if (!person) {
       if (!seat.person) return
       // Off the map, and up from any bench: a ghost from here on.
       if (seat.shown) this.broadcast({ t: 'leave', id: userId }, userId, ws)
       this.write(ws, { ...seat, person: null, shown: false, bench: null })
+      this.releaseIfGone(userId, seat.district)
       if (seat.bench) {
         this.noteSat(seat.bench.id, userId, this.clock())
         this.tellBench(seat.bench.id)
       }
       return this.send(ws, { t: 'welcome', you: { id: userId, visible: false }, people: this.people(userId) })
     }
+    // Visible again: through the gate first, like any arrival.
+    if (!seat.person) return void this.enterLive(ws, person)
     const next = { ...seat, person }
     this.write(ws, next)
-    if (!seat.person)
-      return this.send(ws, { t: 'welcome', you: { id: userId, visible: true }, people: this.people(userId) })
     const changed = JSON.stringify(seat.person) !== JSON.stringify(person)
     if (!changed && why !== 'profile') return
     if (seat.shown && seat.pos) this.broadcast({ t: 'join', p: livePerson(next) }, userId, ws)
@@ -820,6 +977,7 @@ export class DistrictDO extends DurableObject<Env> {
     const now = this.clock()
     if (now - this.trustSweptAt >= TRUST_SWEEP_MS) await this.resweep(now)
     this.sweep(now)
+    await this.beat()
     let next = Infinity
     for (const ws of this.sockets()) next = Math.min(next, this.lastHeard(ws) + IDLE_MS)
     if (next !== Infinity) await this.ctx.storage.setAlarm(Math.max(next, now + 1000))
@@ -1121,6 +1279,7 @@ export class DistrictDO extends DurableObject<Env> {
     if (seat.closed) return
     this.retire(ws)
     if (seat.shown && seat.userId) this.broadcast({ t: 'leave', id: seat.userId }, seat.userId)
+    if (seat.userId && (seat.person || seat.wait)) this.releaseIfGone(seat.userId, seat.district)
     // Their last socket here: their trust state goes with it (the others' sets keep naming them, as they should).
     if (seat.userId && !this.sockets().some((s) => this.seat(s).userId === seat.userId))
       this.trust.delete(seat.userId)

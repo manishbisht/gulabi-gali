@@ -53,7 +53,8 @@ const stats: AdminStats = {
     { id: 'university', residents: 0, ghosts: 0 },
     { id: 'malviya-nagar', residents: 1, ghosts: 2 },
   ],
-  queue: null,
+  live: 4,
+  queue: 2,
   openReports: 1,
   hidden: 1,
 }
@@ -174,6 +175,9 @@ it('a report card shows the evidence as text, with the sender and time, and mark
   // The live counts, and a district that could not be asked.
   expect(host.textContent).toContain('3 residents · 5 ghosts')
   expect(host.textContent).toContain('unknown')
+  // The city's cap: everyone it counts, and everyone waiting for room.
+  expect(host.textContent).toContain('Seen across the city: 4')
+  expect(host.textContent).toContain('Waiting for room: 2')
 })
 
 it('evidence lives only in the report card', async () => {

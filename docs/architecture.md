@@ -230,7 +230,27 @@ important lives in the notice, so a lost one is harmless; the client refetches o
 (`src/net/inbox.ts`, `src/net/reconnect.ts`, `src/connections/useConnections.ts`) and the lists in
 `ui/Connections.tsx` and `ui/ChatView.tsx` come from D1.
 
+### The cap and the waitlist: GateDO
+
+One `GateDO` (named `global`, `backend/src/gate.ts`) counts the residents seen across all four districts,
+one slot per person however many tabs or districts they have open; `MAX_LIVE` (default 300) is the most it
+admits. A district asks it (`admit`) before anyone hears of a resident, and `release`s the slot when that
+person's last resident socket there closes. Slots are kept per (person, district), so a metro ride never
+counts twice, and the last one is held for 20 s, so a reload or a ride (the old socket closes before the new
+one opens) takes it straight back. Each district's alarm vouches for whoever it holds (`heartbeat`); a slot
+nobody has vouched for in 2 minutes (a crashed or evicted district) is let go. It all lives in the object's
+SQLite storage, so it survives hibernation.
+
+Over the cap, the resident's socket stays open as a ghost and is told its place in line (`welcome` with
+`you.queued`, then `{t:'queued', position}` as it moves up). The line is ordered by first ask and keyed by
+user id, so a reload keeps the place; someone with no live socket for 10 minutes is dropped. When a slot
+frees, the gate tells the first live one's district (`promote`), whose socket becomes a resident at once. A
+person who redeemed an invite in the last 24 hours (looked up by the Worker and passed in `X-GG-Who`) skips
+the line, up to `MAX_LIVE` + 10%. The page shows a dismissible card (`ui/FullScreen.tsx`) with the position
+and an email field, `POST /api/waitlist` (no sign-in; 5 an hour per address; stored once, always 204). No
+email is sent: the owner writes to people from the admin page's CSV.
+
 ### Coming in phase 3
 
-The verified tier, reports and moderation, the admin tools and the waitlist. They are not in the code; do not
-look for them.
+The rest of the verified tier, reports and moderation, and the admin tools are being added task by task;
+`docs/superpowers/plans/2026-11-14-phase-3-safety.md` is the source of truth until this section is rewritten.

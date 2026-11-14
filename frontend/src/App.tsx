@@ -19,6 +19,7 @@ import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
 import { useBench, type BenchNotice } from './world/useBench'
+import { useQueue } from './world/useQueue'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
 import { DISTRICT_NAMES } from './world/districtNames'
@@ -38,6 +39,7 @@ import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
 import { InviteSheet } from './ui/InviteSheet'
 import { AccountClosed } from './ui/AccountClosed'
+import { FullScreen } from './ui/FullScreen'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -86,6 +88,9 @@ export default function App() {
     step: stepPerson,
   } = usePersonCard()
   const bench = useBench()
+  /** The line for room when the city is full (`MAX_LIVE`): this resident waits in it as a ghost. */
+  const queue = useQueue()
+  const { queued } = queue
   const { hooks: benchHooks, bind: bindBench } = bench
   /** The person whose request note is being written, and who has been asked this session. */
   const [composing, setComposing] = useState<string | null>(null)
@@ -213,6 +218,7 @@ export default function App() {
           token: () => liveToken.current(),
           replaced: setReplaced,
           banned: () => void refreshMe.current(),
+          queued,
         },
         bench: benchHooks,
         place: (def) => {
@@ -255,6 +261,7 @@ export default function App() {
     patch,
     freeze,
     override,
+    queued,
   ])
 
   const viewer: Viewer = !auth.signedIn
@@ -309,7 +316,16 @@ export default function App() {
         cta={{ label: t('signInButton', lang), onClick: auth.openSignIn }}
       />
     ) : me?.complete ? (
-      <VisibilityChip state="resident" lang={lang} />
+      queue.position === null ? (
+        <VisibilityChip state="resident" lang={lang} />
+      ) : (
+        // waiting for room: unseen until they get in, and the chip brings the card back
+        <VisibilityChip
+          state="ghost"
+          lang={lang}
+          cta={{ label: t('fullChip', lang, { n: queue.position }), onClick: queue.reopen }}
+        />
+      )
     ) : me ? (
       <VisibilityChip
         state="ghost"
@@ -365,6 +381,11 @@ export default function App() {
                 {toast && (
                   <div className="toast" role="status">
                     {toast}
+                  </div>
+                )}
+                {queue.admitted && (
+                  <div className="toast" role="status">
+                    {t('fullAdmitted', lang)}
                   </div>
                 )}
                 {replaced && (
@@ -436,6 +457,9 @@ export default function App() {
                   onVisible={onVisible}
                   onClose={bench.dismiss}
                 />
+              )) ||
+              (queue.card && queue.position !== null && (
+                <FullScreen position={queue.position} lang={lang} onClose={queue.dismiss} />
               ))
             )}
           </>

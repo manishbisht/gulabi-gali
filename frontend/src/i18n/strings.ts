@@ -108,6 +108,29 @@ export const STRINGS = {
   visibilityGhost: { hi: 'Abhi koi tumhe dekh nahi sakta', en: 'Nobody can see you yet' },
   visibilityResident: { hi: 'Jaipur tumhe dekh sakta hai', en: 'Jaipur can see you' },
   visibilityFinish: { hi: 'Profile poora karo', en: 'Finish your profile' },
+  fullTitle: {
+    hi: 'Jaipur full hai! Tumhara number: {n}',
+    en: "Jaipur is full right now! You're number {n}",
+  },
+  fullBody: {
+    hi: 'Tab tak ghoomte raho, bas abhi koi tumhe dekh nahi sakta. Jagah bante hi tum apne aap dikhne lagoge.',
+    en: "Keep exploring meanwhile; nobody can see you just yet. As soon as there's room, you'll show up by yourself.",
+  },
+  fullEmailLabel: {
+    hi: 'Email chhodo, jagah bante hi batayenge',
+    en: "Leave an email and we'll tell you when there's room",
+  },
+  fullEmailSend: { hi: 'Batana', en: 'Let me know' },
+  fullEmailSending: { hi: 'Bhej rahe hain…', en: 'Sending…' },
+  fullEmailDone: { hi: 'Jagah bante hi batayenge!', en: "We'll let you know when there's room!" },
+  fullEmailInvalid: { hi: 'Ye email sahi nahi lag raha.', en: "That email doesn't look right." },
+  fullEmailFailed: {
+    hi: 'Abhi save nahi ho paya. Thodi der mein phir try karo.',
+    en: "Couldn't save that just now. Try again in a bit.",
+  },
+  fullClose: { hi: 'Theek hai', en: 'OK' },
+  fullChip: { hi: 'Line mein: {n}', en: 'In line: {n}' },
+  fullAdmitted: { hi: 'Ab Jaipur tumhe dekh sakta hai!', en: 'Jaipur can see you now!' },
   liveReplaced: {
     hi: 'Tum ek aur tab mein bhi khule ho. Log tumhe ab wahin dekhenge, yahan se nahi.',
     en: "You're open in another tab too. People see you there now, not here.",
@@ -390,6 +413,7 @@ export const STRINGS = {
   adminOpenReports: { hi: 'Khuli reports: {n}', en: 'Open reports: {n}' },
   adminHiddenCount: { hi: 'Chhupe hue: {n}', en: 'Hidden: {n}' },
   adminWaiting: { hi: 'Jagah ke intezaar mein: {n}', en: 'Waiting for room: {n}' },
+  adminLiveTotal: { hi: 'Poore shehar mein dikh rahe: {n}', en: 'Seen across the city: {n}' },
   adminAutoHidden: { hi: 'Auto-hidden', en: 'Auto-hidden' },
   adminAutoHiddenHelp: {
     hi: 'Reports ne inhe map se hata diya. Dekho: kya report karne wale naye accounts hain, ek hi inviter ke?',
