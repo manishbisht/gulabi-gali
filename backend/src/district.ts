@@ -3,6 +3,7 @@ import { resolveUser } from './auth'
 import { allowedOrigin } from './cors'
 import type { Env } from './env'
 import benches from './benches.json'
+import { wordsOk } from './filter/server'
 import { cleanText, loadResident, MAX_STATUS, toPublic } from './profiles'
 import type { RefreshWhy } from './refresh'
 import {
@@ -124,6 +125,8 @@ const RATE = { t: 'error', code: 'rate' } as const
 const FULL = { t: 'error', code: 'full' } as const
 const FAR = { t: 'error', code: 'far' } as const
 const MUTED = { t: 'error', code: 'muted' } as const
+/** Not a bad frame, so never a strike: the line was fine to send, just not fit to show. */
+const WORDS = { t: 'error', code: 'words' } as const
 const STOOD: ServerMsg = { t: 'seated', bench: null, seat: null, with: [] }
 
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
@@ -710,12 +713,14 @@ export class DistrictDO extends DurableObject<Env> {
         return this.move(ws, seat, msg, now)
       case 'status':
         if (!seat.person) return this.send(ws, GHOST)
-        return this.muted(seat.userId, now) ? this.send(ws, MUTED) : this.status(ws, seat, msg.text)
+        if (this.muted(seat.userId, now)) return this.send(ws, MUTED)
+        return wordsOk(msg.text) ? this.status(ws, seat, msg.text) : this.send(ws, WORDS)
       case 'sit':
         return seat.person ? this.sit(ws, seat, msg.bench) : this.send(ws, GHOST)
       case 'say':
         if (!seat.person) return this.send(ws, GHOST)
-        return this.muted(seat.userId, now) ? this.send(ws, MUTED) : this.say(ws, seat, msg.text, now)
+        if (this.muted(seat.userId, now)) return this.send(ws, MUTED)
+        return wordsOk(msg.text) ? this.say(ws, seat, msg.text, now) : this.send(ws, WORDS)
     }
   }
 

@@ -1,4 +1,5 @@
 import type { Env } from './env'
+import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
 import { isVerified } from './trust'
 import { loadResident, publicOf, visibleRow, type ProfileRow } from './profiles'
@@ -87,6 +88,7 @@ export async function sendRequest(
   const body = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   const reason = cleanReason(body.reason)
   if (reason === null) return fail('invalid', 400)
+  if (!wordsOk(reason)) return Response.json({ error: 'words', field: 'reason' }, { status: 400 })
   const to = body.to
   if (typeof to !== 'string' || to.length > 200) return fail('no-such-person', 404)
   if (to === userId) return fail('invalid', 400)

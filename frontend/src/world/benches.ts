@@ -72,7 +72,7 @@ export function seatPose(bench: Bench, n: number): Pose {
 }
 
 /** Why a sit or a line was turned down: the server's `error` codes that concern benches. */
-export type BenchRefusal = 'ghost' | 'full' | 'far' | 'invalid' | 'rate' | 'muted'
+export type BenchRefusal = 'ghost' | 'full' | 'far' | 'invalid' | 'rate' | 'muted' | 'words'
 
 /** Where the player sits, as the server last said: the bench, their seat and the others' first names. */
 export interface BenchSeat {
@@ -173,7 +173,8 @@ export function createSitting(opts: {
         if (asked && m.code !== 'rate') {
           asked = false
           hooks.refused(m.code)
-        } else if (seat && (m.code === 'rate' || m.code === 'muted')) hooks.refused(m.code)
+        } else if (seat && (m.code === 'rate' || m.code === 'muted' || m.code === 'words'))
+          hooks.refused(m.code)
       }
     },
     reset() {

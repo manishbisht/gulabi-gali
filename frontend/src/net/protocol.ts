@@ -149,9 +149,10 @@ export type ServerMsg =
   /**
    * `far`: a sit from further than the server allows from the bench, by the last point it accepted. `full`: a
    * bench with every seat taken, or (followed by a close with `LIVE_CLOSE.full`) a district or an address with
-   * as many sockets as it may hold. `muted`: a moderator has muted this person, so `say` and `status` are refused.
+   * as many sockets as it may hold. `muted`: a moderator has muted this person, so `say` and `status` are refused. `words`: a `say` or
+   * `status` the word filter refused (never a strike).
    */
-  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' | 'muted' }
+  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' | 'muted' | 'words' }
   /** A refused step carries the last point the server accepted: the client goes back there. */
   | { t: 'error'; code: 'too-fast'; x: number; z: number; ry: number }
   | { t: 'pong' }
@@ -202,7 +203,7 @@ export interface MatchView {
  * `not-found` covers a match that does not exist and one the asker is not (or no longer may be) in alike.
  * `ghost`: only a resident has a list of matches.
  */
-export type ChatError = 'invalid' | 'rate' | 'not-found' | 'ghost'
+export type ChatError = 'invalid' | 'rate' | 'not-found' | 'ghost' | 'words'
 
 /**
  * What a person's inbox socket hears: a nudge to refetch, never the content itself (a message notice names

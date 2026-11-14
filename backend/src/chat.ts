@@ -1,5 +1,6 @@
 import type { Env } from './env'
 import { holdEvidence } from './evidence'
+import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
 import { ACTIVE, activeRow, toPublic } from './profiles'
 import { pairOf } from './requests'
@@ -205,6 +206,7 @@ export async function postMessage(
   if (!match) return notFound()
   const body = cleanMessage(typeof raw === 'object' && raw !== null ? (raw as { body?: unknown }).body : null)
   if (body === null) return fail('invalid', 400)
+  if (!wordsOk(body)) return Response.json({ error: 'words', field: 'body' }, { status: 400 })
   const id = crypto.randomUUID()
   const { meta } = await env.DB.prepare(
     `INSERT INTO messages (id, match_id, sender, body, created_at)

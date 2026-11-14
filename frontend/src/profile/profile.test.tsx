@@ -87,6 +87,24 @@ it('server field errors highlight those fields', async () => {
   expect(field('name').getAttribute('aria-invalid')).not.toBe('true')
 })
 
+it('a field the word filter refused is marked, with the respectful hint instead of the generic one', async () => {
+  const onSave = vi.fn<Save>(async () => ({ ok: false, fields: ['about'], words: true }))
+  await mount(onSave)
+  await type(field('name'), 'Asha')
+  const area = field('homeArea') as HTMLSelectElement
+  await act(async () => {
+    area.value = 'Raja Park'
+    area.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await click(field('adult'))
+  await click(field('pledge'))
+  await act(async () => save().click())
+  expect(field('about').getAttribute('aria-invalid')).toBe('true')
+  expect(host.querySelector('[role="alert"]')!.textContent).toContain('respectful')
+  await type(field('about'), 'kinder words')
+  expect(host.querySelector('[role="alert"]')).toBeNull()
+})
+
 it('counters use the server limits', async () => {
   await mount()
   expect(host.textContent).toContain('0/24')

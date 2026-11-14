@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 const COPIES = [
   ['backend/src/protocol.ts', 'frontend/src/net/protocol.ts'],
   ['backend/src/benches.json', 'frontend/src/world/benches.json'],
+  ['backend/src/filter/normalise.ts', 'frontend/src/filter/normalise.ts'],
+  ['backend/src/filter/index.ts', 'frontend/src/filter/index.ts'],
 ]
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')

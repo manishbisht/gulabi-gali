@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang, type StringKey } from '../i18n/strings'
 import { sendMeetRequest, type RequestOutcome } from '../net/api'
 import { MAX_REASON, MIN_REASON, type LivePerson } from '../net/protocol'
@@ -22,6 +23,7 @@ const ERROR_TEXT: Record<Extract<RequestOutcome, { ok: false }>['error'], String
   'not-verified': 'requestNotVerified',
   'no-such-person': 'requestGone',
   invalid: 'requestFailed',
+  words: 'wordsHint',
   failed: 'requestFailed',
 }
 
@@ -67,6 +69,7 @@ export function RequestComposer({ person, lang, token, onDone, onClose }: Props)
           <span aria-live="polite">{t('requestCount', lang, { n: String(n), max: String(MAX_REASON) })}</span>
           {n > 0 && n < MIN_REASON && ` · ${t('requestMin', lang, { n: String(MIN_REASON) })}`}
         </p>
+        <WordsHint text={text} lang={lang} />
         {error && (
           <p className="person-note" role="alert">
             {t(ERROR_TEXT[error], lang)}

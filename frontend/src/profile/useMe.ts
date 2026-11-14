@@ -3,7 +3,7 @@ import { useAuth } from '../auth/useAuth'
 import { getMe, putProfile, type ProfileInput } from '../net/api'
 import type { Me } from '../net/protocol'
 
-export type SaveOutcome = { ok: true } | { ok: false; fields: string[] }
+export type SaveOutcome = { ok: true } | { ok: false; fields: string[]; words?: true }
 
 /** Who the signed-in visitor is to the server. Null while signed out, loading, or when the API is down. */
 export function useMe(): {

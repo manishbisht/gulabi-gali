@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
 import { MAX_BENCH_LINE, type BenchLine } from '../net/protocol'
 import type { BenchSeat } from '../world/benches'
@@ -67,7 +68,9 @@ export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand }: Pro
         )}
       </ol>
       {notice === 'rate' && <p className="bench-note">{t('benchRate', lang)}</p>}
+      {notice === 'words' && <p className="bench-note">{t('wordsHint', lang)}</p>}
       {notice === 'muted' && <p className="bench-note">{t('benchMuted', lang)}</p>}
+      <WordsHint text={text} lang={lang} />
       <form className="bench-say" onSubmit={submit}>
         <input
           aria-label={t('benchSay', lang)}

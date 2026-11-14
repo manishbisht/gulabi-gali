@@ -531,6 +531,9 @@ it('a refused sit is reported; a new socket or leaving the district stands the s
   // and a muted sitter's line is the server's `muted`
   ws.say({ t: 'error', code: 'muted' })
   expect(bench.refused).toHaveBeenLastCalledWith('muted')
+  // and a line the word filter refused is the server's `words`
+  ws.say({ t: 'error', code: 'words' })
+  expect(bench.refused).toHaveBeenLastCalledWith('words')
   // and not seated, a say goes nowhere
   ws.say({ t: 'seated', bench: null, seat: null, with: [] })
   expect(bench.seated).toHaveBeenLastCalledWith(null)

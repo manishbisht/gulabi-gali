@@ -232,3 +232,16 @@ it('a verified viewer sees the link, and a resident does not get one from the se
   const meet = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Say hello')!
   expect(meet.disabled).toBe(false)
 })
+
+it('a request the server refuses for its words says so, and keeps what was written', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json({ error: 'words', field: 'reason' }, 400)),
+  )
+  const { host, props, area, type, submit } = mount()
+  await type('some words the server will not accept')
+  await submit()
+  expect(props.onDone).not.toHaveBeenCalled()
+  expect(host.querySelector('[role="alert"]')!.textContent).toContain('respectful')
+  expect(area().value).toBe('some words the server will not accept')
+})

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
 import type { ProfileInput } from '../net/api'
 import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
@@ -40,6 +41,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
   const [busy, setBusy] = useState(false)
   const [bad, setBad] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
+  const [wordsRefused, setWordsRefused] = useState(false)
 
   const trimmed = name.trim()
   const nameOk = count(trimmed) >= LIMITS.name.min && count(trimmed) <= LIMITS.name.max
@@ -52,6 +54,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
     <T,>(field: string, set: (v: T) => void) =>
     (v: T) => {
       setBad((b) => b.filter((f) => f !== field))
+      setWordsRefused(false)
       set(v)
     }
   const invalid = (field: string) => (bad.includes(field) ? true : undefined)
@@ -61,6 +64,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
     if (!ready) return
     setBusy(true)
     setFailed(false)
+    setWordsRefused(false)
     const result = await onSave({
       name: trimmed,
       look: lookToWire(look),
@@ -76,6 +80,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
     setBusy(false)
     if (result.ok) return onClose()
     setBad(result.fields)
+    setWordsRefused(result.words === true)
     setFailed(result.fields.length === 0)
   }
 
@@ -101,6 +106,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
             <small>
               {count(name)}/{LIMITS.name.max}
             </small>
+            <WordsHint text={name} lang={lang} />
           </label>
           <AvatarBuilder look={look} lang={lang} onChange={setLook} />
           <label>
@@ -131,6 +137,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
             <small>
               {count(status)}/{LIMITS.status}
             </small>
+            <WordsHint text={status} lang={lang} />
           </label>
           <div className="pick-row" role="group" aria-label={t('profileHereFor', lang)}>
             <span>{t('profileHereFor', lang)}</span>
@@ -158,6 +165,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
             <small>
               {count(about)}/{LIMITS.about}
             </small>
+            <WordsHint text={about} lang={lang} />
           </label>
           <label>
             {t('profileLink', lang)}
@@ -206,7 +214,9 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
               <small>{t('profilePauseHint', lang)}</small>
             </span>
           </label>
-          {bad.length > 0 && <p role="alert">{t('profileFieldsFailed', lang)}</p>}
+          {bad.length > 0 && (
+            <p role="alert">{t(wordsRefused ? 'wordsHint' : 'profileFieldsFailed', lang)}</p>
+          )}
           {failed && <p role="alert">{t('profileSaveFailed', lang)}</p>}
           <button type="submit" disabled={!ready}>
             {t(busy ? 'profileSaving' : 'profileSave', lang)}

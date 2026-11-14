@@ -288,6 +288,10 @@ export const STRINGS = {
   chatHint: { hi: 'Kuch likho…', en: 'Write something…' },
   chatSend: { hi: 'Bhejo', en: 'Send' },
   chatSending: { hi: 'Bhej rahe hain…', en: 'Sending…' },
+  wordsHint: {
+    hi: 'Kuch shabd yahan theek nahi hain. Izzat se likhiye, phir bhejiye.',
+    en: "Some of these words aren't okay here. Please keep it respectful, then send.",
+  },
   chatRate: {
     hi: 'Zara aaram se: ek second mein ek baat. Aapka likha yahin hai.',
     en: 'Easy does it: one message a second. Your text is still here.',

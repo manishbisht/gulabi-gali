@@ -4,6 +4,7 @@ import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
 import { purgeEvidence } from './evidence'
+import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
@@ -169,6 +170,10 @@ export default {
     const url = new URL(request.url)
     const { pathname } = url
     if (pathname === '/health') return json({ ok: true }, 200, origin)
+    if (pathname === '/api/filter/words.json') {
+      // Public: hashes only, so the page can hint before sending. The server stays the authority.
+      return json({ hashes: await hashedList() }, 200, origin, { 'cache-control': 'public, max-age=86400' })
+    }
     if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
     const live = pathname.match(/^\/api\/districts\/([^/]+)\/live$/)
     if (live) return openDistrict(request, env, live[1])

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { fetchCity } from './api'
+import { fetchCity, putProfile, sendMessage } from './api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -35,4 +35,19 @@ it('strips trailing slashes from the API base', async () => {
   await fresh()
   expect(fetchMock.mock.calls[0]).toEqual(['https://api.example.com/api/city', { signal: undefined }])
   vi.unstubAllEnvs()
+})
+
+const answer = (body: unknown, status: number) =>
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify(body), { status }))
+
+it('a profile the word filter refused names the field and says it was the words', async () => {
+  answer({ error: 'words', field: 'about' }, 400)
+  expect(await putProfile('tok', {} as never)).toEqual({ ok: false, fields: ['about'], words: true })
+  answer({ error: 'invalid', fields: ['name'] }, 400)
+  expect(await putProfile('tok', {} as never)).toEqual({ ok: false, fields: ['name'] })
+})
+
+it('a chat message the word filter refused is typed as words', async () => {
+  answer({ error: 'words', field: 'body' }, 400)
+  expect(await sendMessage('tok', 'm1', 'hi')).toEqual({ ok: false, error: 'words' })
 })

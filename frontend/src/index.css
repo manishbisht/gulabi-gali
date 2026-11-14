@@ -934,6 +934,12 @@ button {
   opacity: 0.8;
 }
 
+small.words-hint {
+  display: block;
+  margin: 4px 0 6px;
+  font-style: italic;
+}
+
 .landmark-card .chat-note {
   margin: 0 0 6px;
   font-style: italic;

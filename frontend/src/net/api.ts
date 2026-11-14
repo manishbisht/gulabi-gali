@@ -67,7 +67,8 @@ export async function getMe(token: string, signal?: AbortSignal): Promise<Me> {
   return (await res.json()) as Me
 }
 
-export type SaveResult = { ok: true; me: Me } | { ok: false; fields: string[] }
+/** `words`: the server's word filter refused one of `fields` (not a malformed field). */
+export type SaveResult = { ok: true; me: Me } | { ok: false; fields: string[]; words?: true }
 
 /** A 400 gives the offending fields; any other failure rejects. */
 export async function putProfile(token: string, input: ProfileInput): Promise<SaveResult> {
@@ -77,7 +78,12 @@ export async function putProfile(token: string, input: ProfileInput): Promise<Sa
     body: JSON.stringify(input),
   })
   if (res.status === 400) {
-    const body = (await res.json().catch(() => null)) as { fields?: string[] } | null
+    const body = (await res.json().catch(() => null)) as {
+      error?: string
+      field?: string
+      fields?: string[]
+    } | null
+    if (body?.error === 'words') return { ok: false, fields: body.field ? [body.field] : [], words: true }
     return { ok: false, fields: body?.fields ?? [] }
   }
   if (!res.ok) throw new Error(`profile ${res.status}`)
@@ -98,7 +104,7 @@ export async function getProfile(
   return (await res.json()) as FullProfile
 }
 
-type RequestError = 'invalid' | 'ghost' | 'not-verified' | 'no-such-person' | 'already' | 'paused'
+type RequestError = 'invalid' | 'ghost' | 'not-verified' | 'no-such-person' | 'already' | 'paused' | 'words'
 export type RequestOutcome =
   { ok: true; kind: 'sent' | 'matched' } | { ok: false; error: RequestError | 'failed' }
 
@@ -109,6 +115,7 @@ const REQUEST_ERRORS: readonly string[] = [
   'no-such-person',
   'already',
   'paused',
+  'words',
 ]
 
 /** Asks someone to meet. Never rejects: a 201 is `sent`, a crossed request's 200 is `matched`, the rest a typed error. */
@@ -198,7 +205,10 @@ export async function sendMessage(token: string, matchId: string, body: string):
     })
     if (res.ok) return { ok: true, message: (await res.json()) as ChatMessage }
     const err = ((await res.json().catch(() => null)) as { error?: string } | null)?.error
-    return { ok: false, error: err === 'rate' || err === 'not-found' || err === 'invalid' ? err : 'failed' }
+    return {
+      ok: false,
+      error: err === 'rate' || err === 'not-found' || err === 'invalid' || err === 'words' ? err : 'failed',
+    }
   } catch {
     return { ok: false, error: 'failed' }
   }
