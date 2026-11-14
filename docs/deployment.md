@@ -158,11 +158,13 @@ state from phase 2 does not match the phase 3 tables), then apply the migrations
 development.
 
 **The waitlist.** People who find the city full can leave an email. Nothing is sent from the site: download the
-CSV from the admin page and write to them by hand when there is room.
+CSV from the admin page and write to them by hand when there is room. The cron deletes each email 90 days after
+it was left (the form and the privacy note say so).
 
 **Account deletion and Clerk.** `DELETE /api/me` erases everything in Gulabi Gali, but the Clerk sign-in account
 itself is not deleted: that takes the Clerk Backend API and `CLERK_SECRET_KEY`, which the Worker holds but does
-not use this way. The privacy note tells people their Clerk login is separate and is deleted from Clerk. A
+not use this way. The privacy note and the delete step tell people their sign-in email stays with Clerk and to
+write to `{OWNER_CONTACT}` to have it removed: delete that user in the Clerk dashboard (Users) when they do. A
 possible later step is to call Clerk's delete-user endpoint from `deleteAccount` (`backend/src/account.ts`).
 
 **Chats and deletion.** When a chat ends (an unmatch, a block, or either person deleting their account), its last
@@ -174,14 +176,19 @@ remembered (a ban, a hide, a mute, a 14-day request cooldown), so none of those 
 
 - `{OWNER_CONTACT}`: the contact line in the privacy note (`privacyContact` in
   `frontend/src/i18n/strings.ts`, both languages). Replace it with a real email or handle; `grep -n
-OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the tests do not name it).
+OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the tests do not name it). The deploy
+  workflow's build job checks this on `main` and fails while the placeholder is still there.
 - The word list (`backend/src/filter/words.ts`) needs a review by a native Hindi and Hinglish speaker.
 
 **Pre-launch safety checklist**
 
 - [ ] `ADMIN_USER_IDS` holds only `clerk:` ids, and `#/admin` is a 404 for a second account.
+- [ ] Clerk restrictions, if your plan has them (Clerk, Configure, Restrictions): block email subaddresses
+      (`name+1@…`) and disposable email domains, so one person cannot make a pile of accounts.
 - [ ] `DEV_AUTH`, `DEV_AUTH_SECRET` and `VITE_DEV_AUTH` are set nowhere in production.
 - [ ] You verified yourself on the admin page and an invite code redeems for a second account.
+- [ ] A ban stops existing invite codes: verify a test account, note one of its unused codes, ban it on the admin
+      page, and check the code no longer redeems for a third account (and the ban closed its open reports).
 - [ ] `{OWNER_CONTACT}` is filled in and the privacy note reads correctly in both languages.
 - [ ] A native speaker has reviewed the word list.
 - [ ] File a report from a test account, see the evidence on the admin page, close it, and check the evidence is gone.
@@ -189,9 +196,12 @@ OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the te
 - [ ] Delete a test account, and check the sign-in then gives a blank profile.
 - [ ] `MAX_LIVE` is set to what you want, and the full-city card and waitlist work (admin CSV downloads).
 - [ ] Rate limits answer 429 with `Retry-After` on the real domain (the edge sets the connecting address).
-- [ ] **On the first real deploy, check the bench keep-awake:** two accounts sit at one bench and talk, wait
-      more than a minute, report one: the report must carry the recent lines. If the transcript is empty, the
-      district slept and the keep-awake timer is not holding it (see section 3).
+- [ ] **On the first real deploy, check the bench keep-awake:** two accounts sit at one bench and talk, then
+      leave both clients idle (no typing, no moving) for at least 3 minutes before one reports the other: the
+      report must carry the recent lines. If the transcript is empty, the district slept and the keep-awake
+      timer is not holding it (see section 3). The fallback then (not built; only if this check fails) is to
+      persist each bench's transcript in the district object's SQLite storage with a 10-minute TTL, swept by
+      its alarm, instead of keeping it only in memory.
 - [ ] Budget alerts are on (section 3).
 
 ## 3. Budget alerts

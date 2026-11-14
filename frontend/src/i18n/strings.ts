@@ -96,8 +96,8 @@ export const STRINGS = {
   },
   profileLink: { hi: 'Apna link (zaroori nahi)', en: 'Your link (optional)' },
   profileLinkHint: {
-    hi: 'https:// se shuru hone wala. Sirf verified log dekh sakte hain.',
-    en: 'Starts with https://. Only verified people can see it.',
+    hi: 'https:// se shuru hone wala. Har verified member ise dekh sakta hai, isliye wahi link daalo jo un sab ko dikhana theek lage.',
+    en: 'Starts with https://. Every verified member can see it, so only add a link you are happy for all of them to see.',
   },
   profileSave: { hi: 'Save karo', en: 'Save' },
   profileSaving: { hi: 'Save ho raha hai…', en: 'Saving…' },
@@ -119,6 +119,10 @@ export const STRINGS = {
   fullEmailLabel: {
     hi: 'Email chhodo, jagah bante hi batayenge',
     en: "Leave an email and we'll tell you when there's room",
+  },
+  fullEmailKept: {
+    hi: 'Email sirf jagah batane ke liye rakha jaata hai, aur 90 din baad mita diya jaata hai.',
+    en: "We keep it only to tell you there's room, and it is deleted after 90 days.",
   },
   fullEmailSend: { hi: 'Batana', en: 'Let me know' },
   fullEmailSending: { hi: 'Bhej rahe hain…', en: 'Sending…' },
@@ -372,6 +376,26 @@ export const STRINGS = {
     hi: 'Aapka profile (naam, avatar, mohalla, status, about, link), aapke bheje aur mile requests, aapki 1:1 chats, aur aapke dwara ya aapke khilaaf ki gayi reports ke record.',
     en: 'Your profile (name, avatar, neighbourhood, status, about, link), the requests you sent and got, your 1:1 chats, and the records of reports you filed or that were filed about you.',
   },
+  privacyStoredHeld: {
+    hi: 'Jab koi chat unmatch ya block se khatam hoti hai, uske aakhri 30 messages 30 din tak rakhe jaate hain, taaki dono mein se koi bhi use report kar sake. Sirf moderator unhe padh sakta hai, aur woh bhi tabhi jab report ho.',
+    en: 'When a chat ends after an unmatch or a block, its last 30 messages are kept for 30 days so either of you can still report it. Only the moderator can read them, and only if it is reported.',
+  },
+  privacyStoredInvites: {
+    hi: 'Kisne kise invite kiya: aap kis code se verified hue aur woh code kiska tha. Moderator ise dekh sakta hai.',
+    en: 'Who invited whom: the code that made you verified, and whose it was. The moderator can see this.',
+  },
+  privacyStoredCounters: {
+    hi: 'Spam rokne ke liye ginti (kitni requests, messages, reports), kuch aapke IP address ke hisaab se. Ye 2 din tak rehti hai.',
+    en: 'Counts that stop spam (how many requests, messages and reports), some kept against your IP address. They are kept up to 2 days.',
+  },
+  privacyStoredWaitlist: {
+    hi: 'Shehar full hone par chhoda gaya waitlist email, sirf jagah batane ke liye. 90 din baad mita diya jaata hai.',
+    en: "A waitlist email you left while the city was full, only to tell you there's room. It is deleted after 90 days.",
+  },
+  privacyStoredTombstone: {
+    hi: 'Account delete karne ke baad bhi, agar us par ban, hide, mute ya request ka 14 din ka intezaar laga ho, toh sirf account id aur woh rok ek chhote record mein rehti hai, taaki delete karke unse bacha na ja sake.',
+    en: 'After an account is deleted, if a ban, hide, mute or a 14-day request wait was on it, a small record with only the account id and that state stays, so deleting is no way around them.',
+  },
   privacyBenchTitle: { hi: 'Bench ki baatein', en: 'Bench talk' },
   privacyBench: {
     hi: 'Bench pe ki gayi baat-cheet save nahi hoti. Bas ek chhota sa 10 minute ka hissa server ki memory mein rehta hai, aur tabhi padha jaata hai jab us bench ki report hoti hai.',
@@ -389,16 +413,16 @@ export const STRINGS = {
   },
   privacyDeleteTitle: { hi: 'Account delete karna', en: 'Deleting your account' },
   privacyDelete: {
-    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile, requests aur invite codes mita diye jaate hain. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapke login ka Clerk account alag se Clerk se delete hota hai.',
-    en: 'Open your profile and press "Delete my account" at the bottom. Your profile, requests and invite codes are erased. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in account with Clerk is separate, and is deleted from Clerk.',
+    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile, invite codes, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye.',
+    en: 'Open your profile and press "Delete my account" at the bottom. Your profile, invite codes, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to {OWNER_CONTACT} to have it removed.',
   },
   privacyContactTitle: { hi: 'Sawaal ya shikayat', en: 'Questions or complaints' },
   privacyContact: { hi: 'Likhiye: {OWNER_CONTACT}', en: 'Write to: {OWNER_CONTACT}' },
   privacyClose: { hi: 'Theek hai', en: 'OK' },
   deleteTitle: { hi: 'Account delete karo', en: 'Delete my account' },
   deleteWhat: {
-    hi: 'Yeh wapas nahi aayega. Profile, requests aur invite codes mit jayenge. Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Aap naye sire se shuru kar sakte ho.',
-    en: 'This cannot be undone. Your profile, requests and invite codes will be erased. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. You can start again fresh.',
+    hi: 'Yeh wapas nahi aayega. Profile, invite codes, requests aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
+    en: "This cannot be undone. Your profile, invite codes, requests and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to {OWNER_CONTACT} to remove it. You can start again fresh, though a moderator's ban or mute stays.",
   },
   deleteTypeLabel: { hi: 'Confirm karne ke liye DELETE likho', en: 'Type DELETE to confirm' },
   deleteConfirm: { hi: 'Hamesha ke liye delete karo', en: 'Delete forever' },

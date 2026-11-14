@@ -7,6 +7,11 @@ interface Props {
 
 const SECTIONS: [StringKey, StringKey][] = [
   ['privacyStoredTitle', 'privacyStored'],
+  ['privacyStoredTitle', 'privacyStoredHeld'],
+  ['privacyStoredTitle', 'privacyStoredInvites'],
+  ['privacyStoredTitle', 'privacyStoredCounters'],
+  ['privacyStoredTitle', 'privacyStoredWaitlist'],
+  ['privacyStoredTitle', 'privacyStoredTombstone'],
   ['privacyBenchTitle', 'privacyBench'],
   ['privacyReportsTitle', 'profilePrivacy'],
   ['privacyReportsTitle', 'privacyReportsKept'],

@@ -249,7 +249,7 @@ frees, the gate tells the first live one's district (`promote`), whose socket be
 person who redeemed an invite in the last 24 hours (looked up by the Worker and passed in `X-GG-Who`) skips
 the line, up to `MAX_LIVE` + 10%. The page shows a dismissible card (`ui/FullScreen.tsx`) with the position
 and an email field, `POST /api/waitlist` (no sign-in; 5 an hour per address; stored once, always 204). No
-email is sent: the owner writes to people from the admin page's CSV.
+email is sent: the owner writes to people from the admin page's CSV. The cron deletes each email after 90 days.
 
 ## Phase 3: safety
 
@@ -259,10 +259,11 @@ The plan is `docs/superpowers/plans/2026-11-14-phase-3-safety.md`; the schema is
 
 Ghost (no complete profile), resident (visible; can sit, talk at benches, receive and accept requests) and
 verified (can also **send** requests, sees others' links, holds 2 invite codes). A person becomes verified by
-redeeming an invite code (`POST /api/invites/redeem`, one conditional `UPDATE ... WHERE used_by IS NULL`, so a
-code is won once) or by an admin's mark, which also hands out their codes. There is no phone OTP. The first
-verified member is the owner, who marks themselves on the admin page; that bootstraps every invite after.
-`users` carries `verified`, `verified_by`, `hidden`, `muted_until` and `banned`.
+redeeming an invite code from a member who is still verified and not banned (`POST /api/invites/redeem`, one
+conditional `UPDATE ... WHERE used_by IS NULL`, so a code is won once) or by an admin's mark, which also hands
+out their codes. There is no phone OTP. The first verified member is the owner, who marks themselves on the
+admin page; that bootstraps every invite after. `users` carries `verified`, `verified_by`, `hidden`,
+`unhidden_at`, `muted_until` and `banned`.
 
 Residency has two rules in SQL (`ACTIVE`, `VISIBLE` in `profiles.ts`): active is a complete profile and not
 banned; visible is active and not hidden. Every residency check goes through them.
@@ -271,8 +272,8 @@ banned; visible is active and not hidden. Every residency check goes through the
 
 Names, statuses, about, request reasons, chat, bench lines and posters are checked. Text is normalised
 (lowercase, NFKC, leetspeak, repeated letters collapsed, separators stripped) and matched on whole tokens and
-known compounds from `filter/words.ts`. A hit answers `{ ok: false, reason: 'words', field }`. The client has
-the same check for a hint while typing (`filter/WordsHint`); the server has the last word.
+known compounds from `filter/words.ts`. A hit is a 400 `{ error: 'words', field }` (the field it was found in).
+The client has the same check for a hint while typing (`filter/WordsHint`); the server has the last word.
 
 ### Blocks (`blocks.ts`)
 
@@ -295,7 +296,9 @@ transcript is ignored): a bench's in-memory transcript of the last 10 minutes (o
 a chat's last 30 messages (only for its members), or a profile snapshot. Evidence is visible only to admins, and
 is deleted when the report is closed or 30 days after it was filed (the cron). When a chat ends (an unmatch, a
 block, a deletion), its last 30 messages are copied into `held_evidence` for 30 days so it can still be
-reported. Three distinct **verified** reporters within 7 days hide a person until an admin acts. Only `bench`
+reported: `GET /api/ended` lists each person's ended chats (with the other's first name saved when it ended),
+and the Connections sheet shows them under "Ended chats" with Report. A reporter keeps at most one open report
+per person and kind; a repeat only updates its note. Three distinct **verified** reporters within 7 days hide a person until an admin acts. Only `bench`
 and `chat` reports count (`COUNTED_REPORTS`), since the server confirmed the two met; a `person` report needs no
 meeting, so a creep or a ring of accounts could file it about anyone. Residents' reports, reports from someone
 the person has blocked, and reports filed before an admin last unhid them (`users.unhidden_at`) never count
@@ -312,9 +315,13 @@ day. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotic
 ### Admin (`admin.ts`, `frontend/src/admin/`)
 
 Every `/api/admin/*` route is a 404 unless the caller's id is in `ADMIN_USER_IDS`. The page is `#/admin`,
-a lazy chunk so it is never in the city bundle. It lists the report queue with evidence, looks people up, and
-ban, unban, mute (24 hours), unmute, verify and unhide them, shows live stats and exports the waitlist as CSV.
-A ban closes sockets, hides the person and blocks writes; it is idempotent.
+a lazy chunk so it is never in the city bundle. It lists the report queue with evidence, grouped by person with
+a count (people with an underage or harassment report first), looks people up (and whom each one verified,
+`GET /api/admin/users/:id/verified`), and bans, unbans, mutes (24 hours), unmutes, verifies, unverifies and
+unhides them, shows live stats and exports the waitlist as CSV. A ban closes sockets, hides the person, blocks
+writes, closes every open report about them as actioned and deletes their unused invite codes; it is
+idempotent. A ban on a deleted account's id that a report, held chat or block still names writes a banned
+tombstone `users` row, so signing in again with that id is refused.
 
 ### The gate
 
@@ -324,13 +331,16 @@ banned, hidden or deleted.
 
 ### Account deletion (`account.ts`)
 
-`DELETE /api/me` (a banned person gets 403 first, so it is no way out of a ban). Every match ends through
+`DELETE /api/me`, open to a banned person too (the ban stays on the tombstone). Every match ends through
 `endMatch(..., 'delete')`, holding its last 30 messages as evidence, and the other person hears `unmatched`.
-Then one D1 batch deletes the profile, every request in either direction, the invites they own, the blocks they
-made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is kept), and deletes
-the `users` row. Blocks others made against them stay, so they still protect their owners if the id returns;
-reports about them stay until closed. The `users` row is kept as a tombstone (verified cleared) only while a
-hide or mute on it still holds. Sockets close with 4006 and the gate forgets them. The page then signs out;
-signing in again gives a blank profile. The Clerk sign-in account is not touched (see deployment.md). The
-privacy note (`ui/PrivacySheet.tsx`, linked from the intro and the profile sheet) says all of this in plain
-words.
+Then one D1 batch deletes the profile, every pending or accepted request in either direction (`ignored` ones
+stay with their reason blanked: they are the 14-day cooldowns, which the cron sweeps), the invites they own,
+the blocks they made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is
+kept), and deletes the `users` row. Blocks others made against them stay (their saved name blanked), so they
+still protect their owners if the id returns; reports about them stay until closed. The `users` row stays as a
+tombstone (verified cleared) while a ban, a hide (or enough counted reports to hide them, which hides them
+then), a mute or a cooldown request still holds, so deleting is no way out of any of them; an admin can also ban
+a deleted id later (see Admin). Sockets close with 4006 and the gate forgets them. The page then signs out;
+signing in again gives a blank profile, unless the id is banned. The Clerk sign-in account and its email are not
+touched: the privacy note says to write to the owner to have them removed (see deployment.md). The privacy note
+(`ui/PrivacySheet.tsx`, linked from the intro and the profile sheet) says all of this in plain words.

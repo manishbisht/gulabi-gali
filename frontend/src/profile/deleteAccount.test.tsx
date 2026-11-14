@@ -119,3 +119,50 @@ it('the privacy note carries the report line word for word and the contact place
     'If someone reports a conversation, the moderator can read its recent messages.',
   )
 })
+
+it('the privacy note says everything that is kept, and how long', async () => {
+  await act(async () => root.render(<PrivacySheet lang="en" onClose={() => {}} />))
+  const en = host.textContent!
+  for (const kept of [
+    // waitlist emails, and when they go
+    'waitlist',
+    '90 days',
+    // chats held after an unmatch or a block
+    'after an unmatch or a block',
+    // rate counters keyed by address
+    'IP address',
+    'up to 2 days',
+    // who invited whom
+    'Who invited whom',
+    // the tombstone a delete leaves
+    'account id',
+    // ignored requests are not erased at once
+    'up to 14 days with their message blanked',
+    // your own blocks go
+    'the blocks you made',
+    // the sign-in email, honestly
+    'Your sign-in email stays with Clerk',
+    // (the contact itself is the owner's to fill in: the tests never name it)
+    'to have it removed',
+  ])
+    expect(en, kept).toContain(kept)
+  expect(en).not.toContain('is deleted from Clerk')
+  expect(en).not.toContain('requests and invite codes are erased')
+  await act(async () => root.render(<PrivacySheet lang="hi" onClose={() => {}} />))
+  const hi = host.textContent!
+  for (const kept of ['waitlist', '90 din', '2 din', '14 din', 'Clerk', 'hatwane'])
+    expect(hi, kept).toContain(kept)
+})
+
+it('the delete step says your own blocks go and where your sign-in email stays', () => {
+  expect(STRINGS.deleteWhat.en).toContain('the blocks you made')
+  expect(STRINGS.deleteWhat.en).toContain('Your sign-in email stays with Clerk; write to ')
+  expect(STRINGS.deleteWhat.en).toContain(' to remove it.')
+  expect(STRINGS.deleteWhat.hi).toContain('hatwane')
+  expect(STRINGS.deleteWhat.hi).toContain('block')
+})
+
+it('the link field warns that every verified member can see it', () => {
+  expect(STRINGS.profileLinkHint.en).toContain('Every verified member can see it')
+  expect(STRINGS.profileLinkHint.hi).toContain('Har verified member')
+})

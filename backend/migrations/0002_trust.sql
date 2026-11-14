@@ -72,5 +72,5 @@ CREATE INDEX reports_closed_evidence ON reports(state) WHERE evidence IS NOT NUL
 CREATE INDEX reports_evidence_age ON reports(created_at) WHERE evidence IS NOT NULL;
 
 -- People who left an email while the city was full (Task 7 fills it; the admin page exports it as CSV now).
--- Stored only to tell them there is room; no email is sent from here.
+-- Stored only to tell them there is room; no email is sent from here. The cron deletes each after 90 days.
 CREATE TABLE waitlist (email TEXT PRIMARY KEY, created_at INTEGER);

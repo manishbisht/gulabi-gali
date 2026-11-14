@@ -48,6 +48,7 @@ export function FullScreen({ position, lang, onClose }: { position: number; lang
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
+          <small>{t('fullEmailKept', lang)}</small>
           {(state === 'invalid' || state === 'failed') && <p role="alert">{t(NOTES[state], lang)}</p>}
           <button type="submit" disabled={state === 'sending'}>
             {t(state === 'sending' ? 'fullEmailSending' : 'fullEmailSend', lang)}

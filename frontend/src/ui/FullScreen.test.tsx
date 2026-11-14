@@ -88,3 +88,11 @@ it('closes without leaving the city', async () => {
   await act(async () => button('OK')!.click())
   expect(onClose).toHaveBeenCalledTimes(1)
 })
+
+it('the waitlist form says how long the email is kept', async () => {
+  const en = await mount(3)
+  expect(en.host.querySelector('form')!.textContent).toContain('deleted after 90 days')
+  document.body.innerHTML = ''
+  const hi = await mount(3, 'hi')
+  expect(hi.host.querySelector('form')!.textContent).toContain('90 din')
+})

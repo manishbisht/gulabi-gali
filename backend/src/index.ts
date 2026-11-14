@@ -7,7 +7,7 @@ import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
 import { listEnded, purgeEvidence } from './evidence'
-import { GATE_NAME, joinWaitlist } from './gate'
+import { GATE_NAME, joinWaitlist, purgeWaitlist } from './gate'
 import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, muteGate, purgeCounters, readLimit } from './limits'
@@ -269,5 +269,6 @@ export default {
     ctx.waitUntil(purgeEvidence(env).catch((err) => console.error('evidence sweep failed', err)))
     ctx.waitUntil(purgeReportEvidence(env).catch((err) => console.error('report sweep failed', err)))
     ctx.waitUntil(purgeCounters(env).catch((err) => console.error('counter sweep failed', err)))
+    ctx.waitUntil(purgeWaitlist(env).catch((err) => console.error('waitlist sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

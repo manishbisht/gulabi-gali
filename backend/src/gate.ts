@@ -374,11 +374,22 @@ export function cleanEmail(raw: unknown): string | null {
   return email.length <= MAX_EMAIL && EMAIL.test(email) ? email : null
 }
 
+/** A waitlist email is kept this long, then the cron deletes it (the privacy note says so). */
+export const WAITLIST_KEEP_MS = 90 * 24 * 3600_000
+
+/** The cron's sweep: waitlist emails left 90 days ago or more (and any without a date) go. */
+export async function purgeWaitlist(env: Env, now = Date.now()): Promise<void> {
+  await env.DB.prepare('DELETE FROM waitlist WHERE created_at IS NULL OR created_at <= ?')
+    .bind(now - WAITLIST_KEEP_MS)
+    .run()
+}
+
 /**
  * `POST /api/waitlist {email}`: no sign-in (someone turned away as a ghost may have no account). Stored once;
  * listed already or not, a well-formed address gets the same 204 and a malformed one 400, so it never says who
  * is on the list (the controller's Task 7 fix-round-1 ruling, amending the phase 3 plan). A D1 failure is 503
  * `unavailable`, never an unhandled 500. No email is sent: the owner tells people from the admin page's CSV.
+ * The cron deletes it after 90 days (`purgeWaitlist`).
  */
 export async function joinWaitlist(env: Env, request: Request, raw: unknown): Promise<Response> {
   const slow = await ipWindowLimit(env, request, WAITLIST_IP_LIMIT)
