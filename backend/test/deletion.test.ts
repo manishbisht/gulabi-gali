@@ -162,7 +162,7 @@ describe('delete my account', () => {
       await db
         .prepare(
           `INSERT INTO reports (id, reporter, target_kind, target_id, reason, created_at)
-           VALUES (?, ?, 'person', ?, 'spam', ?)`,
+           VALUES (?, ?, 'chat', ?, 'spam', ?)`,
         )
         .bind(crypto.randomUUID(), devId(`Counted ${n}`), tid, Date.now())
         .run()

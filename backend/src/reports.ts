@@ -25,8 +25,9 @@ export const REPORT_KEEP_MS = 30 * 24 * 3600 * 1000
 export const REPORTS_PER_DAY = 20
 /**
  * Auto-hide: this many distinct verified reporters about one person, in open reports filed within `windowMs`,
- * take that person off the map until an admin acts. Residents' reports never count, so fresh accounts made
- * to retaliate can hide nobody.
+ * take that person off the map until an admin acts. Only the reports in `COUNTED_REPORTS` count: residents'
+ * never do, so fresh accounts made to retaliate can hide nobody, and neither do profile reports, which need no
+ * meeting at all.
  */
 export const AUTO_HIDE = { reporters: 3, windowMs: 7 * DAY_MS } as const
 
@@ -161,17 +162,21 @@ async function chatWith(env: Env, reporter: string, target: string, now: number)
 }
 
 /**
- * The reports auto-hide counts, as a `WHERE` over `reports`: about the person `?1`, filed after `?2` (ms), open,
- * confirmed, by a reporter who is verified and not banned. An admin's unhide dismisses exactly these, so the
- * person stays visible until `AUTO_HIDE.reporters` new ones act.
+ * The reports auto-hide counts, as a `WHERE` over `reports`: about the person `?1`, filed after `?2` (ms) and
+ * after an admin last unhid them (`users.unhidden_at`), open and confirmed. Only `bench` and `chat` reports,
+ * whose server-confirmed meeting a creep or a ring of accounts cannot make up (a `person` report needs none);
+ * only by a reporter who is verified and not banned, and whom the person has not blocked (blocking someone is
+ * no reason for them to be able to hide you). Every other report is still queued for the moderator.
  */
-export const COUNTED_REPORTS = `target_kind IN ('person', 'bench', 'chat') AND target_id = ?1 AND created_at > ?2
+export const COUNTED_REPORTS = `target_kind IN ('bench', 'chat') AND target_id = ?1 AND created_at > ?2
+  AND created_at > COALESCE((SELECT unhidden_at FROM users WHERE id = ?1), 0)
   AND state = 'open' AND unconfirmed = 0
-  AND reporter IN (SELECT id FROM users WHERE verified = 1 AND banned = 0)`
+  AND reporter IN (SELECT id FROM users WHERE verified = 1 AND banned = 0)
+  AND NOT EXISTS (SELECT 1 FROM blocks WHERE blocks.a = ?1 AND blocks.b = reports.reporter)`
 
 /**
- * Whether `target` now has `AUTO_HIDE.reporters` distinct verified (and not banned) reporters in open,
- * confirmed reports from the last `AUTO_HIDE.windowMs`; when so they are hidden. True only when this call hid
+ * Whether `target` now has `AUTO_HIDE.reporters` distinct reporters in counted reports (`COUNTED_REPORTS`)
+ * from the last `AUTO_HIDE.windowMs`; when so they are hidden. True only when this call hid
  * them (they were not hidden already); every live district is then told, through `later`.
  */
 async function autoHide(env: Env, target: string, now: number, later: Later): Promise<boolean> {

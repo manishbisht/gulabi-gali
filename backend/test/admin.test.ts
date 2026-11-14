@@ -9,7 +9,7 @@ import {
   type AdminStats,
   type AdminUser,
 } from '../src/protocol'
-import { api, closeAll, devId, inbox, live, login, openInbox, pair, resident } from './helpers'
+import { api, closeAll, devId, inbox, live, login, matchedWith, openInbox, pair, resident } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const API = 'https://api.test'
@@ -477,45 +477,47 @@ describe('admin', () => {
     expect((await api(`/api/profiles/${encodeURIComponent(id)}`, viewer)).status).toBe(200)
   })
 
-  it('unhide sticks: the reports that hid someone are dismissed, so one more cannot hide them again', async () => {
+  it('unhide keeps every report open with its evidence, and only reports filed after it count again', async () => {
     const viewer = await resident('Sticky Viewer')
-    await resident('Sticky Target')
+    const targetToken = await resident('Sticky Target')
     const target = devId('Sticky Target')
     const report = (token: string) =>
       api('/api/reports', token, {
         method: 'POST',
-        body: JSON.stringify({ kind: 'person', targetId: target, reason: 'spam' }),
+        body: JSON.stringify({ kind: 'chat', targetId: target, reason: 'spam' }),
       })
     const visible = async () => (await api(`/api/profiles/${encodeURIComponent(target)}`, viewer)).status
-    // A resident's report, which auto-hide never counts, and three verified ones, which hide them.
-    expect((await report(await resident('Sticky Fresh', {}, { verified: false }))).status).toBe(201)
-    for (const n of ['One', 'Two', 'Three']) await report(await resident(`Sticky Ring ${n}`))
+    // Six people who chatted with them (matched before any hide: a hide stops new matches).
+    const ring = new Map<string, string>()
+    for (const n of ['One', 'Two', 'Three', 'Four', 'Five', 'Six'])
+      ring.set(n, await matchedWith(`Sticky Ring ${n}`, targetToken, target))
+    // Three verified chat reports hide them.
+    for (const n of ['One', 'Two', 'Three']) expect((await report(ring.get(n)!)).status).toBe(201)
     expect(await visible()).toBe(404)
 
     const res = await userAction(target, 'unhide')
-    expect(await res.json()).toMatchObject({ hidden: false, openReports: 1 })
+    expect(await res.json()).toMatchObject({ hidden: false, openReports: 3 })
     expect(await visible()).toBe(200)
     const states = async () =>
       (
-        await testEnv.DB.prepare('SELECT reporter, state FROM reports WHERE target_id = ? ORDER BY reporter')
+        await testEnv.DB.prepare(
+          'SELECT reporter, state, evidence IS NOT NULL AS kept FROM reports WHERE target_id = ? ORDER BY reporter',
+        )
           .bind(target)
-          .all<{ reporter: string; state: string }>()
+          .all<{ reporter: string; state: string; kept: number }>()
       ).results
-    // The three that hid them are closed as dismissed; the one auto-hide never counted stays in the queue.
-    expect(await states()).toEqual([
-      { reporter: devId('Sticky Fresh'), state: 'open' },
-      { reporter: devId('Sticky Ring One'), state: 'dismissed' },
-      { reporter: devId('Sticky Ring Three'), state: 'dismissed' },
-      { reporter: devId('Sticky Ring Two'), state: 'dismissed' },
-    ])
-    // One more verified report, even from someone who reported before: still visible.
-    expect(await (await report(await resident('Sticky Ring One'))).json()).toEqual({ autoHidden: false })
+    // Every report that hid them is still open, evidence and all: unhiding is not a verdict on them.
+    expect(await states()).toEqual(
+      ['One', 'Three', 'Two'].map((n) => ({ reporter: devId(`Sticky Ring ${n}`), state: 'open', kept: 1 })),
+    )
+    // One new counted report: still visible, since only reports filed after the unhide count.
+    expect(await (await report(ring.get('Four')!)).json()).toEqual({ autoHidden: false })
     expect(await visible()).toBe(200)
-    // A repeat unhide while visible dismisses nothing new.
+    // A repeat unhide while visible changes nothing.
     await userAction(target, 'unhide')
-    expect((await states()).filter((r) => r.state === 'open')).toHaveLength(2)
-    // Three verified reporters acting anew hide them again.
-    for (const n of ['Four', 'Five']) await report(await resident(`Sticky Ring ${n}`))
+    expect((await states()).filter((r) => r.state === 'open')).toHaveLength(4)
+    // Three counted reports after the unhide hide them again.
+    for (const n of ['Five', 'Six']) await report(ring.get(n)!)
     expect(await visible()).toBe(404)
   })
 

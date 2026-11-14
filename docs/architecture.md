@@ -295,9 +295,12 @@ transcript is ignored): a bench's in-memory transcript of the last 10 minutes (o
 a chat's last 30 messages (only for its members), or a profile snapshot. Evidence is visible only to admins, and
 is deleted when the report is closed or 30 days after it was filed (the cron). When a chat ends (an unmatch, a
 block, a deletion), its last 30 messages are copied into `held_evidence` for 30 days so it can still be
-reported. Three distinct **verified** reporters within 7 days hide a person until an admin acts; residents'
-reports are queued but never count. A report the server could not confirm (a bench whose district had slept)
-is `unconfirmed` and never counts either.
+reported. Three distinct **verified** reporters within 7 days hide a person until an admin acts. Only `bench`
+and `chat` reports count (`COUNTED_REPORTS`), since the server confirmed the two met; a `person` report needs no
+meeting, so a creep or a ring of accounts could file it about anyone. Residents' reports, reports from someone
+the person has blocked, and reports filed before an admin last unhid them (`users.unhidden_at`) never count
+either; all of them are still queued. A report the server could not confirm (a bench whose district had slept)
+is `unconfirmed` and never counts. Unhiding closes no report: they stay open, evidence and all.
 
 ### Rate limits (`limits.ts`)
 

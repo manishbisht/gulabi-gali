@@ -59,7 +59,7 @@ function AutoHidden({
   token: Token
   version: number
   onChanged(): void
-  /** Someone was unhidden: the reports that hid them were dismissed with it. */
+  /** Someone was unhidden: their reports stay open, but the queue's cards show them as hidden. */
   onUnhidden(): void
 }) {
   const [list, setList] = useState<AdminHidden[] | null>(null)
@@ -155,7 +155,7 @@ function Console({ lang, token }: { lang: Lang; token: Token }) {
   const [version, setVersion] = useState(0)
   const [csvFailed, setCsvFailed] = useState(false)
   const changed = useCallback(() => setVersion((v) => v + 1), [])
-  /** Bumped by an unhide, which dismisses reports: the queue starts over from its first page. */
+  /** Bumped by an unhide: the queue starts over from its first page, its cards showing people as they now are. */
   const [queue, setQueue] = useState(0)
   const unhidden = useCallback(() => setQueue((q) => q + 1), [])
   useEffect(() => {

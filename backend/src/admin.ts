@@ -17,7 +17,6 @@ import type {
   ReportState,
 } from './protocol'
 import { refreshUser } from './refresh'
-import { AUTO_HIDE, COUNTED_REPORTS } from './reports'
 import { markVerified } from './trust'
 
 /** Reports per page of the queue. */
@@ -314,8 +313,9 @@ type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unhide'
  *   answers, and `/api/me` says `banned`. `unban` restores all of it.
  * - `mute`: no writes for `MUTE_MS` (see `muteGate`); a repeat while muted keeps the end it has. `unmute`.
  * - `verify`: verified by `admin`, with their 2 codes.
- * - `unhide`: back on the map, and the reports that hid them (see `COUNTED_REPORTS`) dismissed with it, so they
- *   stay visible until `AUTO_HIDE.reporters` new verified reporters act.
+ * - `unhide`: back on the map, with `unhidden_at` set: auto-hide then counts only reports filed after it (see
+ *   `COUNTED_REPORTS`), so they stay visible until `AUTO_HIDE.reporters` new reports act. Every report stays
+ *   open in the queue, evidence and all: unhiding is not a verdict on them.
  */
 async function actOn(env: Env, id: string, action: UserAction, later: Later): Promise<Response> {
   const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(id).first()
@@ -351,15 +351,10 @@ async function actOn(env: Env, id: string, action: UserAction, later: Later): Pr
       await markVerified(env, id, 'admin', later)
       break
     case 'unhide':
-      // One transaction: the reports that hid them (those auto-hide counts) are dismissed, then they are
-      // unhidden, so the next report alone cannot hide them again. Only while hidden: a repeat dismisses nothing.
-      await env.DB.batch([
-        env.DB.prepare(
-          `UPDATE reports SET state = 'dismissed', closed_at = ?3 WHERE ${COUNTED_REPORTS}
-           AND EXISTS (SELECT 1 FROM users WHERE id = ?1 AND hidden = 1)`,
-        ).bind(id, now - AUTO_HIDE.windowMs, now),
-        env.DB.prepare('UPDATE users SET hidden = 0 WHERE id = ?').bind(id),
-      ])
+      // Only while hidden: a repeat leaves `unhidden_at` (and so what counts) as it was.
+      await env.DB.prepare('UPDATE users SET hidden = 0, unhidden_at = ? WHERE id = ? AND hidden = 1')
+        .bind(now, id)
+        .run()
       await refreshUser(env, id, 'hide')
       break
   }

@@ -267,3 +267,19 @@ export async function pair(x: string, y: string) {
   const { matchId } = (await res.json()) as { matchId: string }
   return { a, b, aId: devId(x), bId: devId(y), matchId }
 }
+
+/**
+ * A new verified resident `name`, matched with the resident `targetId` (whose token accepts): someone who can
+ * file a `chat` report about them, the kind auto-hide counts. Answers their token.
+ */
+export async function matchedWith(name: string, targetToken: string, targetId: string): Promise<string> {
+  const token = await resident(name)
+  const sent = await api('/api/requests', token, {
+    method: 'POST',
+    body: JSON.stringify({ to: targetId, reason: 'Mujhe bhi pencil sketching pasand hai' }),
+  })
+  expect(sent.status).toBe(201)
+  const { id } = (await sent.json()) as { id: string }
+  expect((await api(`/api/requests/${id}/accept`, targetToken, { method: 'POST' })).status).toBe(200)
+  return token
+}

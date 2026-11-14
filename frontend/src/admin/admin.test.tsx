@@ -310,7 +310,7 @@ it('auto-hidden comes first, shows how new the reporters are and who invited the
   expect(entry.textContent?.match(/Verified by dev:boss/g)).toHaveLength(3)
   // The owner is told what an unhide does before tapping it.
   expect(entry.textContent).toContain(
-    'Unhiding dismisses the reports that hid them. They stay visible until three new verified people report them.',
+    'Unhiding closes no report: they all stay open in the queue, evidence and all. Only reports filed after this count: three new chat or bench reports would hide them again.',
   )
   const queueAsks = () => calls.filter((c) => c.path.startsWith('/api/admin/reports')).length
   expect(queueAsks()).toBe(1)
@@ -320,7 +320,7 @@ it('auto-hidden comes first, shows how new the reporters are and who invited the
     '/api/admin/users/dev%3Ameera/unhide',
   ])
   expect(entry.textContent).toContain('Nobody is hidden.')
-  // Those reports were dismissed with it: the queue is asked for again, from the start.
+  // The queue is asked for again, from the start, so its cards show them as they now are.
   await settle()
   expect(queueAsks()).toBe(2)
 })

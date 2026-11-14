@@ -469,8 +469,8 @@ export const STRINGS = {
   adminAutoHiddenNone: { hi: 'Koi chhupa hua nahi hai.', en: 'Nobody is hidden.' },
   adminUnhide: { hi: 'Wapas dikhao', en: 'Unhide' },
   adminUnhideNote: {
-    hi: 'Wapas dikhane par jin reports ne inhe chhupaya tha woh khaarij ho jaati hain. Ye tab tak dikhenge jab tak teen naye verified log report na karein.',
-    en: 'Unhiding dismisses the reports that hid them. They stay visible until three new verified people report them.',
+    hi: 'Wapas dikhane se koi report band nahi hoti: sab saboot ke saath queue mein khuli rehti hain. Ab sirf iske baad ki reports gini jaayengi: teen nayi chat ya bench reports inhe phir chhupa sakti hain.',
+    en: 'Unhiding closes no report: they all stay open in the queue, evidence and all. Only reports filed after this count: three new chat or bench reports would hide them again.',
   },
   adminReports: { hi: 'Reports', en: 'Reports' },
   adminQueueEmpty: { hi: 'Koi khuli report nahi.', en: 'No open reports.' },

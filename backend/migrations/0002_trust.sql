@@ -7,6 +7,8 @@ ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN verified_by TEXT;
 ALTER TABLE users ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN muted_until INTEGER;
+-- When an admin last unhid them (ms): auto-hide counts only reports filed after it, and unhiding closes none.
+ALTER TABLE users ADD COLUMN unhidden_at INTEGER;
 -- The admin page's "hidden" list and count, without a scan of everyone.
 CREATE INDEX users_hidden ON users(created_at) WHERE hidden = 1;
 

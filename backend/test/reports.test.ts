@@ -13,7 +13,7 @@ import {
   REPORT_KEEP_MS,
   REPORTS_PER_DAY,
 } from '../src/reports'
-import { api, closeAll, devId, live, pair, resident, type LiveClient } from './helpers'
+import { api, closeAll, devId, live, matchedWith, pair, resident, type LiveClient } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const stub = (id: DistrictId) => testEnv.DISTRICT.get(testEnv.DISTRICT.idFromName(id))
@@ -305,52 +305,107 @@ describe('reports', () => {
     expect((await report(reporter, { kind: 'person', targetId: 'dev:nobody-at-all' })).status).toBe(404)
   })
 
-  it('3 distinct verified reporters auto-hide; 3 residents do not', async () => {
+  it('auto-hide counts only chat and bench reports, from distinct verified reporters', async () => {
     const watcherToken = await resident('Hide Watcher')
-    await resident('Hide Target')
+    const targetToken = await resident('Hide Target')
     const target = devId('Hide Target')
     const hidden = async () =>
       (await testEnv.DB.prepare('SELECT hidden FROM users WHERE id = ?')
         .bind(target)
         .first<{ hidden: number }>())!.hidden
-    const person = { kind: 'person', targetId: target }
+    const chat = { kind: 'chat', targetId: target }
 
-    // Fresh, unverified accounts: queued, never counted.
-    for (const name of ['Hide Fresh One', 'Hide Fresh Two', 'Hide Fresh Three']) {
-      const res = await report(await resident(name, {}, { verified: false }), person)
+    // Profile reports need no meeting at all, so a creep or a ring of accounts could file them about anyone:
+    // queued, never counted, from however many verified reporters.
+    for (const n of ['One', 'Two', 'Three']) {
+      const res = await report(await resident(`Hide Profile ${n}`), { kind: 'person', targetId: target })
       expect(res.status).toBe(201)
       expect(await res.json()).toEqual({ autoHidden: false })
     }
-    // One verified reporter, three times, is one reporter.
-    const v1 = await resident('Hide Verified One')
-    for (let i = 0; i < 3; i++) expect(await (await report(v1, person)).json()).toEqual({ autoHidden: false })
-    const v2 = await resident('Hide Verified Two')
-    expect(await (await report(v2, { kind: 'person', targetId: target, reason: 'hate' })).json()).toEqual({
-      autoHidden: false,
+    expect(await hidden()).toBe(0)
+    // A fresh, unverified account that did chat with them (the target asked them): queued, never counted.
+    const fresh = await resident('Hide Fresh', {}, { verified: false })
+    const asked = await api('/api/requests', targetToken, {
+      method: 'POST',
+      body: JSON.stringify({ to: devId('Hide Fresh'), reason: 'Mujhe bhi pencil sketching pasand hai' }),
     })
+    const { id: freshRequest } = (await asked.json()) as { id: string }
+    expect((await api(`/api/requests/${freshRequest}/accept`, fresh, { method: 'POST' })).status).toBe(200)
+    expect(await (await report(fresh, chat)).json()).toEqual({ autoHidden: false })
+
+    // Two verified people they chatted with...
+    const chatters: string[] = []
+    for (const n of ['One', 'Two']) {
+      chatters.push(await matchedWith(`Hide Chat ${n}`, targetToken, target))
+      expect(await (await report(chatters.at(-1)!, chat)).json()).toEqual({ autoHidden: false })
+    }
     expect(await hidden()).toBe(0)
     expect((await api(`/api/profiles/${encodeURIComponent(target)}`, watcherToken)).status).toBe(200)
 
-    const v3 = await resident('Hide Verified Three')
-    const res = await report(v3, person)
+    // ...and one who sat at a bench with them: three confirmed meetings hide them.
+    const district: DistrictId = 'mi-road'
+    await sitter('Hide Target', district, 2)
+    await sitter('Hide Bench Three', district, 2)
+    await remembering(district)
+    const res = await report(await resident('Hide Bench Three'), {
+      kind: 'bench',
+      targetId: target,
+      bench: `${district}:2`,
+    })
     expect(res.status).toBe(201)
-    expect(await res.json()).toEqual({ autoHidden: true })
+    // (Nothing was said there, so it carries no lines; the district still saw them both sit.)
+    expect(await res.json()).toEqual({ autoHidden: true, evidence: 'missing' })
     expect(await hidden()).toBe(1)
     expect((await api(`/api/profiles/${encodeURIComponent(target)}`, watcherToken)).status).toBe(404)
-    expect(await rowsAbout(target)).toHaveLength(8)
+    expect(await rowsAbout(target)).toHaveLength(7)
     // Only the report that hid them says so.
-    const v4 = await resident('Hide Verified Four')
-    expect(await (await report(v4, person)).json()).toEqual({ autoHidden: false })
+    expect(await (await report(chatters[0]!, { ...chat, reason: 'hate' })).json()).toEqual({
+      autoHidden: false,
+    })
     expect(await hidden()).toBe(1)
+  })
 
-    // Reports older than 7 days do not count.
-    await resident('Hide Old Target')
+  it('reports older than 7 days do not count', async () => {
+    const oldToken = await resident('Hide Old Target')
     const old = devId('Hide Old Target')
-    for (const t of [v1, v2]) await report(t, { kind: 'person', targetId: old })
+    const tokens = await Promise.all(
+      ['One', 'Two', 'Three'].map((n) => matchedWith(`Hide Old ${n}`, oldToken, old)),
+    )
+    for (const t of tokens.slice(0, 2)) await report(t, { kind: 'chat', targetId: old })
     await testEnv.DB.prepare('UPDATE reports SET created_at = created_at - ? WHERE target_id = ?')
       .bind(8 * 24 * 3600 * 1000, old)
       .run()
-    expect(await (await report(v3, { kind: 'person', targetId: old })).json()).toEqual({ autoHidden: false })
+    expect(await (await report(tokens[2]!, { kind: 'chat', targetId: old })).json()).toEqual({
+      autoHidden: false,
+    })
+  })
+
+  it('a report from someone the target blocked never counts toward hiding them', async () => {
+    const targetToken = await resident('Blocker Target')
+    const target = devId('Blocker Target')
+    const tokens: string[] = []
+    for (const n of ['One', 'Two', 'Three', 'Four'])
+      tokens.push(await matchedWith(`Blocked Reporter ${n}`, targetToken, target))
+    // The target blocked reporter Three (which ends their chat; it is held, so it can still be reported).
+    expect(
+      (
+        await api('/api/blocks', targetToken, {
+          method: 'POST',
+          body: JSON.stringify({ id: devId('Blocked Reporter Three') }),
+        })
+      ).status,
+    ).toBe(204)
+    for (const t of tokens.slice(0, 3)) {
+      const res = await report(t, { kind: 'chat', targetId: target })
+      expect(res.status).toBe(201)
+      expect(await res.json()).toEqual({ autoHidden: false })
+    }
+    // Filed and queued all the same: the moderator still sees it.
+    expect((await rowsAbout(target)).map((r) => r.state)).toEqual(['open', 'open', 'open'])
+    // A third reporter they never blocked: that one hides them.
+    expect(await (await report(tokens[3]!, { kind: 'chat', targetId: target })).json()).toEqual({
+      autoHidden: true,
+    })
   })
 
   it('a reporter files at most 20 a day', async () => {
