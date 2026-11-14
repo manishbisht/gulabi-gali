@@ -336,7 +336,17 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     district: () => here?.district ?? null,
     player: () => here?.player ?? null,
     setLook: (look) => here?.player.setLook(look),
-    travelTo: (id) => enter(id, 'station'),
+    travelTo(id) {
+      // the metro takes a standing walker: get up from a bench, and out of an auto (a boxed-in second try
+      // sets the driver down where the auto stands)
+      here?.sitting?.stand()
+      const driving = here?.driving
+      if (driving?.driving()) {
+        driving.exit()
+        if (driving.driving()) driving.exit()
+      }
+      return enter(id, 'station')
+    },
     onEnter(cb) {
       entered = [...entered, cb]
       return () => void (entered = entered.filter((f) => f !== cb))

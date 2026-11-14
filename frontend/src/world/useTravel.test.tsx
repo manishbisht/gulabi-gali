@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RIDE_MS } from './metroRide'
 import { FADE_MS, savedDistrict, STATION_RANGE, useTravel, type Swap } from './useTravel'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -47,7 +48,10 @@ describe('travelTo', () => {
     expect(travel.fading).toBe(true)
     expect(swap).not.toHaveBeenCalled() // the screen goes black first
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    expect(travel.ride).toEqual({ from: 'walled-city', to: 'mi-road', waiting: false })
+    await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => done)
+    expect(travel.ride).toBeNull()
     expect(swap).toHaveBeenCalledWith('mi-road')
     expect(localStorage.getItem('gg-district')).toBe('mi-road')
     expect(travel.fading).toBe(false)
@@ -65,6 +69,7 @@ describe('travelTo', () => {
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
     act(() => void travel.travelTo('mi-road'))
     arrive()
+    await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => first)
     expect(swap).toHaveBeenCalledTimes(1)
     expect(swap).toHaveBeenCalledWith('university')
@@ -73,6 +78,7 @@ describe('travelTo', () => {
     const next = travel.travelTo('mi-road')
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
     arrive()
+    await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => next)
     expect(swap).toHaveBeenLastCalledWith('mi-road')
   })
@@ -93,6 +99,7 @@ describe('travelTo', () => {
     travel.bind(swap)
     const again = travel.travelTo('university')
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => again)
     expect(swap).toHaveBeenCalled()
   })
@@ -107,9 +114,59 @@ it('remembers nothing when the city closes mid-trip', async () => {
   await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
   travel.bind(null) // App unmounted while the district was loading
   arrive()
+  await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
   await act(() => trip)
   expect(localStorage.getItem('gg-district')).toBeNull()
   expect(travel.failed).toBeNull()
+})
+
+describe('the ride', () => {
+  it('plays while the district loads, and a tap skips the rest of it', async () => {
+    vi.useFakeTimers()
+    const travel = mount()
+    const swap = vi.fn<Swap>(async () => {})
+    travel.bind(swap)
+    let trip: Promise<void>
+    act(() => void (trip = travel.travelTo('mi-road', 'walled-city')))
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    expect(swap).toHaveBeenCalledWith('mi-road') // loading starts with the ride, not after it
+    expect(travel.ride?.waiting).toBe(false)
+    act(() => travel.skipRide())
+    await act(() => trip)
+    expect(travel.ride).toBeNull()
+    expect(localStorage.getItem('gg-district')).toBe('mi-road')
+  })
+
+  it('keeps the coach with a waiting line while the district is still loading, then arrives', async () => {
+    vi.useFakeTimers()
+    const travel = mount()
+    let arrive = () => {}
+    travel.bind(() => new Promise<void>((r) => (arrive = r)))
+    let trip: Promise<void>
+    act(() => void (trip = travel.travelTo('university', 'walled-city')))
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    act(() => travel.skipRide()) // skipping before the load is in just shows the waiting line
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(travel.ride).toEqual({ from: 'walled-city', to: 'university', waiting: true })
+    await act(() => vi.advanceTimersByTimeAsync(20_000))
+    expect(travel.ride?.waiting).toBe(true)
+    arrive()
+    await act(() => trip)
+    expect(travel.ride).toBeNull()
+    expect(localStorage.getItem('gg-district')).toBe('university')
+  })
+
+  it('a failed load ends the ride at once and says so', async () => {
+    vi.useFakeTimers()
+    const travel = mount()
+    travel.bind(() => Promise.reject(new Error('offline')))
+    let trip: Promise<void>
+    act(() => void (trip = travel.travelTo('university', 'walled-city')))
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    await act(() => trip) // no RIDE_MS wait
+    expect(travel.ride).toBeNull()
+    expect(travel.failed).toBe('university')
+  })
 })
 
 describe('trackStation', () => {

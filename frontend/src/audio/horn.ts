@@ -101,6 +101,30 @@ export function honk(now: number = performance.now()): boolean {
   return true
 }
 
+/**
+ * A soft two-note chime for arriving by metro. Only when sound is on and a context already exists (a honk
+ * made it): this never creates one, so a ride stays silent for anyone who has not driven.
+ */
+export function chime(): boolean {
+  const c = ctx
+  if (!c || !soundOn() || c.state !== 'running') return false
+  const t = c.currentTime
+  const gain = c.createGain()
+  gain.gain.setValueAtTime(0.0001, t)
+  gain.gain.linearRampToValueAtTime(0.08, t + 0.03)
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6)
+  gain.connect(c.destination)
+  ;[659, 523].forEach((hz, i) => {
+    const o = c.createOscillator()
+    o.type = 'sine'
+    o.frequency.value = hz
+    o.connect(gain)
+    o.start(t + i * 0.2)
+    o.stop(t + i * 0.2 + 0.4)
+  })
+  return true
+}
+
 /** Lets the audio context go (the page is leaving the city); the next honk makes a fresh one. */
 export function closeAudio(): void {
   const c = ctx

@@ -41,6 +41,7 @@ import { PosterCard } from './ui/PosterCard'
 import { PosterComposer } from './ui/PosterComposer'
 import { RequestComposer, type Sent } from './ui/RequestComposer'
 import { NoWebGL } from './ui/NoWebGL'
+import { MetroRide } from './ui/MetroRide'
 import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
@@ -116,6 +117,8 @@ export default function App() {
   const {
     fading,
     failed: travelFailed,
+    ride,
+    skipRide,
     nearStation,
     sheetOpen,
     openSheet,
@@ -556,7 +559,12 @@ export default function App() {
                     onCollect={collectHere}
                   />
                 ) : sheetOpen ? (
-                  <TravelSheet here={here} lang={lang} onPick={travelTo} onClose={closeSheet} />
+                  <TravelSheet
+                    here={here}
+                    lang={lang}
+                    onPick={(id) => void travelTo(id, here)}
+                    onClose={closeSheet}
+                  />
                 ) : (
                   card ||
                   (bench.notice === 'ghost' && (
@@ -613,6 +621,7 @@ export default function App() {
         />
       )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
+      {ride && <MetroRide {...ride} lang={lang} onSkip={skipRide} />}
       {closed}
     </>
   )

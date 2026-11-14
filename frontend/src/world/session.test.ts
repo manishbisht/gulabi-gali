@@ -732,3 +732,41 @@ it('at the wheel a tap opens no card, E gets out, and nothing else handles E', a
   interact.mockRestore()
   live.session.dispose()
 })
+
+it('travel while seated unseats first', async () => {
+  const { session, ws, sent, bench } = await byTapri()
+  session.sit()
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 2, with: [] })
+  expect(bench.seated).toHaveBeenLastCalledWith(expect.objectContaining({ seat: 2 }))
+  const trip = session.travelTo('mi-road')
+  // the stand-up goes out before the next district has even loaded
+  expect(sent().at(-1)).toEqual({ t: 'sit', bench: null })
+  expect(bench.seated).toHaveBeenLastCalledWith(null)
+  loads[1]!.resolve(fakeDistrict(miRoad))
+  await trip
+  session.dispose()
+})
+
+it('travel while driving dismounts first', async () => {
+  const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+  const live = openLive(async () => null, { drive })
+  const leave = vi.fn()
+  loads[0]!.resolve({
+    ...fakeDistrict(walledCity),
+    autos: { nearest: () => 0, pose: () => ({ x: 0, z: 0, ry: 0 }), take: vi.fn(), leave },
+  })
+  await settle()
+  const interact = vi.spyOn(controls, 'interact')
+  interact.mockReturnValueOnce(true)
+  live.tick(0.016)
+  const player = live.session.player()!
+  expect(player.driving()).toBe(true)
+  const trip = live.session.travelTo('mi-road')
+  expect(player.driving()).toBe(false) // out of the auto before the ride starts
+  expect(leave).toHaveBeenCalled()
+  expect(drive.driving).toHaveBeenLastCalledWith(false)
+  loads[1]!.resolve(fakeDistrict(miRoad))
+  await trip
+  interact.mockRestore()
+  live.session.dispose()
+})

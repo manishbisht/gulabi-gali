@@ -11,7 +11,7 @@ interface Props {
   onClose: () => void
 }
 
-/** The metro's destinations, in the same bottom-card slot as a landmark's. No ride yet: you arrive. */
+/** The metro's destinations, in the same bottom-card slot as a landmark's. Picking one rides the Pink Line there. */
 export function TravelSheet({ here, lang, onPick, onClose }: Props) {
   return (
     <section className="landmark-card travel-sheet" aria-label={t('metroTitle', lang)}>

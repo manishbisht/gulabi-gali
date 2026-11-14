@@ -47,6 +47,13 @@ export const STRINGS = {
     hi: '{place} tak nahi pahunch paaye. Dobara try karo.',
     en: "Couldn't get to {place}. Try again.",
   },
+  rideNext: { hi: 'Agla station: {station}', en: 'Next station: {station}' },
+  rideDoors: {
+    hi: 'Darwaze seedhi taraf khulenge. Utarte waqt zara dhyaan se.',
+    en: 'Doors will open on the right. Mind the gap as you step out.',
+  },
+  rideWaiting: { hi: 'Agle station ka intezaar…', en: 'Waiting at the next station…' },
+  rideSkip: { hi: 'Chhodo, tap karo', en: 'Tap to skip' },
   signInButton: { hi: 'Dikhna hai? Login karo', en: 'Want to be seen? Sign in' },
   signInTitle: { hi: 'Gali mein apni jagah banao', en: 'Take your place in the lane' },
   signInName: { hi: 'Aapka naam', en: 'Your name' },

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DistrictId } from '../net/protocol'
 import { storage } from '../storage'
 import { DISTRICTS } from './district'
+import { playRide } from './metroRide'
+import { chime } from '../audio/horn'
 import type { Vec2 } from './types'
 
 const KEY = 'gg-district'
@@ -34,6 +36,9 @@ export function useTravel() {
   const [sheetOpen, setSheetOpen] = useState(false)
   /** Where the last trip was headed, if its district could not be loaded. Clears itself. */
   const [failed, setFailed] = useState<DistrictId | null>(null)
+  /** The ride on screen, if any; `waiting` once it has run out before the district has arrived. */
+  const [ride, setRide] = useState<{ from: DistrictId; to: DistrictId; waiting: boolean } | null>(null)
+  const skipRef = useRef<() => void>(() => {})
   const failedTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(failedTimer.current), [])
   const swap = useRef<Swap | null>(null)
@@ -56,7 +61,7 @@ export function useTravel() {
    * whose district failed to load (that raises `failed`), nor one cut short by the city closing.
    */
   const travelTo = useCallback(
-    async (id: DistrictId) => {
+    async (id: DistrictId, from: DistrictId = savedDistrict()) => {
       const go = swap.current
       if (busy.current || !go) return
       busy.current = true
@@ -67,8 +72,25 @@ export function useTravel() {
       try {
         await new Promise((r) => setTimeout(r, FADE_MS))
         if (!bound()) return
-        await go(id)
-        if (bound()) storage.set(KEY, id)
+        // the ride plays while the district loads; a failed load cuts the ride short
+        const coach = playRide(from, id)
+        skipRef.current = coach.skip
+        setRide({ from, to: id, waiting: false })
+        const loading = go(id)
+        // remembered the moment the district is in, so a reload mid-ride reopens there
+        loading.then(() => bound() && storage.set(KEY, id), coach.skip)
+        await coach.done
+        if (!bound()) return
+        let arrived = false
+        void loading.then(
+          () => (arrived = true),
+          () => {},
+        )
+        // out of ride before the district is in: keep the coach, with a line saying so
+        await Promise.resolve()
+        if (!arrived) setRide({ from, to: id, waiting: true })
+        await loading
+        if (bound()) chime()
       } catch {
         if (!bound()) return
         setFailed(id)
@@ -76,6 +98,8 @@ export function useTravel() {
         failedTimer.current = setTimeout(() => setFailed(null), FAILED_MS)
       } finally {
         busy.current = false
+        skipRef.current = () => {}
+        setRide(null)
         setFading(false)
       }
     },
@@ -100,5 +124,19 @@ export function useTravel() {
     [showSheet],
   )
 
-  return { fading, failed, nearStation, sheetOpen, openSheet, closeSheet, travelTo, trackStation, bind }
+  const skipRide = useCallback(() => skipRef.current(), [])
+
+  return {
+    fading,
+    failed,
+    ride,
+    skipRide,
+    nearStation,
+    sheetOpen,
+    openSheet,
+    closeSheet,
+    travelTo,
+    trackStation,
+    bind,
+  }
 }
