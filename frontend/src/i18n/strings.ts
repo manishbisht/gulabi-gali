@@ -309,6 +309,11 @@ export const STRINGS = {
     en: 'Nothing here yet. Say hello first.',
   },
   connUnread: { hi: 'Nayi baat', en: 'New message' },
+  connEnded: { hi: 'Khatam baat-cheet', en: 'Ended chats' },
+  connEndedHint: {
+    hi: 'Khatam hone ke 30 din tak in baat-cheeton ki report ki ja sakti hai.',
+    en: 'You can still report these for 30 days after they ended.',
+  },
   chatBack: { hi: 'Wapas', en: 'Back' },
   chatOlder: { hi: 'Purane dekho', en: 'Show older' },
   chatLabel: { hi: 'Chat mein likho', en: 'Write in the chat' },
@@ -347,6 +352,8 @@ export const STRINGS = {
   },
   blockYes: { hi: 'Haan, block karo', en: 'Yes, block' },
   blockNo: { hi: 'Rehne do', en: 'Never mind' },
+  blockAlsoReport: { hi: 'Report bhi karein?', en: 'Also report?' },
+  blockNext: { hi: 'Aage: report likho', en: 'Next: the report' },
   blockFailed: { hi: 'Block nahi ho paya. Dobara try karo.', en: "Couldn't block. Try again." },
   slowDown: {
     hi: 'Thoda ruko. Bahut jaldi ho raha hai, zara der baad phir try karo.',

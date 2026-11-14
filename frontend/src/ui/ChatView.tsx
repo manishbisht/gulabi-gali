@@ -65,6 +65,8 @@ export function ChatView({
 }: Props) {
   const [blocking, setBlocking] = useState(false)
   const [reporting, setReporting] = useState(false)
+  /** The report came from the block question's "Also report?": its "Also block?" starts ticked. */
+  const [blockToo, setBlockToo] = useState(false)
   /** The header's menu (Unmatch, Block, Report) is open. */
   const [menu, setMenu] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
@@ -217,7 +219,14 @@ export function ChatView({
               {t('blockButton', lang)}
             </button>
           )}
-          <button type="button" className="person-close" onClick={() => pick(setReporting)}>
+          <button
+            type="button"
+            className="person-close"
+            onClick={() => {
+              setBlockToo(false)
+              pick(setReporting)
+            }}
+          >
             {t('reportButton', lang)}
           </button>
         </div>
@@ -230,7 +239,11 @@ export function ChatView({
           lang={lang}
           token={token}
           onBlock={onBlock}
-          onClose={() => setReporting(false)}
+          blockToo={blockToo}
+          onClose={() => {
+            setReporting(false)
+            setBlockToo(false)
+          }}
         />
       )}
       {blocking && onBlock && (
@@ -239,6 +252,11 @@ export function ChatView({
           lang={lang}
           onConfirm={onBlock}
           onCancel={() => setBlocking(false)}
+          onReport={() => {
+            setBlocking(false)
+            setBlockToo(true)
+            setReporting(true)
+          }}
         />
       )}
       {confirming && !ended && (
@@ -283,9 +301,24 @@ export function ChatView({
         ))}
       </ol>
       {ended ? (
-        <p className="chat-note" role="status">
-          {t('chatEnded', lang)}
-        </p>
+        <div className="chat-ended">
+          <p className="chat-note" role="status">
+            {t('chatEnded', lang)}
+          </p>
+          {!reporting && (
+            <button
+              type="button"
+              className="person-close"
+              onClick={() => {
+                setMenu(false)
+                setBlockToo(false)
+                setReporting(true)
+              }}
+            >
+              {t('reportButton', lang)}
+            </button>
+          )}
+        </div>
       ) : (
         note && (
           <p className="chat-note" role="status">

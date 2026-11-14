@@ -139,3 +139,104 @@ it('ProfileSheet lists the people you blocked by first name, and Unblock removes
   expect(calls).toContain('DELETE /blocks/p9')
   expect(host.querySelector('.blocked-list')?.textContent).toContain("You haven't blocked anyone")
 })
+
+it('ProfileSheet: Report next to Unblock files a report about the person you blocked', async () => {
+  const calls: { path: string; body?: unknown }[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const path = url.replace(/^.*\/api/, '')
+      calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      return path === '/reports' ? json({ autoHidden: false }, 201) : json([{ id: 'p9', name: 'Meera' }])
+    }),
+  )
+  const me: Me = {
+    id: 'u',
+    complete: true,
+    verified: true,
+    profile: {
+      id: 'u',
+      name: 'Asha Sharma',
+      look: ravi.look,
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+    },
+  }
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () =>
+    createRoot(host).render(
+      <ProfileSheet
+        me={me}
+        lang="en"
+        token={async () => 'tok'}
+        onSave={async () => ({ ok: true })}
+        onClose={() => {}}
+        onSignOut={() => {}}
+      />,
+    ),
+  )
+  await settle()
+  await act(async () => button(host.querySelector('.blocked-list')!, 'Report').click())
+  const form = host.querySelector('[role="dialog"][aria-label="Report Meera"]')!
+  // already blocked: no "Also block?"
+  expect(form.textContent).not.toContain('Also block?')
+  await act(async () => button(form as HTMLElement, 'Spam').click())
+  await act(async () => button(form as HTMLElement, 'Send report').click())
+  await settle()
+  expect(calls.find((c) => c.path === '/reports')?.body).toEqual({
+    kind: 'person',
+    targetId: 'p9',
+    reason: 'spam',
+  })
+})
+
+it('BlockConfirm: "Also report?" takes you to the report first, and blocks once it has gone', async () => {
+  const sent: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/reports')) {
+        sent.push(JSON.parse(String(init!.body)))
+        return json({ autoHidden: false }, 201)
+      }
+      return json({ ...ravi, homeArea: 'Raja Park', about: '', pauseRequests: false })
+    }),
+  )
+  const onBlock = vi.fn(async () => true)
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () =>
+    createRoot(host).render(
+      <PersonCard
+        person={ravi}
+        gone={false}
+        viewer="verified"
+        lang="en"
+        token={async () => 'tok'}
+        onVisible={() => {}}
+        onGetVerified={() => {}}
+        onRequest={() => {}}
+        onBlock={onBlock}
+        onClose={() => {}}
+      />,
+    ),
+  )
+  await settle()
+  await act(async () => button(host, 'Block').click())
+  const ask = host.querySelector('[role="alertdialog"]')!
+  const box = [...ask.querySelectorAll('label')].find((l) => l.textContent === 'Also report?')!
+  await act(async () => box.querySelector('input')!.click())
+  await act(async () => button(ask as HTMLElement, 'Next: the report').click())
+  // nothing blocked yet: the report comes first, with "Also block?" already ticked
+  expect(onBlock).not.toHaveBeenCalled()
+  const form = host.querySelector('[role="dialog"][aria-label="Report Ravi"]')!
+  const also = [...form.querySelectorAll('label')].find((l) => l.textContent === 'Also block?')!
+  expect(also.querySelector('input')!.checked).toBe(true)
+  await act(async () => button(form as HTMLElement, 'Harassing me').click())
+  await act(async () => button(form as HTMLElement, 'Send report').click())
+  await settle()
+  expect(sent).toEqual([{ kind: 'person', targetId: 'p2', reason: 'harassment' }])
+  expect(onBlock).toHaveBeenCalledWith(ravi)
+})

@@ -6,7 +6,7 @@ import { listMatches, listMessages, postMessage, unmatch } from './chat'
 import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
-import { purgeEvidence } from './evidence'
+import { listEnded, purgeEvidence } from './evidence'
 import { GATE_NAME, joinWaitlist } from './gate'
 import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
@@ -186,6 +186,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
       return new Response(null, { status: 204 })
     }
   }
+  if (pathname === '/api/ended' && method === 'GET') return listEnded(env, user.id)
   if (pathname === '/api/reports' && method === 'POST')
     return fileReport(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')

@@ -1,8 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { Connections as ConnectionsState } from '../connections/useConnections'
 import { t, type Lang } from '../i18n/strings'
-import type { MatchView } from '../net/protocol'
+import type { EndedChat, MatchView } from '../net/protocol'
 import { ChatView } from './ChatView'
+import { ReportSheet } from './ReportSheet'
 import { useKeyboard } from './useKeyboard'
 
 type Tab = 'incoming' | 'sent' | 'chats'
@@ -31,8 +32,16 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
   const [chat, setChat] = useState<MatchView | null>(null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  /** An ended chat being reported, from the "Ended chats" list. */
+  const [reporting, setReporting] = useState<EndedChat | null>(null)
   const { keyboard, height } = useKeyboard()
-  const { seeIncoming, incoming } = conn
+  const { seeIncoming, incoming, refresh } = conn
+
+  // Opening the sheet looks again: a block tells the blocked person nothing, so their chat list (and the
+  // ended chats they can still report) may be out of date.
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   // looking at the incoming tab is what reads those requests
   useEffect(() => {
@@ -40,9 +49,10 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
   }, [tab, chat, seeIncoming, incoming])
 
   const open = chat ? conn.matches.find((m) => m.id === chat.id) : undefined
-  // The other side unmatched: the chat stays, saying it has ended. Unmatched here (or gone any other way):
-  // back to the list.
-  const ended = chat !== null && !open && conn.ended.has(chat.id)
+  // The other side ended it (an unmatch, a block, a deletion): the chat stays, saying it has ended, with a
+  // Report button. Unmatched or blocked from here: back to the list (see `onUnmatch`, `onBlock`).
+  const ended =
+    chat !== null && !open && (conn.ended.has(chat.id) || conn.endedChats.some((e) => e.matchId === chat.id))
   const showing = open ?? (ended ? chat : null)
   const style = keyboard ? ({ '--kb': `${keyboard}px`, '--vvh': `${height}px` } as CSSProperties) : undefined
 
@@ -170,24 +180,68 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
                 <p className="bench-footer">{t('connSentNote', lang)}</p>
               </>
             )}
-            {tab === 'chats' &&
-              (conn.matches.length === 0 ? (
-                <p className="chat-empty">{t('connNoChats', lang)}</p>
-              ) : (
-                <ul className="conn-list">
-                  {conn.matches.map((m) => (
-                    <li key={m.id}>
-                      <button type="button" className="conn-chat" onClick={() => setChat(m)}>
-                        <b>{m.person.name}</b>
-                        {conn.chatUnread(m.id) && (
-                          <span className="conn-dot" aria-label={t('connUnread', lang)} />
-                        )}
-                        {m.last && <span className="conn-last">{m.last.body}</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ))}
+            {tab === 'chats' && (
+              <>
+                {conn.matches.length === 0 ? (
+                  <p className="chat-empty">{t('connNoChats', lang)}</p>
+                ) : (
+                  <ul className="conn-list">
+                    {conn.matches.map((m) => (
+                      <li key={m.id}>
+                        <button type="button" className="conn-chat" onClick={() => setChat(m)}>
+                          <b>{m.person.name}</b>
+                          {conn.chatUnread(m.id) && (
+                            <span className="conn-dot" aria-label={t('connUnread', lang)} />
+                          )}
+                          {m.last && <span className="conn-last">{m.last.body}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {conn.endedChats.length > 0 && (
+                  <section className="conn-ended" aria-label={t('connEnded', lang)}>
+                    <h3>{t('connEnded', lang)}</h3>
+                    <p className="bench-footer">{t('connEndedHint', lang)}</p>
+                    {reporting && (
+                      <ReportSheet
+                        key={reporting.matchId}
+                        kind="chat"
+                        targetId={reporting.person.id}
+                        name={reporting.person.name ?? t('blockedSomeone', lang)}
+                        lang={lang}
+                        token={token}
+                        onBlock={
+                          onBlock &&
+                          (() =>
+                            onBlock(reporting.person.id, reporting.person.name ?? t('blockedSomeone', lang)))
+                        }
+                        onClose={() => setReporting(null)}
+                      />
+                    )}
+                    <ul className="conn-list">
+                      {conn.endedChats.map((e) => {
+                        const name = e.person.name ?? t('blockedSomeone', lang)
+                        return (
+                          <li key={e.matchId}>
+                            <b>{name}</b>
+                            <button
+                              type="button"
+                              className="person-close"
+                              aria-label={`${t('reportButton', lang)}: ${name}`}
+                              disabled={reporting !== null}
+                              onClick={() => setReporting(e)}
+                            >
+                              {t('reportButton', lang)}
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </section>
+                )}
+              </>
+            )}
           </div>
         </>
       )}

@@ -21,6 +21,8 @@ interface Props {
   token(): Promise<string | null>
   /** The block flow, offered as "Also block?" and run once the report has gone; true once blocked. */
   onBlock?(): Promise<boolean>
+  /** "Also block?" starts ticked: the person came here from the block question's "Also report?". */
+  blockToo?: boolean
   onClose(): void
 }
 
@@ -45,10 +47,10 @@ const ERROR_TEXT: Record<ReportError | 'block', StringKey> = {
  * The in-sheet report form (never `window.confirm`): a reason, an optional note, and "Also block?". Only the
  * reason and note are sent; the server gathers what was said or shown itself.
  */
-export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock, onClose }: Props) {
+export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock, blockToo, onClose }: Props) {
   const [reason, setReason] = useState<ReportReason | null>(null)
   const [note, setNote] = useState('')
-  const [alsoBlock, setAlsoBlock] = useState(false)
+  const [alsoBlock, setAlsoBlock] = useState(blockToo === true)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<ReportError | 'block' | null>(null)
   /** Filed; `missing` when the server no longer had the bench's record to send with it. */

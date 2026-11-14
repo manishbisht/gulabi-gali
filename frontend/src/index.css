@@ -1007,6 +1007,34 @@ small.words-hint {
   gap: 8px;
 }
 
+.blocked-list li span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* the chats tab's "Ended chats": over, but still reportable for 30 days */
+.conn-ended {
+  margin-top: 14px;
+}
+
+.conn-ended h3 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+
+.conn-ended li,
+.chat-ended {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-ended .chat-note {
+  flex: 1;
+}
+
 /* the chat header's menu: Unmatch, Block, Report */
 .chat-menu {
   justify-content: flex-end;

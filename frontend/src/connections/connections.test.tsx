@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   LIVE_CLOSE,
+  type EndedChat,
   type MatchView,
   type PublicPerson,
   type RequestLists,
@@ -36,6 +37,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 let requests: RequestLists
 let matches: MatchView[]
+let ended: EndedChat[]
+/** The bodies of the reports filed. */
+let reports: unknown[]
 let calls: string[]
 let msgs: { id: string; body: string; at: number; mine: boolean }[]
 /** Armed, the next GET /api/requests waits until `release` is called with its body. */
@@ -53,6 +57,8 @@ const incomingFrom = (p: PublicPerson, reason: string): RequestView => ({
 beforeEach(() => {
   FakeSocket.all = []
   calls = []
+  ended = []
+  reports = []
   armed = false
   msgs = [{ id: 'z9', body: 'hello', at: 5, mine: false }]
   localStorage.clear()
@@ -73,6 +79,11 @@ beforeEach(() => {
         })
       }
       if (path === '/api/matches') return json(matches)
+      if (path === '/api/ended') return json(ended)
+      if (path === '/api/reports' && method === 'POST') {
+        reports.push(JSON.parse(String(init!.body)))
+        return json({ autoHidden: false }, 201)
+      }
       if (path === '/api/matches/m1/messages') return json({ messages: msgs, before: null })
       if (path === '/api/requests/r-p1/accept' && method === 'POST') {
         requests = { ...requests, incoming: [] }
@@ -231,7 +242,7 @@ it('a message notice refetches the chats only; any other notice refetches both l
   from = calls.length
   await notice({ t: 'request', id: 'r-p9' })
   await settle()
-  expect(calls.slice(from).sort()).toEqual(['GET /api/matches', 'GET /api/requests'])
+  expect(calls.slice(from).sort()).toEqual(['GET /api/ended', 'GET /api/matches', 'GET /api/requests'])
 })
 
 it('a chats-only refetch never lets an older request list win', async () => {
@@ -271,6 +282,14 @@ it('an open chat the other person ended says so, and takes no more messages', as
   expect(host.textContent).toContain('This conversation has ended')
   expect(host.querySelector('input[aria-label="Write in the chat"]')).toBeNull()
   expect(button(/^Unmatch$/)).toBeUndefined()
+  // and it can still be reported from right there
+  await click(button(/^Report$/))
+  const form = host.querySelector('[role=dialog][aria-label="Report Ravi"]')!
+  await click([...form.querySelectorAll('button')].find((b) => b.textContent === 'Harassing me')!)
+  await click([...form.querySelectorAll('button')].find((b) => b.textContent === 'Send report')!)
+  await settle()
+  expect(reports).toEqual([{ kind: 'chat', targetId: 'p2', reason: 'harassment' }])
+  await click(button(/^OK$/))
   // back goes to the list, where it is gone
   await click(button(/^Back$/))
   await settle()
@@ -290,4 +309,33 @@ it('an inbox closed for a ban (4004) tells the page, so it can show the ban at o
   await act(async () => FakeSocket.all[0]!.onopen!())
   await act(async () => FakeSocket.all[0]!.onclose!({ code: LIVE_CLOSE.banned }))
   expect(onBanned).toHaveBeenCalledOnce()
+})
+
+it('Ended chats: a chat that is over can still be reported, and opening the sheet looks again', async () => {
+  const { host, q, button, click } = await mount()
+  // Kabir blocked us since the inbox came up: no notice says so (a block tells the blocked nothing)
+  ended = [{ matchId: 'm0', person: { id: 'p7', name: 'Kabir' }, endedAt: 3 }]
+  await click(q('[data-testid=open]'))
+  await settle()
+  await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
+  const section = host.querySelector('[aria-label="Ended chats"]')!
+  expect(section.textContent).toContain('Kabir')
+  await click([...section.querySelectorAll('button')].find((b) => b.textContent === 'Report')!)
+  const form = host.querySelector('[role=dialog][aria-label="Report Kabir"]')!
+  await click([...form.querySelectorAll('button')].find((b) => b.textContent === 'Harassing me')!)
+  await click([...form.querySelectorAll('button')].find((b) => b.textContent === 'Send report')!)
+  await settle()
+  expect(reports).toEqual([{ kind: 'chat', targetId: 'p7', reason: 'harassment' }])
+  expect(host.textContent).toContain('Thank you. The moderator will take a look.')
+  await click(button(/^OK$/))
+  expect(host.querySelector('[role=dialog][aria-label="Report Kabir"]')).toBeNull()
+})
+
+it('an ended chat with no saved name says someone', async () => {
+  ended = [{ matchId: 'm0', person: { id: 'p7', name: null }, endedAt: 3 }]
+  const { host, q, click } = await mount()
+  await click(q('[data-testid=open]'))
+  await settle()
+  await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
+  expect(host.querySelector('[aria-label="Ended chats"]')!.textContent).toContain('Someone')
 })

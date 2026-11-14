@@ -3,6 +3,7 @@ import type {
   ChatError,
   ChatMessage,
   CitySnapshot,
+  EndedChat,
   FullProfile,
   HereFor,
   HomeArea,
@@ -327,6 +328,13 @@ export async function getBlocks(token: string, signal?: AbortSignal): Promise<Bl
   const res = await fetchNoting(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`blocks ${res.status}`)
   return (await res.json()) as BlockedPerson[]
+}
+
+/** The caller's chats that ended in the last 30 days, which they can still report. Rejects on failure. */
+export async function getEnded(token: string, signal?: AbortSignal): Promise<EndedChat[]> {
+  const res = await fetchNoting(`${API_BASE}/api/ended`, { headers: bearer(token), signal })
+  if (!res.ok) throw new Error(`ended ${res.status}`)
+  return (await res.json()) as EndedChat[]
 }
 
 /**

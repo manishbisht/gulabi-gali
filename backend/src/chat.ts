@@ -3,6 +3,7 @@ import { messageLimit, rateLimited } from './limits'
 import { holdEvidence } from './evidence'
 import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
+import { firstName } from './names'
 import { ACTIVE, activeRow, isBlocked, toPublic } from './profiles'
 import { pairOf } from './requests'
 import {
@@ -303,8 +304,18 @@ export async function endMatch(
     if (why === 'block') await env.DB.batch(requests)
     return null
   }
+  // Each side's first name as of now: all the "Ended chats" list will ever show of them.
+  const { results: named } = await env.DB.prepare(
+    'SELECT user_id, name FROM profiles WHERE user_id IN (?, ?)',
+  )
+    .bind(userId, other)
+    .all<{ user_id: string; name: string }>()
+  const nameOf = (id: string) => {
+    const row = named.find((r) => r.user_id === id)
+    return row ? firstName(row.name) : ''
+  }
   const results = await env.DB.batch([
-    holdEvidence(env, match.id, userId, other, now),
+    holdEvidence(env, match.id, userId, other, now, { owner: nameOf(userId), other: nameOf(other) }),
     ...requests,
     env.DB.prepare('DELETE FROM matches WHERE id = ?').bind(match.id),
   ])

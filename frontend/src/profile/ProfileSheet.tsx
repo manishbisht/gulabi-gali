@@ -5,6 +5,7 @@ import { getBlocks, unblockPerson, type BlockedPerson, type ProfileInput } from 
 import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
+import { ReportSheet } from '../ui/ReportSheet'
 import { DeleteAccount } from './DeleteAccount'
 import { AvatarBuilder } from './AvatarBuilder'
 import { areaLabel, HERE_FOR_LABEL, HOME_AREAS } from './homeAreas'
@@ -20,7 +21,7 @@ const linkAllowed = (s: string) =>
 interface Props {
   me: Me
   lang: Lang
-  /** Lets the sheet list the people you blocked (first names), with Unblock. */
+  /** Lets the sheet list the people you blocked (first names), with Unblock and Report. */
   token?: () => Promise<string | null>
   onSave: (p: ProfileInput) => Promise<SaveOutcome>
   onClose: () => void
@@ -53,6 +54,8 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
   /** Whom you blocked: null while loading or when it could not load. */
   const [blocked, setBlocked] = useState<BlockedPerson[] | null>(null)
   const [blockedNote, setBlockedNote] = useState<'load' | 'unblock' | null>(null)
+  /** Someone blocked, being reported: a block alone tells the moderator nothing. */
+  const [reporting, setReporting] = useState<BlockedPerson | null>(null)
   useEffect(() => {
     if (!token || !me.complete) return
     const ctl = new AbortController()
@@ -259,6 +262,17 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
             {blockedNote && (
               <p role="alert">{t(blockedNote === 'load' ? 'blockedLoadFailed' : 'unblockFailed', lang)}</p>
             )}
+            {reporting && (
+              <ReportSheet
+                key={reporting.id}
+                kind="person"
+                targetId={reporting.id}
+                name={reporting.name ?? t('blockedSomeone', lang)}
+                lang={lang}
+                token={token}
+                onClose={() => setReporting(null)}
+              />
+            )}
             {blocked &&
               (blocked.length === 0 ? (
                 <p>{t('blockedNone', lang)}</p>
@@ -269,6 +283,9 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
                       <span>{b.name ?? t('blockedSomeone', lang)}</span>
                       <button type="button" onClick={() => void unblock(b.id)}>
                         {t('unblockButton', lang)}
+                      </button>
+                      <button type="button" disabled={reporting !== null} onClick={() => setReporting(b)}>
+                        {t('reportButton', lang)}
                       </button>
                     </li>
                   ))}

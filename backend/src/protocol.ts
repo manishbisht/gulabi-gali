@@ -230,6 +230,15 @@ export type InboxNotice =
   | { t: 'message'; matchId: string; id: string }
   | { t: 'unmatched'; matchId: string }
 /**
+ * `GET /api/ended`: a chat that ended in the last 30 days (an unmatch, a block, a deletion), which either
+ * member can still report. `person.name` is their first name when it ended, or null when they had none.
+ */
+export interface EndedChat {
+  matchId: string
+  person: { id: string; name: string | null }
+  endedAt: number
+}
+/**
  * Everything the inbox socket sends. A client sends only `{"t":"ping"}`. The server may close it with
  * `LIVE_CLOSE.replaced` (more tabs than one person may keep open: this, the oldest, must not reconnect),
  * `LIVE_CLOSE.banned` (no longer a resident: banned or hidden; must not reconnect) or `LIVE_CLOSE.invalid`

@@ -101,15 +101,59 @@ test('request, accept, chat, unmatch', async ({ browser }) => {
   await sheetA.getByRole('button', { name: 'Bhejo' }).click()
   await expect(sheetB.getByText('JKK ke gate pe milte hain')).toBeVisible()
 
-  // A unmatches (in the sheet, not a native dialog); B's open chat says it has ended, then is gone
+  // A unmatches (in the sheet, not a native dialog); B's open chat says it has ended (and can still be
+  // reported), then is gone from the chats, kept only under "Khatam baat-cheet"
   await sheetA.getByRole('button', { name: 'Aur', exact: true }).click()
   await sheetA.getByRole('button', { name: 'Unmatch' }).click()
   await sheetA.getByRole('button', { name: 'Haan, unmatch karo' }).click()
   await expect(sheetA.getByText('Abhi koi baat nahi')).toBeVisible()
-  await expect(sheetA.getByText(b.name)).toBeHidden()
+  await expect(sheetA.locator('.conn-chat', { hasText: b.name })).toBeHidden()
+  await expect(sheetA.getByRole('region', { name: 'Khatam baat-cheet' })).toContainText(b.name)
   await expect(sheetB.getByText('Ye baat-cheet khatam ho gayi')).toBeVisible()
+  await expect(sheetB.getByRole('button', { name: 'Report karo', exact: true })).toBeVisible()
   await expect(sheetB.getByRole('textbox', { name: 'Chat mein likho' })).toBeHidden()
   await sheetB.getByRole('button', { name: 'Wapas' }).click()
   await expect(sheetB.getByText('Abhi koi baat nahi')).toBeVisible()
-  await expect(sheetB.getByText(a.name)).toBeHidden()
+  await expect(sheetB.locator('.conn-chat', { hasText: a.name })).toBeHidden()
+  await expect(sheetB.getByRole('region', { name: 'Khatam baat-cheet' })).toContainText(a.name)
+})
+
+test('B blocks A mid-chat, and A still reports the chat from "Ended chats"', async ({ browser }) => {
+  const a = await resident(browser, 'Asha')
+  const b = await resident(browser, 'Ravi')
+
+  // A asks, B says yes, and B writes something A will want to report
+  await verify(a.page)
+  await walk(a.page, 'd', 300)
+  await a.page.keyboard.press('e')
+  const card = a.page.getByRole('region', { name: b.name })
+  await card.getByRole('button', { name: 'Milna hai' }).click()
+  await a.page.getByRole('textbox', { name: 'Aapki baat' }).fill('Chai pe chalein? JKK open mic ke baad')
+  await a.page.getByRole('button', { name: 'Bhejo' }).click()
+  await expect(a.page.getByText('Bhej diya!')).toBeVisible()
+  await b.page.getByRole('button', { name: /Mulaqaatein/ }).click()
+  const sheetB = b.page.getByRole('dialog', { name: 'Aapki mulaqaatein' })
+  await sheetB.getByRole('button', { name: 'Haan' }).click()
+  await sheetB.getByRole('button', { name: new RegExp(a.name) }).click()
+  await sheetB.getByRole('textbox', { name: 'Chat mein likho' }).fill('tum kahan rehti ho? batao')
+  await sheetB.getByRole('button', { name: 'Bhejo' }).click()
+  await expect(sheetB.getByText('tum kahan rehti ho? batao')).toBeVisible()
+
+  // B blocks A from the chat: A is told nothing, and the chat is gone from A's list
+  await sheetB.getByRole('button', { name: 'Aur', exact: true }).click()
+  await sheetB.getByRole('button', { name: 'Block karo' }).click()
+  await sheetB.getByRole('button', { name: 'Haan, block karo' }).click()
+  await expect(sheetB.getByText('Abhi koi baat nahi')).toBeVisible()
+
+  // A opens Mulaqaatein: the chat is under "Khatam baat-cheet", and can be reported from there
+  await a.page.getByRole('button', { name: /Mulaqaatein/ }).click()
+  const sheetA = a.page.getByRole('dialog', { name: 'Aapki mulaqaatein' })
+  await sheetA.getByRole('tab', { name: /Baatein/ }).click()
+  const endedA = sheetA.getByRole('region', { name: 'Khatam baat-cheet' })
+  await expect(endedA).toContainText(b.name)
+  await endedA.getByRole('button', { name: `Report karo: ${b.name}` }).click()
+  const form = sheetA.getByRole('dialog', { name: `${b.name} ki report` })
+  await form.getByRole('button', { name: 'Pareshan kar raha/rahi hai' }).click()
+  await form.getByRole('button', { name: 'Report bhejo' }).click()
+  await expect(form).toContainText('Shukriya! Moderator isse khud dekhenge.')
 })

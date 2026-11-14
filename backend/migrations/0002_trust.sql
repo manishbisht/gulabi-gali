@@ -24,12 +24,17 @@ CREATE TABLE counters (
 
 -- A chat's last 30 messages, kept when the match ends (an unmatch, a block, a deletion) so either person can
 -- still report it. `owner` ended it, `other` is the other side; `messages` is a JSON array of
--- {from, body, at}. Admins only, and the cron deletes it 30 days on.
+-- {from, body, at}, for admins only. `owner_name` and `other_name` are each side's first name when it ended
+-- (empty for none): all the "Ended chats" list ever shows of the other person. The cron deletes it 30 days on.
 CREATE TABLE held_evidence (
   id TEXT PRIMARY KEY, owner TEXT NOT NULL, other TEXT NOT NULL, match_id TEXT NOT NULL,
-  messages TEXT NOT NULL, created_at INTEGER NOT NULL);
+  messages TEXT NOT NULL, created_at INTEGER NOT NULL,
+  owner_name TEXT NOT NULL DEFAULT '', other_name TEXT NOT NULL DEFAULT '');
 CREATE INDEX held_evidence_match ON held_evidence(match_id);
 CREATE INDEX held_evidence_created ON held_evidence(created_at);
+-- `GET /api/ended`: a person's ended chats, from either side.
+CREATE INDEX held_evidence_owner ON held_evidence(owner, created_at);
+CREATE INDEX held_evidence_other ON held_evidence(other, created_at);
 
 -- Carried over from the phase 2 review: the lists and the match lookups by the second member.
 CREATE INDEX requests_to_state ON requests(to_id, state, created_at);

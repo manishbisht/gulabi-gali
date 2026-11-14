@@ -53,6 +53,8 @@ export function PersonCard({
 }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [reporting, setReporting] = useState(false)
+  /** The report came from the block question's "Also report?": its "Also block?" starts ticked. */
+  const [blockToo, setBlockToo] = useState(false)
   const resident = viewer === 'resident' || viewer === 'verified'
   const [loaded, setLoaded] = useState<Loaded>(null)
   useEffect(() => {
@@ -108,6 +110,15 @@ export function PersonCard({
           lang={lang}
           onConfirm={() => onBlock(person)}
           onCancel={() => setConfirming(false)}
+          onReport={
+            resident
+              ? () => {
+                  setConfirming(false)
+                  setBlockToo(true)
+                  setReporting(true)
+                }
+              : undefined
+          }
         />
       )}
       {reporting && (
@@ -118,7 +129,11 @@ export function PersonCard({
           lang={lang}
           token={token}
           onBlock={onBlock && (() => onBlock(person))}
-          onClose={() => setReporting(false)}
+          blockToo={blockToo}
+          onClose={() => {
+            setReporting(false)
+            setBlockToo(false)
+          }}
         />
       )}
       <div className="person-actions">
@@ -149,7 +164,14 @@ export function PersonCard({
           </button>
         )}
         {resident && !confirming && !reporting && (
-          <button type="button" className="person-close" onClick={() => setReporting(true)}>
+          <button
+            type="button"
+            className="person-close"
+            onClick={() => {
+              setBlockToo(false)
+              setReporting(true)
+            }}
+          >
             {t('reportButton', lang)}
           </button>
         )}

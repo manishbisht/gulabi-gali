@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { acceptRequest, getMatches, getMessages, getRequests, ignoreRequest, unmatch } from '../net/api'
+import {
+  acceptRequest,
+  getEnded,
+  getMatches,
+  getMessages,
+  getRequests,
+  ignoreRequest,
+  unmatch,
+} from '../net/api'
 import { connectInbox } from '../net/inbox'
-import type { InboxNotice, MatchView, RequestLists } from '../net/protocol'
+import type { EndedChat, InboxNotice, MatchView, RequestLists } from '../net/protocol'
 import { storage } from '../storage'
 
 const READ_KEY = 'gg-read'
@@ -37,6 +45,11 @@ export interface Connections {
   messageTicks: Record<string, number>
   /** Matches the other person ended (an `unmatched` notice): an open one says so instead of vanishing. */
   ended: ReadonlySet<string>
+  /**
+   * Chats that ended in the last 30 days, by either side (an unmatch, a block, a deletion), from the server:
+   * they can still be reported. Fetched with the request lists.
+   */
+  endedChats: EndedChat[]
   /** The match id on success, null if it could not be accepted. The lists are fresh when it resolves. */
   accept(id: string): Promise<string | null>
   ignore(id: string): Promise<void>
@@ -69,11 +82,12 @@ export function useConnections({
   const [latest, setLatest] = useState<Record<string, string>>({})
   const [messageTicks, setTicks] = useState<Record<string, number>>({})
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set())
+  const [endedChats, setEndedChats] = useState<EndedChat[]>([])
   const [reconnects, setReconnects] = useState(0)
   /** Moves with every sign-out or user change: an answer from before it is dropped. */
   const gen = useRef(0)
   /** Each list's newest fetch: an older answer that lands after a newer one is dropped. */
-  const seq = useRef({ requests: 0, matches: 0 })
+  const seq = useRef({ requests: 0, matches: 0, ended: 0 })
   const tokenRef = useRef(token)
   const bannedRef = useRef(onBanned)
   const alive = useRef(true)
@@ -98,17 +112,23 @@ export function useConnections({
     })
   }, [])
 
-  /** Refetches the matches, and the request lists too unless `only` says chats. */
+  /** Refetches the matches, and the request lists and ended chats too unless `only` says chats. */
   const refresh = useCallback(
     async (only?: 'chats') => {
       const g = gen.current
       const m = ++seq.current.matches
       const r = only ? null : ++seq.current.requests
+      const e = only ? null : ++seq.current.ended
       const tok = await tokenRef.current().catch(() => null)
       if (!tok || g !== gen.current) return
-      const [req, mat] = await Promise.allSettled([r === null ? null : getRequests(tok), getMatches(tok)])
+      const [req, mat, end] = await Promise.allSettled([
+        r === null ? null : getRequests(tok),
+        getMatches(tok),
+        e === null ? null : getEnded(tok),
+      ])
       if (!alive.current || g !== gen.current) return
       if (r === seq.current.requests && req.status === 'fulfilled' && req.value) setLists(req.value)
+      if (e === seq.current.ended && end.status === 'fulfilled' && end.value) setEndedChats(end.value)
       if (m === seq.current.matches && mat.status === 'fulfilled') {
         setMatches(mat.value)
         const ids = new Set(mat.value.map((m) => m.id))
@@ -165,6 +185,7 @@ export function useConnections({
       setLatest({})
       setTicks({})
       setEnded(new Set())
+      setEndedChats([])
     }
   }, [user, refresh])
 
@@ -253,6 +274,7 @@ export function useConnections({
     reconnects,
     messageTicks,
     ended,
+    endedChats,
     accept,
     ignore,
     unmatch: leave,
