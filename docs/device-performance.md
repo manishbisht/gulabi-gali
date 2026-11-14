@@ -73,7 +73,34 @@ Initial JS from `npm run build`, gzipped: the entry chunk `index` is 88.9 kB, pl
 is separate, and the other three districts are 2.1 to 3.1 kB each, loaded on travel. The total excluding
 `three` is about 95 kB, against a 250 kB limit.
 
-**Fixes made in this pass.** Nothing missed a target, so no render-path fixes were needed. Go-live fixes from
+### Phase 2: 60 residents in the Walled City
+
+Run 2026-11-14, same machine and spec. A local `wrangler dev` Worker with `DEV_AUTH=1` (local D1 migrated),
+and `node scripts/fake-residents.mjs 60 walled-city 400` running beside it: 60 dev-signed-in residents, each
+with a live socket in the Walled City, wandering 20 m around the spawn at 1.4 m/s and reporting at 10 Hz
+(about 600 moves a second in, the Worker fanning them out). The script's counters stayed at 60 open sockets
+with no errors and no closes throughout. The spec itself is a guest (no sign-in), so it receives the crowd
+and is not part of it; it counted 60 people drawn at the end of each walk (`window.__gg.people()`).
+
+| Run | FCP ms | LCP ms | Walkable ms | Frames (8 s) | p50 ms | p95 ms | p99 ms | Max ms | Frames over 33 ms | Tier after | People | JS heap MB |
+| --- | -----: | -----: | ----------: | -----------: | -----: | -----: | -----: | -----: | ----------------: | ---------- | -----: | ---------: |
+| 1   |    976 |    976 |        1659 |          536 |   16.7 |   16.7 |   16.8 |    117 |                 1 | 2          |     60 |        9.5 |
+| 2   |    980 |    980 |        1687 |          537 |   16.7 |   16.7 |   16.8 |     67 |                 2 | 2          |     60 |       10.7 |
+
+Against the targets: first walkable frame 1.7 s (limit 5 s), p50 16.7 ms (limit 33), 2 of 537 frames over
+33 ms at worst (0.4%, limit 10%), tier still 2, heap under 11 MB (limit 150). That is within noise of the
+phase-1 run without a crowd (1 of 539 over 33 ms, heap 9 MB), so 60 people on screen cost no measurable frame
+time here, even with the CPU slowed 6x. No render-path fixes were needed. Remote people cast shadows only at tier 2 (`src/world/people.ts`).
+
+**Read this with care.** This is a desktop GPU (Apple M3 Pro, ANGLE/Metal) behind a 6x CPU throttle, and it
+flatters the numbers: 60 figures are mostly a vertex and draw-call load, which an M3 shrugs off, while a
+Mali or Adreno mid-ranger pays far more for fill rate and shadows. Everyone stood within 20 m of the spawn,
+the densest case for one district but a case where the 60 m interest radius never trims anything. The real
+phone is still unmeasured: run the checklist above with `fake-residents.mjs` pointed at a Worker the phone can
+reach (`GG_API`), and expect the tier to drop sooner than it did here. The Worker side (one `DistrictDO`
+fanning out 60 movers) is measured only against a local `wrangler dev`, not Cloudflare's network.
+
+**Fixes made in the phase-1 pass.** Nothing missed a target, so no render-path fixes were needed. Go-live fixes from
 the same pass: Google Fonts moved from a render-blocking CSS `@import` to `preconnect` plus a `display=swap`
 stylesheet `<link>` in `index.html` (no longer chained behind the CSS bundle; preconnect + display=swap
 keeps text visible while the font loads); the `three` chunk now has an explicit `chunkSizeWarningLimit`, so the
