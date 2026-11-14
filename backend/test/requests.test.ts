@@ -169,7 +169,7 @@ describe('requests API', () => {
 
   it('accept after 14 days is 410', async () => {
     const a = await resident('reqa8')
-    const b = await resident('reqb8')
+    await resident('reqb8')
     const { id: rid } = (await (await send(a, id('reqb8'))).json()) as { id: string }
     const late = Date.now() + 14 * DAY + 1000
     const res = await acceptRequest(testEnv, id('reqb8'), rid, late)
@@ -243,5 +243,86 @@ describe('requests API', () => {
       .run()
     await expireRequests(testEnv, Date.now())
     expect(await count('SELECT COUNT(*) n FROM requests WHERE from_id = ?', id('reqa13'))).toBe(1)
+  })
+
+  /** An env whose first batch is preceded by `before`: the cron (or anything) getting in between a read and a write. */
+  const racing = (before: string) => {
+    let armed = true
+    const DB = new Proxy(testEnv.DB, {
+      get(target, prop) {
+        if (prop === 'batch')
+          return async (statements: D1PreparedStatement[]) => {
+            if (armed) {
+              armed = false
+              await target.exec(before)
+            }
+            return target.batch(statements)
+          }
+        const v = Reflect.get(target, prop) as unknown
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v
+      },
+    })
+    return { ...testEnv, DB } as Env
+  }
+
+  it('accepting a request the cron just swept is 410, never a crash', async () => {
+    const a = await resident('reqa15')
+    await resident('reqb15')
+    const { id: rid } = (await (await send(a, id('reqb15'))).json()) as { id: string }
+    const res = await acceptRequest(racing(`DELETE FROM requests WHERE id = '${rid}'`), id('reqb15'), rid)
+    expect(res.status).toBe(410)
+    expect(
+      await count('SELECT COUNT(*) n FROM matches WHERE a = ? OR b = ?', id('reqa15'), id('reqa15')),
+    ).toBe(0)
+  })
+
+  it('accepting a request that aged out mid-flight is 410', async () => {
+    const a = await resident('reqa16')
+    await resident('reqb16')
+    const { id: rid } = (await (await send(a, id('reqb16'))).json()) as { id: string }
+    const old = Date.now() - 15 * DAY
+    const res = await acceptRequest(
+      racing(`UPDATE requests SET created_at = ${old} WHERE id = '${rid}'`),
+      id('reqb16'),
+      rid,
+    )
+    expect(res.status).toBe(410)
+    expect(await count("SELECT COUNT(*) n FROM requests WHERE id = ? AND state = 'pending'", rid)).toBe(1)
+  })
+
+  it('a crossed request swept mid-flight falls back to an ordinary request', async () => {
+    await resident('reqa17')
+    const b = await resident('reqb17')
+    const { id: bid } = (await (await send(b, id('reqa17'))).json()) as { id: string }
+    const { sendRequest } = await import('../src/requests')
+    const res = await sendRequest(racing(`DELETE FROM requests WHERE id = '${bid}'`), id('reqa17'), {
+      to: id('reqb17'),
+      reason: REASON,
+    })
+    expect(res.status).toBe(201)
+    expect((await lists(b)).incoming).toHaveLength(1)
+  })
+
+  it('both asking at the very same moment ends in one match and no pending rows', async () => {
+    const a = await resident('reqa18')
+    const b = await resident('reqb18')
+    for (let round = 0; round < 5; round++) {
+      await testEnv.DB.prepare('DELETE FROM matches WHERE a = ?').bind(id('reqa18')).run()
+      await testEnv.DB.prepare('DELETE FROM requests WHERE from_id IN (?, ?)')
+        .bind(id('reqa18'), id('reqb18'))
+        .run()
+      const [r1, r2] = await Promise.all([send(a, id('reqb18')), send(b, id('reqa18'))])
+      expect([r1.status, r2.status].every((s) => s === 200 || s === 201 || s === 409)).toBe(true)
+      expect(
+        await count('SELECT COUNT(*) n FROM matches WHERE a = ? AND b = ?', id('reqa18'), id('reqb18')),
+      ).toBe(1)
+      expect(
+        await count(
+          "SELECT COUNT(*) n FROM requests WHERE state = 'pending' AND from_id IN (?, ?)",
+          id('reqa18'),
+          id('reqb18'),
+        ),
+      ).toBe(0)
+    }
   })
 })

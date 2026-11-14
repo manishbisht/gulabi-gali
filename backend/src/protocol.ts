@@ -110,7 +110,8 @@ export interface RequestLists {
   incoming: RequestView[]
   sent: RequestView[]
 }
-export type RequestError = 'invalid' | 'ghost' | 'no-such-person' | 'already' | 'paused'
+export type RequestError =
+  'invalid' | 'ghost' | 'no-such-person' | 'already' | 'paused' | 'not-found' | 'expired'
 
 /** A person on the live map: their public face and where they stand. */
 export type LivePerson = PublicPerson & { x: number; z: number; ry: number }

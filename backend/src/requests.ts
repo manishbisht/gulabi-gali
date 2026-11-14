@@ -24,23 +24,43 @@ export function cleanReason(x: unknown): string | null {
 const pairOf = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x])
 
 /**
- * Accepts request `id` (which must be pending) in one batch: the state flips and the match is inserted
- * together, `INSERT OR IGNORE` on (a, b), so two accepts at once still leave one match. Answers the match id.
+ * Accepts the pending, unexpired requests `ids` between two people in one batch: the states flip and the match is
+ * inserted together, `INSERT OR IGNORE` on (a, b), so accepts at once still leave one match. Answers the match id,
+ * or null when nothing could be accepted (the cron swept the row, or it expired, since it was read).
  */
-async function accept(env: Env, id: string, from: string, to: string, now: number): Promise<string> {
+async function accept(
+  env: Env,
+  ids: string[],
+  from: string,
+  to: string,
+  now: number,
+): Promise<string | null> {
   const [a, b] = pairOf(from, to)
+  const cutoff = now - REQUEST_TTL_MS
   await env.DB.batch([
-    env.DB.prepare("UPDATE requests SET state = 'accepted' WHERE id = ? AND state = 'pending'").bind(id),
+    ...ids.map((id) =>
+      env.DB.prepare(
+        "UPDATE requests SET state = 'accepted' WHERE id = ? AND state = 'pending' AND created_at > ?",
+      ).bind(id, cutoff),
+    ),
     env.DB.prepare(
       `INSERT OR IGNORE INTO matches (id, a, b, created_at)
-       SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM requests WHERE id = ? AND state = 'accepted')`,
-    ).bind(crypto.randomUUID(), a, b, now, id),
+       SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM requests WHERE id IN (${ids.map(() => '?').join(', ')}) AND state = 'accepted')`,
+    ).bind(crypto.randomUUID(), a, b, now, ...ids),
   ])
   const match = await env.DB.prepare('SELECT id FROM matches WHERE a = ? AND b = ?')
     .bind(a, b)
     .first<{ id: string }>()
-  return match!.id
+  return match?.id ?? null
 }
+
+/** A live (unexpired) pending request from `from` to `to`, if there is one. */
+const pendingBetween = (env: Env, from: string, to: string, cutoff: number) =>
+  env.DB.prepare(
+    "SELECT id FROM requests WHERE from_id = ? AND to_id = ? AND state = 'pending' AND created_at > ?",
+  )
+    .bind(from, to, cutoff)
+    .first<{ id: string }>()
 
 export async function sendRequest(
   env: Env,
@@ -65,12 +85,12 @@ export async function sendRequest(
 
   const cutoff = now - REQUEST_TTL_MS
   // They already asked you: that is a yes, not a second request.
-  const crossed = await env.DB.prepare(
-    "SELECT id FROM requests WHERE from_id = ? AND to_id = ? AND state = 'pending' AND created_at > ?",
-  )
-    .bind(to, userId, cutoff)
-    .first<{ id: string }>()
-  if (crossed) return Response.json({ matched: await accept(env, crossed.id, to, userId, now) })
+  const crossed = await pendingBetween(env, to, userId, cutoff)
+  if (crossed) {
+    const matchId = await accept(env, [crossed.id], to, userId, now)
+    // Swept or expired since it was read: it is no longer a yes, so this is an ordinary request.
+    if (matchId) return Response.json({ matched: matchId })
+  }
 
   // Pending or declined (the sender is never told which) and still alive: one ask per pair.
   const dup = await env.DB.prepare(
@@ -95,6 +115,12 @@ export async function sendRequest(
   } catch {
     // Lost a race with the same ask: the unique index let only one through.
     return fail('already', 409)
+  }
+  // Both asked at the same moment: each insert missed the other's. Whoever looks again now finds it.
+  const reverse = await pendingBetween(env, to, userId, cutoff)
+  if (reverse) {
+    const matchId = await accept(env, [reverse.id, id], to, userId, now)
+    if (matchId) return Response.json({ matched: matchId })
   }
   return Response.json({ id }, { status: 201 })
 }
@@ -158,7 +184,10 @@ export async function acceptRequest(
   // Both people must still be residents: a ban or a half-deleted profile ends it.
   if (!(await residentRow(env, row.from_id)) || !(await residentRow(env, userId)))
     return fail('not-found', 404)
-  return Response.json({ matchId: await accept(env, id, row.from_id, userId, now) })
+  const matchId = await accept(env, [id], row.from_id, userId, now)
+  // The row went (the cron) or aged out between the read and the write.
+  if (!matchId) return fail('expired', 410)
+  return Response.json({ matchId })
 }
 
 export async function ignoreRequest(env: Env, userId: string, id: string): Promise<Response> {
