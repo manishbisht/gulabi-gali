@@ -1,20 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { t, type Lang, type StringKey } from '../i18n/strings'
+import { t, type Lang } from '../i18n/strings'
 import type { ProfileInput } from '../net/api'
 import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { AvatarBuilder } from './AvatarBuilder'
-import { areaLabel, HOME_AREAS } from './homeAreas'
+import { areaLabel, HERE_FOR_LABEL, HOME_AREAS } from './homeAreas'
 import { LIMITS } from './limits'
 import type { SaveOutcome } from './useMe'
-
-const HERE_FOR_LABEL: Record<HereFor, StringKey> = {
-  friends: 'hereForFriends',
-  study: 'hereForStudy',
-  work: 'hereForWork',
-  art: 'hereForArt',
-}
 
 const count = (s: string) => [...s].length
 

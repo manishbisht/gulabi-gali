@@ -98,6 +98,20 @@ export const STRINGS = {
     hi: 'Tum ek aur tab mein bhi khule ho. Log tumhe ab wahin dekhenge, yahan se nahi.',
     en: "You're open in another tab too. People see you there now, not here.",
   },
+  personMeet: { hi: 'Milna hai', en: 'Say hello' },
+  personClose: { hi: 'Band karo', en: 'Close' },
+  personGhostCta: {
+    hi: 'Milne ke liye pehle dikhna padega',
+    en: 'To meet people, you need to be visible first',
+  },
+  personLoading: { hi: 'Thoda ruko…', en: 'One moment…' },
+  personNoProfile: {
+    hi: 'Poori profile abhi nahi khul paayi. Naam aur status dikh rahe hain.',
+    en: "Couldn't open the full profile just now. Name and status only.",
+  },
+  personGone: { hi: 'Ye yahan se chale gaye.', en: 'They have left this street.' },
+  personHereFor: { hi: 'Yahan: {what}', en: 'Here for: {what}' },
+  personSoon: { hi: 'Jald aa raha hai', en: 'Coming soon' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

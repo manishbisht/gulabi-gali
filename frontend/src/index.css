@@ -178,6 +178,36 @@ button {
   font-weight: 600;
 }
 
+.landmark-stamp:disabled {
+  opacity: 0.5;
+}
+
+.person-card .person-area,
+.person-card .person-note {
+  opacity: 0.8;
+}
+
+.person-card .person-note {
+  font-style: italic;
+}
+
+.person-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.person-close {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 0.95rem;
+  text-decoration: underline;
+}
+
 .landmark-done {
   font-size: 0.9rem;
   opacity: 0.8;

@@ -6,7 +6,7 @@ import { applySky, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
 import { connectLive, type LiveConn } from '../net/live'
-import type { ClientMsg, DistrictId, FestivalId, ServerMsg } from '../net/protocol'
+import type { ClientMsg, DistrictId, FestivalId, LivePerson, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
@@ -14,7 +14,7 @@ import { installTestHooks } from '../testHooks'
 import { loadDistrict, type District } from './district'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
-import { createPeople, createPeopleLabels } from './people'
+import { createPeople, createPeopleLabels, type People } from './people'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
@@ -48,6 +48,13 @@ export interface SessionHooks {
   npcCard: {
     step(pos: Vec2, npcs: Npcs, pressed: boolean, landmarkNear: boolean): void
     tap(npc: NpcDef, landmarkNear: boolean): void
+    close(): void
+    isOpen(): boolean
+  }
+  /** The person card (see usePersonCard); outranked by landmark and character cards. */
+  personCard: {
+    step(pos: Vec2, people: Pick<People, 'entries'>, pressed: boolean, landmarkNear: boolean): void
+    tap(person: LivePerson, blocked: boolean): void
     close(): void
     isOpen(): boolean
   }
@@ -168,17 +175,20 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     player.teleport(start.x, start.z)
     const npcs = createNpcs(district.def.npcs, stage.scene)
     const sky = createSky(stage, district, hooks)
+    // made here, not in the presence, so taps and E can reach the people too
+    const people = hooks.presence ? createPeople(stage.scene) : null
     const systems: DistrictSystem[] = [
       npcs,
       sky,
       createLights(stage, district),
-      createInteraction(canvas, stage, controls, district, npcs, hooks),
+      createInteraction(canvas, stage, controls, district, npcs, people, hooks),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
     ]
     // one live socket per tab: `leave` above closed the last district's before this one opens
-    const presence = hooks.presence
-      ? createPresence(stage, district, player, bubbleHost, hooks.presence, opts.WebSocketImpl)
-      : null
+    const presence =
+      hooks.presence && people
+        ? createPresence(stage, district, player, bubbleHost, people, hooks.presence, opts.WebSocketImpl)
+        : null
     if (presence) systems.push(presence)
     here = { district, player, systems, presence }
     repaint = sky.paint
@@ -304,7 +314,8 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 }
 
 /**
- * E and taps: a landmark's stamp, the metro and the character card, in that order of priority. A tap, not
+ * E and taps: a landmark's stamp, the metro, the character card and the person card, in that order of
+ * priority, one card at a time. A tap, not
  * a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
  */
@@ -314,6 +325,7 @@ function createInteraction(
   controls: Controls,
   district: District,
   npcs: Npcs,
+  people: People | null,
   hooks: SessionHooks,
 ): DistrictSystem {
   const ray = new THREE.Raycaster()
@@ -329,7 +341,12 @@ function createInteraction(
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, stage.camera)
     const hit = npcs.pick(ray)
-    if (hit) hooks.npcCard.tap(hit, landmarkNear)
+    if (hit) {
+      if (!landmarkNear) hooks.personCard.close() // a character outranks a person
+      return hooks.npcCard.tap(hit, landmarkNear)
+    }
+    const who = people?.pick(ray)
+    if (who) hooks.personCard.tap(who, landmarkNear || hooks.npcCard.isOpen())
   }
   canvas.addEventListener('pointerdown', onDown)
   canvas.addEventListener('pointerup', onUp)
@@ -337,15 +354,26 @@ function createInteraction(
     update(_dt, pos) {
       const pressed = controls.interact()
       const chatting = hooks.npcCard.isOpen()
-      landmarkNear = hooks.track(pos, district.def.landmarks, pressed && !chatting) !== null
+      const meeting = hooks.personCard.isOpen()
+      const card = chatting || meeting
+      landmarkNear = hooks.track(pos, district.def.landmarks, pressed && !card) !== null
       // E by the station opens the metro, unless a landmark's or a character's card has it
-      const metro = hooks.trackStation(pos, district.def.station, pressed && !landmarkNear && !chatting)
-      hooks.npcCard.step(pos, npcs, pressed && (chatting || !metro), landmarkNear)
+      const metro = hooks.trackStation(pos, district.def.station, pressed && !landmarkNear && !card)
+      hooks.npcCard.step(pos, npcs, pressed && !meeting && (chatting || !metro), landmarkNear)
+      // a character that just opened (or closed on this very E) keeps the key from the person card
+      if (people)
+        hooks.personCard.step(
+          pos,
+          people,
+          pressed && !chatting && (meeting || (!metro && !hooks.npcCard.isOpen())),
+          landmarkNear,
+        )
     },
     dispose() {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
       hooks.npcCard.close()
+      hooks.personCard.close()
     },
   }
 }
@@ -376,10 +404,10 @@ function createPresence(
   district: District,
   player: Player,
   host: HTMLElement,
+  people: People,
   hooks: NonNullable<SessionHooks['presence']>,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
-  const people = createPeople(stage.scene)
   const labels = createPeopleLabels(host)
   const shadows = (q: QualityTier) => people.setShadows(q === 2)
   shadows(stage.quality)

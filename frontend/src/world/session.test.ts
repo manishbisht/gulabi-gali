@@ -72,6 +72,7 @@ function hooks(): SessionHooks {
     track: () => null,
     trackStation: () => false,
     npcCard: { step() {}, tap() {}, close() {}, isOpen: () => false },
+    personCard: { step() {}, tap() {}, close() {}, isOpen: () => false },
     live: { current: () => fallbackSnapshot(new Date()), now: () => new Date(), patch() {}, freeze() {} },
     festival: () => null,
     place: vi.fn(),
@@ -317,4 +318,68 @@ it('shows remote people from the live socket and drops them with the district', 
   expect(stage.scene.getObjectByName('person-dev:asha')).toBeDefined()
   session.dispose()
   expect(stage.scene.getObjectByName('person-dev:asha')).toBeUndefined()
+})
+
+/** Opens a live district with one person dead ahead of the camera, and gives back the pieces to tap with. */
+async function withPersonAhead() {
+  const live = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  const look = { skin: 2, outfit: 'sandstone', head: 'none' } as const
+  ws.say({
+    t: 'welcome',
+    you: { id: null, visible: false },
+    people: [{ id: 'p1', name: 'Asha', look, status: '', x: 0, z: -5, ry: 0 }],
+  })
+  const canvas = document.querySelector('canvas')!
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect
+  const tapCentre = () => {
+    live.stage.camera.position.set(0, 1, 0)
+    live.stage.camera.lookAt(0, 1, -5)
+    live.stage.camera.updateMatrixWorld(true)
+    const at = { clientX: 50, clientY: 50 }
+    canvas.dispatchEvent(Object.assign(new Event('pointerdown'), at))
+    canvas.dispatchEvent(Object.assign(new Event('pointerup'), at))
+  }
+  return { ...live, tapCentre }
+}
+
+it('a tap on a person reaches the person card, told whether a landmark or character card is up', async () => {
+  const { hooks: h, tapCentre } = await withPersonAhead()
+  const tap = vi.spyOn(h.personCard, 'tap')
+  tapCentre()
+  expect(tap).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), false)
+  vi.spyOn(h.npcCard, 'isOpen').mockReturnValue(true)
+  tapCentre()
+  expect(tap).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'p1' }), true)
+})
+
+it('with a landmark in reach, a tap on a person is told it is blocked', async () => {
+  const { hooks: h, tapCentre, tick, session } = await withPersonAhead()
+  h.track = () => ({}) as never
+  tick(0.016) // the interaction system learns a landmark is near
+  const tap = vi.spyOn(h.personCard, 'tap')
+  tapCentre()
+  expect(tap).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), true)
+  session.dispose()
+})
+
+it('E reaches the person card only when no character card or metro has the key', async () => {
+  const live = await withPersonAhead()
+  const { hooks: h, tick } = live
+  const step = vi.spyOn(h.personCard, 'step')
+  const pressed = vi.spyOn(controls, 'interact').mockReturnValue(true)
+  tick(0.016)
+  expect(step.mock.calls.at(-1)![2]).toBe(true)
+  h.trackStation = () => true // E at the station opens the metro
+  tick(0.016)
+  expect(step.mock.calls.at(-1)![2]).toBe(false)
+  h.trackStation = () => false
+  vi.spyOn(h.npcCard, 'isOpen').mockReturnValue(true) // a character card is up: E closes that
+  tick(0.016)
+  expect(step.mock.calls.at(-1)![2]).toBe(false)
+  pressed.mockRestore()
+  live.session.dispose()
 })

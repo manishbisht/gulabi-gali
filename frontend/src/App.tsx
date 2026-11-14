@@ -14,6 +14,7 @@ import { createControls, type Controls } from './player/controls'
 import { disposeAvatarCache } from './player/avatar'
 import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
+import { usePersonCard } from './world/usePersonCard'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
 import { DISTRICT_NAMES } from './world/districtNames'
@@ -25,6 +26,7 @@ import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
 import { Joystick } from './ui/Joystick'
 import { NpcCard } from './ui/NpcCard'
+import { PersonCard, type Viewer } from './ui/PersonCard'
 import { NoWebGL } from './ui/NoWebGL'
 import { TravelSheet } from './ui/TravelSheet'
 
@@ -57,6 +59,20 @@ export default function App() {
   const controlsRef = useRef<Controls | null>(null)
   const { near, have, toast, collectHere, track } = useStamps(lang)
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
+  const {
+    open: meeting,
+    tap: tapPerson,
+    close: closePerson,
+    isOpen: personOpen,
+    step: stepPerson,
+  } = usePersonCard()
+  /** Until the request composer lands, "Milna hai" says so in a toast. */
+  const [soon, setSoon] = useState(false)
+  useEffect(() => {
+    if (!soon) return
+    const id = setTimeout(() => setSoon(false), 2500)
+    return () => clearTimeout(id)
+  }, [soon])
   const {
     fading,
     failed: travelFailed,
@@ -139,6 +155,7 @@ export default function App() {
         track,
         trackStation,
         npcCard: { step: stepNpc, tap: tapNpc, close: closeNpc, isOpen: npcOpen },
+        personCard: { step: stepPerson, tap: tapPerson, close: closePerson, isOpen: personOpen },
         live: { current, now, patch, freeze },
         look: () => profileLookRef.current,
         festival: () => override ?? current().festival,
@@ -168,6 +185,10 @@ export default function App() {
     closeNpc,
     npcOpen,
     stepNpc,
+    tapPerson,
+    closePerson,
+    personOpen,
+    stepPerson,
     trackStation,
     bindTravel,
     current,
@@ -177,6 +198,8 @@ export default function App() {
     override,
   ])
 
+  const viewer: Viewer = !auth.signedIn ? 'ghost' : me?.complete ? 'resident' : 'incomplete'
+  const openProfile = () => void (me && setProfileOpen(true))
   const visibility =
     auth.mode === 'none' || !auth.ready ? undefined : !auth.signedIn ? (
       <VisibilityChip
@@ -226,6 +249,11 @@ export default function App() {
                 {toast}
               </div>
             )}
+            {soon && (
+              <div className="toast" role="status">
+                {t('personSoon', lang)}
+              </div>
+            )}
             {replaced && (
               <div className="toast" role="status">
                 {t('liveReplaced', lang)}
@@ -256,7 +284,19 @@ export default function App() {
             ) : sheetOpen ? (
               <TravelSheet here={here} lang={lang} onPick={travelTo} onClose={closeSheet} />
             ) : (
-              talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />
+              (talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />) ||
+              (meeting && (
+                <PersonCard
+                  person={meeting.person}
+                  gone={meeting.gone}
+                  viewer={viewer}
+                  lang={lang}
+                  token={auth.token}
+                  onVisible={auth.signedIn ? openProfile : auth.openSignIn}
+                  onRequest={() => setSoon(true)}
+                  onClose={closePerson}
+                />
+              ))
             )}
           </>
         }
