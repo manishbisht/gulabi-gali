@@ -23,7 +23,9 @@ export default defineConfig({
       // scene — a dynamic import eventually stops arriving and the page lands
       // on the chunk-error screen. Static hashed chunks do not do that, and
       // they are also what actually ships.
-      command: 'npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort',
+      // GG_ALLOW_LOCAL_API: this bundle talks to the local Worker on purpose.
+      command:
+        'GG_ALLOW_LOCAL_API=1 npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort',
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
