@@ -12,5 +12,7 @@
   ],
   // Needs the manishbisht.me zone on Cloudflare; see docs/deployment.md for the workers.dev fallback.
   "routes": [{ "pattern": "api.gulabi-gali.manishbisht.me", "custom_domain": true }],
+  "durable_objects": { "bindings": [{ "name": "DISTRICT", "class_name": "DistrictDO" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DistrictDO"] }],
   "triggers": { "crons": ["*/15 * * * *"] },
 }

@@ -14,7 +14,7 @@ import {
   type PublicPerson,
 } from './protocol'
 
-const MAX_STATUS = 80
+export const MAX_STATUS = 80
 const MAX_ABOUT = 200
 const MAX_LINK = 200
 
@@ -66,7 +66,7 @@ function parseLook(x: unknown): AvatarLookWire | null {
   }
 }
 
-function cleanText(x: unknown, max: number): string | null {
+export function cleanText(x: unknown, max: number): string | null {
   if (x === undefined || x === null) return ''
   if (typeof x !== 'string') return null
   // Control characters (but not newlines in `about`) are never wanted.
@@ -182,14 +182,26 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
   return Response.json(await getMe(env, userId))
 }
 
-export async function getProfile(env: Env, id: string): Promise<Response> {
+/** A resident's profile row: complete, and its owner not banned. Anyone else is a ghost. */
+async function residentRow(env: Env, id: string): Promise<ProfileRow | null> {
   const row = await env.DB.prepare(
     'SELECT p.* FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? AND u.banned = 0',
   )
     .bind(id)
     .first<ProfileRow>()
-  if (!row || !isComplete(row)) return Response.json({ error: 'not found' }, { status: 404 })
+  return row && isComplete(row) ? row : null
+}
+
+export async function getProfile(env: Env, id: string): Promise<Response> {
+  const row = await residentRow(env, id)
+  if (!row) return Response.json({ error: 'not found' }, { status: 404 })
   return Response.json(toFull(row))
+}
+
+/** What the map may show of a resident, or null for anyone the map must not show. */
+export async function loadResident(env: Env, id: string): Promise<PublicPerson | null> {
+  const row = await residentRow(env, id)
+  return row ? toPublic(toFull(row)) : null
 }
 
 /** DEV_AUTH only: trade a name for a dev token. The caller has already checked the flag. */

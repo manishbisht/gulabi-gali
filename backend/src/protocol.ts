@@ -90,3 +90,33 @@ export interface Me {
   profile: FullProfile | null
   complete: boolean
 }
+
+/** A person on the live map: their public face and where they stand. */
+export type LivePerson = PublicPerson & { x: number; z: number; ry: number }
+
+export type ClientMsg =
+  | { t: 'move'; x: number; z: number; ry: number }
+  | { t: 'sit'; bench: string | null }
+  | { t: 'say'; text: string }
+  | { t: 'status'; text: string }
+  | { t: 'ping' }
+
+export type ServerMsg =
+  | { t: 'welcome'; you: { id: string | null; visible: boolean }; people: LivePerson[] }
+  /** Also sent again for someone already listed, when they come back on a new socket: treat it as an upsert. */
+  | { t: 'join'; p: LivePerson }
+  | { t: 'leave'; id: string }
+  | { t: 'moves'; m: [id: string, x: number, z: number, ry: number][] }
+  | { t: 'status'; id: string; text: string }
+  | { t: 'bench'; bench: string; from: string; name: string; text: string; at: number }
+  | { t: 'seated'; bench: string | null; with: string[] }
+  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' }
+  /** A refused step carries the last point the server accepted: the client goes back there. */
+  | { t: 'error'; code: 'too-fast'; x: number; z: number; ry: number }
+  | { t: 'pong' }
+
+/**
+ * How the server may end a district socket. A replaced socket lost to a newer one for the same person (another
+ * tab, a reconnect) and must not reconnect, or two tabs would take turns knocking each other off.
+ */
+export const LIVE_CLOSE = { replaced: 4001, invalid: 4002, idle: 4003 } as const

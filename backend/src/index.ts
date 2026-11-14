@@ -1,5 +1,6 @@
 import { resolveUser } from './auth'
 import { allowedOrigin, corsHeaders } from './cors'
+import { openDistrict } from './district'
 import type { Env } from './env'
 import type { CitySnapshot } from './protocol'
 import { devLogin, getMe, getProfile, putProfile } from './profiles'
@@ -84,6 +85,8 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   return Response.json({ error: 'not found' }, { status: 404 })
 }
 
+export { DistrictDO } from './district'
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = allowedOrigin(request.headers.get('Origin'))
@@ -93,6 +96,8 @@ export default {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return json({ ok: true }, 200, origin)
     if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
+    const live = pathname.match(/^\/api\/districts\/([^/]+)\/live$/)
+    if (live) return openDistrict(request, env, live[1])
     if (pathname.startsWith('/api/')) return withCors(await handleApi(request, env, pathname), origin)
     return json({ error: 'not found' }, 404, origin)
   },
