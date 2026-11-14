@@ -52,6 +52,8 @@ export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, o
   const [confirming, setConfirming] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const list = useRef<HTMLOListElement>(null)
+  /** Whether the reader is at the bottom: only then does a new line pull the view down. */
+  const stick = useRef(true)
   const alive = useRef(true)
   const tmp = useRef(0)
   const onReadRef = useRef(onRead)
@@ -111,7 +113,7 @@ export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, o
   const newest = lines.at(-1)?.id
   useLayoutEffect(() => {
     const el = list.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el && stick.current) el.scrollTop = el.scrollHeight
   }, [newest])
 
   const submit = async (e: FormEvent) => {
@@ -122,6 +124,7 @@ export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, o
     setBusy(true)
     setNote(null)
     setText('')
+    stick.current = true
     setLines((was) => merge(was, [{ id, body, at: Date.now(), mine: true, pending: true } as Line]))
     const tok = await token().catch(() => null)
     const out = tok ? await sendMessage(tok, matchId, body) : null
@@ -173,7 +176,15 @@ export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, o
           </div>
         </div>
       )}
-      <ol className="chat-lines" ref={list} aria-live="polite">
+      <ol
+        className="chat-lines"
+        ref={list}
+        aria-live="polite"
+        onScroll={(e) => {
+          const el = e.currentTarget
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+        }}
+      >
         {older && (
           <li className="chat-older">
             <button type="button" className="person-close" onClick={() => void showOlder()}>

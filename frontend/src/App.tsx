@@ -141,8 +141,10 @@ export default function App() {
     liveAs.current = residentId
     session.current?.reconnectLive()
   }, [residentId, auth.token])
-  const conn = useConnections({ enabled: !!residentId, token: auth.token })
+  const conn = useConnections({ user: residentId, token: auth.token })
   const [connOpen, setConnOpen] = useState(false)
+  // signing out shuts the sheet, so the next resident does not find it open
+  if (!residentId && connOpen) setConnOpen(false)
   const connShown = connOpen && !!residentId
   // C opens and closes Connections, unless a text field has the keys
   useEffect(() => {

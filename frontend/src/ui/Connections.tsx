@@ -70,7 +70,7 @@ export function Connections({ conn, lang, token, onClose }: Props) {
           person={showing.person}
           lang={lang}
           token={token}
-          tick={conn.messageTicks[showing.id] ?? 0}
+          tick={(conn.messageTicks[showing.id] ?? 0) + conn.reconnects}
           onRead={(id) => conn.markRead(showing.id, id)}
           onBack={() => setChat(null)}
           onUnmatch={async () => {

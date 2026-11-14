@@ -31,6 +31,8 @@ export interface Connections {
   seeIncoming(): void
   /** The chat was read up to this message id. */
   markRead(matchId: string, messageId: string): void
+  /** How many times the inbox socket has come (back) up: an open chat refetches, it may have missed a message. */
+  reconnects: number
   /** Per match, how many `message` notices have arrived: a chat that is open refetches when its count moves. */
   messageTicks: Record<string, number>
   /** The match id on success, null if it could not be accepted. The lists are fresh when it resolves. */
@@ -46,10 +48,11 @@ export interface Connections {
  * again": every list is refetched (also on each (re)connect, so a notice missed offline is still caught).
  */
 export function useConnections({
-  enabled,
+  user,
   token,
 }: {
-  enabled: boolean
+  /** The signed-in resident, or null for nobody (no inbox). A different user starts everything afresh. */
+  user: string | null
   token: () => Promise<string | null>
 }): Connections {
   const [lists, setLists] = useState<RequestLists>(NONE)
@@ -59,6 +62,9 @@ export function useConnections({
   /** The newest message id known per match, from a notice or a fetch. */
   const [latest, setLatest] = useState<Record<string, string>>({})
   const [messageTicks, setTicks] = useState<Record<string, number>>({})
+  const [reconnects, setReconnects] = useState(0)
+  /** Moves with every refresh and every sign-out or user change; an answer from an older one is dropped. */
+  const gen = useRef(0)
   const tokenRef = useRef(token)
   const alive = useRef(true)
   const asked = useRef(new Set<string>())
@@ -82,10 +88,11 @@ export function useConnections({
   }, [])
 
   const refresh = useCallback(async () => {
+    const g = ++gen.current
     const tok = await tokenRef.current().catch(() => null)
-    if (!tok) return
+    if (!tok || g !== gen.current) return
     const [req, mat] = await Promise.allSettled([getRequests(tok), getMatches(tok)])
-    if (!alive.current) return
+    if (!alive.current || g !== gen.current) return
     if (req.status === 'fulfilled') setLists(req.value)
     if (mat.status === 'fulfilled') {
       setMatches(mat.value)
@@ -102,7 +109,7 @@ export function useConnections({
         void getMessages(tok, m.id)
           .then((page) => {
             const id = page?.messages.at(-1)?.id
-            if (id && alive.current) setLatest((l) => ({ ...l, [m.id]: id }))
+            if (id && alive.current && g === gen.current) setLatest((l) => ({ ...l, [m.id]: id }))
           })
           .catch(() => asked.current.delete(m.id))
       }
@@ -110,10 +117,15 @@ export function useConnections({
   }, [writeRead])
 
   useEffect(() => {
-    if (!enabled) return
+    if (!user) return
+    const generation = gen
+    const questions = asked
     const conn = connectInbox({
       token: () => tokenRef.current(),
-      onOpen: () => void refresh(),
+      onOpen: () => {
+        setReconnects((n) => n + 1)
+        void refresh()
+      },
       onNotice: (n: InboxNotice) => {
         if (n.t === 'message') {
           setLatest((l) => ({ ...l, [n.matchId]: n.id }))
@@ -124,10 +136,15 @@ export function useConnections({
     })
     return () => {
       conn.close()
+      generation.current++
+      questions.current.clear()
       setLists(NONE)
       setMatches([])
+      setSeen(new Set())
+      setLatest({})
+      setTicks({})
     }
-  }, [enabled, refresh])
+  }, [user, refresh])
 
   const sent = useMemo(() => lists.sent.filter((r) => r.state === 'pending'), [lists.sent])
 
@@ -211,6 +228,7 @@ export function useConnections({
     chatUnread,
     seeIncoming,
     markRead,
+    reconnects,
     messageTicks,
     accept,
     ignore,

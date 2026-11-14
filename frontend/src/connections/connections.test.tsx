@@ -31,6 +31,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 let requests: RequestLists
 let matches: MatchView[]
 let calls: string[]
+let msgs: { id: string; body: string; at: number; mine: boolean }[]
+/** Armed, the next GET /api/requests waits until `release` is called with its body. */
+let armed: boolean
+let release: (body: unknown) => void
 
 const incomingFrom = (p: PublicPerson, reason: string): RequestView => ({
   id: `r-${p.id}`,
@@ -43,6 +47,8 @@ const incomingFrom = (p: PublicPerson, reason: string): RequestView => ({
 beforeEach(() => {
   FakeSocket.all = []
   calls = []
+  armed = false
+  msgs = [{ id: 'z9', body: 'hello', at: 5, mine: false }]
   localStorage.clear()
   requests = { incoming: [incomingFrom(asha, 'Chai pe chalein? JKK ke baad')], sent: [] }
   matches = [{ id: 'm1', person: ravi, last: { body: 'hello', at: 5, mine: false } }]
@@ -53,10 +59,15 @@ beforeEach(() => {
       const path = url.replace(/^https?:\/\/[^/]+/, '')
       const method = init?.method ?? 'GET'
       calls.push(`${method} ${path}`)
-      if (path === '/api/requests') return json(requests)
+      if (path === '/api/requests') {
+        if (!armed) return json(requests)
+        armed = false
+        return new Promise<Response>((resolve) => {
+          release = (body) => resolve(json(body))
+        })
+      }
       if (path === '/api/matches') return json(matches)
-      if (path === '/api/matches/m1/messages')
-        return json({ messages: [{ id: 'z9', body: 'hello', at: 5, mine: false }], before: null })
+      if (path === '/api/matches/m1/messages') return json({ messages: msgs, before: null })
       if (path === '/api/requests/r-p1/accept' && method === 'POST') {
         requests = { ...requests, incoming: [] }
         matches = [{ id: 'm2', person: asha }, ...matches]
@@ -77,12 +88,13 @@ afterEach(() => {
 
 const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))))
 
-function Probe({ sheet }: { sheet: boolean }) {
-  const conn = useConnections({ enabled: true, token: async () => 'tok' })
+function Probe({ sheet, user = 'u1' }: { sheet: boolean; user?: string | null }) {
+  const conn = useConnections({ user, token: async () => 'tok' })
   const [open, setOpen] = useState(sheet)
   return (
     <>
       <output data-testid="badge">{conn.badge}</output>
+      <output data-testid="incoming">{conn.incoming.length}</output>
       <button type="button" data-testid="open" onClick={() => setOpen(true)} />
       {open && <Connections conn={conn} lang="en" token={async () => 'tok'} onClose={() => setOpen(false)} />}
     </>
@@ -144,4 +156,60 @@ it('unmatch removes the chat', async () => {
   expect(calls).toContain('DELETE /api/matches/m1')
   expect(host.textContent).not.toContain('Ravi')
   expect(JSON.parse(localStorage.getItem('gg-read') ?? '{}')).not.toHaveProperty('m1')
+})
+
+it('the later refresh wins when answers come back out of order', async () => {
+  armed = true // the first refresh (the socket opening) is slow
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () => createRoot(host).render(<Probe sheet={false} />))
+  await settle()
+  await act(async () => FakeSocket.all[0]!.onopen!())
+  await settle()
+  const first = release
+  // a notice: a second refresh, which answers at once with the fresh list
+  await act(async () => FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'request', id: 'r-p1' }) }))
+  await settle()
+  expect(host.querySelector('[data-testid=incoming]')!.textContent).toBe('1')
+  // the slow, older answer (an empty list) lands last and must not win
+  await act(async () => first({ incoming: [], sent: [] }))
+  await settle()
+  expect(host.querySelector('[data-testid=incoming]')!.textContent).toBe('1')
+})
+
+it('a refresh that resolves after sign-out changes nothing', async () => {
+  localStorage.setItem('gg-read', JSON.stringify({ gone: 'x' }))
+  armed = true
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<Probe sheet={false} />))
+  await settle()
+  await act(async () => FakeSocket.all[0]!.onopen!())
+  await settle()
+  await act(async () => root.render(<Probe sheet={false} user={null} />))
+  await settle()
+  await act(async () => release(requests))
+  await settle()
+  expect(host.querySelector('[data-testid=incoming]')!.textContent).toBe('0')
+  expect(host.querySelector('[data-testid=badge]')!.textContent).toBe('0')
+  // nothing was pruned against the wrong user's matches
+  expect(JSON.parse(localStorage.getItem('gg-read')!)).toEqual({ gone: 'x' })
+})
+
+it('an open chat catches up after the inbox reconnects', async () => {
+  const { host, q, button, click } = await mount()
+  await click(q('[data-testid=open]'))
+  await settle()
+  await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
+  await click(button(/Ravi/))
+  await settle()
+  expect(host.textContent).toContain('hello')
+  // the socket drops; a message lands on the server during the gap, unheard
+  await act(async () => FakeSocket.all[0]!.onclose!({ code: 1006 }))
+  msgs = [...msgs, { id: 'z10', body: 'sent while you were away', at: 6, mine: false }]
+  await act(async () => void (await new Promise((r) => setTimeout(r, 1100))))
+  expect(FakeSocket.all).toHaveLength(2)
+  expect(host.textContent).not.toContain('sent while you were away')
+  await act(async () => FakeSocket.all[1]!.onopen!())
+  await settle()
+  expect(host.textContent).toContain('sent while you were away')
 })
