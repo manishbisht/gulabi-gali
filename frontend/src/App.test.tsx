@@ -15,12 +15,14 @@ const webgl = vi.hoisted(() => ({ available: true }))
 vi.mock('./engine/webgl', () => ({ hasWebGL: () => webgl.available }))
 /** The fake stage keeps its scene and listeners where the tests can count them. */
 const stage = vi.hoisted(() => ({
+  fail: false,
   scene: null as unknown as THREE.Scene,
   frames: new Set<(dt: number) => void>(),
   qualities: new Set<(q: number) => void>(),
 }))
 vi.mock('./engine/stage', () => ({
   createStage: () => {
+    if (stage.fail) throw new Error('WebGL 1 is not supported since r163')
     stage.scene = new THREE.Scene()
     stage.frames.clear()
     stage.qualities.clear()
@@ -54,6 +56,7 @@ vi.mock('./world/district', async (importOriginal) => {
 
 afterEach(() => {
   webgl.available = true
+  stage.fail = false
   unreachable.clear()
   vi.unstubAllGlobals()
   localStorage.clear()
@@ -90,6 +93,18 @@ it('shows the no-3D screen instead of the intro when WebGL is missing', async ()
   await act(async () => root.render(<App />))
   expect(host.textContent).toContain("3D doesn't run on this phone/browser")
   expect(host.querySelector('.enter')).toBeNull()
+  await act(async () => root.unmount())
+})
+
+it('shows the no-3D screen, not a blank page, when the renderer cannot start', async () => {
+  stage.fail = true
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  expect(host.textContent).toContain("3D doesn't run on this phone/browser")
+  expect(host.querySelector('canvas')).toBeNull()
   await act(async () => root.unmount())
 })
 

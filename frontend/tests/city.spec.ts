@@ -12,6 +12,17 @@ test('shows the no-3D screen without WebGL', async ({ page }) => {
   await expect(page.getByText('Is phone/browser pe 3D nahi chal raha')).toBeVisible()
 })
 
+test('shows the no-3D screen when only WebGL2 is missing', async ({ page }) => {
+  await page.addInitScript(() => {
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (type: string, ...rest: unknown[]) {
+      return type === 'webgl2' ? null : orig.call(this, type, ...rest)
+    } as typeof orig
+  })
+  await page.goto('/?gg-test=1')
+  await expect(page.getByText('Is phone/browser pe 3D nahi chal raha')).toBeVisible()
+})
+
 test('enters the city and renders', async ({ page }) => {
   await enterCity(page)
   expect(await page.evaluate(() => window.__gg.quality())).toBeGreaterThanOrEqual(0)

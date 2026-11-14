@@ -51,7 +51,7 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
 function festivalOverride(): FestivalId | null {
   const q = new URLSearchParams(location.search)
   const id = q.get('gg-festival')
-  return q.get('gg-test') === '1' && id && id in FESTIVALS ? (id as FestivalId) : null
+  return q.get('gg-test') === '1' && id && Object.hasOwn(FESTIVALS, id) ? (id as FestivalId) : null
 }
 
 export default function App() {
@@ -60,6 +60,8 @@ export default function App() {
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [here, setHere] = useState<DistrictId>('walled-city')
   const [webgl] = useState(hasWebGL)
+  /** The renderer could not start (WebGL2 missing or the context was refused). */
+  const [stageFailed, setStageFailed] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
   const { near, have, toast, collectHere, track } = useStamps(lang)
@@ -90,7 +92,13 @@ export default function App() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!entered || !canvas) return
-    const stage = createStage(canvas)
+    let stage: ReturnType<typeof createStage>
+    try {
+      stage = createStage(canvas)
+    } catch {
+      setStageFailed(true)
+      return
+    }
     stage.scene.background = new THREE.Color(SKY) // until the live sky takes over
     const controls = createControls(window)
     controlsRef.current = controls
@@ -256,7 +264,7 @@ export default function App() {
     override,
   ])
 
-  if (!webgl) return <NoWebGL lang={lang} />
+  if (!webgl || stageFailed) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
   return (
     <>

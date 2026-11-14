@@ -16,6 +16,11 @@ export const STRINGS = {
     hi: 'Gali nahi khul payi. Page reload karo.',
     en: "Couldn't open the lane. Reload the page.",
   },
+  crashed: {
+    hi: 'Kuch gadbad ho gayi. Page reload karo.',
+    en: 'Something went wrong. Reload the page.',
+  },
+  reload: { hi: 'Reload karo', en: 'Reload' },
   weatherUnknown: { hi: '—', en: '—' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
   langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },
