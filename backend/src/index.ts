@@ -7,6 +7,7 @@ import { purgeEvidence } from './evidence'
 import { floating, openInbox, type Later } from './inbox'
 import { purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
+import { listInvites, redeemInvite } from './trust'
 import { activeRow, devLogin, getMe, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
@@ -63,8 +64,37 @@ function withCors(res: Response, origin: string | null): Response {
   return out
 }
 
+/** The biggest JSON body any route reads: a profile is a few hundred bytes, so this is generous. */
+const MAX_BODY = 16 * 1024
+
+/** The parsed body, or null when it is not JSON or is over `MAX_BODY` (read in chunks, so a big one is never held). */
 async function readJson(request: Request): Promise<unknown> {
-  return request.json().catch(() => null)
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY) return null
+  const reader = request.body?.getReader()
+  if (!reader) return null
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read().catch(() => ({ done: true, value: undefined }))
+    if (done) break
+    size += value.byteLength
+    if (size > MAX_BODY) {
+      void reader.cancel().catch(() => undefined)
+      return null
+    }
+    chunks.push(value)
+  }
+  const bytes = new Uint8Array(size)
+  let at = 0
+  for (const c of chunks) {
+    bytes.set(c, at)
+    at += c.byteLength
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes))
+  } catch {
+    return null
+  }
 }
 
 async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
@@ -80,6 +110,9 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   if (pathname === '/api/me' && method === 'GET') return Response.json(await getMe(env, user.id))
   if (pathname === '/api/me/profile' && method === 'PUT')
     return putProfile(env, user.id, await readJson(request))
+  if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
+  if (pathname === '/api/invites/redeem' && method === 'POST')
+    return redeemInvite(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')
     return sendRequest(env, user.id, await readJson(request), Date.now(), later)
   if (pathname === '/api/requests' && method === 'GET')
@@ -107,11 +140,13 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     if (!(await activeRow(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
     const limited = await readLimit(env, user.id, 'profile')
     if (limited) return limited
+    let id: string
     try {
-      return await getProfile(env, decodeURIComponent(match[1]))
+      id = decodeURIComponent(match[1])
     } catch {
       return Response.json({ error: 'not found' }, { status: 404 })
     }
+    return getProfile(env, id, user.id)
   }
   return Response.json({ error: 'not found' }, { status: 404 })
 }

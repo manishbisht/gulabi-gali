@@ -19,6 +19,7 @@ const ERROR_TEXT: Record<Extract<RequestOutcome, { ok: false }>['error'], String
   already: 'requestAlready',
   paused: 'requestPaused',
   ghost: 'requestGhost',
+  'not-verified': 'requestNotVerified',
   'no-such-person': 'requestGone',
   invalid: 'requestFailed',
   failed: 'requestFailed',

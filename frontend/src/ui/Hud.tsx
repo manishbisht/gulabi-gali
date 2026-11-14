@@ -18,6 +18,8 @@ interface Props {
   visibility?: ReactNode
   /** Present only when a user is signed in. */
   onProfile?: () => void
+  /** Present only for a resident: opens the invite code sheet (enter a code, or share your own). */
+  onInvite?: () => void
   /** Present only for a resident: opens Connections, with the count of unread things on its badge. */
   onConnections?: () => void
   connectionsBadge?: number
@@ -36,6 +38,7 @@ export function Hud({
   onLang,
   visibility,
   onProfile,
+  onInvite,
   onConnections,
   connectionsBadge = 0,
   top,
@@ -59,12 +62,17 @@ export function Hud({
           {t('langToggle', lang)}
         </button>
       </div>
-      {(visibility || onProfile || onConnections) && (
+      {(visibility || onProfile || onInvite || onConnections) && (
         <div className="hud-identity">
           {visibility}
           {onProfile && (
             <button type="button" className="hud-chip profile-button" onClick={onProfile}>
               {t('profileOpen', lang)}
+            </button>
+          )}
+          {onInvite && (
+            <button type="button" className="hud-chip profile-button invite-button" onClick={onInvite}>
+              {t('inviteOpen', lang)}
             </button>
           )}
           {onConnections && (

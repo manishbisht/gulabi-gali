@@ -26,6 +26,7 @@ export interface ProfileRow {
   status: string
   here_for: string | null
   about: string
+  link: string | null
   adult: number
   pledge: number
   pause_requests: number
@@ -40,7 +41,8 @@ export function toPublic(p: PublicPerson): PublicPerson {
   return { id: p.id, name: firstName(p.name), look: { ...p.look }, status: p.status }
 }
 
-function toFull(row: ProfileRow): FullProfile {
+/** `withLink`: the viewer is verified, or it is the owner's own profile. Everyone else never gets the link. */
+function toFull(row: ProfileRow, withLink = false): FullProfile {
   return {
     id: row.user_id,
     name: row.name,
@@ -50,6 +52,7 @@ function toFull(row: ProfileRow): FullProfile {
     hereFor: row.here_for as HereFor | null,
     about: row.about,
     pauseRequests: row.pause_requests === 1,
+    ...(withLink && row.link ? { link: row.link } : {}),
   }
 }
 
@@ -67,25 +70,29 @@ function parseLook(x: unknown): AvatarLookWire | null {
   }
 }
 
-export function cleanText(x: unknown, max: number): string | null {
+export function cleanText(x: unknown, max: number, oneLine = false): string | null {
   if (x === undefined || x === null) return ''
   if (typeof x !== 'string') return null
-  // Control characters (but not newlines in `about`) are never wanted.
+  // Control characters are never wanted; `about` alone may keep its newlines, a `oneLine` field loses them.
   const text = x
     .normalize('NFC')
-    .replace(/[\p{Cc}\p{Cf}]/gu, (c) => (c === '\n' ? c : ''))
+    .replace(/[\p{Cc}\p{Cf}]/gu, (c) => (c === '\n' && !oneLine ? c : ''))
     .trim()
   return [...text].length <= max ? text : null
 }
 
-/** https only, at most 200 characters, no credentials. */
+/**
+ * https only, at most 200 characters, no credentials, no control or format characters. Answers the normalised
+ * `href` (what is stored), null for no link, or undefined for one that is not allowed.
+ */
 export function cleanLink(x: unknown): string | null | undefined {
-  if (x === undefined || x === null || x === '') return null
-  if (typeof x !== 'string' || x.length > MAX_LINK) return undefined
+  if (x === null || x === '') return null
+  if (typeof x !== 'string' || x.length > MAX_LINK || /[\p{Cc}\p{Cf}\s]/u.test(x)) return undefined
   try {
     const url = new URL(x)
-    if (url.protocol !== 'https:' || url.username || url.password) return undefined
-    return x
+    if (url.protocol !== 'https:' || url.username || url.password || url.href.length > MAX_LINK)
+      return undefined
+    return url.href
   } catch {
     return undefined
   }
@@ -98,7 +105,8 @@ type Parsed = {
   homeArea: HomeArea
   hereFor: HereFor | null
   about: string
-  link: string | null
+  /** undefined: the request left `link` out, so the stored one stays. */
+  link: string | null | undefined
   adult: boolean
   pledge: boolean
   pauseRequests: boolean
@@ -111,15 +119,16 @@ export function parseProfile(raw: unknown): { ok: true; value: Parsed } | { ok: 
   if (!name) fields.push('name')
   const look = parseLook(b.look)
   if (!look) fields.push('look')
-  const status = cleanText(b.status, MAX_STATUS)
+  const status = cleanText(b.status, MAX_STATUS, true)
   if (status === null) fields.push('status')
   if (!HOME_AREAS.includes(b.homeArea as never)) fields.push('homeArea')
   const hereFor = b.hereFor ?? null
   if (hereFor !== null && !HERE_FOR.includes(hereFor as never)) fields.push('hereFor')
   const about = cleanText(b.about, MAX_ABOUT)
   if (about === null) fields.push('about')
-  const link = cleanLink(b.link)
-  if (link === undefined) fields.push('link')
+  const keepLink = !('link' in b) || b.link === undefined
+  const link = keepLink ? undefined : cleanLink(b.link)
+  if (!keepLink && link === undefined) fields.push('link')
   if (typeof b.adult !== 'boolean') fields.push('adult')
   if (typeof b.pledge !== 'boolean') fields.push('pledge')
   if (b.pauseRequests !== undefined && typeof b.pauseRequests !== 'boolean') fields.push('pauseRequests')
@@ -133,7 +142,7 @@ export function parseProfile(raw: unknown): { ok: true; value: Parsed } | { ok: 
       homeArea: b.homeArea as HomeArea,
       hereFor: hereFor as HereFor | null,
       about: about!,
-      link: link!,
+      link,
       adult: b.adult as boolean,
       pledge: b.pledge as boolean,
       pauseRequests: b.pauseRequests === true,
@@ -148,7 +157,16 @@ export async function getMe(env: Env, userId: string): Promise<Me> {
   const row = await env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?')
     .bind(userId)
     .first<ProfileRow>()
-  return { id: userId, profile: row ? toFull(row) : null, complete: row ? isComplete(row) : false }
+  const verified = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ verified: number }>()
+  return {
+    id: userId,
+    // Your own link is yours to see and edit, verified or not.
+    profile: row ? toFull(row, true) : null,
+    complete: row ? isComplete(row) : false,
+    verified: verified?.verified === 1,
+  }
 }
 
 export async function putProfile(env: Env, userId: string, raw: unknown): Promise<Response> {
@@ -162,7 +180,8 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
       `INSERT INTO profiles (user_id, name, look, home_area, status, here_for, about, link, adult, pledge, pause_requests, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET name = excluded.name, look = excluded.look, home_area = excluded.home_area,
-         status = excluded.status, here_for = excluded.here_for, about = excluded.about, link = excluded.link,
+         status = excluded.status, here_for = excluded.here_for, about = excluded.about,
+         link = CASE WHEN ? = 1 THEN excluded.link ELSE profiles.link END,
          adult = excluded.adult, pledge = excluded.pledge, pause_requests = excluded.pause_requests,
          updated_at = excluded.updated_at`,
     ).bind(
@@ -173,11 +192,12 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
       p.status,
       p.hereFor,
       p.about,
-      p.link,
+      p.link ?? null,
       p.adult ? 1 : 0,
       p.pledge ? 1 : 0,
       p.pauseRequests ? 1 : 0,
       now,
+      p.link === undefined ? 0 : 1,
     ),
   ])
   return Response.json(await getMe(env, userId))
@@ -209,10 +229,14 @@ export const activeRow = (env: Env, id: string): Promise<ProfileRow | null> => r
 /** The profile row of someone others may see (see `VISIBLE`). */
 export const visibleRow = (env: Env, id: string): Promise<ProfileRow | null> => rowWhere(env, id, VISIBLE)
 
-export async function getProfile(env: Env, id: string): Promise<Response> {
+/** Another person's profile for `viewerId`, who carries the link only when verified. */
+export async function getProfile(env: Env, id: string, viewerId: string): Promise<Response> {
   const row = await visibleRow(env, id)
   if (!row) return Response.json({ error: 'not found' }, { status: 404 })
-  return Response.json(toFull(row))
+  const viewer = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
+    .bind(viewerId)
+    .first<{ verified: number }>()
+  return Response.json(toFull(row, viewer?.verified === 1))
 }
 
 /** The public face of a profile row. */

@@ -938,3 +938,38 @@ button {
   margin: 0 0 6px;
   font-style: italic;
 }
+
+.invite-codes ul {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.invite-codes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invite-codes code {
+  font-size: 1.2rem;
+  letter-spacing: 0.12em;
+}
+
+.invite-codes button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  font: inherit;
+}
+
+.person-link a {
+  color: inherit;
+  overflow-wrap: anywhere;
+}

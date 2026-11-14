@@ -30,3 +30,9 @@ CREATE INDEX held_evidence_created ON held_evidence(created_at);
 CREATE INDEX requests_to_state ON requests(to_id, state, created_at);
 CREATE INDEX requests_from_to_state ON requests(from_id, to_id, state);
 CREATE INDEX matches_b ON matches(b);
+
+-- Invite codes: a verified member's gift to one person. `code` is 8 characters of Crockford base32. `used_by`
+-- is set by one conditional UPDATE (`WHERE used_by IS NULL`), so a code can only be won once.
+CREATE TABLE invites (
+  code TEXT PRIMARY KEY, owner TEXT NOT NULL, used_by TEXT, used_at INTEGER, created_at INTEGER NOT NULL);
+CREATE INDEX invites_owner ON invites(owner);

@@ -5,8 +5,11 @@ import { t, type Lang } from '../i18n/strings'
 import type { Sent } from './RequestComposer'
 import { areaLabel, HERE_FOR_LABEL } from '../profile/homeAreas'
 
-/** Who is looking: nobody visible yet, signed in without a finished profile, or a resident. */
-export type Viewer = 'ghost' | 'incomplete' | 'resident'
+/**
+ * Who is looking: nobody visible yet, signed in without a finished profile, a resident, or a verified resident
+ * (the only one who can start a request, and who sees links).
+ */
+export type Viewer = 'ghost' | 'incomplete' | 'resident' | 'verified'
 
 interface Props {
   person: LivePerson
@@ -19,6 +22,8 @@ interface Props {
   token(): Promise<string | null>
   /** The ghost's CTA: sign in, or finish the profile. */
   onVisible(): void
+  /** A resident who is not verified yet: opens the invite code sheet. */
+  onGetVerified(): void
   onRequest(person: LivePerson): void
   onClose(): void
 }
@@ -37,10 +42,11 @@ export function PersonCard({
   lang,
   token,
   onVisible,
+  onGetVerified,
   onRequest,
   onClose,
 }: Props) {
-  const resident = viewer === 'resident'
+  const resident = viewer === 'resident' || viewer === 'verified'
   const [loaded, setLoaded] = useState<Loaded>(null)
   useEffect(() => {
     if (!resident) return
@@ -75,6 +81,14 @@ export function PersonCard({
               ` · ${t('personHereFor', lang, { what: t(HERE_FOR_LABEL[profile.hereFor], lang) })}`}
           </p>
           {profile.about && <p>{profile.about}</p>}
+          {profile.link && (
+            <p className="person-link">
+              {t('personLink', lang)}:{' '}
+              <a href={profile.link} target="_blank" rel="noopener noreferrer nofollow ugc">
+                {profile.link}
+              </a>
+            </p>
+          )}
         </>
       )}
       {resident && !done && <p className="person-note">{t('personLoading', lang)}</p>}
@@ -83,14 +97,21 @@ export function PersonCard({
       {gone && <p className="person-note">{t('personGone', lang)}</p>}
       <div className="person-actions">
         {resident ? (
-          <button
-            type="button"
-            className="landmark-stamp"
-            disabled={gone || !!sent}
-            onClick={() => onRequest(person)}
-          >
-            {t('personMeet', lang)}
-          </button>
+          <>
+            <button
+              type="button"
+              className="landmark-stamp"
+              disabled={gone || !!sent || viewer !== 'verified'}
+              onClick={() => onRequest(person)}
+            >
+              {t('personMeet', lang)}
+            </button>
+            {viewer !== 'verified' && (
+              <button type="button" className="landmark-stamp" onClick={onGetVerified}>
+                {t('personGetVerified', lang)}
+              </button>
+            )}
+          </>
         ) : (
           <button type="button" className="landmark-stamp" onClick={onVisible}>
             {t('personGhostCta', lang)}

@@ -104,6 +104,7 @@ function show(viewer: Viewer, extra: Partial<Parameters<typeof PersonCard>[0]> =
     lang: 'en' as const,
     token: async () => 'tok',
     onVisible: vi.fn(),
+    onGetVerified: vi.fn(),
     onRequest: vi.fn(),
     onClose: vi.fn(),
     ...extra,
@@ -143,7 +144,7 @@ it('an incomplete viewer never fetches either', async () => {
 it('resident viewer loads full profile', async () => {
   const fetchMock = vi.fn(async () => json(full))
   vi.stubGlobal('fetch', fetchMock)
-  const { host, props, render } = show('resident')
+  const { host, props, render } = show('verified')
   await render()
   const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
   expect(url).toContain('/api/profiles/p1')
@@ -161,7 +162,7 @@ it.each([
   ['network failure', async () => Promise.reject(new Error('offline'))],
 ])('a resident whose profile fetch fails (%s) still sees name, status and a note', async (_n, impl) => {
   vi.stubGlobal('fetch', vi.fn(impl))
-  const { host, render } = show('resident')
+  const { host, render } = show('verified')
   await render()
   expect(host.textContent).toContain('Asha')
   expect(host.textContent).toContain('chai pe aao')
@@ -173,7 +174,7 @@ it('when the person has left, the card stays and "Milna hai" is disabled', async
     'fetch',
     vi.fn(async () => json(full)),
   )
-  const { host, props, render } = show('resident')
+  const { host, props, render } = show('verified')
   await render()
   await render({ ...props, gone: true })
   expect(host.textContent).toContain('Asha Sharma')

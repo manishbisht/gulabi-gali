@@ -34,6 +34,7 @@ import { NoWebGL } from './ui/NoWebGL'
 import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
+import { InviteSheet } from './ui/InviteSheet'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -100,7 +101,8 @@ export default function App() {
     trackStation,
     bind: bindTravel,
   } = useTravel()
-  const { me, save } = useMe()
+  const { me, save, refresh } = useMe()
+  const [inviteOpen, setInviteOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
   const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
   const profileLookRef = useRef(profileLook)
@@ -152,6 +154,7 @@ export default function App() {
   const [connOpen, setConnOpen] = useState(false)
   // signing out shuts the sheet, so the next resident does not find it open
   if (!residentId && connOpen) setConnOpen(false)
+  if (!residentId && inviteOpen) setInviteOpen(false)
   const connShown = connOpen && !!residentId
   // C opens and closes Connections, unless a text field has the keys
   useEffect(() => {
@@ -240,7 +243,13 @@ export default function App() {
     override,
   ])
 
-  const viewer: Viewer = !auth.signedIn ? 'ghost' : me?.complete ? 'resident' : 'incomplete'
+  const viewer: Viewer = !auth.signedIn
+    ? 'ghost'
+    : me?.complete
+      ? me.verified
+        ? 'verified'
+        : 'resident'
+      : 'incomplete'
   const openProfile = () => void (me && setProfileOpen(true))
   const onVisible = auth.signedIn ? openProfile : auth.openSignIn
   const benchToast = bench.notice && BENCH_TOASTS[bench.notice]
@@ -268,6 +277,7 @@ export default function App() {
         lang={lang}
         token={auth.token}
         onVisible={onVisible}
+        onGetVerified={() => setInviteOpen(true)}
         onRequest={(person) => setComposing(person.id)}
         onClose={closePerson}
       />
@@ -314,6 +324,7 @@ export default function App() {
         onLang={setLang}
         visibility={visibility}
         onProfile={auth.signedIn && me ? () => setProfileOpen(true) : undefined}
+        onInvite={residentId ? () => setInviteOpen(true) : undefined}
         onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
         connectionsBadge={conn.badge}
         top={
@@ -400,6 +411,15 @@ export default function App() {
             setProfileOpen(false)
             void auth.signOut()
           }}
+        />
+      )}
+      {inviteOpen && me && residentId && (
+        <InviteSheet
+          me={me}
+          lang={lang}
+          token={auth.token}
+          onVerified={() => void refresh()}
+          onClose={() => setInviteOpen(false)}
         />
       )}
       {connShown && (

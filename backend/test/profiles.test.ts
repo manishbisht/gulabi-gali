@@ -47,7 +47,7 @@ describe('profiles API', () => {
   it('PUT then GET /api/me round-trips and marks complete', async () => {
     const token = await login('roundtrip')
     const before = (await (await call('/api/me', {}, token)).json()) as Me
-    expect(before).toEqual({ id: 'dev:roundtrip', profile: null, complete: false })
+    expect(before).toEqual({ id: 'dev:roundtrip', profile: null, complete: false, verified: false })
 
     const put = await call('/api/me/profile', { method: 'PUT', body: body() }, token)
     expect(put.status).toBe(200)
@@ -62,8 +62,9 @@ describe('profiles API', () => {
       hereFor: 'friends',
       about: 'Painter, slow walker.',
       pauseRequests: false,
+      // your own link comes back to you, so the editor can show it; other people's needs a verified viewer
+      link: 'https://example.com/asha',
     })
-    expect(JSON.stringify(me)).not.toContain('example.com')
     const stored = await testEnv.DB.prepare('SELECT link FROM profiles WHERE user_id = ?')
       .bind('dev:roundtrip')
       .first<{ link: string }>()

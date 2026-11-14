@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test'
+import { env, SELF } from 'cloudflare:test'
 import { expect, vi } from 'vitest'
 import type { ClientMsg, DistrictId, InboxMsg, ServerMsg } from '../src/protocol'
 
@@ -17,8 +17,21 @@ export async function login(name: string): Promise<string> {
   return ((await res.json()) as { token: string }).token
 }
 
-/** A dev user with a complete profile: someone the map shows. */
-export async function resident(name: string, over: Record<string, unknown> = {}): Promise<string> {
+/** Marks a dev user verified, as an admin would: they can then send requests. */
+export const verify = (name: string) =>
+  env.DB.prepare('UPDATE users SET verified = 1, verified_by = ? WHERE id = ?')
+    .bind('admin', devId(name))
+    .run()
+
+/**
+ * A dev user with a complete profile: someone the map shows. Verified unless `verified: false` (the tier that
+ * can send requests, which most tests need).
+ */
+export async function resident(
+  name: string,
+  over: Record<string, unknown> = {},
+  { verified = true }: { verified?: boolean } = {},
+): Promise<string> {
   const token = await login(name)
   const res = await SELF.fetch(`${API}/api/me/profile`, {
     method: 'PUT',
@@ -36,6 +49,7 @@ export async function resident(name: string, over: Record<string, unknown> = {})
     }),
   })
   expect(res.status).toBe(200)
+  if (verified) await verify(name)
   return token
 }
 

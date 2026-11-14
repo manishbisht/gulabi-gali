@@ -5,6 +5,7 @@ import {
   type BrowserContextOptions,
   type Page,
 } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
 import { enterCity } from './city'
 
 /** A signed-in visitor with a finished profile, and the id the live socket knows them by. */
@@ -96,4 +97,29 @@ export async function hopTo(page: Page, x: number, z: number) {
     await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), to)
     await page.waitForTimeout(1100)
   }
+}
+
+/**
+ * Verifies a resident the way a person does: with an invite code, typed into the Invite sheet. There is no
+ * verified member to hand one out yet in a fresh local D1, so a founder and one code are written to it first.
+ */
+export async function verify(page: Page): Promise<void> {
+  const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+  const code = Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * 32)]).join('')
+  const now = Date.now()
+  const sql =
+    `INSERT OR IGNORE INTO users (id, created_at, verified) VALUES ('dev:founder', ${now}, 1); ` +
+    `INSERT INTO invites (code, owner, created_at) VALUES ('${code}', 'dev:founder', ${now});`
+  execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'gulabi-gali', '--local', '--cwd', 'backend', '--command', sql],
+    { cwd: '..', stdio: 'pipe' },
+  )
+  await page.getByRole('button', { name: 'Invite' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Invite code' })
+  await sheet.getByLabel('Code (8 akshar)').fill(`${code.slice(0, 4)}-${code.slice(4).toLowerCase()}`)
+  await sheet.getByRole('button', { name: 'Code lagao' }).click()
+  await expect(sheet.getByText('Ho gaya, tum verified ho!')).toBeVisible()
+  await expect(sheet.getByText('Tumhare codes')).toBeVisible()
+  await sheet.getByRole('button', { name: 'Band karo' }).click()
 }

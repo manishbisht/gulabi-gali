@@ -52,6 +52,9 @@ async function resident(name: string, over: Record<string, unknown> = {}): Promi
     token,
   )
   expect(res.status).toBe(200)
+  await testEnv.DB.prepare('UPDATE users SET verified = 1 WHERE id = ?')
+    .bind(`dev:${name.toLowerCase()}`)
+    .run()
   return token
 }
 

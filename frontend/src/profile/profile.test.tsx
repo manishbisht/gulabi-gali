@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { ProfileSheet } from './ProfileSheet'
@@ -37,7 +37,7 @@ async function mount(onSave: Save = vi.fn(async () => ({ ok: true }) as const)) 
   await act(async () =>
     root.render(
       <ProfileSheet
-        me={{ id: 'u', profile: null, complete: false }}
+        me={{ id: 'u', profile: null, complete: false, verified: false }}
         lang="en"
         onSave={onSave}
         onClose={() => {}}
@@ -119,7 +119,7 @@ it('a resident can pause requests, and un-pause them, with the rest of the profi
       root.render(
         <ProfileSheet
           key={String(pauseRequests)}
-          me={{ id: 'u', profile: { ...profile, pauseRequests }, complete: true }}
+          me={{ id: 'u', profile: { ...profile, pauseRequests }, complete: true, verified: false }}
           lang="en"
           onSave={onSave}
           onClose={() => {}}
@@ -140,4 +140,60 @@ it('a resident can pause requests, and un-pause them, with the rest of the profi
   await click(field('pauseRequests'))
   await act(async () => save().click())
   expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ pauseRequests: false }))
+})
+
+describe('the profile link', () => {
+  const stored = {
+    id: 'u',
+    name: 'Asha',
+    look: { skin: 1, outfit: 'teal', head: 'none' },
+    status: '',
+    homeArea: 'Raja Park',
+    hereFor: null,
+    about: '',
+    pauseRequests: false,
+    link: 'https://example.com/asha',
+  } as const
+  const open = async (onSave: Save) =>
+    act(async () =>
+      root.render(
+        <ProfileSheet
+          me={{ id: 'u', profile: stored, complete: true, verified: true }}
+          lang="en"
+          onSave={onSave}
+          onClose={() => {}}
+          onSignOut={() => {}}
+        />,
+      ),
+    )
+
+  it('shows the stored link, and saving without touching it leaves link out so the server keeps it', async () => {
+    const onSave = vi.fn<Save>(async () => ({ ok: true }) as const)
+    await open(onSave)
+    expect((field('link') as HTMLInputElement).value).toBe('https://example.com/asha')
+    await act(async () => save().click())
+    const sent = onSave.mock.calls[0]![0]
+    expect('link' in sent).toBe(false)
+  })
+
+  it('sends a changed link trimmed, and null when it is cleared', async () => {
+    const onSave = vi.fn<Save>(async () => ({ ok: true }) as const)
+    await open(onSave)
+    await type(field('link'), '  https://example.org/me  ')
+    await act(async () => save().click())
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ link: 'https://example.org/me' }))
+    await type(field('link'), '')
+    await act(async () => save().click())
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ link: null }))
+  })
+
+  it('refuses a link that is not https, before it is sent', async () => {
+    const onSave = vi.fn<Save>(async () => ({ ok: true }) as const)
+    await open(onSave)
+    await type(field('link'), 'http://example.com')
+    expect(save().disabled).toBe(true)
+    expect(field('link').getAttribute('aria-invalid')).toBe('true')
+    await type(field('link'), 'https://example.com')
+    expect(save().disabled).toBe(false)
+  })
 })

@@ -11,6 +11,10 @@ import type { SaveOutcome } from './useMe'
 
 const count = (s: string) => [...s].length
 
+/** An empty link, or an https one within the limit (the server has the last word). */
+const linkAllowed = (s: string) =>
+  s === '' || (s.length <= LIMITS.link && /^https:\/\/[^\s/]+/i.test(s) && !/[\p{Cc}\p{Cf}\s]/u.test(s))
+
 interface Props {
   me: Me
   lang: Lang
@@ -27,6 +31,9 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
   const [status, setStatus] = useState(p?.status ?? '')
   const [hereFor, setHereFor] = useState<HereFor | null>(p?.hereFor ?? null)
   const [about, setAbout] = useState(p?.about ?? '')
+  const [link, setLink] = useState(p?.link ?? '')
+  /** Until the link field is touched the save leaves `link` out, so the stored one stays. */
+  const [linkTouched, setLinkTouched] = useState(false)
   const [adult, setAdult] = useState(me.complete)
   const [pledge, setPledge] = useState(me.complete)
   const [paused, setPaused] = useState(p?.pauseRequests ?? false)
@@ -37,7 +44,8 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
   const trimmed = name.trim()
   const nameOk = count(trimmed) >= LIMITS.name.min && count(trimmed) <= LIMITS.name.max
   const lengthsOk = count(status.trim()) <= LIMITS.status && count(about.trim()) <= LIMITS.about
-  const ready = nameOk && lengthsOk && area !== '' && adult && pledge && !busy
+  const linkOk = !linkTouched || linkAllowed(link.trim())
+  const ready = nameOk && lengthsOk && linkOk && area !== '' && adult && pledge && !busy
 
   /** Editing a field clears the server's complaint about it. */
   const edit =
@@ -60,7 +68,7 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
       homeArea: area,
       hereFor,
       about: about.trim(),
-      link: null,
+      ...(linkTouched ? { link: link.trim() === '' ? null : link.trim() } : {}),
       adult,
       pledge,
       pauseRequests: paused,
@@ -150,6 +158,23 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
             <small>
               {count(about)}/{LIMITS.about}
             </small>
+          </label>
+          <label>
+            {t('profileLink', lang)}
+            <input
+              data-field="link"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              value={link}
+              placeholder="https://"
+              aria-invalid={!linkOk || invalid('link')}
+              onChange={(e) => {
+                setLinkTouched(true)
+                edit('link', setLink)(e.target.value)
+              }}
+            />
+            <small>{t('profileLinkHint', lang)}</small>
           </label>
           <label className="check">
             <input

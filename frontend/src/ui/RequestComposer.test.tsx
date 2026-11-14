@@ -134,11 +134,12 @@ it('the card confirms a sent request and disables "Say hello"', async () => {
       <PersonCard
         person={asha}
         gone={false}
-        viewer="resident"
+        viewer="verified"
         lang="en"
         sent="sent"
         token={async () => null}
         onVisible={() => undefined}
+        onGetVerified={() => undefined}
         onRequest={() => undefined}
         onClose={() => undefined}
       />,
@@ -147,4 +148,87 @@ it('the card confirms a sent request and disables "Say hello"', async () => {
   expect(host.textContent).toContain('Sent!')
   const meet = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Say hello')!
   expect(meet.disabled).toBe(true)
+})
+
+it('a resident who is not verified sees "Say hello" off and a way to get verified', async () => {
+  const host = document.body.appendChild(document.createElement('div'))
+  const onGetVerified = vi.fn()
+  const onRequest = vi.fn()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      json({
+        id: 'p1',
+        name: 'Asha',
+        look: asha.look,
+        status: '',
+        homeArea: 'Raja Park',
+        hereFor: null,
+        about: '',
+        pauseRequests: false,
+      }),
+    ),
+  )
+  await act(async () =>
+    createRoot(host).render(
+      <PersonCard
+        person={asha}
+        gone={false}
+        viewer="resident"
+        lang="en"
+        token={async () => 'tok'}
+        onVisible={() => undefined}
+        onGetVerified={onGetVerified}
+        onRequest={onRequest}
+        onClose={() => undefined}
+      />,
+    ),
+  )
+  const buttons = [...host.querySelectorAll('button')]
+  const meet = buttons.find((b) => b.textContent === 'Say hello')!
+  expect(meet.disabled).toBe(true)
+  const get = buttons.find((b) => b.textContent === 'Get verified with an invite code')!
+  act(() => get.click())
+  expect(onGetVerified).toHaveBeenCalled()
+  expect(onRequest).not.toHaveBeenCalled()
+})
+
+it('a verified viewer sees the link, and a resident does not get one from the server', async () => {
+  const host = document.body.appendChild(document.createElement('div'))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      json({
+        id: 'p1',
+        name: 'Asha',
+        look: asha.look,
+        status: '',
+        homeArea: 'Raja Park',
+        hereFor: null,
+        about: '',
+        pauseRequests: false,
+        link: 'https://example.com/asha',
+      }),
+    ),
+  )
+  await act(async () =>
+    createRoot(host).render(
+      <PersonCard
+        person={asha}
+        gone={false}
+        viewer="verified"
+        lang="en"
+        token={async () => 'tok'}
+        onVisible={() => undefined}
+        onGetVerified={() => undefined}
+        onRequest={() => undefined}
+        onClose={() => undefined}
+      />,
+    ),
+  )
+  const a = host.querySelector('a')!
+  expect(a.getAttribute('href')).toBe('https://example.com/asha')
+  expect(a.rel).toContain('noopener')
+  const meet = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Say hello')!
+  expect(meet.disabled).toBe(false)
 })

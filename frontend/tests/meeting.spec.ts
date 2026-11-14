@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
-import { closePeople, hopTo, resident, walk } from './support/people'
+import { closePeople, hopTo, resident, verify, walk } from './support/people'
 
 test.afterEach(closePeople)
 
@@ -54,6 +54,14 @@ test('request, accept, chat, unmatch', async ({ browser }) => {
   await walk(a.page, 'd', 300)
   await a.page.keyboard.press('e')
   const card = a.page.getByRole('region', { name: b.name })
+  // not verified yet: "Milna hai" is off, and the card points at the invite code
+  await expect(card.getByRole('button', { name: 'Milna hai' })).toBeDisabled()
+  await expect(card.getByRole('button', { name: 'Invite code se verified bano' })).toBeVisible()
+  await a.page.keyboard.press('e') // close the card
+  await verify(a.page)
+  await a.page.keyboard.press('e')
+  await expect(card.getByRole('button', { name: 'Milna hai' })).toBeEnabled()
+  await expect(card.getByRole('button', { name: 'Invite code se verified bano' })).toBeHidden()
   await card.getByRole('button', { name: 'Milna hai' }).click()
   await a.page.getByRole('textbox', { name: 'Aapki baat' }).fill(reason)
   await a.page.getByRole('button', { name: 'Bhejo' }).click()

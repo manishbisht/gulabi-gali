@@ -84,12 +84,22 @@ export type FullProfile = PublicPerson & {
   hereFor: HereFor | null
   about: string
   pauseRequests: boolean
+  /** An https link, only for a verified viewer (and for the owner, who sees their own). Never on a `PublicPerson`. */
+  link?: string
 }
 
 export interface Me {
   id: string
   profile: FullProfile | null
   complete: boolean
+  /** Can send requests and sees others' links: redeemed an invite code, or an admin marked them. */
+  verified: boolean
+}
+
+/** One of a verified member's invite codes: 8 characters (the screen shows XXXX-XXXX). */
+export interface InviteView {
+  code: string
+  used: boolean
 }
 
 /** What a person's `Milna hai` request says: 10 to 140 characters (code points), once cleaned. */

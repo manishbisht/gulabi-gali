@@ -1,5 +1,6 @@
 import type { Env } from './env'
 import { floating, notify, type Later } from './inbox'
+import { isVerified } from './trust'
 import { loadResident, publicOf, visibleRow, type ProfileRow } from './profiles'
 import { MAX_REASON, MIN_REASON, REQUEST_TTL_MS, type RequestLists, type RequestView } from './protocol'
 
@@ -81,6 +82,8 @@ export async function sendRequest(
   // A new request reaches someone new: only someone others may see can send one (a hidden person cannot).
   const me = await visibleRow(env, userId)
   if (!me) return fail('ghost', 403)
+  // Residents can be asked and can answer; reaching out first is for the verified.
+  if (!(await isVerified(env, userId))) return fail('not-verified', 403)
   const body = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   const reason = cleanReason(body.reason)
   if (reason === null) return fail('invalid', 400)

@@ -6,6 +6,7 @@ import type {
   FullProfile,
   HereFor,
   HomeArea,
+  InviteView,
   MatchView,
   Me,
   MessagePage,
@@ -51,7 +52,8 @@ export interface ProfileInput {
   homeArea: HomeArea
   hereFor: HereFor | null
   about: string
-  link: string | null
+  /** Left out when the person did not touch it (the server keeps the stored one); null clears it. */
+  link?: string | null
   adult: boolean
   pledge: boolean
   pauseRequests: boolean
@@ -96,11 +98,18 @@ export async function getProfile(
   return (await res.json()) as FullProfile
 }
 
-type RequestError = 'invalid' | 'ghost' | 'no-such-person' | 'already' | 'paused'
+type RequestError = 'invalid' | 'ghost' | 'not-verified' | 'no-such-person' | 'already' | 'paused'
 export type RequestOutcome =
   { ok: true; kind: 'sent' | 'matched' } | { ok: false; error: RequestError | 'failed' }
 
-const REQUEST_ERRORS: readonly string[] = ['invalid', 'ghost', 'no-such-person', 'already', 'paused']
+const REQUEST_ERRORS: readonly string[] = [
+  'invalid',
+  'ghost',
+  'not-verified',
+  'no-such-person',
+  'already',
+  'paused',
+]
 
 /** Asks someone to meet. Never rejects: a 201 is `sent`, a crossed request's 200 is `matched`, the rest a typed error. */
 export async function sendMeetRequest(token: string, to: string, reason: string): Promise<RequestOutcome> {
@@ -205,5 +214,33 @@ export async function unmatch(token: string, matchId: string): Promise<boolean> 
     return res.ok || res.status === 404
   } catch {
     return false
+  }
+}
+
+/** The caller's invite codes. Rejects on failure. */
+export async function getInvites(token: string, signal?: AbortSignal): Promise<InviteView[]> {
+  const res = await fetch(`${API_BASE}/api/invites`, { headers: bearer(token), signal })
+  if (!res.ok) throw new Error(`invites ${res.status}`)
+  return ((await res.json()) as { codes: InviteView[] }).codes
+}
+
+export type RedeemError = 'bad-code' | 'used' | 'own-code' | 'already-verified' | 'rate' | 'failed'
+export type RedeemResult = { ok: true; me: Me } | { ok: false; error: RedeemError }
+
+const REDEEM_ERRORS: readonly string[] = ['bad-code', 'used', 'own-code', 'already-verified', 'rate']
+
+/** Never rejects: the verified `Me`, or the typed reason the code did not work. */
+export async function redeemInvite(token: string, code: string): Promise<RedeemResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/invites/redeem`, {
+      method: 'POST',
+      headers: json(token),
+      body: JSON.stringify({ code }),
+    })
+    if (res.ok) return { ok: true, me: (await res.json()) as Me }
+    const error = ((await res.json().catch(() => null)) as { error?: string } | null)?.error
+    return { ok: false, error: error && REDEEM_ERRORS.includes(error) ? (error as RedeemError) : 'failed' }
+  } catch {
+    return { ok: false, error: 'failed' }
   }
 }
