@@ -6,12 +6,15 @@ import { PALETTE } from './palette'
 import { buildProps } from './props'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
-/** Districts that exist so far; the others arrive with their own task. */
-export const DISTRICTS: DistrictId[] = ['walled-city']
+/** The four districts, in the order the metro lists them. */
+export const DISTRICTS: DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar']
 
 /** Each district is its own chunk, fetched only when the player goes there. */
-const SOURCES: Partial<Record<DistrictId, () => Promise<{ default: DistrictDef }>>> = {
+const SOURCES: Record<DistrictId, () => Promise<{ default: DistrictDef }>> = {
   'walled-city': () => import('./districts/walledCity'),
+  'mi-road': () => import('./districts/miRoad'),
+  university: () => import('./districts/university'),
+  'malviya-nagar': () => import('./districts/malviyaNagar'),
 }
 
 export interface District {
@@ -35,8 +38,8 @@ const CELL = 60
 const SHADOW_REACH = 45
 
 export async function loadDistrict(id: DistrictId): Promise<District> {
-  const source = SOURCES[id]
-  if (!source) throw new Error(`District not built yet: ${id}`)
+  const source = SOURCES[id] as (typeof SOURCES)[DistrictId] | undefined
+  if (!source) throw new Error(`No such district: ${id}`)
   const def = (await source()).default
   const root = new THREE.Group()
   root.name = def.id

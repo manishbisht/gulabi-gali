@@ -144,3 +144,42 @@ test('kite sky on Sankranti', async ({ page }) => {
   expect(await page.evaluate(() => window.__gg.festival())).toBe('sankranti')
   await expect(page.getByText('Makar Sankranti mubarak! Aasmaan dekho')).toBeVisible()
 })
+
+test('E by the station opens the metro on a desktop', async ({ page }) => {
+  await enterCity(page)
+  await page.evaluate(() => window.__gg.teleport(-7.2, 11))
+  await expect(page.getByRole('button', { name: 'Metro' })).toBeVisible()
+  await page.keyboard.press('e')
+  const sheet = page.getByRole('region', { name: 'Kahan chalein?' })
+  await expect(sheet).toContainText('University–JKK')
+  await page.keyboard.press('e')
+  await expect(sheet).toHaveCount(0)
+})
+
+test.describe('by metro', () => {
+  const { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent } = devices['Pixel 7']
+  test.use({ viewport, deviceScaleFactor, isMobile, hasTouch, userAgent })
+
+  test('travels by metro', async ({ page }) => {
+    await enterCity(page)
+    await expect(page.getByRole('button', { name: 'Metro' })).toHaveCount(0) // the spawn is far from it
+    await page.evaluate(() => window.__gg.teleport(-7.2, 11)) // the Walled City's station
+    await page.getByRole('button', { name: 'Metro' }).tap()
+    const sheet = page.getByRole('region', { name: 'Kahan chalein?' })
+    await expect(sheet.getByRole('button')).toHaveText([
+      'MI Road–Raja Park',
+      'University–JKK',
+      'Malviya Nagar–WTP',
+      'Band karo',
+    ])
+    await sheet.getByRole('button', { name: 'MI Road–Raja Park' }).tap()
+    await expect.poll(() => page.evaluate(() => window.__gg.district())).toBe('mi-road')
+    await expect(page.locator('.hud-top')).toContainText('MI Road–Raja Park')
+    // arrived at MI Road's own station, with the metro right there to go back
+    await expect(page.getByRole('button', { name: 'Metro' })).toBeVisible()
+    await page.reload()
+    await page.getByRole('button', { name: 'Padharo!' }).click()
+    await expect.poll(() => page.evaluate(() => window.__gg?.district())).toBe('mi-road')
+    await expect(page.locator('.hud-top')).toContainText('MI Road–Raja Park')
+  })
+})

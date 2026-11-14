@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DistrictId } from '../net/protocol'
 import { DISTRICTS, loadDistrict, type District } from './district'
 import { footprint } from './kit'
+import { CAST } from './cast'
+import { DISTRICT_NAMES } from './districtNames'
+import { TOTAL_STAMPS } from './stamps'
 import type { AABB, LandmarkDef, Vec2 } from './types'
 
 const PLAYER_RADIUS = 0.4
@@ -120,10 +123,73 @@ describe('districts', () => {
     expect(d.lights.hemi).toBeInstanceOf(THREE.HemisphereLight)
   })
 
-  it('rejects a district that is not built yet', async () => {
-    await expect(loadDistrict('mi-road')).rejects.toThrow(/mi-road/)
+  it('rejects a district that does not exist', async () => {
+    await expect(loadDistrict('atlantis' as DistrictId)).rejects.toThrow(/atlantis/)
   })
 })
+
+/** Every mesh material in the model, flattened. */
+const materials = (o: THREE.Object3D) => {
+  const out: THREE.Material[] = []
+  o.traverse((m) => {
+    if (m instanceof THREE.Mesh) out.push(...(Array.isArray(m.material) ? m.material : [m.material]))
+  })
+  return out
+}
+
+describe('the city', () => {
+  it('has all four districts', () => {
+    expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar'])
+  })
+
+  it('landmark count across districts is 9', async () => {
+    const all = await Promise.all(DISTRICTS.map(load))
+    expect(all.reduce((n, d) => n + d.def.landmarks.length, 0)).toBe(TOTAL_STAMPS)
+    expect(TOTAL_STAMPS).toBe(9)
+  })
+
+  it.each(DISTRICTS)('%s: names itself the way the metro lists it', async (id) => {
+    expect((await load(id)).def.name).toEqual(DISTRICT_NAMES[id])
+  })
+
+  it.each(DISTRICTS)('%s: every landmark model is under 8k triangles', async (id) => {
+    for (const l of (await load(id)).def.landmarks)
+      expect(triangles(await l.build()), l.id).toBeLessThan(8000)
+  })
+
+  it.each(DISTRICTS)('%s: has a metro entrance by its station', async (id) => {
+    const d = await load(id)
+    const entrances = d.def.props.filter((p) => p.kind === 'station')
+    expect(entrances).toHaveLength(1)
+    const at = entrances[0]!.at
+    expect(Math.hypot(at.x - d.def.station.x, at.z - d.def.station.z)).toBeLessThan(4)
+  })
+
+  it.each(DISTRICTS)('%s: its signature landmark is floodlit after dark', async (id) => {
+    const d = await load(id)
+    const lit = d.def.landmarks.filter((l) => materials(d.root.getObjectByName(l.id)!).some(glows))
+    expect(lit.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it.each(DISTRICTS)(
+    '%s: its centre, where festivals gather, is a public place, not a building',
+    async (id) => {
+      const d = await load(id)
+      const half = d.def.size / 2
+      expect(Math.abs(d.def.centre.x)).toBeLessThan(half)
+      expect(Math.abs(d.def.centre.z)).toBeLessThan(half)
+      expect(blockedBy(d.def.buildings.map(footprint))(d.def.centre)).toBe(false)
+    },
+  )
+
+  it('every character walks in exactly one district', async () => {
+    const all = await Promise.all(DISTRICTS.map(load))
+    const ids = all.flatMap((d) => d.def.npcs.map((n) => n.id)).sort()
+    expect(ids).toEqual(Object.keys(CAST).sort())
+  })
+})
+
+const glows = (m: THREE.Material) => typeof m.userData.nightGlow === 'number'
 
 describe('district lifecycle', () => {
   it('lets the camera pull in front of buildings and landmarks, not props', async () => {
@@ -212,5 +278,74 @@ describe('the Walled City', () => {
     const n = triangles(await hawa.build())
     expect(n).toBeGreaterThan(1500) // the signature model: a honeycomb, not a box
     expect(n).toBeLessThan(8000)
+  })
+})
+
+const ids = (xs: { id: string }[]) => xs.map((x) => x.id).sort()
+const share = <T>(xs: T[], test: (x: T) => boolean) => xs.filter(test).length / xs.length
+
+describe('MI Road', () => {
+  it('is MI Road–Raja Park, with Albert Hall in Ram Niwas Bagh behind its gate', async () => {
+    const d = await load('mi-road')
+    expect(d.def.name).toEqual({ hi: 'MI Road–Raja Park', en: 'MI Road & Raja Park' })
+    expect(d.def.size).toBe(200)
+    expect(ids(d.def.landmarks)).toEqual(['albert-hall', 'ram-niwas-gate'])
+    const at = (id: string) => d.def.landmarks.find((l) => l.id === id)!.at
+    // from the gate on MI Road you look north (up the screen) along the garden to the hall
+    expect(at('albert-hall').z).toBeLessThan(at('ram-niwas-gate').z - 30)
+    expect(Math.abs(at('albert-hall').x - at('ram-niwas-gate').x)).toBeLessThan(2)
+  })
+
+  it('is ochre and sandstone more than pink, with a long shop-lined road and cafés', async () => {
+    const d = await load('mi-road')
+    const fill = d.def.buildings.filter((b) => b.style !== 'wall')
+    expect(share(fill, (b) => b.tint === 'ochre' || b.tint === 'sandstone')).toBeGreaterThan(0.6)
+    expect(share(fill, (b) => (b.tint ?? 'pink') === 'pink')).toBeLessThan(0.1)
+    expect(fill.filter((b) => b.style === 'shop').length).toBeGreaterThanOrEqual(30)
+    expect(d.def.props.filter((p) => p.kind === 'tapri').length).toBeGreaterThanOrEqual(4)
+    expect(d.def.props.filter((p) => p.kind === 'bench').length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('is where Sunita ji keeps shop', async () => {
+    expect(ids((await load('mi-road')).def.npcs)).toEqual(['sunita'])
+  })
+})
+
+describe('University', () => {
+  it('is University–JKK, with the RU gate and Jawahar Kala Kendra', async () => {
+    const d = await load('university')
+    expect(d.def.name).toEqual({ hi: 'University–JKK', en: 'University & JKK' })
+    expect(d.def.size).toBe(200)
+    expect(ids(d.def.landmarks)).toEqual(['jkk', 'university-gate'])
+  })
+
+  it('is a green campus', async () => {
+    const d = await load('university')
+    expect(d.def.ground).toBe('grass')
+    expect(d.def.props.filter((p) => p.kind === 'tree').length).toBeGreaterThanOrEqual(30)
+  })
+
+  it('is where Kavya, Aarav and Meera spend their days', async () => {
+    expect(ids((await load('university')).def.npcs)).toEqual(['aarav', 'kavya', 'meera'])
+  })
+})
+
+describe('Malviya Nagar', () => {
+  it('is Malviya Nagar–WTP, with World Trade Park', async () => {
+    const d = await load('malviya-nagar')
+    expect(d.def.name).toEqual({ hi: 'Malviya Nagar–WTP', en: 'Malviya Nagar & WTP' })
+    expect(d.def.size).toBe(200)
+    expect(ids(d.def.landmarks)).toEqual(['wtp'])
+  })
+
+  it('is modern blocks and coaching centres', async () => {
+    const d = await load('malviya-nagar')
+    const fill = d.def.buildings.filter((b) => b.style !== 'wall')
+    expect(share(fill, (b) => b.style === 'modern')).toBeGreaterThan(0.5)
+    expect(d.def.props.filter((p) => p.kind === 'poster-wall').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('is where Farhan and Neha live', async () => {
+    expect(ids((await load('malviya-nagar')).def.npcs)).toEqual(['farhan', 'neha'])
   })
 })

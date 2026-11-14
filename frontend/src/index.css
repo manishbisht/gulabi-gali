@@ -292,3 +292,67 @@ button {
 .npc-card .npc-notreal {
   font-style: italic;
 }
+
+.metro-button {
+  flex: none;
+  align-self: flex-end;
+  min-height: 52px;
+  padding: 0 20px;
+  border: 2px solid var(--cream);
+  border-radius: 999px;
+  background: var(--pink);
+  color: var(--plum);
+  font-family: 'Baloo 2', system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.travel-sheet ul {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.travel-stop {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.travel-close {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  text-decoration: underline;
+}
+
+/* Metro travel: the screen goes black while one district gives way to the next (FADE_MS in useTravel). */
+.fade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.fade[data-on] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade {
+    transition: none;
+  }
+}

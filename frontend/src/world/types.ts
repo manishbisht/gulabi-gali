@@ -59,6 +59,8 @@ export interface DistrictDef {
   size: number
   spawn: Vec2
   station: Vec2
+  /** Where people gather: Holi colour rises here. Open ground, clear of buildings and landmarks. */
+  centre: Vec2
   ground: PaletteKey
   paving: Paving[]
   buildings: BuildingSpec[]

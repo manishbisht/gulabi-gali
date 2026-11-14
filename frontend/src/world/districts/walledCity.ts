@@ -1,11 +1,11 @@
-import type * as THREE from 'three'
 import { CAST } from '../cast'
-import { footprint } from '../kit'
+import { DISTRICT_NAMES } from '../districtNames'
 import { BADI_CHAUPAR, buildBadiChaupar } from '../landmarks/badiChaupar'
 import { buildHawaMahal, HAWA_MAHAL } from '../landmarks/hawaMahal'
 import { buildJantarMantar, JANTAR_MANTAR } from '../landmarks/jantarMantar'
 import { buildTripoliaGate, TRIPOLIA_GATE } from '../landmarks/tripoliaGate'
-import type { AABB, BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec, Vec2 } from '../types'
+import type { AABB, BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
+import { centred, createFill, grow, placed, rect, wall, type Facing } from './layout'
 
 /*
  * The Walled City, 240 × 240 m, with Badi Chaupar at the origin; x is east and -z is north. A loose take
@@ -24,25 +24,7 @@ const SQUARE = BADI_CHAUPAR.square / 2
 const LANE = 62 // lane centre lines, each 8 m wide
 const DEEP = 12 // the deepest building in a row
 
-const rect = (x0: number, z0: number, x1: number, z1: number): AABB => ({
-  minX: Math.min(x0, x1),
-  maxX: Math.max(x0, x1),
-  minZ: Math.min(z0, z1),
-  maxZ: Math.max(z0, z1),
-})
-const grow = (r: AABB, m: number): AABB => rect(r.minX - m, r.minZ - m, r.maxX + m, r.maxZ + m)
-const centred = (at: Vec2, size: { w: number; d: number }) =>
-  rect(at.x - size.w / 2, at.z - size.d / 2, at.x + size.w / 2, at.z + size.d / 2)
-const overlaps = (a: AABB, b: AABB) =>
-  a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ
-
 // ---- landmarks -------------------------------------------------------------------------------
-
-const placed = (build: () => THREE.Group, at: Vec2) => async () => {
-  const g = build()
-  g.position.set(at.x, 0, at.z)
-  return g
-}
 
 const HAWA_AT = { x: 36, z: -18 }
 const JANTAR_AT = { x: -50, z: -36 }
@@ -102,19 +84,6 @@ const landmarks: LandmarkDef[] = [
 
 // ---- buildings -------------------------------------------------------------------------------
 
-/** mulberry32: a tiny seeded generator, so the layout never changes between visits. */
-function seeded(seed: number) {
-  let a = seed
-  return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-const rand = seeded(1727)
-const between = (lo: number, hi: number) => lo + rand() * (hi - lo)
-
 /** The Jantar Mantar compound, walled on four sides with a gate onto the bazaar. */
 const COMPOUND = rect(-73, -57, -28, -MAIN)
 
@@ -124,15 +93,7 @@ const HAWA_VIEW = rect(HAWA_AT.x - 14, MAIN, HAWA_AT.x + 14, MAIN + 14)
 /** Kept free of fill: the landmarks with a little breathing room, the Jantar Mantar compound, the view. */
 const KEEP_OUT: AABB[] = [...landmarks.map((l) => grow(l.footprint, 3)), grow(COMPOUND, 1), HAWA_VIEW]
 
-const buildings: BuildingSpec[] = []
-
-const fits = (b: AABB) =>
-  b.minX >= -INNER &&
-  b.maxX <= INNER &&
-  b.minZ >= -INNER &&
-  b.maxZ <= INNER &&
-  !KEEP_OUT.some((k) => overlaps(b, k)) &&
-  !buildings.some((o) => overlaps(b, footprint(o)))
+const { buildings, rand, row: fillRow } = createFill(1727, rect(-INNER, -INNER, INNER, INNER), KEEP_OUT)
 
 /** How a row looks: bazaars are mostly arcaded shops, lanes mostly havelis. */
 type Mix = 'bazaar' | 'lane'
@@ -145,32 +106,12 @@ function building(mix: Mix, w: number, d: number): Omit<BuildingSpec, 'x' | 'z' 
   return { w, d, floors, style, tint }
 }
 
-/**
- * Buildings shoulder to shoulder along one side of a street, facing it. `front` is the building line,
- * `facing` the way the street faces look; `from`..`to` runs along the street.
- */
-function row(from: number, to: number, front: number, facing: 'n' | 's' | 'e' | 'w', mix: Mix) {
-  let at = from
-  while (to - at >= 6) {
-    const w = Math.min(Math.round(between(7, mix === 'bazaar' ? 10 : 12)), to - at)
-    const d = Math.round(between(9, DEEP))
-    const mid = at + w / 2
-    const spec: BuildingSpec =
-      facing === 's'
-        ? { ...building(mix, w, d), x: mid, z: front - d / 2 }
-        : facing === 'n'
-          ? { ...building(mix, w, d), x: mid, z: front + d / 2, rot: 180 }
-          : facing === 'e'
-            ? { ...building(mix, w, d), x: front - d / 2, z: mid, rot: 270 }
-            : { ...building(mix, w, d), x: front + d / 2, z: mid, rot: 90 }
-    if (fits(footprint(spec))) {
-      buildings.push(spec)
-      at += w
-    } else {
-      at += 1 // something is in the way: try a little further along
-    }
-  }
-}
+/** A row of bazaar shops or lane havelis along one side of a street; see `createFill`. */
+const row = (from: number, to: number, front: number, facing: Facing, mix: Mix) =>
+  fillRow(from, to, front, facing, (w, d) => building(mix, w, d), {
+    w: [7, mix === 'bazaar' ? 10 : 12],
+    d: [9, DEEP],
+  })
 
 /** Stretches along a street between the Chaupar (or its corner rows) and the inner lane, split by lanes. */
 const stretches = (start: number): [number, number][] => [
@@ -197,17 +138,6 @@ for (const [a, b] of stretches(JOHARI + DEEP)) {
 for (const [a, b] of stretches(MAIN + DEEP)) {
   if (a < 0) row(a, b, LANE - 4, 'e', 'lane')
   if (b > 0) row(a, b, -LANE + 4, 'w', 'lane')
-}
-
-/** An axis-aligned run of wall from one corner to the other. */
-function wall(r: AABB, floors: 1 | 2, tint: 'pink' | 'terracotta' = 'pink'): BuildingSpec {
-  const w = r.maxX - r.minX
-  const d = r.maxZ - r.minZ
-  const x = (r.minX + r.maxX) / 2
-  const z = (r.minZ + r.maxZ) / 2
-  return w >= d
-    ? { x, z, w, d, floors, style: 'wall', tint }
-    : { x, z, w: d, d: w, floors, style: 'wall', tint, rot: 90 }
 }
 
 // The city wall, in segments along the edges (north and south run the full width).
@@ -349,11 +279,12 @@ const npcs: NpcDef[] = [
 
 const walledCity: DistrictDef = {
   id: 'walled-city',
-  name: { hi: 'Gulabi Shahar', en: 'Pink City' },
+  name: DISTRICT_NAMES['walled-city'],
   size: SIZE,
   // Halfway up Johari Bazaar, looking north between the shops to the Chaupar's fountain.
   spawn: { x: 1.5, z: 44 },
   station: { x: -7.2, z: 11 },
+  centre: CHAUPAR_AT,
   ground: 'sandstone',
   paving,
   buildings,

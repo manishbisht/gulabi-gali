@@ -12,7 +12,7 @@ export interface SkyParams {
   fogDensity: number
   sunIntensity: number
   ambientIntensity: number
-  /** Lamps, tapri bulbs and the Hawa Mahal facade glow. */
+  /** Lamps, tapri bulbs and each district's floodlit landmark (materials tagged `nightGlow`). */
   nightLights: boolean
   rain: boolean
   dust: boolean

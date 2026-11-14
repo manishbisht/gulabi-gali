@@ -8,6 +8,7 @@ export const PALETTE = {
   marigold: '#F2A81D',
   road: '#4A4543',
   grass: '#7C9A5A',
+  glass: '#5F9FC4',
 } as const
 
 export type PaletteKey = keyof typeof PALETTE

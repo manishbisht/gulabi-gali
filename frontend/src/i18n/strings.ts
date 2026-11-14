@@ -35,6 +35,9 @@ export const STRINGS = {
   npcClose: { hi: 'Band karo', en: 'Close' },
   npcBadge: { hi: 'Kirdaar', en: 'Character' },
   joystickLabel: { hi: 'Chalne ka joystick', en: 'Walking joystick' },
+  metro: { hi: 'Metro', en: 'Metro' },
+  metroTitle: { hi: 'Kahan chalein?', en: 'Where to?' },
+  metroClose: { hi: 'Band karo', en: 'Close' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

@@ -3,7 +3,7 @@ import type { LandmarkDef, Vec2 } from './types'
 
 const KEY = 'gg-stamps'
 
-/** One stamp per landmark across all four districts. Only the Walled City's exist so far. */
+/** One stamp per landmark across all four districts. */
 export const TOTAL_STAMPS = 9
 
 /** The landmark ids stamped so far, in the order they were collected. */

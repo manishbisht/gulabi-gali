@@ -3,6 +3,7 @@ import type { Stage } from '../engine/stage'
 import type { FestivalId } from '../net/protocol'
 import { FLOOR_H } from '../world/kit/parts'
 import type { District } from '../world/district'
+import type { BuildingSpec, BuildingStyle } from '../world/types'
 import { PALETTE } from '../world/palette'
 import type { SkyParams } from './sky'
 
@@ -64,18 +65,25 @@ function kiteGeometry() {
   return g
 }
 
-interface Diya {
+export interface Diya {
   x: number
   y: number
   z: number
 }
 
-/** Spots for diyas along the front and back parapets of the havelis, in world space. */
-function parapetDiyas(district: District, limit: number): Diya[] {
+/** How far above the top floor each style's roof edge stands: the haveli parapet, the shop and modern slabs. */
+const ROOF_EDGE: Partial<Record<BuildingStyle, number>> = { haveli: 0.7, shop: 0.45, modern: 0.3 }
+
+/**
+ * Spots for diyas along the front and back roof edges of the havelis, shops and modern blocks, in world
+ * space, spread evenly over the whole district when there are more than `limit`.
+ */
+export function roofDiyas(buildings: BuildingSpec[], limit: number): Diya[] {
   const spots: Diya[] = []
-  for (const b of district.def.buildings) {
-    if (b.style !== 'haveli') continue
-    const y = b.floors * FLOOR_H + 0.75
+  for (const b of buildings) {
+    const edge = ROOF_EDGE[b.style]
+    if (edge === undefined) continue
+    const y = b.floors * FLOOR_H + edge + 0.05
     const pw = b.w + 0.2
     const turn = THREE.MathUtils.degToRad(b.rot ?? 0)
     const c = Math.cos(turn)
@@ -87,7 +95,6 @@ function parapetDiyas(district: District, limit: number): Diya[] {
       }
     }
   }
-  // spread the budget evenly over the whole district rather than filling one corner
   if (spots.length <= limit) return spots
   const step = spots.length / limit
   return Array.from({ length: limit }, (_, i) => spots[Math.floor(i * step)]!)
@@ -95,7 +102,7 @@ function parapetDiyas(district: District, limit: number): Diya[] {
 
 /**
  * Festival dressing: Sankranti kites over the rooftops, Diwali diyas on the parapets, Holi colour
- * at the Chaupar. Instanced throughout and nothing allocates per frame.
+ * at the district's centre. Instanced throughout and nothing allocates per frame.
  */
 export function createFestivalFx(stage: Stage, district: District): FestivalFx {
   const group = new THREE.Group()
@@ -149,15 +156,15 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
   puffs.frustumCulled = false
   puffs.visible = false
   puffs.name = 'holi-puffs'
-  const chaupar = district.def.landmarks.find((l) => l.id === 'badi-chaupar')?.at ?? { x: 0, z: 0 }
+  const centre = district.def.centre
   const px = new Float32Array(MAX_PUFFS)
   const pz = new Float32Array(MAX_PUFFS)
   const page = new Float32Array(MAX_PUFFS)
   const respawn = (i: number) => {
     const a = rand(Math.PI * 2)
     const r = Math.sqrt(Math.random()) * HOLI_RADIUS
-    px[i] = chaupar.x + Math.cos(a) * r
-    pz[i] = chaupar.z + Math.sin(a) * r
+    px[i] = centre.x + Math.cos(a) * r
+    pz[i] = centre.z + Math.sin(a) * r
     puffs.setColorAt(i, colour.set(HOLI_COLOURS[(Math.random() * HOLI_COLOURS.length) | 0]!))
     if (puffs.instanceColor) puffs.instanceColor.needsUpdate = true
   }
@@ -168,7 +175,7 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
   group.add(puffs)
 
   // ---- diyas
-  const diyaSpots = parapetDiyas(district, COUNTS.diwali![2])
+  const diyaSpots = roofDiyas(district.def.buildings, COUNTS.diwali![2])
   const diyas = new THREE.InstancedMesh(
     track(new THREE.SphereGeometry(0.32, 6, 4)),
     track(new THREE.MeshBasicMaterial({ color: '#FFB347', fog: false })),
