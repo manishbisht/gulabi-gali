@@ -76,6 +76,8 @@ export function useBench() {
     [show],
   )
   const dismiss = useCallback(() => show(null), [show])
+  /** Drops what `from` said: after blocking them, the lines already here go too. */
+  const forget = useCallback((from: string) => setLines((all) => all.filter((l) => l.from !== from)), [])
 
-  return { near, seat, lines, notice, hooks, bind, sit, stand, say, dismiss }
+  return { near, seat, lines, notice, hooks, bind, sit, stand, say, dismiss, forget }
 }

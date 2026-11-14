@@ -1,4 +1,5 @@
 import { resolveUser } from './auth'
+import { blockUser, listBlocks, unblockUser } from './blocks'
 import { listMatches, listMessages, postMessage, unmatch } from './chat'
 import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
@@ -119,6 +120,17 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
   if (pathname === '/api/invites/redeem' && method === 'POST')
     return redeemInvite(env, user.id, await readJson(request), later)
+  if (pathname === '/api/blocks' && method === 'GET') return listBlocks(env, user.id)
+  if (pathname === '/api/blocks' && method === 'POST')
+    return blockUser(env, user.id, await readJson(request), later)
+  const unblock = pathname.match(/^\/api\/blocks\/([^/]+)$/)
+  if (unblock && method === 'DELETE') {
+    try {
+      return await unblockUser(env, user.id, decodeURIComponent(unblock[1]))
+    } catch {
+      return new Response(null, { status: 204 })
+    }
+  }
   if (pathname === '/api/requests' && method === 'POST')
     return sendRequest(env, user.id, await readJson(request), Date.now(), later)
   if (pathname === '/api/requests' && method === 'GET')

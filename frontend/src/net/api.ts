@@ -10,6 +10,7 @@ import type {
   MatchView,
   Me,
   MessagePage,
+  PublicPerson,
   RequestLists,
 } from './protocol'
 
@@ -253,4 +254,38 @@ export async function redeemInvite(token: string, code: string): Promise<RedeemR
   } catch {
     return { ok: false, error: 'failed' }
   }
+}
+
+/** Blocks `id`: true once it is done (the server answers 204 whether or not they exist). Never rejects. */
+export async function blockPerson(token: string, id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/blocks`, {
+      method: 'POST',
+      headers: json(token),
+      body: JSON.stringify({ id }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** True once `id` is no longer blocked. Never rejects. */
+export async function unblockPerson(token: string, id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/blocks/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: bearer(token),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** The people the caller has blocked, by first name. Rejects on failure. */
+export async function getBlocks(token: string, signal?: AbortSignal): Promise<PublicPerson[]> {
+  const res = await fetch(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
+  if (!res.ok) throw new Error(`blocks ${res.status}`)
+  return (await res.json()) as PublicPerson[]
 }

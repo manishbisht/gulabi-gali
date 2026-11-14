@@ -2,7 +2,7 @@ import type { Env } from './env'
 import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
 import { isVerified } from './trust'
-import { loadResident, publicOf, visibleRow, type ProfileRow } from './profiles'
+import { isBlocked, loadResident, publicOf, visibleRow, type ProfileRow } from './profiles'
 import { MAX_REASON, MIN_REASON, REQUEST_TTL_MS, type RequestLists, type RequestView } from './protocol'
 
 /** The most requests either list returns: enough for a busy inbox, never an unbounded read. */
@@ -93,7 +93,7 @@ export async function sendRequest(
   if (typeof to !== 'string' || to.length > 200) return fail('no-such-person', 404)
   if (to === userId) return fail('invalid', 400)
   const them = await visibleRow(env, to)
-  if (!them) return fail('no-such-person', 404)
+  if (!them || (await isBlocked(env, userId, to))) return fail('no-such-person', 404)
 
   const [a, b] = pairOf(userId, to)
   const matched = await env.DB.prepare('SELECT id FROM matches WHERE a = ? AND b = ?').bind(a, b).first()
@@ -148,6 +148,10 @@ export async function sendRequest(
   return Response.json({ id }, { status: 201 })
 }
 
+/** A clause: the row's other person (`col`) is not blocked by, or blocking, the asker (`?1`). Normally no row survives a block; this covers a race. */
+const unblocked = (col: string) =>
+  `NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.a = ?1 AND k.b = ${col}) OR (k.b = ?1 AND k.a = ${col}))`
+
 interface RequestRow {
   id: string
   from_id: string
@@ -176,13 +180,15 @@ export async function listRequests(env: Env, userId: string, now = Date.now()): 
   const cutoff = now - REQUEST_TTL_MS
   const [incoming, sent] = await Promise.all([
     env.DB.prepare(
-      "SELECT * FROM requests WHERE to_id = ? AND state = 'pending' AND created_at > ? ORDER BY created_at DESC LIMIT ?",
+      `SELECT * FROM requests WHERE to_id = ?1 AND state = 'pending' AND created_at > ?2 AND ${unblocked('from_id')}
+       ORDER BY created_at DESC LIMIT ?3`,
     )
       .bind(userId, cutoff, LIST_LIMIT)
       .all<RequestRow>(),
     // An unmatch's block (an empty reason, see `unmatch`) is no request its sender made: never listed.
     env.DB.prepare(
-      "SELECT * FROM requests WHERE from_id = ? AND reason != '' AND (state = 'accepted' OR created_at > ?) ORDER BY created_at DESC LIMIT ?",
+      `SELECT * FROM requests WHERE from_id = ?1 AND reason != '' AND (state = 'accepted' OR created_at > ?2)
+       AND ${unblocked('to_id')} ORDER BY created_at DESC LIMIT ?3`,
     )
       .bind(userId, cutoff, LIST_LIMIT)
       .all<RequestRow>(),
@@ -209,7 +215,8 @@ export async function acceptRequest(
   // Both people must still be residents others may see: a ban, a hide or a half-deleted profile ends it, since a
   // new match with a hidden person would be one the other side could not see.
   const me = await visibleRow(env, userId)
-  if (!me || !(await visibleRow(env, row.from_id))) return fail('not-found', 404)
+  if (!me || !(await visibleRow(env, row.from_id)) || (await isBlocked(env, userId, row.from_id)))
+    return fail('not-found', 404)
   const matchId = await accept(env, [id], row.from_id, userId, now)
   // The row went (the cron) or aged out between the read and the write.
   if (!matchId) return fail('expired', 410)

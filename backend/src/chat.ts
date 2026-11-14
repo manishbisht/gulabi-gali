@@ -2,7 +2,7 @@ import type { Env } from './env'
 import { holdEvidence } from './evidence'
 import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
-import { ACTIVE, activeRow, toPublic } from './profiles'
+import { ACTIVE, activeRow, isBlocked, toPublic } from './profiles'
 import { pairOf } from './requests'
 import {
   MAX_MESSAGE,
@@ -80,6 +80,8 @@ async function member(env: Env, userId: string, matchId: string, both: boolean):
   if (!me || !match) return null
   const other = match.a === userId ? match.b : match.a
   if (both && !(await activeRow(env, other))) return null
+  // A block ends the match, so this only catches a race; a blocked pair can neither read nor write.
+  if (both && (await isBlocked(env, userId, other))) return null
   return { id: match.id, other }
 }
 

@@ -4,6 +4,7 @@ import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
 import { useMe } from './profile/useMe'
+import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
 import { VisibilityChip } from './ui/VisibilityChip'
 import { loadOrCreateLook, lookFromWire } from './player/avatar'
@@ -151,6 +152,7 @@ export default function App() {
     session.current?.reconnectLive()
   }, [liveKey, auth.token])
   const conn = useConnections({ user: residentId, token: auth.token })
+  const { block, toast: blockToast } = useBlock(auth.token, lang)
   const [connOpen, setConnOpen] = useState(false)
   // signing out shuts the sheet, so the next resident does not find it open
   if (!residentId && connOpen) setConnOpen(false)
@@ -279,6 +281,11 @@ export default function App() {
         onVisible={onVisible}
         onGetVerified={() => setInviteOpen(true)}
         onRequest={(person) => setComposing(person.id)}
+        onBlock={async (person) => {
+          const done = await block(person.id, person.name)
+          if (done) closePerson()
+          return done
+        }}
         onClose={closePerson}
       />
     ))
@@ -334,6 +341,11 @@ export default function App() {
                 {toast}
               </div>
             )}
+            {blockToast && (
+              <div className="toast" role="status">
+                {blockToast}
+              </div>
+            )}
             {replaced && (
               <div className="toast" role="status">
                 {t('liveReplaced', lang)}
@@ -375,6 +387,11 @@ export default function App() {
                   lang={lang}
                   onSay={bench.say}
                   onStand={bench.stand}
+                  onBlock={async (id, name) => {
+                    const done = await block(id, name)
+                    if (done) bench.forget(id)
+                    return done
+                  }}
                 />
               )
             ) : near ? (
@@ -404,6 +421,7 @@ export default function App() {
         <ProfileSheet
           me={me}
           lang={lang}
+          token={auth.token}
           onSave={save}
           onClose={closeProfile}
           onSignOut={() => {
@@ -423,7 +441,13 @@ export default function App() {
         />
       )}
       {connShown && (
-        <Connections conn={conn} lang={lang} token={auth.token} onClose={() => setConnOpen(false)} />
+        <Connections
+          conn={conn}
+          lang={lang}
+          token={auth.token}
+          onBlock={block}
+          onClose={() => setConnOpen(false)}
+        />
       )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
     </>

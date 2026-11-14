@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
-import type { ProfileInput } from '../net/api'
-import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
+import { getBlocks, unblockPerson, type ProfileInput } from '../net/api'
+import { HERE_FOR, type HereFor, type HomeArea, type Me, type PublicPerson } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { AvatarBuilder } from './AvatarBuilder'
@@ -19,12 +19,14 @@ const linkAllowed = (s: string) =>
 interface Props {
   me: Me
   lang: Lang
+  /** Lets the sheet list the people you blocked (first names), with Unblock. */
+  token?: () => Promise<string | null>
   onSave: (p: ProfileInput) => Promise<SaveOutcome>
   onClose: () => void
   onSignOut: () => void
 }
 
-export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
+export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut }: Props) {
   const p = me.profile
   const [name, setName] = useState(p?.name ?? '')
   const [look, setLook] = useState<AvatarLook>(() => (p && lookFromWire(p.look)) || loadOrCreateLook())
@@ -42,6 +44,29 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
   const [bad, setBad] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
   const [wordsRefused, setWordsRefused] = useState(false)
+
+  /** Whom you blocked: null while loading or when it could not load. */
+  const [blocked, setBlocked] = useState<PublicPerson[] | null>(null)
+  const [blockedNote, setBlockedNote] = useState<'load' | 'unblock' | null>(null)
+  useEffect(() => {
+    if (!token || !me.complete) return
+    const ctl = new AbortController()
+    void (async () => {
+      try {
+        const tok = await token()
+        if (tok) setBlocked(await getBlocks(tok, ctl.signal))
+      } catch {
+        if (!ctl.signal.aborted) setBlockedNote('load')
+      }
+    })()
+    return () => ctl.abort()
+  }, [token, me.complete])
+  const unblock = async (id: string) => {
+    setBlockedNote(null)
+    const tok = token ? await token().catch(() => null) : null
+    if (tok && (await unblockPerson(tok, id))) setBlocked((was) => was && was.filter((b) => b.id !== id))
+    else setBlockedNote('unblock')
+  }
 
   const trimmed = name.trim()
   const nameOk = count(trimmed) >= LIMITS.name.min && count(trimmed) <= LIMITS.name.max
@@ -222,6 +247,29 @@ export function ProfileSheet({ me, lang, onSave, onClose, onSignOut }: Props) {
             {t(busy ? 'profileSaving' : 'profileSave', lang)}
           </button>
         </form>
+        {token && me.complete && (blocked || blockedNote) && (
+          <div className="blocked-list">
+            <h3>{t('blockedTitle', lang)}</h3>
+            {blockedNote && (
+              <p role="alert">{t(blockedNote === 'load' ? 'blockedLoadFailed' : 'unblockFailed', lang)}</p>
+            )}
+            {blocked &&
+              (blocked.length === 0 ? (
+                <p>{t('blockedNone', lang)}</p>
+              ) : (
+                <ul>
+                  {blocked.map((b) => (
+                    <li key={b.id}>
+                      <span>{b.name}</span>
+                      <button type="button" onClick={() => void unblock(b.id)}>
+                        {t('unblockButton', lang)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+          </div>
+        )}
         <button type="button" className="auth-close" onClick={onClose}>
           {t('profileNotNow', lang)}
         </button>

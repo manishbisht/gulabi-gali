@@ -4,6 +4,7 @@ import { t, type Lang } from '../i18n/strings'
 import { MAX_BENCH_LINE, type BenchLine } from '../net/protocol'
 import type { BenchSeat } from '../world/benches'
 import type { BenchNotice } from '../world/useBench'
+import { BlockConfirm } from './BlockConfirm'
 import { useKeyboard } from './useKeyboard'
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
   /** Sends a line; false keeps what was typed (too soon, or nowhere to send it). */
   onSay(text: string): boolean
   onStand(): void
+  /** Blocks the sitter who said a line; true once done. */
+  onBlock?(id: string, name: string): Promise<boolean>
 }
 
 /**
@@ -23,8 +26,9 @@ interface Props {
  * line to say, and Utho. It sits beside the joystick; while the phone keyboard is up it spans the screen just
  * above the keyboard instead (the joystick is under the keyboard then anyway).
  */
-export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand }: Props) {
+export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand, onBlock }: Props) {
   const [text, setText] = useState('')
+  const [blocking, setBlocking] = useState<{ id: string; name: string } | null>(null)
   const list = useRef<HTMLOListElement>(null)
   const { keyboard, height } = useKeyboard()
   // the newest line in view, as in any chat
@@ -56,6 +60,18 @@ export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand }: Pro
       <p className="bench-with">
         {seat.with.length ? t('benchWith', lang, { names: seat.with.join(', ') }) : t('benchAlone', lang)}
       </p>
+      {blocking && onBlock && (
+        <BlockConfirm
+          name={blocking.name}
+          lang={lang}
+          onConfirm={async () => {
+            const done = await onBlock(blocking.id, blocking.name)
+            if (done) setBlocking(null)
+            return done
+          }}
+          onCancel={() => setBlocking(null)}
+        />
+      )}
       <ol className="bench-lines" ref={list} aria-live="polite">
         {lines.length === 0 ? (
           <li className="bench-empty">{t('benchEmpty', lang)}</li>
@@ -63,6 +79,16 @@ export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand }: Pro
           lines.map((l, i) => (
             <li key={i}>
               <b>{l.from === me ? t('benchYou', lang) : l.name}</b> {l.text}
+              {onBlock && me && l.from !== me && (
+                <button
+                  type="button"
+                  className="line-block"
+                  aria-label={`${t('blockButton', lang)}: ${l.name}`}
+                  onClick={() => setBlocking({ id: l.from, name: l.name })}
+                >
+                  {t('blockButton', lang)}
+                </button>
+              )}
             </li>
           ))
         )}

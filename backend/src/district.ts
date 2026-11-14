@@ -250,9 +250,19 @@ export interface Trust {
   mutedUntil: number | null
   /** Ids blocked by, or blocking, this person: they never see each other. */
   blocked: Set<string>
+  /** Of those, the ones this person blocked, and the ones who blocked them: who is stood up from a shared bench. Own load only. */
+  blocking: Set<string>
+  blockedBy: Set<string>
 }
 
-const noTrust = (): Trust => ({ banned: false, hidden: false, mutedUntil: null, blocked: new Set() })
+const noTrust = (): Trust => ({
+  banned: false,
+  hidden: false,
+  mutedUntil: null,
+  blocked: new Set(),
+  blocking: new Set(),
+  blockedBy: new Set(),
+})
 
 /** `ids`' trust state from D1, in one round trip. Someone with no row has none. */
 export async function loadTrust(env: Env, ids: readonly string[]): Promise<Map<string, Trust>> {
@@ -282,7 +292,9 @@ export async function loadTrust(env: Env, ids: readonly string[]): Promise<Map<s
   }
   for (const { a, b } of blocks.results as { a: string; b: string }[]) {
     out.get(a)?.blocked.add(b)
+    out.get(a)?.blocking.add(b)
     out.get(b)?.blocked.add(a)
+    out.get(b)?.blockedBy.add(a)
   }
   return out
 }
@@ -610,7 +622,7 @@ export class DistrictDO extends DurableObject<Env> {
       for (const ws of mine) this.drop(ws, LIVE_CLOSE.banned, 'banned')
       return
     }
-    this.reblock(userId, mine, before, t.blocked)
+    this.reblock(userId, mine, before, t)
     const face = t.hidden ? null : person
     if (face !== undefined) for (const ws of mine) this.reface(ws, face, why)
   }
@@ -639,8 +651,19 @@ export class DistrictDO extends DurableObject<Env> {
     for (const id of ids) this.apply(id, got.get(id) ?? noTrust(), undefined, null)
   }
 
+  /** Stands `ws` up from its bench, because someone sitting there blocked them: `seated null`, no reason given. */
+  private unseat(ws: WebSocket, seat: Seat): void {
+    const was = seat.bench
+    if (!was) return
+    seat.bench = null
+    this.write(ws, seat)
+    this.send(ws, STOOD)
+    this.noteSat(was.id, seat.userId, this.clock())
+  }
+
   /** After `userId`'s blocks changed from `before` to `after`: each side hears the other leave, or come back. */
-  private reblock(userId: string, mine: WebSocket[], before: Set<string>, after: Set<string>): void {
+  private reblock(userId: string, mine: WebSocket[], before: Set<string>, t: Trust): void {
+    const after = t.blocked
     const benches = new Set<string>()
     for (const other of this.sockets()) {
       const theirs = this.seat(other)
@@ -650,6 +673,12 @@ export class DistrictDO extends DurableObject<Env> {
       if (theirs.bench) benches.add(theirs.bench.id)
       for (const ws of mine) {
         const seat = this.seat(ws)
+        // On one bench, the blocked person is stood up and the blocker stays (both blocking: neither moves).
+        if (blocked && seat.bench && seat.bench.id === theirs.bench?.id) {
+          if (t.blockedBy.has(theirs.userId) && !t.blocking.has(theirs.userId)) this.unseat(ws, seat)
+          else if (t.blocking.has(theirs.userId) && !t.blockedBy.has(theirs.userId))
+            this.unseat(other, theirs)
+        }
         if (blocked) {
           if (theirs.shown) this.send(ws, { t: 'leave', id: theirs.userId })
           if (seat.shown) this.send(other, { t: 'leave', id: userId })

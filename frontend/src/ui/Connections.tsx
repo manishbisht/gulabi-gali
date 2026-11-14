@@ -16,6 +16,8 @@ interface Props {
   conn: ConnectionsState
   lang: Lang
   token(): Promise<string | null>
+  /** Blocks them; true once done. */
+  onBlock?(id: string, name: string): Promise<boolean>
   onClose(): void
 }
 
@@ -23,7 +25,7 @@ interface Props {
  * The Connections sheet: requests that came in (Haan / Abhi nahi), requests sent, and the chats. It exists
  * only while open, so closed it leaves the joystick alone; with the phone keyboard up it sits just above it.
  */
-export function Connections({ conn, lang, token, onClose }: Props) {
+export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('incoming')
   /** The chat open, as it was when opened: kept to show it ended, once the other side unmatches. */
   const [chat, setChat] = useState<MatchView | null>(null)
@@ -78,6 +80,14 @@ export function Connections({ conn, lang, token, onClose }: Props) {
           ended={ended}
           onRead={(id) => conn.markRead(showing.id, id)}
           onBack={() => setChat(null)}
+          onBlock={
+            onBlock &&
+            (async () => {
+              const done = await onBlock(showing.person.id, showing.person.name)
+              if (done) setChat(null)
+              return done
+            })
+          }
           onUnmatch={async () => {
             const gone = await conn.unmatch(showing.id)
             if (gone) setChat(null)

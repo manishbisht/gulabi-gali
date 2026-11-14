@@ -979,3 +979,30 @@ small.words-hint {
   color: inherit;
   overflow-wrap: anywhere;
 }
+
+.line-block {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.blocked-list ul {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.blocked-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

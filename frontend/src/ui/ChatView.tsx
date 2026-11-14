@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { t, type Lang, type StringKey } from '../i18n/strings'
 import { getMessages, sendMessage } from '../net/api'
+import { BlockConfirm } from './BlockConfirm'
 import { MAX_MESSAGE, type ChatMessage, type PublicPerson } from '../net/protocol'
 
 interface Props {
@@ -17,6 +18,8 @@ interface Props {
   onBack(): void
   /** True once the match is gone. */
   onUnmatch(): Promise<boolean>
+  /** Blocks them; true once done (the parent then closes the chat). */
+  onBlock?(): Promise<boolean>
 }
 
 /** A message the server has not confirmed yet. */
@@ -45,7 +48,19 @@ const NOTE_TEXT: Record<Exclude<Note, null>, StringKey> = {
  * One match's chat: the newest 50 messages (older ones on request), a composer that sends at once and
  * confirms after, and Unmatch behind a confirm in the sheet. Bodies are text, never markup.
  */
-export function ChatView({ matchId, person, lang, token, tick, ended, onRead, onBack, onUnmatch }: Props) {
+export function ChatView({
+  matchId,
+  person,
+  lang,
+  token,
+  tick,
+  ended,
+  onRead,
+  onBack,
+  onUnmatch,
+  onBlock,
+}: Props) {
+  const [blocking, setBlocking] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
   const [older, setOlder] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -160,12 +175,25 @@ export function ChatView({ matchId, person, lang, token, tick, ended, onRead, on
           {t('chatBack', lang)}
         </button>
         <h3>{person.name}</h3>
-        {!confirming && !ended && (
+        {!confirming && !blocking && !ended && (
           <button type="button" className="person-close" onClick={() => setConfirming(true)}>
             {t('chatUnmatch', lang)}
           </button>
         )}
+        {!confirming && !blocking && onBlock && (
+          <button type="button" className="person-close" onClick={() => setBlocking(true)}>
+            {t('blockButton', lang)}
+          </button>
+        )}
       </div>
+      {blocking && onBlock && (
+        <BlockConfirm
+          name={person.name}
+          lang={lang}
+          onConfirm={onBlock}
+          onCancel={() => setBlocking(false)}
+        />
+      )}
       {confirming && !ended && (
         <div className="chat-confirm" role="alertdialog" aria-label={t('chatUnmatch', lang)}>
           <p>{t('chatUnmatchAsk', lang, { name: person.name })}</p>

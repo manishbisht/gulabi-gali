@@ -233,10 +233,21 @@ export const activeRow = (env: Env, id: string): Promise<ProfileRow | null> => r
 /** The profile row of someone others may see (see `VISIBLE`). */
 export const visibleRow = (env: Env, id: string): Promise<ProfileRow | null> => rowWhere(env, id, VISIBLE)
 
+/** Whether `a` and `b` are kept apart by a block, either way. */
+export async function isBlocked(env: Env, a: string, b: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    'SELECT 1 AS x FROM blocks WHERE (a = ?1 AND b = ?2) OR (a = ?2 AND b = ?1)',
+  )
+    .bind(a, b)
+    .first()
+  return row !== null
+}
+
 /** Another person's profile for `viewerId`, who carries the link only when verified. */
 export async function getProfile(env: Env, id: string, viewerId: string): Promise<Response> {
   const row = await visibleRow(env, id)
-  if (!row) return Response.json({ error: 'not found' }, { status: 404 })
+  if (!row || (await isBlocked(env, viewerId, id)))
+    return Response.json({ error: 'not found' }, { status: 404 })
   const viewer = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
     .bind(viewerId)
     .first<{ verified: number }>()

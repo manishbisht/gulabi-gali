@@ -313,6 +313,20 @@ export const STRINGS = {
   chatUnmatchNo: { hi: 'Rehne do', en: 'Keep chat' },
   chatUnmatchFailed: { hi: 'Unmatch nahi ho paya. Dobara try karo.', en: "Couldn't unmatch. Try again." },
   chatEnded: { hi: 'Ye baat-cheet khatam ho gayi', en: 'This conversation has ended' },
+  blockButton: { hi: 'Block karo', en: 'Block' },
+  blockAsk: {
+    hi: '{name} ko block karein? Ye aapko kahin nahi dikhenge, aur aap inhe. Unhe pata nahi chalega.',
+    en: "Block {name}? You won't see each other anywhere. They won't be told.",
+  },
+  blockYes: { hi: 'Haan, block karo', en: 'Yes, block' },
+  blockNo: { hi: 'Rehne do', en: 'Never mind' },
+  blockFailed: { hi: 'Block nahi ho paya. Dobara try karo.', en: "Couldn't block. Try again." },
+  blockDone: { hi: '{name} block ho gaye', en: '{name} is blocked' },
+  blockedTitle: { hi: 'Block kiye hue log', en: 'People you blocked' },
+  blockedNone: { hi: 'Abhi kisi ko block nahi kiya.', en: "You haven't blocked anyone." },
+  blockedLoadFailed: { hi: 'Block list nahi khul payi.', en: "Couldn't load the block list." },
+  unblockButton: { hi: 'Unblock', en: 'Unblock' },
+  unblockFailed: { hi: 'Unblock nahi ho paya. Dobara try karo.', en: "Couldn't unblock. Try again." },
   benchNoticeClose: { hi: 'Theek hai', en: 'OK' },
 } as const satisfies Record<string, Record<Lang, string>>
 

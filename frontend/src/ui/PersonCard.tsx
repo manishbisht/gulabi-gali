@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getProfile } from '../net/api'
 import type { FullProfile, LivePerson } from '../net/protocol'
 import { t, type Lang } from '../i18n/strings'
+import { BlockConfirm } from './BlockConfirm'
 import type { Sent } from './RequestComposer'
 import { areaLabel, HERE_FOR_LABEL } from '../profile/homeAreas'
 
@@ -25,6 +26,8 @@ interface Props {
   /** A resident who is not verified yet: opens the invite code sheet. */
   onGetVerified(): void
   onRequest(person: LivePerson): void
+  /** Blocks them; true once done (the parent then closes the card). */
+  onBlock?(person: LivePerson): Promise<boolean>
   onClose(): void
 }
 
@@ -44,8 +47,10 @@ export function PersonCard({
   onVisible,
   onGetVerified,
   onRequest,
+  onBlock,
   onClose,
 }: Props) {
+  const [confirming, setConfirming] = useState(false)
   const resident = viewer === 'resident' || viewer === 'verified'
   const [loaded, setLoaded] = useState<Loaded>(null)
   useEffect(() => {
@@ -95,6 +100,14 @@ export function PersonCard({
       {resident && done && !profile && <p className="person-note">{t('personNoProfile', lang)}</p>}
       {sent && <p className="person-note">{t(sent === 'sent' ? 'requestSent' : 'requestMatched', lang)}</p>}
       {gone && <p className="person-note">{t('personGone', lang)}</p>}
+      {confirming && onBlock && (
+        <BlockConfirm
+          name={name}
+          lang={lang}
+          onConfirm={() => onBlock(person)}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       <div className="person-actions">
         {resident ? (
           <>
@@ -115,6 +128,11 @@ export function PersonCard({
         ) : (
           <button type="button" className="landmark-stamp" onClick={onVisible}>
             {t('personGhostCta', lang)}
+          </button>
+        )}
+        {resident && onBlock && !confirming && (
+          <button type="button" className="person-close" onClick={() => setConfirming(true)}>
+            {t('blockButton', lang)}
           </button>
         )}
         <button type="button" className="person-close" onClick={onClose}>
