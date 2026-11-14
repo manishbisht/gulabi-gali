@@ -222,7 +222,8 @@ every object, and the runtime may evict one anyway. Nothing about it needs backi
 of an evening empties every bench's last ten minutes (and the memory of who sat where).
 
 The deploy job applies D1 migrations (`wrangler d1 migrations apply gulabi-gali --remote`) before it deploys the
-Worker. Keep every migration additive (new tables, new columns with defaults, new indexes), so the Worker still
+Worker, and on `main` the Pages build waits for that job, so the frontend never ships ahead of the API it talks
+to. Keep every migration additive (new tables, new columns with defaults, new indexes), so the Worker still
 running between the two steps works against the migrated database.
 
 ## Local development

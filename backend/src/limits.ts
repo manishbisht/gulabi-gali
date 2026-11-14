@@ -61,9 +61,12 @@ export async function readLimit(
     : rateLimited(windowMs, now)
 }
 
+/** The cron's sweep of counter windows long past, found by `counters_window`; it takes the cutoff. */
+export const COUNTER_PURGE = 'DELETE FROM counters WHERE window_start < ?'
+
 /** The cron's sweep of counter windows long past. */
 export async function purgeCounters(env: Env, now = Date.now()): Promise<void> {
-  await env.DB.prepare('DELETE FROM counters WHERE window_start < ?')
+  await env.DB.prepare(COUNTER_PURGE)
     .bind(now - COUNTER_KEEP_MS)
     .run()
 }

@@ -1,5 +1,6 @@
 import { applyD1Migrations, env } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { BLOCKS_PER_HOUR } from '../src/blocks'
 import { BENCH_POSITIONS } from '../src/district'
 import type { Env } from '../src/env'
 import type { DistrictId, MatchView, PublicPerson, RequestLists } from '../src/protocol'
@@ -226,5 +227,23 @@ describe('block', () => {
       .bind(x, y, x, y)
       .first<{ n: number }>()
     expect(m!.n).toBe(0)
+  })
+})
+
+describe('block limits', () => {
+  it('blocking and unblocking share 30 an hour per account, then 429 with Retry-After', async () => {
+    const token = await resident('Block Hammer')
+    // Mixed, and about ids that may not exist: every call counts.
+    for (let i = 0; i < BLOCKS_PER_HOUR; i++) {
+      const res = i % 2 ? await unblock(token, `dev:hammered-${i}`) : await block(token, `dev:hammered-${i}`)
+      expect(res.status, `call ${i + 1}`).toBe(204)
+    }
+    for (const res of [await block(token, 'dev:hammered-x'), await unblock(token, 'dev:hammered-x')]) {
+      expect(res.status).toBe(429)
+      expect(await res.json()).toEqual({ error: 'rate' })
+      expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0)
+    }
+    // Someone else's allowance is their own.
+    expect((await block(await resident('Block Calm'), 'dev:hammered-x')).status).toBe(204)
   })
 })

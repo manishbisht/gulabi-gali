@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { postMessage } from '../src/chat'
 import type { Env } from '../src/env'
 import worker from '../src/index'
-import { ACCOUNT_LIMIT, clientKey, windowStart } from '../src/limits'
+import { ACCOUNT_LIMIT, clientKey, COUNTER_PURGE, windowStart } from '../src/limits'
+import { REQUEST_EXPIRY } from '../src/requests'
 import { api, devId, login, resident } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -312,3 +313,19 @@ describe('loopback and spoofing', () => {
 
 /** A dev token for a name, without making the account. */
 const login0 = (name: string) => login(name)
+
+describe('cron sweeps', () => {
+  it('find their rows by index, never by scanning the table', async () => {
+    for (const [sql, table, index] of [
+      [COUNTER_PURGE, 'counters', 'counters_window'],
+      [REQUEST_EXPIRY, 'requests', 'requests_created'],
+    ] as const) {
+      const { results } = await testEnv.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .bind(0)
+        .all<{ detail: string }>()
+      const plan = results.map((r) => r.detail).join(' | ')
+      expect(plan, sql).toMatch(new RegExp(`SEARCH ${table} USING (COVERING )?INDEX ${index}`))
+      expect(plan, sql).not.toMatch(/SCAN/)
+    }
+  })
+})

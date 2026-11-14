@@ -243,9 +243,12 @@ export async function ignoreRequest(env: Env, userId: string, id: string): Promi
   return new Response(null, { status: 204 })
 }
 
+/** The cron's sweep of requests past their 14 days, found by `requests_created`; it takes the cutoff. */
+export const REQUEST_EXPIRY = "DELETE FROM requests WHERE state != 'accepted' AND created_at <= ?"
+
 /** The cron's sweep: a request nobody answered in 14 days goes (accepted ones stay: they are matches' history). */
 export async function expireRequests(env: Env, now = Date.now()): Promise<void> {
-  await env.DB.prepare("DELETE FROM requests WHERE state != 'accepted' AND created_at <= ?")
+  await env.DB.prepare(REQUEST_EXPIRY)
     .bind(now - REQUEST_TTL_MS)
     .run()
 }

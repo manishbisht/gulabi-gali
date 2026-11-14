@@ -39,7 +39,7 @@ test('the owner sees a report another person filed, and bans the person it is ab
   // The local D1 outlives a run, so older open reports may come first: page on until this one shows.
   const card = owner.locator('[data-report]').filter({ hasText: target.name })
   const more = owner.getByRole('button', { name: 'Aur dikhao' })
-  await expect(owner.getByRole('heading', { name: 'Reports' })).toBeVisible()
+  await expect(owner.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible()
   await expect(async () => {
     if (await more.isVisible()) await more.click()
     await expect(card).toBeVisible({ timeout: 1000 })

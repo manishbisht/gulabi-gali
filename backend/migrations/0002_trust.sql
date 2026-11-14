@@ -23,6 +23,8 @@ CREATE INDEX blocks_b ON blocks(b);
 CREATE TABLE counters (
   user_id TEXT NOT NULL, bucket TEXT NOT NULL, window_start INTEGER NOT NULL, n INTEGER NOT NULL,
   PRIMARY KEY (user_id, bucket, window_start));
+-- The cron's sweep of old windows, without a scan of every counter.
+CREATE INDEX counters_window ON counters(window_start);
 
 -- A chat's last 30 messages, kept when the match ends (an unmatch, a block, a deletion) so either person can
 -- still report it. `owner` ended it, `other` is the other side; `messages` is a JSON array of
@@ -42,6 +44,8 @@ CREATE INDEX held_evidence_other ON held_evidence(other, created_at);
 CREATE INDEX requests_to_state ON requests(to_id, state, created_at);
 CREATE INDEX requests_from_to_state ON requests(from_id, to_id, state);
 CREATE INDEX matches_b ON matches(b);
+-- The cron's sweep of requests past their 14 days, without a scan of every request.
+CREATE INDEX requests_created ON requests(created_at);
 
 -- Invite codes: a verified member's gift to one person. `code` is 8 characters of Crockford base32. `used_by`
 -- is set by one conditional UPDATE (`WHERE used_by IS NULL`), so a code can only be won once.

@@ -310,7 +310,7 @@ is `unconfirmed` and never counts. Unhiding closes no report: they stay open, ev
 Per address, three Workers Rate Limiting bindings (sockets 120 a minute, sign-ins 20 a minute, writes 300 a
 minute) plus an hourly invite-redemption count in D1; loopback is exempt only in dev. Per account, D1
 `counters`: requests 5 a day for an account under 7 days old and 20 after, messages 30 a minute, reports 20 a
-day. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotice.ts`).
+day, blocks and unblocks 30 an hour together. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotice.ts`).
 
 ### Admin (`admin.ts`, `frontend/src/admin/`)
 
