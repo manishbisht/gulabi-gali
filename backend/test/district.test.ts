@@ -298,6 +298,50 @@ describe('DistrictDO', () => {
     expect(a.closes).toEqual([])
   })
 
+  it('a failed status write is logged', async () => {
+    const district = stub('mi-road')
+    const a = await live('mi-road', { token: await resident('Offline Omar') })
+    await a.next('welcome')
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failing = {
+      prepare: () => ({ bind: () => ({ run: () => Promise.reject(new Error('d1 down')) }) }),
+    }
+    let real: unknown
+    await runInDurableObject(district, (instance) => {
+      const held = instance as unknown as { env: Env }
+      real = held.env
+      held.env = { ...held.env, DB: failing as unknown as D1Database }
+    })
+    try {
+      a.send({ t: 'status', text: 'net gaya' })
+      await vi.waitFor(
+        () => expect(logged).toHaveBeenCalledWith('district: status write failed', expect.any(Error)),
+        WAIT,
+      )
+    } finally {
+      logged.mockRestore()
+      await runInDurableObject(district, (instance) => {
+        ;(instance as unknown as { env: unknown }).env = real
+      })
+    }
+  })
+
+  it('a spent status allowance survives a wake', async () => {
+    const district = stub('walled-city')
+    const a = await live('walled-city', { token: await resident('Thrifty Tanvi') })
+    await a.next('welcome')
+    a.send({ t: 'status', text: 'pehli line' })
+    await a.sync()
+    expect(a.all('error')).toEqual([])
+    // Forget everything held in memory, as a wake from hibernation does.
+    await runInDurableObject(district, (instance) => {
+      ;(instance as unknown as { seats: WeakMap<object, unknown> }).seats = new WeakMap()
+    })
+    a.send({ t: 'status', text: 'doosri line' })
+    await a.sync()
+    expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
+  })
+
   it('an unchanged status is neither broadcast nor written', async () => {
     const a = await live('malviya-nagar', { token: await resident('Same Sameer') })
     const watcher = await live('malviya-nagar')
