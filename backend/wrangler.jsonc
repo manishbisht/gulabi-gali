@@ -6,6 +6,10 @@
   "observability": { "enabled": true },
   // Replace the id with the output of: wrangler kv namespace create CITY
   "kv_namespaces": [{ "binding": "CITY", "id": "REPLACE_WITH_CITY_KV_ID" }],
+  // Replace the id with the output of: wrangler d1 create gulabi-gali
+  "d1_databases": [
+    { "binding": "DB", "database_name": "gulabi-gali", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" },
+  ],
   // Needs the manishbisht.me zone on Cloudflare; see docs/deployment.md for the workers.dev fallback.
   "routes": [{ "pattern": "api.gulabi-gali.manishbisht.me", "custom_domain": true }],
   "triggers": { "crons": ["*/15 * * * *"] },

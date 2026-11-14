@@ -1,6 +1,8 @@
+import { resolveUser } from './auth'
 import { allowedOrigin, corsHeaders } from './cors'
 import type { Env } from './env'
 import type { CitySnapshot } from './protocol'
+import { devLogin, getMe, getProfile, putProfile } from './profiles'
 import { defaultSnapshot, fetchSnapshot } from './weather'
 
 const CITY_KEY = 'now'
@@ -48,6 +50,40 @@ export async function handleCity(
   }
 }
 
+function withCors(res: Response, origin: string | null): Response {
+  if (!origin) return res
+  const out = new Response(res.body, res)
+  for (const [k, v] of Object.entries(corsHeaders(origin))) out.headers.set(k, v)
+  return out
+}
+
+async function readJson(request: Request): Promise<unknown> {
+  return request.json().catch(() => null)
+}
+
+async function handleApi(request: Request, env: Env, pathname: string): Promise<Response> {
+  const { method } = request
+  if (pathname === '/api/dev/login') {
+    if (env.DEV_AUTH !== '1' || method !== 'POST')
+      return Response.json({ error: 'not found' }, { status: 404 })
+    return devLogin(env, await readJson(request))
+  }
+  const user = await resolveUser(request, env)
+  if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
+  if (pathname === '/api/me' && method === 'GET') return Response.json(await getMe(env, user.id))
+  if (pathname === '/api/me/profile' && method === 'PUT')
+    return putProfile(env, user.id, await readJson(request))
+  const match = pathname.match(/^\/api\/profiles\/([^/]+)$/)
+  if (match && method === 'GET') {
+    try {
+      return await getProfile(env, decodeURIComponent(match[1]))
+    } catch {
+      return Response.json({ error: 'not found' }, { status: 404 })
+    }
+  }
+  return Response.json({ error: 'not found' }, { status: 404 })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = allowedOrigin(request.headers.get('Origin'))
@@ -57,6 +93,7 @@ export default {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return json({ ok: true }, 200, origin)
     if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
+    if (pathname.startsWith('/api/')) return withCors(await handleApi(request, env, pathname), origin)
     return json({ error: 'not found' }, 404, origin)
   },
   async scheduled(_controller, env, ctx) {

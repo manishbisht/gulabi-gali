@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `npm run dev`. Never put these in wrangler.jsonc.
+DEV_AUTH=1
+DEV_AUTH_SECRET=change-me-locally
+# Real sign-in (leave unset in dev to use /api/dev/login):
+# CLERK_SECRET_KEY=sk_test_...
+# CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----..."
