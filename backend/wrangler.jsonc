@@ -4,4 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-01",
   "observability": { "enabled": true },
+  // Replace the id with the output of: wrangler kv namespace create CITY
+  "kv_namespaces": [{ "binding": "CITY", "id": "REPLACE_WITH_CITY_KV_ID" }],
+  "triggers": { "crons": ["*/15 * * * *"] },
 }
