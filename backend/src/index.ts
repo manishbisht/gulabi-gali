@@ -9,6 +9,7 @@ import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
+import { fileReport, purgeReportEvidence } from './reports'
 import { devVerify, listInvites, redeemInvite } from './trust'
 import { activeRow, devLogin, getMe, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
@@ -131,6 +132,8 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
       return new Response(null, { status: 204 })
     }
   }
+  if (pathname === '/api/reports' && method === 'POST')
+    return fileReport(env, user.id, await readJson(request))
   if (pathname === '/api/requests' && method === 'POST')
     return sendRequest(env, user.id, await readJson(request), Date.now(), later)
   if (pathname === '/api/requests' && method === 'GET')
@@ -199,6 +202,7 @@ export default {
     // A failed sweep is only logged: it must not take the city refresh with it, and the next run tries again.
     ctx.waitUntil(expireRequests(env).catch((err) => console.error('request sweep failed', err)))
     ctx.waitUntil(purgeEvidence(env).catch((err) => console.error('evidence sweep failed', err)))
+    ctx.waitUntil(purgeReportEvidence(env).catch((err) => console.error('report sweep failed', err)))
     ctx.waitUntil(purgeCounters(env).catch((err) => console.error('counter sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

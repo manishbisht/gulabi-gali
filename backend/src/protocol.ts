@@ -222,3 +222,27 @@ export type InboxNotice =
  * (garbage or a flood).
  */
 export type InboxMsg = InboxNotice | { t: 'pong' }
+
+/**
+ * What a report is about. `person`: their profile; `bench`: what they said at a bench (with its id);
+ * `chat`: a 1:1 chat with them. Every kind names the person (`targetId`): the server assembles the evidence.
+ */
+export const REPORT_KINDS = ['person', 'bench', 'chat'] as const
+export type ReportKind = (typeof REPORT_KINDS)[number]
+export const REPORT_REASONS = ['harassment', 'hate', 'spam', 'underage', 'other'] as const
+export type ReportReason = (typeof REPORT_REASONS)[number]
+/** A report's optional note is at most this many characters (code points), once cleaned. */
+export const MAX_REPORT_NOTE = 300
+/** `POST /api/reports` body. Anything else sent (evidence above all) is ignored. */
+export interface ReportInput {
+  kind: ReportKind
+  targetId: string
+  /** For `bench` only: the bench's id. */
+  bench?: string
+  reason: ReportReason
+  note?: string
+}
+/** The 201 answer: `autoHidden` when this report was the one that took the person off the map. */
+export interface ReportResult {
+  autoHidden: boolean
+}

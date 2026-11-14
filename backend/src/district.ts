@@ -369,6 +369,12 @@ function benchAt(district: DistrictId, id: string): { x: number; z: number } | n
   return BENCH_POSITIONS[district][Number(n)] ?? null
 }
 
+/** The district bench `id` belongs to (whose object keeps its transcript), or null for anything not a bench. */
+export function benchDistrict(id: string): DistrictId | null {
+  if (id.length > MAX_BENCH_ID) return null
+  return DISTRICT_IDS.find((d) => benchAt(d, id) !== null) ?? null
+}
+
 const far = (p: { x: number; z: number }, b: { x: number; z: number }, range: number) =>
   Math.hypot(p.x - b.x, p.z - b.z) > range
 

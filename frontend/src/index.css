@@ -1006,3 +1006,69 @@ small.words-hint {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* the chat header's menu: Unmatch, Block, Report */
+.chat-menu {
+  justify-content: flex-end;
+}
+
+/* the in-sheet report form, in a person card, a chat or a bench panel */
+.report-sheet h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.report-sheet form {
+  display: grid;
+  gap: 8px;
+}
+
+.report-sheet .pick {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: inherit;
+  font: inherit;
+}
+
+.report-sheet .pick[aria-pressed='true'] {
+  border-color: var(--cream);
+}
+
+.report-note {
+  display: grid;
+  gap: 4px;
+}
+
+.report-note textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid var(--sandstone);
+  border-radius: 14px;
+  background: rgb(245 230 216 / 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* any smaller and iOS zooms the page on focus */
+  resize: none;
+}
+
+.report-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.report-block input {
+  width: 24px;
+  height: 24px;
+}
+
+.profile-privacy {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}

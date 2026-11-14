@@ -1,0 +1,160 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { WordsHint } from '../filter/WordsHint'
+import { t, type Lang, type StringKey } from '../i18n/strings'
+import { sendReport, type ReportError } from '../net/api'
+import {
+  MAX_REPORT_NOTE,
+  REPORT_REASONS,
+  type ReportInput,
+  type ReportKind,
+  type ReportReason,
+} from '../net/protocol'
+
+interface Props {
+  kind: ReportKind
+  /** The person the report is about. */
+  targetId: string
+  /** For a bench report: which bench. */
+  bench?: string
+  name: string
+  lang: Lang
+  token(): Promise<string | null>
+  /** The block flow, offered as "Also block?" and run once the report has gone; true once blocked. */
+  onBlock?(): Promise<boolean>
+  onClose(): void
+}
+
+const REASON_TEXT: Record<ReportReason, StringKey> = {
+  harassment: 'reportHarassment',
+  hate: 'reportHate',
+  spam: 'reportSpam',
+  underage: 'reportUnderage',
+  other: 'reportOther',
+}
+
+const ERROR_TEXT: Record<ReportError | 'block', StringKey> = {
+  rate: 'reportRate',
+  words: 'wordsHint',
+  gone: 'reportGone',
+  failed: 'reportFailed',
+  block: 'blockFailed',
+}
+
+/**
+ * The in-sheet report form (never `window.confirm`): a reason, an optional note, and "Also block?". Only the
+ * reason and note are sent; the server gathers what was said or shown itself.
+ */
+export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock, onClose }: Props) {
+  const [reason, setReason] = useState<ReportReason | null>(null)
+  const [note, setNote] = useState('')
+  const [alsoBlock, setAlsoBlock] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<ReportError | 'block' | null>(null)
+  const [sent, setSent] = useState(false)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!reason || busy) return
+    setBusy(true)
+    setProblem(null)
+    const text = note.trim()
+    const input: ReportInput = {
+      kind,
+      targetId,
+      ...(bench ? { bench } : {}),
+      reason,
+      ...(text ? { note: text } : {}),
+    }
+    const tok = await token().catch(() => null)
+    const out = tok ? await sendReport(tok, input) : ({ ok: false, error: 'failed' } as const)
+    if (!alive.current) return
+    if (!out.ok) {
+      setBusy(false)
+      return setProblem(out.error)
+    }
+    // the block flow closes whatever this sheet sits in once it is done
+    const blocked = alsoBlock && onBlock ? await onBlock().catch(() => false) : true
+    if (!alive.current) return
+    setBusy(false)
+    setSent(true)
+    if (!blocked) setProblem('block')
+  }
+
+  const title = t('reportTitle', lang, { name })
+  return (
+    <div className="chat-confirm report-sheet" role="dialog" aria-label={title}>
+      <h3>{title}</h3>
+      {sent ? (
+        <>
+          <p role="status">{t('reportThanks', lang)}</p>
+          {problem && (
+            <p className="chat-note" role="alert">
+              {t(ERROR_TEXT[problem], lang)}
+            </p>
+          )}
+          <div className="person-actions">
+            <button type="button" className="landmark-stamp" onClick={onClose}>
+              {t('benchNoticeClose', lang)}
+            </button>
+          </div>
+        </>
+      ) : (
+        <form onSubmit={(e) => void submit(e)}>
+          <div className="pick-row" role="group" aria-label={t('reportWhy', lang)}>
+            <span>{t('reportWhy', lang)}</span>
+            {REPORT_REASONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className="pick pick-text"
+                aria-pressed={reason === r}
+                onClick={() => setReason(r)}
+              >
+                {t(REASON_TEXT[r], lang)}
+              </button>
+            ))}
+          </div>
+          <label className="report-note">
+            {t('reportNote', lang)}
+            <textarea
+              rows={2}
+              value={note}
+              maxLength={MAX_REPORT_NOTE}
+              onChange={(e) => {
+                setNote(e.target.value)
+                if (problem === 'words') setProblem(null)
+              }}
+            />
+            <WordsHint text={note} lang={lang} />
+          </label>
+          {onBlock && (
+            <label className="report-block">
+              <input type="checkbox" checked={alsoBlock} onChange={(e) => setAlsoBlock(e.target.checked)} />
+              {t('reportAlsoBlock', lang)}
+            </label>
+          )}
+          {problem && (
+            <p className="chat-note" role="alert">
+              {t(ERROR_TEXT[problem], lang)}
+            </p>
+          )}
+          <div className="person-actions">
+            <button type="submit" className="landmark-stamp" disabled={!reason || busy}>
+              {t(busy ? 'reportSending' : 'reportSend', lang)}
+            </button>
+            <button type="button" className="person-close" onClick={onClose}>
+              {t('reportCancel', lang)}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}

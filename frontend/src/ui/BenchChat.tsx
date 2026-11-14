@@ -5,6 +5,7 @@ import { MAX_BENCH_LINE, type BenchLine } from '../net/protocol'
 import type { BenchSeat } from '../world/benches'
 import type { BenchNotice } from '../world/useBench'
 import { BlockConfirm } from './BlockConfirm'
+import { ReportSheet } from './ReportSheet'
 import { useKeyboard } from './useKeyboard'
 
 interface Props {
@@ -14,6 +15,8 @@ interface Props {
   me: string | null
   notice: BenchNotice | null
   lang: Lang
+  /** Lets a line be reported (the server takes what was said here from its own memory). */
+  token?(): Promise<string | null>
   /** Sends a line; false keeps what was typed (too soon, or nowhere to send it). */
   onSay(text: string): boolean
   onStand(): void
@@ -26,9 +29,10 @@ interface Props {
  * line to say, and Utho. It sits beside the joystick; while the phone keyboard is up it spans the screen just
  * above the keyboard instead (the joystick is under the keyboard then anyway).
  */
-export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand, onBlock }: Props) {
+export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand, onBlock }: Props) {
   const [text, setText] = useState('')
   const [blocking, setBlocking] = useState<{ id: string; name: string } | null>(null)
+  const [reporting, setReporting] = useState<{ id: string; name: string } | null>(null)
   const list = useRef<HTMLOListElement>(null)
   const { keyboard, height } = useKeyboard()
   // the newest line in view, as in any chat
@@ -72,6 +76,18 @@ export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand, onBlo
           onCancel={() => setBlocking(null)}
         />
       )}
+      {reporting && token && (
+        <ReportSheet
+          kind="bench"
+          targetId={reporting.id}
+          bench={seat.bench.id}
+          name={reporting.name}
+          lang={lang}
+          token={token}
+          onBlock={onBlock && (() => onBlock(reporting.id, reporting.name))}
+          onClose={() => setReporting(null)}
+        />
+      )}
       <ol className="bench-lines" ref={list} aria-live="polite">
         {lines.length === 0 ? (
           <li className="bench-empty">{t('benchEmpty', lang)}</li>
@@ -84,9 +100,25 @@ export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand, onBlo
                   type="button"
                   className="line-block"
                   aria-label={`${t('blockButton', lang)}: ${l.name}`}
-                  onClick={() => setBlocking({ id: l.from, name: l.name })}
+                  onClick={() => {
+                    setReporting(null)
+                    setBlocking({ id: l.from, name: l.name })
+                  }}
                 >
                   {t('blockButton', lang)}
+                </button>
+              )}
+              {token && me && l.from !== me && (
+                <button
+                  type="button"
+                  className="line-block"
+                  aria-label={`${t('reportButton', lang)}: ${l.name}`}
+                  onClick={() => {
+                    setBlocking(null)
+                    setReporting({ id: l.from, name: l.name })
+                  }}
+                >
+                  {t('reportButton', lang)}
                 </button>
               )}
             </li>

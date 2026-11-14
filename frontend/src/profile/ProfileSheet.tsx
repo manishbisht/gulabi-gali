@@ -227,6 +227,7 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut }: Pr
             />
             {t('profilePledge', lang)}
           </label>
+          <p className="profile-privacy">{t('profilePrivacy', lang)}</p>
           <label className="check">
             <input
               data-field="pauseRequests"
@@ -260,7 +261,7 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut }: Pr
                 <ul>
                   {blocked.map((b) => (
                     <li key={b.id}>
-                      <span>{b.name}</span>
+                      <span>{b.name ?? t('blockedSomeone', lang)}</span>
                       <button type="button" onClick={() => void unblock(b.id)}>
                         {t('unblockButton', lang)}
                       </button>

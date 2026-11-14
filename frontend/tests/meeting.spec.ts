@@ -30,7 +30,9 @@ test('two residents sit at the same tapri, and what one says the other reads', a
   const atB = b.page.getByRole('region', { name: 'Tapri pe' })
   await expect(atB).toContainText(`Saath mein: ${a.name}`)
   await expect(atA).toContainText(`Saath mein: ${b.name}`)
-  await expect(atB).toContainText('Jo is bench pe baithe hain wahi padh sakte hain. Kuch save nahi hota.')
+  await expect(atB).toContainText(
+    'Jo is bench pe baithe hain wahi padh sakte hain. Report hone par moderator haal ki baatein dekh sakta hai.',
+  )
   await expect(b.page.getByRole('group', { name: 'Chalne ka joystick' })).toBeVisible()
   expect(await apart(atB, b.page.getByRole('group', { name: 'Chalne ka joystick' }))).toBe(true)
 
@@ -38,6 +40,15 @@ test('two residents sit at the same tapri, and what one says the other reads', a
   await atA.getByRole('textbox', { name: 'Bench pe kuch kaho' }).press('Enter')
   await expect(atB).toContainText(`${a.name} chai peeoge?`)
   await expect(atA).toContainText('Tum chai peeoge?')
+
+  // B reports A's line, in the panel: the server takes the bench's last minutes from its own memory
+  await atB.getByRole('button', { name: `Report karo: ${a.name}` }).click()
+  const form = atB.getByRole('dialog', { name: `${a.name} ki report` })
+  await form.getByRole('button', { name: 'Spam' }).click()
+  await form.getByRole('button', { name: 'Report bhejo' }).click()
+  await expect(form).toContainText('Shukriya! Moderator isse khud dekhenge.')
+  await form.getByRole('button', { name: 'Theek hai' }).click()
+  await expect(form).toBeHidden()
 
   // Utho: B gets up, and A is alone on the bench again
   await atB.getByRole('button', { name: 'Utho' }).click()
@@ -91,6 +102,7 @@ test('request, accept, chat, unmatch', async ({ browser }) => {
   await expect(sheetB.getByText('JKK ke gate pe milte hain')).toBeVisible()
 
   // A unmatches (in the sheet, not a native dialog); B's open chat says it has ended, then is gone
+  await sheetA.getByRole('button', { name: 'Aur', exact: true }).click()
   await sheetA.getByRole('button', { name: 'Unmatch' }).click()
   await sheetA.getByRole('button', { name: 'Haan, unmatch karo' }).click()
   await expect(sheetA.getByText('Abhi koi baat nahi')).toBeVisible()

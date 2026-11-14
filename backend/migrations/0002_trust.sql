@@ -39,3 +39,16 @@ CREATE INDEX matches_b ON matches(b);
 CREATE TABLE invites (
   code TEXT PRIMARY KEY, owner TEXT NOT NULL, used_by TEXT, used_at INTEGER, created_at INTEGER NOT NULL);
 CREATE INDEX invites_owner ON invites(owner);
+
+-- A report: `reporter` says `target_id` (always a person's id; for a bench or a chat, whoever it is about)
+-- did wrong, in a `target_kind` place. `evidence` is JSON the server put together itself (a profile
+-- snapshot without the link, a bench's last 10 minutes, a chat's last 30 messages), at most 64 KB, for
+-- admins only. The cron sets it to NULL once the report is closed, or 30 days after it was filed.
+CREATE TABLE reports (
+  id TEXT PRIMARY KEY, reporter TEXT NOT NULL,
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('person','bench','chat','poster')), target_id TEXT NOT NULL,
+  reason TEXT NOT NULL CHECK (reason IN ('harassment','hate','spam','underage','other')),
+  note TEXT NOT NULL DEFAULT '', evidence TEXT, created_at INTEGER NOT NULL,
+  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open','actioned','dismissed')), closed_at INTEGER);
+CREATE INDEX reports_target ON reports(target_kind, target_id, created_at);
+CREATE INDEX reports_state ON reports(state, created_at);

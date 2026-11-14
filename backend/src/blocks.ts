@@ -4,10 +4,13 @@ import { floating, notify, type Later } from './inbox'
 import { firstName } from './names'
 import { refreshUser } from './refresh'
 
-/** What the block list shows of someone: an id and the first name saved when they were blocked. */
+/**
+ * What the block list shows of someone: an id and the first name saved when they were blocked, or null when
+ * none was (they had no profile then): the page says "someone" in the reader's language.
+ */
 export interface BlockedPerson {
   id: string
-  name: string
+  name: string | null
 }
 
 const MAX_ID = 200
@@ -59,13 +62,13 @@ export async function unblockUser(env: Env, userId: string, id: string): Promise
   return noContent()
 }
 
-/** `GET /api/blocks`: the people the caller has blocked, newest first: id and the first name saved at block time. */
+/** `GET /api/blocks`: the people the caller has blocked, newest first: id and the first name saved at block time (or null). */
 export async function listBlocks(env: Env, userId: string): Promise<Response> {
   const { results } = await env.DB.prepare(
     'SELECT b, name FROM blocks WHERE a = ? ORDER BY created_at DESC LIMIT ?',
   )
     .bind(userId, LIST_LIMIT)
     .all<{ b: string; name: string }>()
-  const out: BlockedPerson[] = results.map((r) => ({ id: r.b, name: r.name || 'Someone' }))
+  const out: BlockedPerson[] = results.map((r) => ({ id: r.b, name: r.name || null }))
   return Response.json(out)
 }

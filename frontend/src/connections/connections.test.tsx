@@ -148,6 +148,7 @@ it('unmatch removes the chat', async () => {
   await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
   await click(button(/Ravi/))
   await settle()
+  await click(button(/^More$/))
   await click(button(/^Unmatch$/))
   // the confirm is in the sheet, not a native dialog
   expect(calls).not.toContain('DELETE /api/matches/m1')

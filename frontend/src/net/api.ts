@@ -10,6 +10,8 @@ import type {
   MatchView,
   Me,
   MessagePage,
+  ReportInput,
+  ReportResult,
   RequestLists,
 } from './protocol'
 
@@ -282,10 +284,10 @@ export async function unblockPerson(token: string, id: string): Promise<boolean>
   }
 }
 
-/** Someone the caller blocked: an id and the first name saved when they did. */
+/** Someone the caller blocked: an id and the first name saved when they did (null: none was saved). */
 export interface BlockedPerson {
   id: string
-  name: string
+  name: string | null
 }
 
 /** The people the caller has blocked, by first name. Rejects on failure. */
@@ -293,4 +295,25 @@ export async function getBlocks(token: string, signal?: AbortSignal): Promise<Bl
   const res = await fetch(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`blocks ${res.status}`)
   return (await res.json()) as BlockedPerson[]
+}
+
+/** `gone`: nothing left to report (a bench you left over 10 minutes ago, a chat that is over). */
+export type ReportError = 'rate' | 'words' | 'gone' | 'failed'
+export type ReportOutcome = ({ ok: true } & ReportResult) | { ok: false; error: ReportError }
+
+/** Files a report; the server gathers what goes with it. Never rejects. */
+export async function sendReport(token: string, input: ReportInput): Promise<ReportOutcome> {
+  try {
+    const res = await fetch(`${API_BASE}/api/reports`, {
+      method: 'POST',
+      headers: json(token),
+      body: JSON.stringify(input),
+    })
+    if (res.ok) return { ok: true, ...((await res.json()) as ReportResult) }
+    const error = ((await res.json().catch(() => null)) as { error?: string } | null)?.error
+    if (res.status === 404) return { ok: false, error: 'gone' }
+    return { ok: false, error: error === 'rate' || error === 'words' ? error : 'failed' }
+  } catch {
+    return { ok: false, error: 'failed' }
+  }
 }

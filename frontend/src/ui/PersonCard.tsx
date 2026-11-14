@@ -3,6 +3,7 @@ import { getProfile } from '../net/api'
 import type { FullProfile, LivePerson } from '../net/protocol'
 import { t, type Lang } from '../i18n/strings'
 import { BlockConfirm } from './BlockConfirm'
+import { ReportSheet } from './ReportSheet'
 import type { Sent } from './RequestComposer'
 import { areaLabel, HERE_FOR_LABEL } from '../profile/homeAreas'
 
@@ -51,6 +52,7 @@ export function PersonCard({
   onClose,
 }: Props) {
   const [confirming, setConfirming] = useState(false)
+  const [reporting, setReporting] = useState(false)
   const resident = viewer === 'resident' || viewer === 'verified'
   const [loaded, setLoaded] = useState<Loaded>(null)
   useEffect(() => {
@@ -108,6 +110,17 @@ export function PersonCard({
           onCancel={() => setConfirming(false)}
         />
       )}
+      {reporting && (
+        <ReportSheet
+          kind="person"
+          targetId={person.id}
+          name={name}
+          lang={lang}
+          token={token}
+          onBlock={onBlock && (() => onBlock(person))}
+          onClose={() => setReporting(false)}
+        />
+      )}
       <div className="person-actions">
         {resident ? (
           <>
@@ -130,9 +143,14 @@ export function PersonCard({
             {t('personGhostCta', lang)}
           </button>
         )}
-        {resident && onBlock && !confirming && (
+        {resident && onBlock && !confirming && !reporting && (
           <button type="button" className="person-close" onClick={() => setConfirming(true)}>
             {t('blockButton', lang)}
+          </button>
+        )}
+        {resident && !confirming && !reporting && (
+          <button type="button" className="person-close" onClick={() => setReporting(true)}>
+            {t('reportButton', lang)}
           </button>
         )}
         <button type="button" className="person-close" onClick={onClose}>

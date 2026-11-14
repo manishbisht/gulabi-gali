@@ -498,7 +498,9 @@ it("Baitho sits on the server's word and opens the bench chat; Utho stands up", 
   await server({ t: 'seated', bench: 'walled-city:4', seat: 0, with: ['Ravi'] })
   const chat = host.querySelector<HTMLElement>('.bench-chat')!
   expect(chat.textContent).toContain('Ravi')
-  expect(chat.textContent).toContain('Jo is bench pe baithe hain wahi padh sakte hain. Kuch save nahi hota.')
+  expect(chat.textContent).toContain(
+    'Jo is bench pe baithe hain wahi padh sakte hain. Report hone par moderator haal ki baatein dekh sakta hai.',
+  )
   expect(button(host, 'Baitho')).toBeUndefined()
 
   const input = chat.querySelector('input')!

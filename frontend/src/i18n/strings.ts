@@ -85,6 +85,10 @@ export const STRINGS = {
     hi: 'Sab ki izzat karunga/karungi. Koi harassment, hate ya spam nahi.',
     en: "I'll treat everyone with respect. No harassment, hate or spam.",
   },
+  profilePrivacy: {
+    hi: 'Agar koi baat-cheet report hoti hai, toh moderator uske haal ke messages padh sakta hai.',
+    en: 'If someone reports a conversation, the moderator can read its recent messages.',
+  },
   profilePause: { hi: 'Abhi requests band', en: 'Pause requests' },
   profilePauseHint: {
     hi: 'Koi tumhe nayi request nahi bhej payega. Jo chats chal rahi hain, chalti rahengi.',
@@ -232,8 +236,8 @@ export const STRINGS = {
   benchSayHint: { hi: 'Kuch kaho…', en: 'Say something…' },
   benchSend: { hi: 'Bhejo', en: 'Send' },
   benchFooter: {
-    hi: 'Jo is bench pe baithe hain wahi padh sakte hain. Kuch save nahi hota.',
-    en: 'Only people on this bench can read this. Nothing is saved.',
+    hi: 'Jo is bench pe baithe hain wahi padh sakte hain. Report hone par moderator haal ki baatein dekh sakta hai.',
+    en: "Only people on this bench can read this. If it's reported, the moderator can see recent messages.",
   },
   benchGhost: {
     hi: 'Baithne ke liye pehle dikhna padega',
@@ -328,6 +332,34 @@ export const STRINGS = {
   unblockButton: { hi: 'Unblock', en: 'Unblock' },
   unblockFailed: { hi: 'Unblock nahi ho paya. Dobara try karo.', en: "Couldn't unblock. Try again." },
   benchNoticeClose: { hi: 'Theek hai', en: 'OK' },
+  blockedSomeone: { hi: 'Koi', en: 'Someone' },
+  reportButton: { hi: 'Report karo', en: 'Report' },
+  reportTitle: { hi: '{name} ki report', en: 'Report {name}' },
+  reportWhy: { hi: 'Kya hua?', en: 'What happened?' },
+  reportHarassment: { hi: 'Pareshan kar raha/rahi hai', en: 'Harassing me' },
+  reportHate: { hi: 'Nafrat / gaaliyan', en: 'Hate or abuse' },
+  reportSpam: { hi: 'Spam', en: 'Spam' },
+  reportUnderage: { hi: '18 se kam lagta/lagti hai', en: 'Looks under 18' },
+  reportOther: { hi: 'Kuch aur', en: 'Something else' },
+  reportNote: { hi: 'Aur kuch batana hai? (zaroori nahi)', en: 'Anything else to add? (optional)' },
+  reportAlsoBlock: { hi: 'Block bhi karein?', en: 'Also block?' },
+  reportSend: { hi: 'Report bhejo', en: 'Send report' },
+  reportSending: { hi: 'Bhej rahe hain…', en: 'Sending…' },
+  reportCancel: { hi: 'Rehne do', en: 'Never mind' },
+  reportThanks: {
+    hi: 'Shukriya! Moderator isse khud dekhenge.',
+    en: 'Thank you. The moderator will take a look.',
+  },
+  reportFailed: { hi: 'Report nahi ja payi. Dobara try karo.', en: "Couldn't send the report. Try again." },
+  reportRate: {
+    hi: 'Aaj ki reports poori ho gayi. Kal phir bhej sakte ho.',
+    en: "That's all the reports for today. You can send more tomorrow.",
+  },
+  reportGone: {
+    hi: 'Ye ab report nahi ho sakta: saath bhejne ko kuch nahi bacha.',
+    en: "This can't be reported now: there's nothing left to send with it.",
+  },
+  chatMore: { hi: 'Aur', en: 'More' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

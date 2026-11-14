@@ -196,7 +196,7 @@ describe('block', () => {
     const by = Object.fromEntries(list.map((p) => [p.id, p]))
     expect(by[devId('List Hidden Hari')]).toEqual({ id: devId('List Hidden Hari'), name: 'List' })
     expect(by[devId('List Banned Bela')]).toEqual({ id: devId('List Banned Bela'), name: 'List' })
-    expect(by[devId('List Ghost')]).toEqual({ id: devId('List Ghost'), name: 'Someone' })
+    expect(by[devId('List Ghost')]).toEqual({ id: devId('List Ghost'), name: null })
     expect((await unblock(a, devId('List Ghost'))).status).toBe(204)
     expect(((await (await api('/api/blocks', a)).json()) as unknown[]).length).toBe(2)
   })

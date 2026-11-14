@@ -389,6 +389,7 @@ export default function App() {
                   me={me?.id ?? null}
                   notice={bench.notice}
                   lang={lang}
+                  token={auth.token}
                   onSay={bench.say}
                   onStand={bench.stand}
                   onBlock={async (id, name) => {

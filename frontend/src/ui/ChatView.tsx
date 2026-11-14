@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 import { t, type Lang, type StringKey } from '../i18n/strings'
 import { getMessages, sendMessage } from '../net/api'
 import { BlockConfirm } from './BlockConfirm'
+import { ReportSheet } from './ReportSheet'
 import { MAX_MESSAGE, type ChatMessage, type PublicPerson } from '../net/protocol'
 
 interface Props {
@@ -61,6 +62,9 @@ export function ChatView({
   onBlock,
 }: Props) {
   const [blocking, setBlocking] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  /** The header's menu (Unmatch, Block, Report) is open. */
+  const [menu, setMenu] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
   const [older, setOlder] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -168,6 +172,12 @@ export function ChatView({
     if (!gone) setNote('unmatch')
   }
 
+  /** A menu entry: the menu closes and what was picked opens in the sheet. */
+  const pick = (open: (on: boolean) => void) => {
+    setMenu(false)
+    open(true)
+  }
+
   return (
     <div className="chat-view">
       <div className="chat-head">
@@ -175,17 +185,46 @@ export function ChatView({
           {t('chatBack', lang)}
         </button>
         <h3>{person.name}</h3>
-        {!confirming && !blocking && !ended && (
-          <button type="button" className="person-close" onClick={() => setConfirming(true)}>
-            {t('chatUnmatch', lang)}
-          </button>
-        )}
-        {!confirming && !blocking && onBlock && (
-          <button type="button" className="person-close" onClick={() => setBlocking(true)}>
-            {t('blockButton', lang)}
+        {!confirming && !blocking && !reporting && (
+          <button
+            type="button"
+            className="person-close"
+            aria-expanded={menu}
+            aria-controls={`chat-menu-${matchId}`}
+            onClick={() => setMenu((m) => !m)}
+          >
+            {t('chatMore', lang)}
           </button>
         )}
       </div>
+      {menu && (
+        <div className="person-actions chat-menu" id={`chat-menu-${matchId}`}>
+          {!ended && (
+            <button type="button" className="person-close" onClick={() => pick(setConfirming)}>
+              {t('chatUnmatch', lang)}
+            </button>
+          )}
+          {onBlock && (
+            <button type="button" className="person-close" onClick={() => pick(setBlocking)}>
+              {t('blockButton', lang)}
+            </button>
+          )}
+          <button type="button" className="person-close" onClick={() => pick(setReporting)}>
+            {t('reportButton', lang)}
+          </button>
+        </div>
+      )}
+      {reporting && (
+        <ReportSheet
+          kind="chat"
+          targetId={person.id}
+          name={person.name}
+          lang={lang}
+          token={token}
+          onBlock={onBlock}
+          onClose={() => setReporting(false)}
+        />
+      )}
       {blocking && onBlock && (
         <BlockConfirm
           name={person.name}
