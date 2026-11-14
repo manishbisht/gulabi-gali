@@ -103,6 +103,19 @@ describe('profiles API', () => {
     }
   })
 
+  it('accepts an about of exactly 200 characters and rejects 201', async () => {
+    const token = await login('aboutedge')
+    const ok = await call('/api/me/profile', { method: 'PUT', body: body({ about: 'a'.repeat(200) }) }, token)
+    expect(ok.status).toBe(200)
+    const bad = await call(
+      '/api/me/profile',
+      { method: 'PUT', body: body({ about: 'a'.repeat(201) }) },
+      token,
+    )
+    expect(bad.status).toBe(400)
+    expect(((await bad.json()) as { fields: string[] }).fields).toContain('about')
+  })
+
   it('rejects an unknown outfit or head', async () => {
     const token = await login('badlook')
     const res = await call(

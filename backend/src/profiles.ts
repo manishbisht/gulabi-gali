@@ -15,7 +15,7 @@ import {
 } from './protocol'
 
 const MAX_STATUS = 80
-const MAX_ABOUT = 280
+const MAX_ABOUT = 200
 const MAX_LINK = 200
 
 interface ProfileRow {
