@@ -189,8 +189,9 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
  *
  * - `ACTIVE`, acting as yourself: a complete profile (adult and pledge), not banned. A hidden person is still
  *   active: they see their own requests and matches, keep their chats going and keep their inbox.
- * - `VISIBLE`, being seen by anyone else: active and not hidden. On the map, as a profile, in someone else's
- *   requests or matches, and as someone a new request or match can reach.
+ * - `VISIBLE`, being seen by anyone new: active and not hidden. On the map, as a profile, in someone else's
+ *   requests, and as someone a new request or match can reach. A match that already exists outlives a hide
+ *   (see `listMatches`).
  */
 export const ACTIVE = 'u.banned = 0 AND p.adult = 1 AND p.pledge = 1'
 export const VISIBLE = `${ACTIVE} AND u.hidden = 0`

@@ -93,7 +93,7 @@ describe('refreshUser', () => {
     await expect.poll(() => box.closes).toEqual([LIVE_CLOSE.banned])
   })
 
-  it('hide: off the map at once, a ghost on their own socket, 404 as a profile, out of match lists', async () => {
+  it('hide: off the map at once, a ghost on their own socket, 404 as a profile, the match kept', async () => {
     const { a, b, aId, matchId } = await pair('Hide Hema', 'Hide Harsh')
     const watcher = await walker('Hide Watcher', 'walled-city', 3)
     const hidden = await walker('Hide Hema', 'walled-city', 2, a)
@@ -117,10 +117,10 @@ describe('refreshUser', () => {
     // A fresh socket (which takes over from the old one) is a ghost from the start.
     const again = await live('walled-city', { token: a })
     expect((await again.next('welcome')).you.visible).toBe(false)
-    // Their profile is gone for everyone, and their match drops out of the other side's list.
+    // Their profile is gone for everyone; the match they already had stays in the other side's list.
     expect((await api(`/api/profiles/${encodeURIComponent(aId)}`, b)).status).toBe(404)
     const list = (await (await api('/api/matches', b)).json()) as MatchView[]
-    expect(list.map((m) => m.id)).not.toContain(matchId)
+    expect(list.map((m) => m.id)).toContain(matchId)
 
     // Unhidden: their socket is a resident again, and the next move lists them.
     await sql('UPDATE users SET hidden = 0 WHERE id = ?', aId)
@@ -178,11 +178,8 @@ describe('refreshUser', () => {
     await box.next('message', (n) => n.matchId === matchId)
     expect(box.closes).toEqual([])
 
-    // Everyone else: no profile, no match in the list, no request either way, nobody new to reach.
+    // Everyone else: no profile, no request either way, nobody new to reach.
     expect((await api(`/api/profiles/${encodeURIComponent(aId)}`, b)).status).toBe(404)
-    expect(((await (await api('/api/matches', b)).json()) as MatchView[]).map((m) => m.id)).not.toContain(
-      matchId,
-    )
     const theirs = (await (await api('/api/requests', d)).json()) as RequestLists
     expect(theirs.incoming).toEqual([])
     const asker = (await (await api('/api/requests', c)).json()) as RequestLists
@@ -190,6 +187,31 @@ describe('refreshUser', () => {
     expect((await ask(c, aId)).status).toBe(404)
     expect((await ask(a, devId('Own Chirag'))).status).toBe(403)
     expect((await api(`/api/requests/${fromC.id}/accept`, a, { method: 'POST' })).status).toBe(404)
+  })
+
+  it('an existing match with a hidden person stays in the other member’s list, to read, write or end', async () => {
+    const { a, b, aId, matchId } = await pair('Kept Kamla', 'Kept Bhola')
+    await sql('UPDATE users SET hidden = 1 WHERE id = ?', aId)
+    await refreshUser(testEnv, aId, 'hide')
+    const list = (await (await api('/api/matches', b)).json()) as MatchView[]
+    const kept = list.find((m) => m.id === matchId)
+    // Their public face only: the first name, as anywhere else.
+    expect(kept?.person).toEqual({
+      id: aId,
+      name: 'Kept',
+      look: { skin: 1, outfit: 'pink', head: 'none' },
+      status: 'chai pe',
+    })
+    const post = (token: string, body: string) =>
+      api(`/api/matches/${matchId}/messages`, token, { method: 'POST', body: JSON.stringify({ body }) })
+    expect((await post(b, 'Sab theek?')).status).toBe(201)
+    expect((await post(a, 'Haan')).status).toBe(201)
+    const page = (await (await api(`/api/matches/${matchId}/messages`, b)).json()) as MessagePage
+    expect(page.messages.map((m) => m.body)).toEqual(['Sab theek?', 'Haan'])
+    // Still no new contact: no profile card.
+    expect((await api(`/api/profiles/${encodeURIComponent(aId)}`, b)).status).toBe(404)
+    // And they can end it.
+    expect((await api(`/api/matches/${matchId}`, b, { method: 'DELETE' })).status).toBe(204)
   })
 
   it('a refresh that fails once is retried, and lands', async () => {

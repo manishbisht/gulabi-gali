@@ -178,9 +178,10 @@ change or a close at once.
   spot, a mute refuses `say` and `status` with `muted`. A target that fails is retried once; past that, each
   district's alarm reloads everyone connected at least once a minute. After D1 fails to answer, a district
   waits 3 s before asking again (dropping frames meanwhile).
-- **Hidden** people are invisible to everyone else (map, profiles, others' requests and match lists, new
-  requests and matches) but still act as themselves: their own requests and matches, their existing chats
-  (the other member can still read and write them) and their inbox. `ACTIVE` and `VISIBLE` in
+- **Hidden** people get no new contact: off the map, their profile card a 404, out of others' request lists,
+  and no new requests or matches either way. What already exists goes on: they keep their own requests,
+  matches, chats and inbox, and a match they already had stays in the other member's list, to read, write,
+  report or end. `ACTIVE` and `VISIBLE` in
   `backend/src/profiles.ts` are the two rules.
 - The client side: `src/world/session.ts` wires a district's systems on enter and disposes them on leave;
   `src/world/people.ts` draws remote residents (shadows only at tier 2);

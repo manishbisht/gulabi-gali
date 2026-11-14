@@ -1,7 +1,7 @@
 import type { Env } from './env'
 import { holdEvidence } from './evidence'
 import { floating, notify, type Later } from './inbox'
-import { activeRow, VISIBLE, toPublic } from './profiles'
+import { ACTIVE, activeRow, toPublic } from './profiles'
 import { pairOf } from './requests'
 import {
   MAX_MESSAGE,
@@ -114,8 +114,10 @@ function readCursor(cursor: string): { at: number; id: string } | null {
 }
 
 /**
- * `GET /api/matches`: the asker's matches with someone they may see on the other side (`VISIBLE`: a hidden
- * person's matches drop out of everyone else's list), most recently active first.
+ * `GET /api/matches`: the asker's matches with someone still active on the other side (`ACTIVE`), most recently
+ * active first. A match with someone hidden since stays, with their first-name public face: hiding stops new
+ * contact (the map, the profile card, new requests and matches), not a chat already going, which the other
+ * member can still read, write, report or end.
  */
 export async function listMatches(env: Env, userId: string): Promise<Response> {
   if (!(await activeRow(env, userId))) return fail('ghost', 403)
@@ -128,7 +130,7 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
      JOIN users u ON u.id = p.user_id
      LEFT JOIN messages l ON l.id = (
        SELECT id FROM messages WHERE match_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1)
-     WHERE (m.a = ?1 OR m.b = ?1) AND ${VISIBLE}
+     WHERE (m.a = ?1 OR m.b = ?1) AND ${ACTIVE}
      ORDER BY COALESCE(l.created_at, m.created_at) DESC, m.id DESC
      LIMIT ?2`,
   )
