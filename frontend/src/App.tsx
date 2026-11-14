@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
 import { hasWebGL } from './engine/webgl'
+import { useAuth } from './auth/useAuth'
 import { useLang } from './i18n/lang'
 import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
@@ -41,6 +42,7 @@ function festivalOverride(): FestivalId | null {
 
 export default function App() {
   const [lang, setLang] = useLang()
+  const auth = useAuth()
   const [entered, setEntered] = useState(false)
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [here, setHere] = useState<DistrictId>('walled-city')
@@ -150,6 +152,7 @@ export default function App() {
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
+        onSignIn={auth.mode !== 'none' && !auth.signedIn ? auth.openSignIn : undefined}
         top={
           <>
             {toast && (

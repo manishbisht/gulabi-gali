@@ -47,6 +47,17 @@ export const STRINGS = {
     hi: '{place} tak nahi pahunch paaye. Dobara try karo.',
     en: "Couldn't get to {place}. Try again.",
   },
+  signInButton: { hi: 'Dikhna hai? Login karo', en: 'Want to be seen? Sign in' },
+  signInTitle: { hi: 'Gali mein apni jagah banao', en: 'Take your place in the lane' },
+  signInName: { hi: 'Aapka naam', en: 'Your name' },
+  signInGo: { hi: 'Andar aao', en: 'Come in' },
+  signInFailed: { hi: 'Login nahi ho paya. Dobara try karo.', en: "Couldn't sign in. Try again." },
+  signInClose: { hi: 'Baad mein', en: 'Not now' },
+  inAppHint: {
+    hi: 'Google se login ke liye Chrome mein kholo',
+    en: 'To sign in with Google, open this in Chrome',
+  },
+  inAppHintDismiss: { hi: 'Ye line hatao', en: 'Dismiss this tip' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

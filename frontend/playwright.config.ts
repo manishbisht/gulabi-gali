@@ -1,4 +1,8 @@
 import { defineConfig } from '@playwright/test'
+// The e2e sign-in switch, named once: the Worker takes it as a wrangler var, the bundle as a Vite env.
+// Neither is ever set in a shipped config; this file is the only place that turns them on.
+const DEV_AUTH = { worker: '--var DEV_AUTH:1', bundle: 'VITE_DEV_AUTH=1' }
+
 export default defineConfig({
   testDir: './tests',
   timeout: 60000,
@@ -11,7 +15,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   webServer: [
     {
-      command: 'npm run dev -w backend',
+      command: `npm run dev -w backend -- ${DEV_AUTH.worker}`,
       cwd: '..',
       url: 'http://127.0.0.1:8787/health',
       reuseExistingServer: !process.env.CI,
@@ -25,8 +29,8 @@ export default defineConfig({
       // they are also what actually ships.
       // GG_ALLOW_LOCAL_API: this bundle talks to the local Worker on purpose.
       // VITE_TEST_HOOKS: only this build carries window.__gg; the shipped one does not.
-      command:
-        'GG_ALLOW_LOCAL_API=1 VITE_TEST_HOOKS=1 npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort',
+      // VITE_DEV_AUTH: this build signs in by name against the Worker's /api/dev/login.
+      command: `GG_ALLOW_LOCAL_API=1 VITE_TEST_HOOKS=1 ${DEV_AUTH.bundle} npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort`,
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,

@@ -14,12 +14,14 @@ interface Props {
   stamps: string
   lang: Lang
   onLang: (l: Lang) => void
+  /** Present only when the visitor is signed out and sign-in exists. */
+  onSignIn?: () => void
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
 }
 
-export function Hud({ place, snapshot, line, banner, stamps, lang, onLang, top, bottom }: Props) {
+export function Hud({ place, snapshot, line, banner, stamps, lang, onLang, onSignIn, top, bottom }: Props) {
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
@@ -38,6 +40,11 @@ export function Hud({ place, snapshot, line, banner, stamps, lang, onLang, top, 
           {t('langToggle', lang)}
         </button>
       </div>
+      {onSignIn && (
+        <button type="button" className="sign-in-button" onClick={onSignIn}>
+          {t('signInButton', lang)}
+        </button>
+      )}
       {line && <p className="city-line">{line}</p>}
       {banner && (
         <p className="festival-banner" role="status">
