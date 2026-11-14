@@ -78,7 +78,12 @@ export interface SessionHooks {
    * `replaced(true)` says another tab of the same person took over, and this one will not reconnect;
    * `replaced(false)` clears that once a socket is welcomed again.
    */
-  presence?: { token(): Promise<string | null>; replaced(on: boolean): void }
+  presence?: {
+    token(): Promise<string | null>
+    replaced(on: boolean): void
+    /** The socket was closed for a ban (4004): the page should ask the server who it is now. */
+    banned?(): void
+  }
   /** Tapris and benches: what the sitting system tells React (see useBench). Needs `presence`. */
   bench?: BenchHooks
 }
@@ -491,6 +496,7 @@ function createPresence(
         people.clear()
         hooks.replaced(true)
       },
+      onBanned: () => hooks.banned?.(),
       onState,
       WebSocketImpl,
     })

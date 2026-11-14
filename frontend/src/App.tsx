@@ -105,6 +105,11 @@ export default function App() {
     bind: bindTravel,
   } = useTravel()
   const { me, banned, save, refresh } = useMe()
+  /** Read by the live socket when it is closed for a ban: the stage is not rebuilt when `refresh` changes. */
+  const refreshMe = useRef(refresh)
+  useEffect(() => {
+    refreshMe.current = refresh
+  }, [refresh])
   const [inviteOpen, setInviteOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
   const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
@@ -153,7 +158,7 @@ export default function App() {
     liveAs.current = liveKey
     session.current?.reconnectLive()
   }, [liveKey, auth.token])
-  const conn = useConnections({ user: residentId, token: auth.token })
+  const conn = useConnections({ user: residentId, token: auth.token, onBanned: refresh })
   const slowed = useRateNotice()
   const { block, toast: blockToast } = useBlock(auth.token, lang)
   const [connOpen, setConnOpen] = useState(false)
@@ -204,7 +209,11 @@ export default function App() {
         live: { current, now, patch, freeze },
         look: () => profileLookRef.current,
         festival: () => override ?? current().festival,
-        presence: { token: () => liveToken.current(), replaced: setReplaced },
+        presence: {
+          token: () => liveToken.current(),
+          replaced: setReplaced,
+          banned: () => void refreshMe.current(),
+        },
         bench: benchHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')

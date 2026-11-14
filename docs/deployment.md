@@ -92,6 +92,15 @@ numbered files in `backend/migrations/`, applied with the same command.
    ghost.
 
 5. The publishable key (`pk_...`) goes to GitHub as `VITE_CLERK_PUBLISHABLE_KEY`, in section 2.
+   The moderator: once you have signed in on the site, copy your Clerk user id (Clerk, Users, `user_...`) and
+   set it as a Worker secret, `npx wrangler secret put ADMIN_USER_IDS`, as `clerk:user_...` (comma-separate
+   more than one). Then `#/admin` on the site is the moderation page for that account, and a 404 for
+   everyone else.
+
+   > **Never put a `dev:` id (such as `dev:owner`) in the production `ADMIN_USER_IDS`.** Those belong to the
+   > local name-only sign-in. The Worker ignores `dev:` ids unless `DEV_AUTH=1` as a second guard, but the
+   > secret must only ever hold `clerk:` ids.
+
 6. **A production instance needs DNS.** Clerk's development instance works anywhere, but a production
    instance only starts once its DNS records are in place: Clerk, Configure, Domains lists them. They are the
    **Frontend API** `CNAME` (`clerk.gulabi-gali.manishbisht.me` pointing at Clerk), the **email DKIM**

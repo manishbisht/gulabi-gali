@@ -53,10 +53,13 @@ export interface Connections {
 export function useConnections({
   user,
   token,
+  onBanned,
 }: {
   /** The signed-in resident, or null for nobody (no inbox). A different user starts everything afresh. */
   user: string | null
   token: () => Promise<string | null>
+  /** The inbox was closed because this person is no longer a resident (4004): ask the server who they are. */
+  onBanned?: () => void
 }): Connections {
   const [lists, setLists] = useState<RequestLists>(NONE)
   const [matches, setMatches] = useState<MatchView[]>([])
@@ -72,11 +75,13 @@ export function useConnections({
   /** Each list's newest fetch: an older answer that lands after a newer one is dropped. */
   const seq = useRef({ requests: 0, matches: 0 })
   const tokenRef = useRef(token)
+  const bannedRef = useRef(onBanned)
   const alive = useRef(true)
   const asked = useRef(new Set<string>())
   useEffect(() => {
     tokenRef.current = token
-  }, [token])
+    bannedRef.current = onBanned
+  }, [token, onBanned])
   useEffect(() => {
     alive.current = true
     return () => {
@@ -134,6 +139,7 @@ export function useConnections({
     const questions = asked
     const conn = connectInbox({
       token: () => tokenRef.current(),
+      onBanned: () => bannedRef.current?.(),
       onOpen: () => {
         setReconnects((n) => n + 1)
         void refresh()

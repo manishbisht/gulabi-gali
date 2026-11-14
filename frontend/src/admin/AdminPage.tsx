@@ -52,11 +52,14 @@ function AutoHidden({
   token,
   version,
   onChanged,
+  onUnhidden,
 }: {
   lang: Lang
   token: Token
   version: number
   onChanged(): void
+  /** Someone was unhidden: the reports that hid them were dismissed with it. */
+  onUnhidden(): void
 }) {
   const [list, setList] = useState<AdminHidden[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -84,11 +87,13 @@ function AutoHidden({
     if (!out.ok) return setFailed(true)
     setList((was) => was && was.filter((h) => h.user.id !== id))
     onChanged()
+    onUnhidden()
   }
   return (
     <section className="admin-section admin-hidden" aria-labelledby="admin-hidden">
       <h2 id="admin-hidden">{t('adminAutoHidden', lang)}</h2>
       <p className="admin-help">{t('adminAutoHiddenHelp', lang)}</p>
+      <p className="admin-help">{t('adminUnhideNote', lang)}</p>
       {list && list.length === 0 && <p className="admin-empty">{t('adminAutoHiddenNone', lang)}</p>}
       {list && list.length > 0 && (
         <ul className="admin-list">
@@ -149,6 +154,9 @@ function Console({ lang, token }: { lang: Lang; token: Token }) {
   const [version, setVersion] = useState(0)
   const [csvFailed, setCsvFailed] = useState(false)
   const changed = useCallback(() => setVersion((v) => v + 1), [])
+  /** Bumped by an unhide, which dismisses reports: the queue starts over from its first page. */
+  const [queue, setQueue] = useState(0)
+  const unhidden = useCallback(() => setQueue((q) => q + 1), [])
   useEffect(() => {
     let alive = true
     let timer: ReturnType<typeof setInterval> | null = null
@@ -184,8 +192,8 @@ function Console({ lang, token }: { lang: Lang; token: Token }) {
   return (
     <>
       {stats && <Stats stats={stats} lang={lang} />}
-      <AutoHidden lang={lang} token={token} version={version} onChanged={changed} />
-      <ReportQueue lang={lang} token={token} onChanged={changed} />
+      <AutoHidden lang={lang} token={token} version={version} onChanged={changed} onUnhidden={unhidden} />
+      <ReportQueue key={queue} lang={lang} token={token} onChanged={changed} />
       <UserLookup lang={lang} token={token} onChanged={changed} />
       <section className="admin-section">
         <button

@@ -5,5 +5,6 @@ DEV_AUTH_SECRET=change-me-locally
 # CLERK_SECRET_KEY=sk_test_...
 # CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----..."
 # Who may open #/admin: full user ids, comma-separated (in production a secret, e.g. clerk:user_...).
-# Locally, dev-log in as "Owner" to be dev:owner.
+# Locally, dev-log in as "Owner" to be dev:owner. NEVER put a dev: id in the production secret: it is a name
+# anyone could type locally (the Worker ignores dev: ids there unless DEV_AUTH=1, but do not rely on that).
 ADMIN_USER_IDS=dev:owner

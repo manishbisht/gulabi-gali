@@ -17,15 +17,16 @@ export function useMe(): {
 } {
   const { signedIn, token } = useAuth()
   const [fetched, setFetched] = useState<Me | null>(null)
-  const [banned, setBanned] = useState(false)
+  /** The token getter the server said was banned: a ban belongs to that sign-in, never to the next one. */
+  const [bannedFor, setBannedFor] = useState<(() => Promise<string | null>) | null>(null)
   const got = useCallback((next: Me) => {
     setFetched(next)
-    setBanned(false)
+    setBannedFor(null)
   }, [])
-  const failed = useCallback((err: unknown) => {
+  const failed = useCallback((err: unknown, of: () => Promise<string | null>) => {
     if (!(err instanceof BannedError)) return
     setFetched(null)
-    setBanned(true)
+    setBannedFor(() => of)
   }, [])
 
   const refresh = useCallback(async () => {
@@ -35,7 +36,7 @@ export function useMe(): {
       got(await getMe(tok))
     } catch (err) {
       // anything but a ban keeps what we have: the city carries on as a ghost
-      failed(err)
+      failed(err, token)
     }
   }, [token, got, failed])
 
@@ -50,7 +51,7 @@ export function useMe(): {
         if (!ctl.signal.aborted) got(next)
       } catch (err) {
         // offline or the API is down: stay a ghost
-        if (!ctl.signal.aborted) failed(err)
+        if (!ctl.signal.aborted) failed(err, token)
       }
     })()
     return () => ctl.abort()
@@ -71,5 +72,5 @@ export function useMe(): {
     [token],
   )
 
-  return { me: signedIn ? fetched : null, banned: signedIn && banned, refresh, save }
+  return { me: signedIn ? fetched : null, banned: signedIn && bannedFor === token, refresh, save }
 }

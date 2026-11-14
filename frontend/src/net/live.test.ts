@@ -107,6 +107,24 @@ it('never reconnects after being replaced by another tab, and says so', async ()
   expect(FakeSocket.all).toHaveLength(1)
 })
 
+it('a ban (4004) says so at once, then reconnects as anyone dropped does', async () => {
+  const onBanned = vi.fn()
+  const conn = connectLive({
+    district: 'walled-city',
+    token: async () => null,
+    onMsg: vi.fn(),
+    onBanned,
+    WebSocketImpl: Impl,
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  last().open()
+  last().hangUp(LIVE_CLOSE.banned)
+  expect(onBanned).toHaveBeenCalledOnce()
+  // the next socket is whoever the page now is (a ghost, once it knows): the server decides
+  expect(conn.state()).toBe('connecting')
+  conn.close()
+})
+
 it('close stops a pending reconnect and a pending token', async () => {
   let release: (t: string | null) => void = () => {}
   const { conn } = live(vi.fn(), vi.fn(), () => new Promise((r) => (release = r)))

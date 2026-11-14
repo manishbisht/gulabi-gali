@@ -375,6 +375,59 @@ it('a banned account gets a plain screen saying so, over the city, with a way to
   await act(async () => root.unmount())
 })
 
+it('a live session is told of its ban at once, and a new sign-in starts clean', async () => {
+  const me = {
+    id: 'u',
+    complete: true,
+    profile: {
+      id: 'u',
+      name: 'Asha',
+      look: PROFILE_LOOK,
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+    },
+  }
+  let banned = false
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (!String(url).endsWith('/api/me')) return Promise.reject(new TypeError('offline'))
+    const who = new Headers(init?.headers).get('Authorization')
+    // the next person to sign in here cannot reach the API at all: nothing new is known about them
+    if (who === 'Bearer other') return Promise.reject(new TypeError('offline'))
+    return banned ? new Response(JSON.stringify({ error: 'banned' }), { status: 403 }) : Response.json(me)
+  })
+  localStorage.setItem('gg-lang', 'hi')
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  const render = (auth: AuthState) =>
+    act(async () =>
+      root.render(
+        <AuthContext.Provider value={auth}>
+          <App />
+        </AuthContext.Provider>,
+      ),
+    )
+  await render(signedIn())
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
+  await vi.waitFor(async () => expect(await liveNow()[0]?.opts.token()).toBe('tok'))
+  expect(host.textContent).not.toContain('Ye account band hai')
+
+  // The moderator bans them: the district closes their socket with 4004, and the page asks who it is now.
+  banned = true
+  await act(async () => liveNow()[0]!.opts.onBanned!())
+  await vi.waitFor(() => expect(host.textContent).toContain('Ye account band hai'))
+
+  // Someone else signs in on this tab (a new token): the ban was the last account's, so it goes, even before
+  // anything is known about the new one.
+  await render(signedIn({ token: async () => 'other' }))
+  await vi.waitFor(() => expect(host.textContent).toContain('Abhi koi tumhe dekh nahi sakta'))
+  expect(host.textContent).not.toContain('Ye account band hai')
+  await act(async () => root.unmount())
+})
+
 it('the live socket follows who you are, and says so when another tab takes over', async () => {
   const me = {
     id: 'u',

@@ -9,7 +9,7 @@ import {
   type AdminStats,
   type AdminUser,
 } from '../src/protocol'
-import { api, closeAll, devId, inbox, live, login, pair, resident } from './helpers'
+import { api, closeAll, devId, inbox, live, login, openInbox, pair, resident } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const API = 'https://api.test'
@@ -61,6 +61,15 @@ const insertReport = (
     extra.state ?? 'open',
     extra.unconfirmed ?? 0,
   )
+
+/** What each write path answers a banned person. */
+const BANNED_WRITE: Record<string, unknown> = {
+  'send a request': { error: 'ghost' },
+  'accept a request': { error: 'not-found' },
+  chat: { error: 'not-found' },
+  report: { error: 'ghost' },
+  'redeem an invite': { error: 'ghost' },
+}
 
 /** Every report in a state's list, page by page. */
 async function everyReport(state = 'open') {
@@ -141,9 +150,37 @@ describe('admin', () => {
     expect((await handleAdmin(req, list, new URL(req.url), { id: 'clerk:user_ab' })).status).toBe(404)
   })
 
+  it('a dev id is an admin only while dev auth is on', async () => {
+    const { handleAdmin, isAdmin } = await import('../src/admin')
+    const req = new Request(`${API}/api/admin/stats`)
+    const ADMIN_USER_IDS = 'dev:owner,clerk:user_real'
+    // Production (no DEV_AUTH, or anything but exactly '1'): the dev id copied in by mistake is nobody.
+    for (const DEV_AUTH of [undefined, '', '0', 'true']) {
+      const prod = { ...testEnv, ADMIN_USER_IDS, DEV_AUTH }
+      expect(isAdmin(prod, 'dev:owner'), String(DEV_AUTH)).toBe(false)
+      expect((await handleAdmin(req, prod, new URL(req.url), { id: 'dev:owner' })).status).toBe(404)
+      // The real id beside it still works.
+      expect((await handleAdmin(req, prod, new URL(req.url), { id: 'clerk:user_real' })).status).toBe(200)
+    }
+    expect(isAdmin({ ADMIN_USER_IDS, DEV_AUTH: '1' }, 'dev:owner')).toBe(true)
+  })
+
   it('ban is idempotent and closes live sockets', async () => {
-    const token = await resident('Ban Target')
-    const id = devId('Ban Target')
+    const { a: token, aId: id, matchId } = await pair('Ban Target', 'Ban Partner')
+    // Things a banned person might still try to use: a request waiting for them, and an unused invite code.
+    const asker = await resident('Ban Asker')
+    const asked = await api('/api/requests', asker, {
+      method: 'POST',
+      body: JSON.stringify({ to: id, reason: 'Chalo kabhi chai pe milte hain' }),
+    })
+    expect(asked.status).toBe(201)
+    const { id: pendingId } = (await asked.json()) as { id: string }
+    const founder = await SELF.fetch(`${API}/api/dev/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: 'dev:ban-founder' }),
+    })
+    const [code] = ((await founder.json()) as { codes: string[] }).codes
     const street = await live('mi-road', { token })
     street.send({ t: 'move', x: 1, z: 0, ry: 0 })
     await street.sync()
@@ -171,6 +208,64 @@ describe('admin', () => {
     expect((await api(`/api/profiles/${encodeURIComponent(id)}`, await resident('Ban Viewer'))).status).toBe(
       404,
     )
+
+    // Every write path refuses them: they are no longer a resident, whatever they hold.
+    const writes: [string, () => Promise<Response>][] = [
+      [
+        'send a request',
+        () =>
+          api('/api/requests', token, {
+            method: 'POST',
+            body: JSON.stringify({ to: devId('Ban Asker'), reason: 'Chalo kabhi chai pe milte hain' }),
+          }),
+      ],
+      ['accept a request', () => api(`/api/requests/${pendingId}/accept`, token, { method: 'POST' })],
+      [
+        'chat',
+        () =>
+          api(`/api/matches/${matchId}/messages`, token, {
+            method: 'POST',
+            body: JSON.stringify({ body: 'still here?' }),
+          }),
+      ],
+      [
+        'report',
+        () =>
+          api('/api/reports', token, {
+            method: 'POST',
+            body: JSON.stringify({ kind: 'person', targetId: devId('Ban Partner'), reason: 'spam' }),
+          }),
+      ],
+      [
+        'redeem an invite',
+        () => api('/api/invites/redeem', token, { method: 'POST', body: JSON.stringify({ code }) }),
+      ],
+    ]
+    for (const [what, write] of writes) {
+      const res = await write()
+      expect([403, 404], what).toContain(res.status)
+      expect(await res.json(), what).toEqual(BANNED_WRITE[what])
+    }
+    const pending = await testEnv.DB.prepare('SELECT state FROM requests WHERE id = ?')
+      .bind(pendingId)
+      .first<{ state: string }>()
+    expect(pending!.state).toBe('pending')
+    expect(await testEnv.DB.prepare('SELECT used_by FROM invites WHERE code = ?').bind(code).first()).toEqual(
+      { used_by: null },
+    )
+    // No inbox, and on the street only a ghost: seen by nobody, sitting and speaking refused.
+    expect((await openInbox({ token })).status).toBe(403)
+    const street2 = await live('walled-city', { token })
+    expect((await street2.next('welcome')).you.visible).toBe(false)
+    const from = street2.mark()
+    street2.send({ t: 'sit', bench: 'walled-city:0' })
+    street2.send({ t: 'say', text: 'hello?' })
+    await street2.sync()
+    expect(street2.all('error', from)).toEqual([
+      { t: 'error', code: 'ghost' },
+      { t: 'error', code: 'ghost' },
+    ])
+    street2.close()
 
     // Unban restores, and is idempotent too.
     for (let i = 0; i < 2; i++) {
@@ -380,6 +475,48 @@ describe('admin', () => {
     for (let i = 0; i < 2; i++)
       expect(await (await userAction(id, 'unhide')).json()).toMatchObject({ hidden: false })
     expect((await api(`/api/profiles/${encodeURIComponent(id)}`, viewer)).status).toBe(200)
+  })
+
+  it('unhide sticks: the reports that hid someone are dismissed, so one more cannot hide them again', async () => {
+    const viewer = await resident('Sticky Viewer')
+    await resident('Sticky Target')
+    const target = devId('Sticky Target')
+    const report = (token: string) =>
+      api('/api/reports', token, {
+        method: 'POST',
+        body: JSON.stringify({ kind: 'person', targetId: target, reason: 'spam' }),
+      })
+    const visible = async () => (await api(`/api/profiles/${encodeURIComponent(target)}`, viewer)).status
+    // A resident's report, which auto-hide never counts, and three verified ones, which hide them.
+    expect((await report(await resident('Sticky Fresh', {}, { verified: false }))).status).toBe(201)
+    for (const n of ['One', 'Two', 'Three']) await report(await resident(`Sticky Ring ${n}`))
+    expect(await visible()).toBe(404)
+
+    const res = await userAction(target, 'unhide')
+    expect(await res.json()).toMatchObject({ hidden: false, openReports: 1 })
+    expect(await visible()).toBe(200)
+    const states = async () =>
+      (
+        await testEnv.DB.prepare('SELECT reporter, state FROM reports WHERE target_id = ? ORDER BY reporter')
+          .bind(target)
+          .all<{ reporter: string; state: string }>()
+      ).results
+    // The three that hid them are closed as dismissed; the one auto-hide never counted stays in the queue.
+    expect(await states()).toEqual([
+      { reporter: devId('Sticky Fresh'), state: 'open' },
+      { reporter: devId('Sticky Ring One'), state: 'dismissed' },
+      { reporter: devId('Sticky Ring Three'), state: 'dismissed' },
+      { reporter: devId('Sticky Ring Two'), state: 'dismissed' },
+    ])
+    // One more verified report, even from someone who reported before: still visible.
+    expect(await (await report(await resident('Sticky Ring One'))).json()).toEqual({ autoHidden: false })
+    expect(await visible()).toBe(200)
+    // A repeat unhide while visible dismisses nothing new.
+    await userAction(target, 'unhide')
+    expect((await states()).filter((r) => r.state === 'open')).toHaveLength(2)
+    // Three verified reporters acting anew hide them again.
+    for (const n of ['Four', 'Five']) await report(await resident(`Sticky Ring ${n}`))
+    expect(await visible()).toBe(404)
   })
 
   it('the auto-hidden list shows who was hidden, by whom, and how new their accounts are', async () => {

@@ -2,7 +2,13 @@
 import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { MatchView, PublicPerson, RequestLists, RequestView } from '../net/protocol'
+import {
+  LIVE_CLOSE,
+  type MatchView,
+  type PublicPerson,
+  type RequestLists,
+  type RequestView,
+} from '../net/protocol'
 import { Connections } from '../ui/Connections'
 import { useConnections } from './useConnections'
 
@@ -270,4 +276,18 @@ it('an open chat the other person ended says so, and takes no more messages', as
   await settle()
   expect(host.textContent).not.toContain('Ravi')
   expect(host.textContent).not.toContain('This conversation has ended')
+})
+
+it('an inbox closed for a ban (4004) tells the page, so it can show the ban at once', async () => {
+  const onBanned = vi.fn()
+  function Banned() {
+    useConnections({ user: 'u1', token: async () => 'tok', onBanned })
+    return null
+  }
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () => createRoot(host).render(<Banned />))
+  await settle()
+  await act(async () => FakeSocket.all[0]!.onopen!())
+  await act(async () => FakeSocket.all[0]!.onclose!({ code: LIVE_CLOSE.banned }))
+  expect(onBanned).toHaveBeenCalledOnce()
 })

@@ -161,15 +161,22 @@ async function chatWith(env: Env, reporter: string, target: string, now: number)
 }
 
 /**
+ * The reports auto-hide counts, as a `WHERE` over `reports`: about the person `?1`, filed after `?2` (ms), open,
+ * confirmed, by a reporter who is verified and not banned. An admin's unhide dismisses exactly these, so the
+ * person stays visible until `AUTO_HIDE.reporters` new ones act.
+ */
+export const COUNTED_REPORTS = `target_kind IN ('person', 'bench', 'chat') AND target_id = ?1 AND created_at > ?2
+  AND state = 'open' AND unconfirmed = 0
+  AND reporter IN (SELECT id FROM users WHERE verified = 1 AND banned = 0)`
+
+/**
  * Whether `target` now has `AUTO_HIDE.reporters` distinct verified (and not banned) reporters in open,
  * confirmed reports from the last `AUTO_HIDE.windowMs`; when so they are hidden. True only when this call hid
  * them (they were not hidden already); every live district is then told, through `later`.
  */
 async function autoHide(env: Env, target: string, now: number, later: Later): Promise<boolean> {
   const row = await env.DB.prepare(
-    `SELECT COUNT(DISTINCT r.reporter) AS n FROM reports r JOIN users u ON u.id = r.reporter
-     WHERE r.target_kind IN ('person', 'bench', 'chat') AND r.target_id = ? AND r.created_at > ?
-       AND r.state = 'open' AND r.unconfirmed = 0 AND u.verified = 1 AND u.banned = 0`,
+    `SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE ${COUNTED_REPORTS}`,
   )
     .bind(target, now - AUTO_HIDE.windowMs)
     .first<{ n: number }>()

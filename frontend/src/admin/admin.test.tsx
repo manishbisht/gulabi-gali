@@ -304,12 +304,21 @@ it('auto-hidden comes first, shows how new the reporters are and who invited the
   expect(entry.textContent).toContain('Meera')
   expect(entry.textContent?.match(/Account 0 days old/g)).toHaveLength(3)
   expect(entry.textContent?.match(/Verified by dev:boss/g)).toHaveLength(3)
+  // The owner is told what an unhide does before tapping it.
+  expect(entry.textContent).toContain(
+    'Unhiding dismisses the reports that hid them. They stay visible until three new verified people report them.',
+  )
+  const queueAsks = () => calls.filter((c) => c.path.startsWith('/api/admin/reports')).length
+  expect(queueAsks()).toBe(1)
   await click(entry, 'Unhide')
   await settle()
   expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
     '/api/admin/users/dev%3Ameera/unhide',
   ])
   expect(entry.textContent).toContain('Nobody is hidden.')
+  // Those reports were dismissed with it: the queue is asked for again, from the start.
+  await settle()
+  expect(queueAsks()).toBe(2)
 })
 
 it('looks someone up and acts on them; a ban asks first', async () => {

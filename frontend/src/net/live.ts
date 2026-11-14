@@ -34,6 +34,11 @@ export interface LiveOptions {
   onMsg: (m: ServerMsg) => void
   /** Another tab of the same person took this place over (close code 4001). Nothing reconnects after it. */
   onReplaced?: () => void
+  /**
+   * A moderator banned this person (close code 4004). It reconnects as usual: the server decides what the
+   * next socket is (a ghost, for a banned person), and the page is told so it can ask who it is now.
+   */
+  onBanned?: () => void
   /** Each change of `state()`, as it happens. */
   onState?: (s: LiveState) => void
   WebSocketImpl?: typeof WebSocket
@@ -143,6 +148,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
         setState('closed')
         return opts.onReplaced?.()
       }
+      if (e.code === LIVE_CLOSE.banned) opts.onBanned?.()
       setState('connecting')
       backoff.dropped()
     }

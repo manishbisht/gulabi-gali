@@ -31,8 +31,16 @@ function inbox() {
   const onNotice = vi.fn()
   const onOpen = vi.fn()
   const onReplaced = vi.fn()
-  const conn = connectInbox({ token: async () => 'tok', onNotice, onOpen, onReplaced, WebSocketImpl: Impl })
-  return { conn, onNotice, onOpen, onReplaced }
+  const onBanned = vi.fn()
+  const conn = connectInbox({
+    token: async () => 'tok',
+    onNotice,
+    onOpen,
+    onReplaced,
+    onBanned,
+    WebSocketImpl: Impl,
+  })
+  return { conn, onNotice, onOpen, onReplaced, onBanned }
 }
 
 it('connects with the token, reports notices and every open', async () => {
@@ -70,6 +78,8 @@ it('does not reconnect once the person is no longer a resident (4004: banned or 
   await vi.advanceTimersByTimeAsync(60_000)
   expect(FakeSocket.all).toHaveLength(1)
   expect(a.onReplaced).not.toHaveBeenCalled()
+  // and says so, so the page can ask who it is now
+  expect(a.onBanned).toHaveBeenCalledOnce()
 })
 
 it('does not reconnect after another tab took the inbox (4001), and not after close()', async () => {

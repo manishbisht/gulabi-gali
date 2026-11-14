@@ -56,7 +56,9 @@ test('the owner sees a report another person filed, and bans the person it is ab
   await card.getByRole('alertdialog').getByRole('button', { name: 'Haan, ban karo' }).click()
   await expect(card).toHaveCount(0)
 
-  // The banned person is told plainly, and the city no longer has them.
+  // The banned person is told plainly, at once: their sockets closed with the ban, so the page asked again.
+  await expect(target.page.getByText('Ye account band hai')).toBeVisible()
+  // And after a reload too.
   await target.page.reload()
   await expect(target.page.getByText('Ye account band hai')).toBeVisible()
 })

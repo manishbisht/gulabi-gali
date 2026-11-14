@@ -19,6 +19,8 @@ export interface InboxOptions {
   onOpen: () => void
   /** Another tab holds the inbox (close code 4001). Nothing reconnects after it. */
   onReplaced?: () => void
+  /** No longer a resident (close code 4004: banned, or no profile any more). Nothing reconnects after it. */
+  onBanned?: () => void
   WebSocketImpl?: typeof WebSocket
 }
 
@@ -92,7 +94,7 @@ export function connectInbox(opts: InboxOptions): InboxConn {
       // banned or hidden: the server would only refuse a reconnect
       if (e.code === LIVE_CLOSE.banned) {
         done = true
-        return
+        return opts.onBanned?.()
       }
       backoff.dropped()
     }

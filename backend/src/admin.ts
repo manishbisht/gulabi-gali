@@ -16,6 +16,7 @@ import type {
   ReportState,
 } from './protocol'
 import { refreshUser } from './refresh'
+import { AUTO_HIDE, COUNTED_REPORTS } from './reports'
 import { markVerified } from './trust'
 
 /** Reports per page of the queue. */
@@ -35,8 +36,13 @@ const PERSON_KINDS = "('person', 'bench', 'chat')"
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
 const invalid = () => Response.json({ error: 'invalid' }, { status: 400 })
 
-/** Whether `userId` is in `ADMIN_USER_IDS` (whole ids, comma-separated). Unset or empty: nobody is. */
-export function isAdmin(env: Pick<Env, 'ADMIN_USER_IDS'>, userId: string): boolean {
+/**
+ * Whether `userId` is in `ADMIN_USER_IDS` (whole ids, comma-separated). Unset or empty: nobody is. A `dev:` id
+ * counts only while `DEV_AUTH` is exactly `1`: a dev id copied into production by mistake makes nobody an
+ * admin (and dev tokens are refused there anyway).
+ */
+export function isAdmin(env: Pick<Env, 'ADMIN_USER_IDS' | 'DEV_AUTH'>, userId: string): boolean {
+  if (userId.startsWith('dev:') && env.DEV_AUTH !== '1') return false
   return (env.ADMIN_USER_IDS ?? '')
     .split(',')
     .map((id) => id.trim())
@@ -306,7 +312,9 @@ type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unhide'
  * - `ban`: off the map and out of every list (`ACTIVE`), their district and inbox sockets closed before this
  *   answers, and `/api/me` says `banned`. `unban` restores all of it.
  * - `mute`: no writes for `MUTE_MS` (see `muteGate`); a repeat while muted keeps the end it has. `unmute`.
- * - `verify`: verified by `admin`, with their 2 codes. `unhide`: back on the map.
+ * - `verify`: verified by `admin`, with their 2 codes.
+ * - `unhide`: back on the map, and the reports that hid them (see `COUNTED_REPORTS`) dismissed with it, so they
+ *   stay visible until `AUTO_HIDE.reporters` new verified reporters act.
  */
 async function actOn(env: Env, id: string, action: UserAction, later: Later): Promise<Response> {
   const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(id).first()
@@ -342,7 +350,15 @@ async function actOn(env: Env, id: string, action: UserAction, later: Later): Pr
       await markVerified(env, id, 'admin', later)
       break
     case 'unhide':
-      await set('hidden = 0')
+      // One transaction: the reports that hid them (those auto-hide counts) are dismissed, then they are
+      // unhidden, so the next report alone cannot hide them again. Only while hidden: a repeat dismisses nothing.
+      await env.DB.batch([
+        env.DB.prepare(
+          `UPDATE reports SET state = 'dismissed', closed_at = ?3 WHERE ${COUNTED_REPORTS}
+           AND EXISTS (SELECT 1 FROM users WHERE id = ?1 AND hidden = 1)`,
+        ).bind(id, now - AUTO_HIDE.windowMs, now),
+        env.DB.prepare('UPDATE users SET hidden = 0 WHERE id = ?').bind(id),
+      ])
       await refreshUser(env, id, 'hide')
       break
   }
