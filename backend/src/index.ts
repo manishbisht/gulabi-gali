@@ -29,10 +29,14 @@ export async function handleCity(
   origin: string | null = null,
 ): Promise<Response> {
   const headers = { 'cache-control': CITY_CACHE }
-  const stored = await env.CITY.get<CitySnapshot>(CITY_KEY, 'json')
+  // A failed or garbled KV read is just a cache miss.
+  const stored = await env.CITY.get<CitySnapshot>(CITY_KEY, 'json').catch(() => null)
   if (stored) return json(stored, 200, origin, headers)
   try {
-    return json(await refreshCity(env, fetcher, now), 200, origin, headers)
+    const live = await fetchSnapshot(fetcher, now)
+    // Serve the live snapshot even if storing it fails.
+    await env.CITY.put(CITY_KEY, JSON.stringify(live)).catch(() => undefined)
+    return json(live, 200, origin, headers)
   } catch {
     return json(defaultSnapshot(now), 200, origin, headers)
   }
