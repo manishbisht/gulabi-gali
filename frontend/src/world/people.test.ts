@@ -224,3 +224,24 @@ it('remote auto flag renders an auto, and the instance goes when the flag drops'
   people.dispose()
   expect(autos(scene)).toBeUndefined()
 })
+
+it('leaves the riders buffer alone while nobody rides, and refreshes it once when the last one gets off', () => {
+  const scene = new THREE.Scene()
+  const people = createPeople(scene)
+  people.apply(welcome([asha]))
+  const mesh = autos(scene)!
+  const v0 = mesh.instanceMatrix.version
+  people.update(1 / 60, HERE)
+  people.update(1 / 60, HERE)
+  expect(mesh.instanceMatrix.version).toBe(v0) // no riders, none before: not re-uploaded
+
+  people.apply({ t: 'moves', m: [[asha.id, 0, 0, 0, 'auto']] })
+  people.update(1 / 60, HERE)
+  expect(mesh.instanceMatrix.version).toBe(v0 + 1)
+  people.apply({ t: 'moves', m: [[asha.id, 0, 0, 0]] })
+  people.update(1 / 60, HERE)
+  expect(mesh.instanceMatrix.version).toBe(v0 + 2) // the frame the last rider left
+  people.update(1 / 60, HERE)
+  expect(mesh.instanceMatrix.version).toBe(v0 + 2)
+  people.dispose()
+})

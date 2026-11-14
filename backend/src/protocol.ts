@@ -137,9 +137,10 @@ export type Vehicle = 'auto'
 
 export type ClientMsg =
   /**
-   * `v: 'auto'` says the sender is driving one: they may then go 12 m/s (a 12 m burst) instead of walking
-   * pace, and the others draw an auto under them. Absent means on foot; any other value is a bad frame. A
-   * client can claim an auto it is not in; the cost is a 1.5x speed allowance, which is accepted.
+   * `v: 'auto'` says the sender is driving one: they may then go 12 m/s (a 24 m burst, two seconds' worth)
+   * instead of walking pace, and the others draw an auto under them. Absent means on foot; any other value
+   * is a bad frame. A client can claim an auto it is not in; the cost is a 1.5x pace and a 3x burst, which
+   * is accepted.
    */
   | { t: 'move'; x: number; z: number; ry: number; v?: Vehicle }
   | { t: 'sit'; bench: string | null }

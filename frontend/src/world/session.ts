@@ -245,7 +245,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       autos: district.autos,
       player,
       stand: () => sitting?.stand(),
-      hooks: hooks.drive ?? { near() {}, driving() {}, blocked() {} },
+      station: district.def.station,
+      hooks: hooks.drive ?? { near() {}, driving() {}, blocked() {}, rescued() {} },
     })
     const systems: DistrictSystem[] = [
       npcs,

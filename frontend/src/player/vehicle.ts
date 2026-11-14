@@ -16,9 +16,12 @@ const FULL_TURN_SPEED = 3
 /** The footprint of the auto model (see props), and the walker who gets out of it. */
 const FOOT = { w: 1.4, d: 2.7 }
 const WALKER_RADIUS = 0.4
-/** Where to get out: rings from this close to this far, a step apart, and eight ways round each. */
+/**
+ * Where to get out: rings from this close to this far, a step apart, and eight ways round each. The first
+ * 3 m are the usual search; only when all of that is blocked does it widen, to 6 m.
+ */
 const EXIT_NEAR = 1.2
-const EXIT_FAR = 3
+const EXIT_FAR = 6
 const EXIT_STEP = 0.3
 /** Sides first (a door is on the side), then the corners, then front and back. */
 const EXIT_WAYS = [1 / 2, -1 / 2, 3 / 4, -3 / 4, 1 / 4, -1 / 4, 1, 0].map((f) => f * Math.PI)
@@ -40,7 +43,7 @@ export interface Vehicle {
   /** Lands at (x, z). A step that was cut short by a wall takes the speed off in proportion. */
   commit(x: number, z: number): void
   /**
-   * Somewhere to step out: the nearest point on rings 1.2 to 3 m round it that a walker fits at, clear of
+   * Somewhere to step out: the nearest point on rings 1.2 to 3 m round it (6 m when those are all blocked) that a walker fits at, clear of
    * `colliders` and of the auto itself (which stays where it is left). Null when there is none: stay in.
    */
   exitPoint(colliders: readonly AABB[], walkerRadius?: number): Vec2 | null

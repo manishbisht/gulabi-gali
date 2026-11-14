@@ -673,3 +673,62 @@ it('the walls: fetched on each welcome as this person, kept current by the socke
   getContext.mockRestore()
   vi.unstubAllGlobals()
 })
+
+it('at the wheel a tap opens no card, E gets out, and nothing else handles E', async () => {
+  const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+  const track = vi.fn(() => null)
+  const trackStation = vi.fn(() => false)
+  const live = openLive(async () => null, { drive, track, trackStation })
+  loads[0]!.resolve({
+    ...fakeDistrict(walledCity),
+    autos: { nearest: () => 0, pose: () => ({ x: 0, z: 0, ry: 0 }), take: vi.fn(), leave: vi.fn() },
+  })
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  const look = { skin: 2, outfit: 'sandstone', head: 'none' } as const
+  ws.say({
+    t: 'welcome',
+    you: { id: null, visible: false },
+    people: [{ id: 'p1', name: 'Asha', look, status: '', x: 0, z: -5, ry: 0 }],
+  })
+  const canvas = document.querySelector('canvas')!
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect
+  const tapCentre = () => {
+    live.stage.camera.position.set(0, 1, 0)
+    live.stage.camera.lookAt(0, 1, -5)
+    live.stage.camera.updateMatrixWorld(true)
+    const at = { clientX: 50, clientY: 50 }
+    canvas.dispatchEvent(Object.assign(new Event('pointerdown'), at))
+    canvas.dispatchEvent(Object.assign(new Event('pointerup'), at))
+  }
+  const tap = vi.spyOn(live.hooks.personCard, 'tap')
+  const personStep = vi.spyOn(live.hooks.personCard, 'step')
+  const npcStep = vi.spyOn(live.hooks.npcCard, 'step')
+  const interact = vi.spyOn(controls, 'interact')
+
+  // E beside a parked auto mounts it
+  interact.mockReturnValueOnce(true)
+  live.tick(0.016)
+  expect(drive.driving).toHaveBeenLastCalledWith(true)
+  expect(live.session.player()!.driving()).toBe(true)
+
+  // at the wheel, a tap on a person opens nothing
+  tapCentre()
+  expect(tap).not.toHaveBeenCalled()
+
+  // E gets out, and no other system hears that press
+  interact.mockReturnValueOnce(true)
+  live.tick(0.016)
+  expect(drive.driving).toHaveBeenLastCalledWith(false)
+  expect(live.session.player()!.driving()).toBe(false)
+  for (const spy of [personStep, npcStep]) expect(spy.mock.calls.at(-1)![2]).toBe(false)
+  expect(track.mock.calls.at(-1)![2]).toBe(false)
+  expect(trackStation.mock.calls.at(-1)![2]).toBe(false)
+
+  // on foot again, the same tap works
+  tapCentre()
+  expect(tap).toHaveBeenCalledOnce()
+  interact.mockRestore()
+  live.session.dispose()
+})

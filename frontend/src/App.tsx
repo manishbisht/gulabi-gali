@@ -482,6 +482,11 @@ export default function App() {
                     {t('driveStuck', lang)}
                   </div>
                 )}
+                {drive.rescued && (
+                  <div className="toast" role="status">
+                    {t('driveRescued', lang)}
+                  </div>
+                )}
                 {benchToast && (
                   <div className="toast" role="status">
                     {t(benchToast, lang)}

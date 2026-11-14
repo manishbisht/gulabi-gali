@@ -18,6 +18,7 @@ export function useDrive() {
   const [near, setNear] = useState(false)
   const [driving, setDriving] = useState(false)
   const [stuck, setStuck] = useState(false)
+  const [rescued, setRescued] = useState(false)
   const actions = useRef<DriveActions | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -28,6 +29,12 @@ export function useDrive() {
       driving(on) {
         setDriving(on)
         if (!on) setStuck(false)
+        if (on) setRescued(false)
+      },
+      rescued() {
+        clearTimeout(timer.current)
+        setRescued(true)
+        timer.current = setTimeout(() => setRescued(false), NOTICE_MS)
       },
       blocked() {
         clearTimeout(timer.current)
@@ -43,5 +50,5 @@ export function useDrive() {
   const exit = useCallback(() => actions.current?.exitAuto(), [])
   const honk = useCallback(() => actions.current?.honk(), [])
 
-  return { near, driving, stuck, hooks, bind, mount, exit, honk }
+  return { near, driving, stuck, rescued, hooks, bind, mount, exit, honk }
 }

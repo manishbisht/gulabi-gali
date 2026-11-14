@@ -82,6 +82,8 @@ export function createPeople(scene: THREE.Object3D): People {
   rides.frustumCulled = false // its instances move every frame; the bounds computed at the start would not follow
   rides.castShadow = false
   scene.add(rides)
+  /** Whether the last frame drew any rider, so a street with none keeps its buffer untouched. */
+  let hadRides = false
   const ride = new THREE.Matrix4()
   const turned = new THREE.Quaternion()
   const up = new THREE.Vector3(0, 1, 0)
@@ -209,7 +211,8 @@ export function createPeople(scene: THREE.Object3D): People {
         }
       }
       rides.count = riding
-      rides.instanceMatrix.needsUpdate = true
+      if (riding > 0 || hadRides) rides.instanceMatrix.needsUpdate = true
+      hadRides = riding > 0
     },
     pick(ray) {
       for (let i = 0; i < all.length; i++) all[i]!.body.updateMatrixWorld(true)

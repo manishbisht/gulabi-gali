@@ -101,14 +101,24 @@ describe('createVehicle', () => {
     it('searches outward until it finds room, and gives up when there is none', () => {
       const v = createVehicle('auto')
       v.reset(0, 0, 0)
-      // a solid ring of walls up to 3.2 m: nothing on the search ring is clear
-      const wall: AABB[] = [{ minX: -3.2, maxX: 3.2, minZ: -3.2, maxZ: 3.2 }]
+      // walls out to 6.5 m: nothing on any search ring is clear
+      const wall: AABB[] = [{ minX: -6.5, maxX: 6.5, minZ: -6.5, maxZ: 6.5 }]
       expect(v.exitPoint(wall)).toBeNull()
       // a wall that covers only the near ring: found further out
       const near: AABB[] = [{ minX: -1.9, maxX: 1.9, minZ: -2.6, maxZ: 2.6 }]
       const out = v.exitPoint(near)!
       expect(out).not.toBeNull()
       expect(Math.hypot(out.x, out.z)).toBeGreaterThan(1.9)
+    })
+
+    it('widens to 6 m when everything within 3 m is blocked', () => {
+      const v = createVehicle('auto')
+      v.reset(0, 0, 0)
+      const out = v.exitPoint([{ minX: -3.2, maxX: 3.2, minZ: -3.2, maxZ: 3.2 }])!
+      expect(out).not.toBeNull()
+      const d = Math.hypot(out.x, out.z)
+      expect(d).toBeGreaterThan(3)
+      expect(d).toBeLessThanOrEqual(6)
     })
 
     it('is a point the auto itself would not trap: exit beside a turned auto', () => {

@@ -213,7 +213,7 @@ describe('DistrictDO', () => {
     expect(moves.m).toEqual([['dev:speedy-sona', 3.5, 4, 0]])
   })
 
-  it('an auto moves at 12 m/s with a 12 m burst; walking stays at 8, and v is validated strictly', async () => {
+  it('an auto moves at 12 m/s with a 24 m burst; walking stays at 8, and v is validated strictly', async () => {
     const a = await live('mi-road', { token: await resident('Auto Anil') })
     const b = await live('mi-road', { token: await resident('Auto Watcher') })
     const walker = await live('mi-road', { token: await resident('Walk Wasim') })
@@ -232,7 +232,7 @@ describe('DistrictDO', () => {
     // the flag rides along, so the others can draw an auto under the driver
     expect(moved.m.find(([id]) => id === 'dev:auto-anil')).toEqual(['dev:auto-anil', 10, 0, 0, 'auto'])
 
-    // and the auto's allowance still ends at 12 m
+    // and the auto's allowance still ends: 14 m of burst are left, not 20
     a.send({ t: 'move', x: 30, z: 0, ry: 0, v: 'auto' })
     expect(await a.next('error')).toEqual({ t: 'error', code: 'too-fast', x: 10, z: 0, ry: 0 })
 
@@ -246,6 +246,20 @@ describe('DistrictDO', () => {
     a.send({ t: 'move', x: 10.5, z: 0, ry: 0 })
     const after = await b.next('moves', (m) => m.m.some(([id]) => id === 'dev:auto-anil'), out)
     expect(after.m.find(([id]) => id === 'dev:auto-anil')).toEqual(['dev:auto-anil', 10.5, 0, 0])
+  })
+
+  it('a driver who stalled for 2 s and catches up at 12 m/s is not refused, and the burst still ends', async () => {
+    const a = await live('mi-road', { token: await resident('Stall Sunil') })
+    a.send({ t: 'move', x: 0, z: 0, ry: 0, v: 'auto' })
+    await a.sync()
+    // two seconds of frames arriving at once: 24 m in 12 m hops, which a 12 m burst would have refused
+    a.send({ t: 'move', x: 12, z: 0, ry: 0, v: 'auto' })
+    a.send({ t: 'move', x: 24, z: 0, ry: 0, v: 'auto' })
+    await a.sync()
+    expect(a.all('error')).toEqual([])
+    // that was all the burst there is
+    a.send({ t: 'move', x: 40, z: 0, ry: 0, v: 'auto' })
+    expect((await a.next('error')).code).toBe('too-fast')
   })
 
   it('a ghost cannot status/sit/say', async () => {

@@ -253,6 +253,10 @@ export const STRINGS = {
     hi: 'Yahan utarne ki jagah nahi — auto thoda hata ke utro.',
     en: 'No room to get out here — move the auto a little first.',
   },
+  driveRescued: {
+    hi: 'Auto phans gayi thi — aapko metro station pe utaar diya.',
+    en: 'The auto was stuck — we set you down at the metro station.',
+  },
   soundOn: { hi: 'Awaaz: chalu', en: 'Sound: on' },
   soundOff: { hi: 'Awaaz: band', en: 'Sound: off' },
   soundToggleLabel: { hi: 'Awaaz chalu ya band karo', en: 'Turn sound on or off' },

@@ -90,11 +90,13 @@ export const MAX_SPEED = 8
  */
 export const SPEED_BURST_M = MAX_SPEED
 /**
- * A move that says `v: 'auto'` gets this pace and burst instead (three times walking speed). The flag is the
- * client's word: one that lies gets 1.5x the walking allowance, an accepted cost.
+ * A move that says `v: 'auto'` gets this pace (1.5x walking) and a burst of two seconds' worth, as walking
+ * does: the client also drives at 12 m/s, so a stall of up to 2 s must not rubber-band a driver at full
+ * speed. The flag is the client's word: one that lies gets 1.5x the walking pace and 3x the walking burst
+ * (24 m once, after standing still), an accepted cost.
  */
 export const AUTO_MAX_SPEED = 12
-export const AUTO_BURST_M = AUTO_MAX_SPEED
+export const AUTO_BURST_M = 2 * AUTO_MAX_SPEED
 /** A socket with no move or ping for this long is closed, and its person leaves. */
 export const IDLE_MS = 30_000
 export const MAX_FRAME_CHARS = 2048

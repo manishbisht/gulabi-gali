@@ -69,7 +69,8 @@ function context(): Audio | null {
 export function unlockAudio(): void {
   if (!soundOn()) return
   const c = context()
-  if (c && c.state === 'suspended') void c.resume().catch(() => {})
+  // not just 'suspended': Safari reports 'interrupted' after a call or a lock
+  if (c && c.state !== 'running') void c.resume().catch(() => {})
 }
 
 /**
@@ -81,7 +82,7 @@ export function honk(now: number = performance.now()): boolean {
   const c = context()
   if (!c) return false
   lastHonk = now
-  if (c.state === 'suspended') void c.resume().catch(() => {})
+  if (c.state !== 'running') void c.resume().catch(() => {})
   const t = c.currentTime
   const gain = c.createGain()
   gain.gain.setValueAtTime(0.0001, t)

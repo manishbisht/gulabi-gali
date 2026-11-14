@@ -4,12 +4,14 @@ import { closeAudio, HONK_GAP_MS, honk, resetHorn, setSoundOn, soundOn, unlockAu
 
 let made = 0
 let oscillators = 0
+const contexts: FakeAudio[] = []
 class FakeAudio {
   currentTime = 0
   state = 'suspended'
   destination = {}
   constructor() {
     made++
+    contexts.push(this)
   }
   resume = vi.fn(async () => {
     this.state = 'running'
@@ -28,6 +30,7 @@ class FakeAudio {
 beforeEach(() => {
   made = 0
   oscillators = 0
+  contexts.length = 0
   storage.clear()
   resetHorn()
   vi.stubGlobal('AudioContext', FakeAudio)
@@ -67,6 +70,7 @@ it('is silent when sound is off, and remembers the choice under gg-sound', () =>
 it('unlock wakes a suspended context from a gesture, and close lets it go', () => {
   unlockAudio()
   expect(made).toBe(1)
+  expect(contexts[0]!.resume).toHaveBeenCalledOnce()
   closeAudio()
   honk(1000)
   expect(made).toBe(2)
@@ -75,4 +79,18 @@ it('unlock wakes a suspended context from a gesture, and close lets it go', () =
 it('survives a browser with no WebAudio', () => {
   vi.stubGlobal('AudioContext', undefined)
   expect(honk(1000)).toBe(false)
+})
+
+it("wakes a context Safari left 'interrupted', on unlock and on a honk", () => {
+  unlockAudio()
+  const c = contexts[0]!
+  c.state = 'interrupted'
+  unlockAudio()
+  expect(c.resume).toHaveBeenCalledTimes(2)
+  c.state = 'interrupted'
+  honk(1000)
+  expect(c.resume).toHaveBeenCalledTimes(3)
+  c.state = 'running'
+  honk(2000)
+  expect(c.resume).toHaveBeenCalledTimes(3) // running: left alone
 })
