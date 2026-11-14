@@ -36,7 +36,9 @@ export class ClerkKeys {
     const now = this.clock()
     const fresh = now - this.fetchedAt < JWKS_TTL_MS
     if (fresh && this.keys.has(kid)) return this.keys.get(kid)!
-    if (!fresh || now - this.triedAt >= JWKS_RETRY_MS) await this.refresh(secretKey)
+    // Stale or missing, the set is asked for again at most once a window: a Clerk outage, or a stream of
+    // forged key ids, costs one call per window. Meanwhile a stale set still serves the keys it holds.
+    if (now - this.triedAt >= JWKS_RETRY_MS) await this.refresh(secretKey)
     return this.keys.get(kid) ?? null
   }
 
