@@ -1,7 +1,7 @@
 import type { Env } from './env'
 import { holdEvidence } from './evidence'
 import { floating, notify, type Later } from './inbox'
-import { RESIDENT, residentRow, toPublic } from './profiles'
+import { activeRow, VISIBLE, toPublic } from './profiles'
 import { pairOf } from './requests'
 import {
   MAX_MESSAGE,
@@ -63,21 +63,22 @@ interface Member {
 }
 
 /**
- * The match `matchId`, when `userId` is in it and still a resident. With `both`, the other side must be a
- * resident too (a banned member's chat cannot be read or written). Null for everything else alike, so a
- * caller can only ever answer 404: whether a match exists never leaks.
+ * The match `matchId`, when `userId` is in it and may still act as themself (`ACTIVE`). With `both`, the other
+ * side must be active too (a banned member's chat cannot be read or written). A hidden member's chat goes on,
+ * for both of them: it is evidence, and the review should be fair. Null for everything else alike, so a caller
+ * can only ever answer 404: whether a match exists never leaks.
  */
 async function member(env: Env, userId: string, matchId: string, both: boolean): Promise<Member | null> {
   if (matchId.length > MAX_ID) return null
   const [me, match] = await Promise.all([
-    residentRow(env, userId),
+    activeRow(env, userId),
     env.DB.prepare('SELECT id, a, b FROM matches WHERE id = ? AND (a = ? OR b = ?)')
       .bind(matchId, userId, userId)
       .first<{ id: string; a: string; b: string }>(),
   ])
   if (!me || !match) return null
   const other = match.a === userId ? match.b : match.a
-  if (both && !(await residentRow(env, other))) return null
+  if (both && !(await activeRow(env, other))) return null
   return { id: match.id, other }
 }
 
@@ -112,9 +113,12 @@ function readCursor(cursor: string): { at: number; id: string } | null {
   return m ? { at: Number(m[1]), id: m[2] } : null
 }
 
-/** `GET /api/matches`: the asker's matches with a resident on the other side, most recently active first. */
+/**
+ * `GET /api/matches`: the asker's matches with someone they may see on the other side (`VISIBLE`: a hidden
+ * person's matches drop out of everyone else's list), most recently active first.
+ */
 export async function listMatches(env: Env, userId: string): Promise<Response> {
-  if (!(await residentRow(env, userId))) return fail('ghost', 403)
+  if (!(await activeRow(env, userId))) return fail('ghost', 403)
   // One query: the other side's profile and each match's last message come in by join.
   const { results } = await env.DB.prepare(
     `SELECT m.id, p.user_id, p.name, p.look, p.status,
@@ -124,7 +128,7 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
      JOIN users u ON u.id = p.user_id
      LEFT JOIN messages l ON l.id = (
        SELECT id FROM messages WHERE match_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1)
-     WHERE (m.a = ?1 OR m.b = ?1) AND ${RESIDENT}
+     WHERE (m.a = ?1 OR m.b = ?1) AND ${VISIBLE}
      ORDER BY COALESCE(l.created_at, m.created_at) DESC, m.id DESC
      LIMIT ?2`,
   )

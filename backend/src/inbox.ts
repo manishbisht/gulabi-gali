@@ -3,7 +3,7 @@ import { resolveUser } from './auth'
 import { allowedOrigin } from './cors'
 import { WHO_HEADER } from './district'
 import type { Env } from './env'
-import { loadResident } from './profiles'
+import { activeRow } from './profiles'
 import { LIVE_CLOSE, type InboxNotice } from './protocol'
 
 /** Open inbox sockets one person may keep (tabs, a phone and a laptop). The next one closes the oldest. */
@@ -50,7 +50,7 @@ export async function openInbox(request: Request, env: Env): Promise<Response> {
   const headers = new Headers(request.headers)
   headers.delete(WHO_HEADER)
   const user = await resolveUser(new Request(request.url, { headers }), env)
-  if (!user || !(await loadResident(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
+  if (!user || !(await activeRow(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
   return inboxOf(env, user.id).fetch('https://inbox.internal/', {
     headers: { Upgrade: 'websocket', [WHO_HEADER]: encodeURIComponent(user.id) },
   })
@@ -96,11 +96,12 @@ export class InboxDO extends DurableObject<Env> {
   }
 
   /**
-   * RPC, from `refreshUser`: someone who is no longer a resident (banned, hidden, profile gone) has no inbox,
-   * so every socket closes with `LIVE_CLOSE.banned`, which the client does not reconnect after.
+   * RPC, from `refreshUser`: someone who may no longer act as themself (banned, profile gone; see `ACTIVE`) has
+   * no inbox, so every socket closes with `LIVE_CLOSE.banned`, which the client does not reconnect after. A
+   * hidden person keeps theirs.
    */
   async refresh(userId: string): Promise<void> {
-    if (await loadResident(this.env, userId)) return
+    if (await activeRow(this.env, userId)) return
     for (const ws of this.sockets()) this.drop(ws, LIVE_CLOSE.banned, 'not a resident')
   }
 

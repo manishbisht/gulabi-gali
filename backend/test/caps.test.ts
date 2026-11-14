@@ -1,6 +1,6 @@
 import { applyD1Migrations, env, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { MAX_SOCKETS_PER_IP } from '../src/district'
+import { DEFAULT_MAX_IP_SOCKETS, ipKey } from '../src/district'
 import type { Env } from '../src/env'
 import { allow, READ_LIMIT, windowStart } from '../src/limits'
 import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'
@@ -36,6 +36,27 @@ async function knock(district: DistrictId, headers: Record<string, string> = {},
 const turnedAway = async (k: Awaited<ReturnType<typeof knock>>) => {
   await vi.waitFor(() => expect(k.closes).toEqual([LIVE_CLOSE.full]), WAIT)
   expect(k.heard).toEqual([{ t: 'error', code: 'full' }])
+}
+
+/** Runs `fn` with `vars` set on the district object's env, then puts its env back. */
+async function withVars(district: DistrictId, vars: Partial<Env>, fn: () => Promise<void>) {
+  let real: Env | undefined
+  await runInDurableObject(stub(district), (instance) => {
+    const held = instance as unknown as { env: Env }
+    real = held.env
+    held.env = { ...held.env, ...vars }
+  })
+  try {
+    await fn()
+  } finally {
+    await runInDurableObject(stub(district), (instance) => {
+      const held = instance as unknown as { env: Env }
+      held.env = {
+        ...held.env,
+        ...Object.fromEntries(Object.keys(vars).map((k) => [k, real![k as keyof Env]])),
+      }
+    })
+  }
 }
 
 describe('socket caps', () => {
@@ -76,46 +97,105 @@ describe('socket caps', () => {
     }
   })
 
-  it(`at most ${MAX_SOCKETS_PER_IP} live sockets per IP per district`, async () => {
-    const ip = { 'CF-Connecting-IP': '203.0.113.7' }
-    const six = []
-    for (let i = 0; i < MAX_SOCKETS_PER_IP; i++) {
-      const k = await knock('mi-road', ip)
-      expect(k.heard[0]?.t).toBe('welcome')
-      six.push(k)
-    }
-    await turnedAway(await knock('mi-road', ip))
-    // Another IP, and the same IP in another district, are their own counts.
-    expect((await knock('mi-road', { 'CF-Connecting-IP': '203.0.113.8' })).heard[0]?.t).toBe('welcome')
-    expect((await knock('walled-city', ip)).heard[0]?.t).toBe('welcome')
-    // A place frees up when one closes.
-    six[0]!.ws.close(1000)
-    await vi.waitFor(async () => {
-      const k = await knock('mi-road', ip)
-      expect(k.heard[0]?.t).toBe('welcome')
-      six.push(k)
-    }, WAIT)
-    for (const k of six) k.ws.close(1000)
+  it(`the per-address cap is ${DEFAULT_MAX_IP_SOCKETS} unless MAX_IP_SOCKETS says, with IPv6 counted by /64`, () => {
+    expect(DEFAULT_MAX_IP_SOCKETS).toBe(24)
+    expect(testEnv.MAX_IP_SOCKETS).toBe('24')
+    expect(ipKey('203.0.113.7')).toBe('203.0.113.7')
+    expect(ipKey('::ffff:203.0.113.7')).toBe('203.0.113.7')
+    for (const same of ['2001:db8:1:2::a', '2001:DB8:1:2:ffff::b', '2001:0db8:0001:0002:0:0:0:c'])
+      expect(ipKey(same)).toBe('2001:db8:1:2::/64')
+    expect(ipKey('2001:db8:1:3::a')).toBe('2001:db8:1:3::/64')
+    expect(ipKey('2001:db8::1')).toBe('2001:db8:0:0::/64')
   })
 
-  it('loopback (local dev and the stress script) is not capped per IP', async () => {
-    const all = []
-    for (let i = 0; i <= MAX_SOCKETS_PER_IP; i++) {
-      const k = await knock('malviya-nagar', { 'CF-Connecting-IP': '127.0.0.1' })
-      expect(k.heard[0]?.t).toBe('welcome')
-      all.push(k)
-    }
-    for (const k of all) k.ws.close(1000)
+  it('at most MAX_IP_SOCKETS live sockets per address per district', async () => {
+    await withVars('mi-road', { MAX_IP_SOCKETS: '3' }, async () => {
+      const ip = { 'CF-Connecting-IP': '203.0.113.7' }
+      const three = []
+      for (let i = 0; i < 3; i++) {
+        const k = await knock('mi-road', ip)
+        expect(k.heard[0]?.t).toBe('welcome')
+        three.push(k)
+      }
+      await turnedAway(await knock('mi-road', ip))
+      // Residents count like ghosts.
+      await turnedAway(await knock('mi-road', ip, await resident('Ip Isha')))
+      // Another address is its own count.
+      expect((await knock('mi-road', { 'CF-Connecting-IP': '203.0.113.8' })).heard[0]?.t).toBe('welcome')
+      // A place frees up when one closes.
+      three[0]!.ws.close(1000)
+      await vi.waitFor(async () => {
+        const k = await knock('mi-road', ip)
+        expect(k.heard[0]?.t).toBe('welcome')
+        three.push(k)
+      }, WAIT)
+      for (const k of three) k.ws.close(1000)
+    })
+    // The same address in another district is its own count too (default cap there).
+    expect((await knock('walled-city', { 'CF-Connecting-IP': '203.0.113.7' })).heard[0]?.t).toBe('welcome')
   })
 
-  it('residents count against their IP like ghosts', async () => {
-    const ip = { 'CF-Connecting-IP': '198.51.100.20' }
-    const socks = []
-    for (let i = 0; i < MAX_SOCKETS_PER_IP - 1; i++) socks.push(await knock('walled-city', ip))
-    const resident6 = await knock('walled-city', ip, await resident('Ip Isha'))
-    expect(resident6.heard[0]).toMatchObject({ t: 'welcome', you: { visible: true } })
-    await turnedAway(await knock('walled-city', ip, await resident('Ip Ishaan')))
-    for (const k of [...socks, resident6]) k.ws.close(1000)
+  it('IPv6 addresses count by their /64, however they are written', async () => {
+    await withVars('university', { MAX_IP_SOCKETS: '2' }, async () => {
+      const at = (ip: string) => knock('university', { 'CF-Connecting-IP': ip })
+      const a = await at('2001:db8:1:2::a')
+      const b = await at('2001:db8:1:2:ffff::b')
+      expect([a.heard[0]?.t, b.heard[0]?.t]).toEqual(['welcome', 'welcome'])
+      await turnedAway(await at('2001:0DB8:0001:0002:0:0:0:c'))
+      const next = await at('2001:db8:1:3::a')
+      expect(next.heard[0]?.t).toBe('welcome')
+      for (const k of [a, b, next]) k.ws.close(1000)
+    })
+  })
+
+  it('loopback (local dev and the stress script) is not capped per address', async () => {
+    await withVars('malviya-nagar', { MAX_IP_SOCKETS: '2' }, async () => {
+      const all = []
+      for (let i = 0; i < 3; i++) {
+        const k = await knock('malviya-nagar', { 'CF-Connecting-IP': '127.0.0.1' })
+        expect(k.heard[0]?.t).toBe('welcome')
+        all.push(k)
+      }
+      for (const k of all) k.ws.close(1000)
+    })
+  })
+
+  it('a connect over a cap is told full without asking D1, even while D1 is down', async () => {
+    const district = stub('walled-city')
+    await withVars('walled-city', { MAX_IP_SOCKETS: '1' }, async () => {
+      const ip = { 'CF-Connecting-IP': '198.51.100.20' }
+      const token = await resident('Outage Om')
+      const first = await knock('walled-city', ip)
+      expect(first.heard[0]?.t).toBe('welcome')
+      let asked = 0
+      const down = {
+        prepare: () => ({ bind: () => ({}) }),
+        batch: () => {
+          asked++
+          return Promise.reject(new Error('d1 down'))
+        },
+      }
+      let real: unknown
+      await runInDurableObject(district, (instance) => {
+        const held = instance as unknown as { env: Env; warm: boolean }
+        real = held.env
+        held.env = { ...held.env, DB: down as unknown as D1Database }
+        // As after a wake: nothing loaded yet.
+        held.warm = false
+      })
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+      try {
+        await turnedAway(await knock('walled-city', ip))
+        await turnedAway(await knock('walled-city', ip, token))
+        expect(asked).toBe(0)
+      } finally {
+        logged.mockRestore()
+        await runInDurableObject(district, (instance) => {
+          ;(instance as unknown as { env: unknown }).env = real
+        })
+      }
+      first.ws.close(1000)
+    })
   })
 })
 

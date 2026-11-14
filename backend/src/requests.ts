@@ -1,6 +1,6 @@
 import type { Env } from './env'
 import { floating, notify, type Later } from './inbox'
-import { loadResident, publicOf, residentRow, type ProfileRow } from './profiles'
+import { loadResident, publicOf, visibleRow, type ProfileRow } from './profiles'
 import { MAX_REASON, MIN_REASON, REQUEST_TTL_MS, type RequestLists, type RequestView } from './protocol'
 
 /** The most requests either list returns: enough for a busy inbox, never an unbounded read. */
@@ -78,7 +78,8 @@ export async function sendRequest(
   now = Date.now(),
   later: Later = floating,
 ): Promise<Response> {
-  const me = await residentRow(env, userId)
+  // A new request reaches someone new: only someone others may see can send one (a hidden person cannot).
+  const me = await visibleRow(env, userId)
   if (!me) return fail('ghost', 403)
   const body = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   const reason = cleanReason(body.reason)
@@ -86,7 +87,7 @@ export async function sendRequest(
   const to = body.to
   if (typeof to !== 'string' || to.length > 200) return fail('no-such-person', 404)
   if (to === userId) return fail('invalid', 400)
-  const them = await residentRow(env, to)
+  const them = await visibleRow(env, to)
   if (!them) return fail('no-such-person', 404)
 
   const [a, b] = pairOf(userId, to)
@@ -200,9 +201,10 @@ export async function acceptRequest(
     .first<RequestRow>()
   if (!row) return fail('not-found', 404)
   if (row.created_at <= now - REQUEST_TTL_MS) return fail('expired', 410)
-  // Both people must still be residents: a ban or a half-deleted profile ends it.
-  const me = await residentRow(env, userId)
-  if (!me || !(await residentRow(env, row.from_id))) return fail('not-found', 404)
+  // Both people must still be residents others may see: a ban, a hide or a half-deleted profile ends it, since a
+  // new match with a hidden person would be one the other side could not see.
+  const me = await visibleRow(env, userId)
+  if (!me || !(await visibleRow(env, row.from_id))) return fail('not-found', 404)
   const matchId = await accept(env, [id], row.from_id, userId, now)
   // The row went (the cron) or aged out between the read and the write.
   if (!matchId) return fail('expired', 410)

@@ -7,7 +7,7 @@ import { purgeEvidence } from './evidence'
 import { floating, openInbox, type Later } from './inbox'
 import { purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
-import { devLogin, getMe, getProfile, putProfile, residentRow } from './profiles'
+import { activeRow, devLogin, getMe, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
 
@@ -104,7 +104,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   const match = pathname.match(/^\/api\/profiles\/([^/]+)$/)
   if (match && method === 'GET') {
     // A full profile is for residents only: a token alone (no profile, half a one, a ban) is still a ghost.
-    if (!(await residentRow(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
+    if (!(await activeRow(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
     const limited = await readLimit(env, user.id, 'profile')
     if (limited) return limited
     try {

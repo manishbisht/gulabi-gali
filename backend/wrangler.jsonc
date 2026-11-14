@@ -23,6 +23,6 @@
     { "tag": "v2", "new_sqlite_classes": ["InboxDO"] },
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
-  // The most live sockets one district holds, ghosts included (see DistrictDO).
-  "vars": { "MAX_DISTRICT_SOCKETS": "400" },
+  // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64.
+  "vars": { "MAX_DISTRICT_SOCKETS": "400", "MAX_IP_SOCKETS": "24" },
 }

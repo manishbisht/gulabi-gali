@@ -44,7 +44,7 @@ export const TRANSCRIPT_LINES = 200
 export const WHO_HEADER = 'X-GG-Who'
 export interface Who {
   userId: string | null
-  /** Set only for a resident (see `RESIDENT`): a complete profile whose owner is neither banned nor hidden. */
+  /** Set only for a resident others may see (see `VISIBLE`): complete, neither banned nor hidden. */
   person: PublicPerson | null
   /** The address the socket came from (`CF-Connecting-IP`), for the per-address cap; null when unknown. */
   ip: string | null
@@ -52,8 +52,16 @@ export interface Who {
 
 /** A district holds at most this many sockets, ghosts and residents alike, unless `MAX_DISTRICT_SOCKETS` says. */
 export const DEFAULT_MAX_SOCKETS = 400
-/** And at most this many from one address. Loopback (local dev, the stress script) is exempt. */
-export const MAX_SOCKETS_PER_IP = 6
+/**
+ * And at most this many from one address, unless `MAX_IP_SOCKETS` says: generous, since Indian mobile carriers
+ * put many people behind one IPv4 address (CGNAT). IPv6 addresses count by their /64, the block one subscriber
+ * gets. Loopback (local dev, the stress script) is exempt.
+ */
+export const DEFAULT_MAX_IP_SOCKETS = 24
+/** After D1 fails to give the trust state, it is not asked again for this long (frames meanwhile are dropped). */
+export const TRUST_RETRY_MS = 3_000
+/** The alarm reloads every connected person's trust state at most this often: the backstop for a lost refresh. */
+export const TRUST_SWEEP_MS = 60_000
 /**
  * While any bench remembers a line, a timer this often keeps the object out of hibernation (which would forget
  * the lines): never longer than `TRANSCRIPT_MS` after the last one. Hibernation needs ~10 s with no pending
@@ -209,18 +217,39 @@ export function readWho(raw: string | null): Who {
 const isLoopback = (ip: string) => ip === '::1' || ip.startsWith('127.') || ip === '::ffff:127.0.0.1'
 
 /**
+ * What an address counts as for the per-address cap: an IPv4 address as itself, an IPv6 one as its /64 (written
+ * out, so every spelling of it is the same key).
+ */
+export function ipKey(ip: string): string {
+  const a = ip.toLowerCase().split('%')[0]!
+  if (!a.includes(':')) return a
+  const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped) return mapped[1]!
+  const [head, tail] = a.split('::') as [string, string | undefined]
+  const h = head ? head.split(':') : []
+  const t = tail ? tail.split(':') : []
+  const groups =
+    tail === undefined ? h : [...h, ...Array<string>(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t]
+  return `${groups
+    .slice(0, 4)
+    .map((g) => (parseInt(g, 16) || 0).toString(16))
+    .join(':')}::/64`
+}
+
+/**
  * What a district keeps in memory about a connected person, loaded from D1 (see `loadTrust`): whether they are
  * banned, until when they are muted, and everyone on either side of a block with them. Never in a socket's
  * attachment, which has a size cap that a long block list would break.
  */
 export interface Trust {
   banned: boolean
+  hidden: boolean
   mutedUntil: number | null
   /** Ids blocked by, or blocking, this person: they never see each other. */
   blocked: Set<string>
 }
 
-const noTrust = (): Trust => ({ banned: false, mutedUntil: null, blocked: new Set() })
+const noTrust = (): Trust => ({ banned: false, hidden: false, mutedUntil: null, blocked: new Set() })
 
 /** `ids`' trust state from D1, in one round trip. Someone with no row has none. */
 export async function loadTrust(env: Env, ids: readonly string[]): Promise<Map<string, Trust>> {
@@ -230,16 +259,22 @@ export async function loadTrust(env: Env, ids: readonly string[]): Promise<Map<s
   const list = JSON.stringify(ids)
   const [users, blocks] = await env.DB.batch([
     env.DB.prepare(
-      'SELECT id, banned, muted_until FROM users WHERE id IN (SELECT value FROM json_each(?1))',
+      'SELECT id, banned, hidden, muted_until FROM users WHERE id IN (SELECT value FROM json_each(?1))',
     ).bind(list),
     env.DB.prepare(
       `SELECT a, b FROM blocks WHERE a IN (SELECT value FROM json_each(?1))
        UNION SELECT a, b FROM blocks WHERE b IN (SELECT value FROM json_each(?1))`,
     ).bind(list),
   ])
-  for (const u of users.results as { id: string; banned: number; muted_until: number | null }[]) {
+  for (const u of users.results as {
+    id: string
+    banned: number
+    hidden: number
+    muted_until: number | null
+  }[]) {
     const t = out.get(u.id)!
     t.banned = u.banned === 1
+    t.hidden = u.hidden === 1
     t.mutedUntil = u.muted_until
   }
   for (const { a, b } of blocks.results as { a: string; b: string }[]) {
@@ -373,6 +408,10 @@ export class DistrictDO extends DurableObject<Env> {
   /** Whether `trust` holds everyone connected since this instance started; `warming` while it loads. */
   private warm = false
   private warming: Promise<boolean> | null = null
+  /** When D1 last failed to give trust state: none is asked for until `TRUST_RETRY_MS` after (see `load`). */
+  private trustFailedAt = -Infinity
+  /** When the alarm last reloaded everyone's trust state (see `alarm`). */
+  private trustSweptAt = -Infinity
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -385,9 +424,12 @@ export class DistrictDO extends DurableObject<Env> {
     const district = new URL(request.url).pathname.slice(1) as DistrictId
     if (!DISTRICT_IDS.includes(district)) return notFound()
     const who = readWho(request.headers.get(WHO_HEADER))
+    // Full is full before anything is asked of D1: a turned-away connect costs nothing, even in an outage.
+    if (this.crowded(who)) return this.turnAway(who.userId)
     // Blocks and mutes, theirs and everyone's already here, before anyone is told of anyone.
     if (!(await this.ready()) || (who.userId && !(await this.load([who.userId]))))
       return new Response('try again', { status: 503 })
+    // Others may have come in while D1 answered.
     if (this.crowded(who)) return this.turnAway(who.userId)
     const now = this.clock()
     // Newest socket wins: the old one closes, and the new one stands where it stood.
@@ -419,7 +461,7 @@ export class DistrictDO extends DurableObject<Env> {
       lanes: fullLanes(now),
       flood: null,
       bench: null,
-      ip: who.ip,
+      ip: who.ip === null ? null : ipKey(who.ip),
     }
     this.write(server, seat)
     this.send(server, {
@@ -435,20 +477,21 @@ export class DistrictDO extends DurableObject<Env> {
 
   /**
    * Whether a new socket for `who` would be one too many: for the district (`MAX_DISTRICT_SOCKETS`), or for
-   * its address (`MAX_SOCKETS_PER_IP`). A person's own socket, which the new one replaces, does not count.
+   * its address (`MAX_IP_SOCKETS`, by `ipKey`). A person's own socket, which the new one replaces, does not count.
    */
   private crowded(who: Who): boolean {
     const max = Number(this.env.MAX_DISTRICT_SOCKETS) || DEFAULT_MAX_SOCKETS
     let all = 0
     let fromIp = 0
-    const capIp = who.ip !== null && !isLoopback(who.ip)
+    const maxIp = Number(this.env.MAX_IP_SOCKETS) || DEFAULT_MAX_IP_SOCKETS
+    const key = who.ip !== null && !isLoopback(who.ip) ? ipKey(who.ip) : null
     for (const ws of this.sockets()) {
       const seat = this.seat(ws)
       if (who.userId && seat.userId === who.userId) continue
       all++
-      if (capIp && seat.ip === who.ip) fromIp++
+      if (key !== null && seat.ip === key) fromIp++
     }
-    return all >= max || fromIp >= MAX_SOCKETS_PER_IP
+    return all >= max || fromIp >= maxIp
   }
 
   /**
@@ -467,7 +510,8 @@ export class DistrictDO extends DurableObject<Env> {
 
   /**
    * True once `trust` holds everyone connected; after a wake, it loads them first (one D1 round trip, shared
-   * by whatever arrives meanwhile). False when D1 could not be reached: the caller must not relay anything.
+   * by whatever arrives meanwhile). False when D1 could not be reached, or failed less than `TRUST_RETRY_MS`
+   * ago: the caller must not relay anything.
    */
   private ready(): Promise<boolean> {
     if (this.warm) return Promise.resolve(true)
@@ -479,18 +523,27 @@ export class DistrictDO extends DurableObject<Env> {
     this.warming ??= this.load([...ids]).then((ok) => {
       this.warm = ok
       this.warming = null
+      // Everyone was just loaded: the alarm's backstop need not do it again for a while.
+      if (ok) this.trustSweptAt = this.clock()
       return ok
     })
     return this.warming
   }
 
-  /** Loads `ids`' trust state into memory. False (and logged) when D1 could not be reached. */
+  /**
+   * Loads `ids`' trust state into memory. False when D1 could not be reached (logged), and, without asking it,
+   * for `TRUST_RETRY_MS` after that: in an outage, a busy district's frames and connects would otherwise each
+   * ask again.
+   */
   private async load(ids: string[]): Promise<boolean> {
+    if (!ids.length) return true
+    if (this.clock() - this.trustFailedAt < TRUST_RETRY_MS) return false
     try {
       const got = await loadTrust(this.env, ids)
       for (const [id, t] of got) this.setTrust(id, t, true)
       return true
     } catch (err) {
+      this.trustFailedAt = this.clock()
       console.error('district: trust load failed', err)
       return false
     }
@@ -521,16 +574,31 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /**
-   * RPC, from `refreshUser`: `userId`'s state changed in D1. Reloads it (ban, mute, blocks, public face) and
-   * acts on it here at once: a ban closes their sockets with `LIVE_CLOSE.banned`; blocks made or lifted take
-   * people out of, or put them back into, each other's view; someone who is no longer a resident (hidden) is
-   * taken off the map and told they are a ghost, and one who is again is told they are visible (their next move
-   * lists them); a changed face (or `profile`) goes out as a `join`. Throws when D1 cannot be reached.
+   * RPC, from `refreshUser`: `userId`'s state changed in D1. Reloads it (ban, hide, mute, blocks, public face)
+   * and acts on it here at once (see `apply`). Nothing to do, and no D1 asked, when they have no socket here:
+   * their state loads when they connect. Throws when D1 cannot be reached, so the caller can retry.
    */
   async refresh(userId: string, why: RefreshWhy): Promise<void> {
+    if (!this.sockets().some((ws) => this.seat(ws).userId === userId)) return
     if (!(await this.ready())) throw new Error('district: trust state unavailable')
     const [got, person] = await Promise.all([loadTrust(this.env, [userId]), loadResident(this.env, userId)])
-    const t = got.get(userId) ?? noTrust()
+    this.apply(userId, got.get(userId) ?? noTrust(), person, why)
+  }
+
+  /**
+   * Acts on `userId`'s fresh trust state `t`: a ban closes their sockets with `LIVE_CLOSE.banned`; blocks made
+   * or lifted take people out of, or put them back into, each other's view; a mute is simply kept (see
+   * `muted`). With their public face (`person`, null when others may no longer see them): someone hidden is
+   * taken off the map and told they are a ghost, someone visible again is told so (their next move lists them),
+   * and a changed face (or `why` = `profile`) goes out as a `join`. Without it (`undefined`, from the alarm's
+   * backstop) a hide still makes them a ghost, and nothing else about their face changes.
+   */
+  private apply(
+    userId: string,
+    t: Trust,
+    person: PublicPerson | null | undefined,
+    why: RefreshWhy | null,
+  ): void {
     const mine = this.sockets().filter((ws) => this.seat(ws).userId === userId)
     const before = this.trust.get(userId)?.blocked ?? new Set<string>()
     this.setTrust(userId, t, mine.length > 0)
@@ -540,7 +608,32 @@ export class DistrictDO extends DurableObject<Env> {
       return
     }
     this.reblock(userId, mine, before, t.blocked)
-    for (const ws of mine) this.reface(ws, person, why)
+    const face = t.hidden ? null : person
+    if (face !== undefined) for (const ws of mine) this.reface(ws, face, why)
+  }
+
+  /**
+   * The backstop for a refresh that never arrived (`refreshUser` retries once, then gives up): reloads everyone
+   * connected and applies what changed, so a missed ban, hide, mute or block takes hold within
+   * `TRUST_SWEEP_MS` or so. Run by the alarm, which comes round at least every `IDLE_MS` while anyone is here.
+   */
+  private async resweep(now: number): Promise<void> {
+    this.trustSweptAt = now
+    const ids = new Set<string>()
+    for (const ws of this.sockets()) {
+      const { userId } = this.seat(ws)
+      if (userId) ids.add(userId)
+    }
+    if (!ids.size || now - this.trustFailedAt < TRUST_RETRY_MS) return
+    let got: Map<string, Trust>
+    try {
+      got = await loadTrust(this.env, [...ids])
+    } catch (err) {
+      this.trustFailedAt = this.clock()
+      console.error('district: trust sweep failed', err)
+      return
+    }
+    for (const id of ids) this.apply(id, got.get(id) ?? noTrust(), undefined, null)
   }
 
   /** After `userId`'s blocks changed from `before` to `after`: each side hears the other leave, or come back. */
@@ -568,7 +661,7 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /** Brings `ws`'s person up to date with `person` (null: no longer a resident). */
-  private reface(ws: WebSocket, person: PublicPerson | null, why: RefreshWhy): void {
+  private reface(ws: WebSocket, person: PublicPerson | null, why: RefreshWhy | null): void {
     const seat = this.seat(ws)
     const userId = seat.userId!
     if (!person) {
@@ -664,6 +757,7 @@ export class DistrictDO extends DurableObject<Env> {
     // So the leaves the sweep sends skip anyone blocked; if D1 is down the sweep runs regardless.
     await this.ready()
     const now = this.clock()
+    if (now - this.trustSweptAt >= TRUST_SWEEP_MS) await this.resweep(now)
     this.sweep(now)
     let next = Infinity
     for (const ws of this.sockets()) next = Math.min(next, this.lastHeard(ws) + IDLE_MS)

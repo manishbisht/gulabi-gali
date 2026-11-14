@@ -167,14 +167,21 @@ change or a close at once.
   as long, so someone who only listened can still report. A deploy, or the runtime evicting the object anyway,
   still loses both.
 - **Caps:** a district holds at most `MAX_DISTRICT_SOCKETS` sockets (400 unless the var says otherwise), ghosts
-  included, and at most 6 from one address (`CF-Connecting-IP`, carried in `X-GG-Who`; loopback is exempt for
-  local dev). One more is told `full` and closed with 4005.
+  included, and at most `MAX_IP_SOCKETS` (24) from one address (`CF-Connecting-IP`, carried in `X-GG-Who`;
+  generous for mobile carriers' shared addresses; IPv6 counts by its /64; loopback is exempt for local dev).
+  One more is told `full` and closed with 4005, before D1 is asked anything.
 - **Trust** (phase 3): each connected person's blocks and mute live in the object's memory, never in an
   attachment (whose size is capped), loaded from D1 on connect and, after a wake, before the first frame is
   handled. Two people blocked either way never hear of each other. Any change to a person (ban, hide, mute,
   block, profile) goes through `refreshUser` (`backend/src/refresh.ts`), which tells all four districts and
   the person's inbox to reload them: a ban closes their sockets with 4004, a hide makes them a ghost on the
-  spot, a mute refuses `say` and `status` with `muted`.
+  spot, a mute refuses `say` and `status` with `muted`. A target that fails is retried once; past that, each
+  district's alarm reloads everyone connected at least once a minute. After D1 fails to answer, a district
+  waits 3 s before asking again (dropping frames meanwhile).
+- **Hidden** people are invisible to everyone else (map, profiles, others' requests and match lists, new
+  requests and matches) but still act as themselves: their own requests and matches, their existing chats
+  (the other member can still read and write them) and their inbox. `ACTIVE` and `VISIBLE` in
+  `backend/src/profiles.ts` are the two rules.
 - The client side: `src/world/session.ts` wires a district's systems on enter and disposes them on leave;
   `src/world/people.ts` draws remote residents (shadows only at tier 2);
   `useBench.ts` and `ui/BenchChat.tsx` are the bench UI.

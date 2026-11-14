@@ -184,23 +184,32 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
 }
 
 /**
- * Who is a resident, as SQL over `profiles p JOIN users u ON u.id = p.user_id`: a complete profile (adult and
- * pledge) whose owner is neither banned nor hidden. The one definition: every query that asks whether someone
- * is a resident uses this, and anyone it leaves out is a ghost everywhere (the map, profiles, lists, chats).
+ * The two residency rules, as SQL over `profiles p JOIN users u ON u.id = p.user_id`. Every residency check uses
+ * one of them (through `activeRow`, `visibleRow` and `loadResident`):
+ *
+ * - `ACTIVE`, acting as yourself: a complete profile (adult and pledge), not banned. A hidden person is still
+ *   active: they see their own requests and matches, keep their chats going and keep their inbox.
+ * - `VISIBLE`, being seen by anyone else: active and not hidden. On the map, as a profile, in someone else's
+ *   requests or matches, and as someone a new request or match can reach.
  */
-export const RESIDENT = 'u.banned = 0 AND u.hidden = 0 AND p.adult = 1 AND p.pledge = 1'
+export const ACTIVE = 'u.banned = 0 AND p.adult = 1 AND p.pledge = 1'
+export const VISIBLE = `${ACTIVE} AND u.hidden = 0`
 
-/** A resident's profile row (see `RESIDENT`). Anyone else is a ghost. */
-export async function residentRow(env: Env, id: string): Promise<ProfileRow | null> {
-  return env.DB.prepare(
-    `SELECT p.* FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? AND ${RESIDENT}`,
+const rowWhere = (env: Env, id: string, rule: string) =>
+  env.DB.prepare(
+    `SELECT p.* FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? AND ${rule}`,
   )
     .bind(id)
     .first<ProfileRow>()
-}
+
+/** The profile row of someone who may act as themself (see `ACTIVE`). Anyone else is a ghost. */
+export const activeRow = (env: Env, id: string): Promise<ProfileRow | null> => rowWhere(env, id, ACTIVE)
+
+/** The profile row of someone others may see (see `VISIBLE`). */
+export const visibleRow = (env: Env, id: string): Promise<ProfileRow | null> => rowWhere(env, id, VISIBLE)
 
 export async function getProfile(env: Env, id: string): Promise<Response> {
-  const row = await residentRow(env, id)
+  const row = await visibleRow(env, id)
   if (!row) return Response.json({ error: 'not found' }, { status: 404 })
   return Response.json(toFull(row))
 }
@@ -208,9 +217,9 @@ export async function getProfile(env: Env, id: string): Promise<Response> {
 /** The public face of a profile row. */
 export const publicOf = (row: ProfileRow): PublicPerson => toPublic(toFull(row))
 
-/** What the map may show of a resident, or null for anyone the map must not show. */
+/** What the map (or anyone else) may show of a resident, or null for anyone it must not show (see `VISIBLE`). */
 export async function loadResident(env: Env, id: string): Promise<PublicPerson | null> {
-  const row = await residentRow(env, id)
+  const row = await visibleRow(env, id)
   return row ? publicOf(row) : null
 }
 
