@@ -65,8 +65,8 @@ const landmarks: LandmarkDef[] = [
     id: 'jantar-mantar',
     name: { hi: 'Jantar Mantar', en: 'Jantar Mantar' },
     story: {
-      hi: 'Sawai Jai Singh II ki pathar ki observatory, 1734 mein poori hui. Samrat Yantra ki dhoop-ghadi 27 metre oonchi hai aur 2 second tak sahi time batati hai.',
-      en: "Sawai Jai Singh II's stone observatory, finished in 1734. The Samrat Yantra sundial stands 27 m tall and tells the time to about two seconds.",
+      hi: 'Sawai Jai Singh II ki pathar ki observatory, 18vi sadi mein bani. Samrat Yantra ki dhoop-ghadi 27 metre oonchi hai aur lagbhag 2 second tak ka time batati hai.',
+      en: "Sawai Jai Singh II's stone observatory, built in the early 1700s. The Samrat Yantra sundial stands 27 m tall and is said to tell the time to about two seconds.",
     },
     at: JANTAR_AT,
     radius: 16,
@@ -77,8 +77,8 @@ const landmarks: LandmarkDef[] = [
     id: 'tripolia-gate',
     name: { hi: 'Tripolia Gate', en: 'Tripolia Gate' },
     story: {
-      hi: 'Tripolia yaani teen darwaze. City Palace ka ye gate aaj bhi sirf shahi parivaar ke liye khulta hai.',
-      en: "Tripolia means 'three gates'. This entrance to the City Palace still opens only for the royal family.",
+      hi: 'Tripolia yaani teen darwaze. City Palace ka ye gate shahi parivaar ke liye reserved hai; visitors dusre gate se jaate hain.',
+      en: "Tripolia means 'three gates'. This entrance to the City Palace is reserved for the royal family; visitors use other gates.",
     },
     at: TRIPOLIA_AT,
     radius: 12,

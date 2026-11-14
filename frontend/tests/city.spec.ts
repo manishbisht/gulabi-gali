@@ -48,6 +48,18 @@ test('walks with the keyboard', async ({ page }) => {
   expect(distance(spawn, await page.evaluate(() => window.__gg.position()))).toBeGreaterThan(2)
 })
 
+test('collects a stamp at Hawa Mahal', async ({ page }) => {
+  await enterCity(page)
+  await expect(page.locator('.stamp-count')).toHaveText('0/9')
+  await page.evaluate(() => window.__gg.teleport(36, -8))
+  await page.getByRole('button', { name: 'Stamp lo' }).click()
+  await expect(page.getByRole('status')).toContainText('stamp mila: Hawa Mahal')
+  await expect(page.locator('.stamp-count')).toHaveText('1/9')
+  await page.reload()
+  await page.getByRole('button', { name: 'Padharo!' }).click()
+  await expect(page.locator('.stamp-count')).toHaveText('1/9')
+})
+
 test.describe('on a phone', () => {
   const { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent } = devices['Pixel 7']
   test.use({ viewport, deviceScaleFactor, isMobile, hasTouch, userAgent })

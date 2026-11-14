@@ -6,14 +6,16 @@ interface Props {
   /** The district's name, already in the current language. */
   place: string
   snapshot: CitySnapshot | null
+  /** Stamp progress as `N/9`. */
+  stamps: string
   lang: Lang
   onLang: (l: Lang) => void
-  /** Later tasks fill these: toast/stamps, minimap, joystick area. */
+  /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
 }
 
-export function Hud({ place, snapshot, lang, onLang, top, bottom }: Props) {
+export function Hud({ place, snapshot, stamps, lang, onLang, top, bottom }: Props) {
   const weather =
     snapshot && snapshot.tempC !== null ? `${Math.round(snapshot.tempC)}°C` : t('weatherUnknown', lang)
   return (
@@ -21,6 +23,9 @@ export function Hud({ place, snapshot, lang, onLang, top, bottom }: Props) {
       <div className="hud-top">
         <span className="hud-chip">{place}</span>
         <span className="hud-chip">{weather}</span>
+        <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
+          {stamps}
+        </span>
         <button
           type="button"
           className="hud-chip lang-toggle"

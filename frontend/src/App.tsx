@@ -10,9 +10,12 @@ import { createControls, type Controls } from './player/controls'
 import { loadOrCreateLook } from './player/avatar'
 import { createPlayer } from './player/player'
 import { loadDistrict } from './world/district'
+import { TOTAL_STAMPS } from './world/stamps'
+import { useStamps } from './world/useStamps'
 import type { DistrictDef } from './world/types'
 import { Hud } from './ui/Hud'
 import { Intro } from './ui/Intro'
+import { LandmarkCard } from './ui/LandmarkCard'
 import { Joystick } from './ui/Joystick'
 import { NoWebGL } from './ui/NoWebGL'
 import { installTestHooks } from './testHooks'
@@ -28,6 +31,7 @@ export default function App() {
   const [webgl] = useState(hasWebGL)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
+  const { near, have, toast, collectHere, track } = useStamps(lang)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -67,6 +71,7 @@ export default function App() {
         const offFrame = stage.onFrame((dt) => {
           player.update(dt)
           district.focus(player.position())
+          track(player.position(), district.def.landmarks, controls)
         })
         setPlace(district.def.name)
         installTestHooks({
@@ -95,7 +100,7 @@ export default function App() {
       controlsRef.current = null
       stage.dispose()
     }
-  }, [entered])
+  }, [entered, track])
 
   if (!webgl) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
@@ -107,9 +112,29 @@ export default function App() {
           typeof place === 'string' ? t(place === 'failed' ? 'loadFailed' : 'loading', lang) : place[lang]
         }
         snapshot={snapshot}
+        stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
-        bottom={<Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />}
+        top={
+          toast && (
+            <div className="toast" role="status">
+              {toast}
+            </div>
+          )
+        }
+        bottom={
+          <>
+            <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />
+            {near && (
+              <LandmarkCard
+                landmark={near}
+                lang={lang}
+                stamped={have.includes(near.id)}
+                onCollect={collectHere}
+              />
+            )}
+          </>
+        }
       />
     </>
   )

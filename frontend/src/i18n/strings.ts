@@ -4,6 +4,9 @@ export const STRINGS = {
   enter: { hi: 'Padharo!', en: 'Come in' },
   tagline: { hi: 'Jaipur ki gali, aapke phone mein', en: "Jaipur's lanes, on your phone" },
   stampGot: { hi: 'Jaipur Darshan · stamp mila: {place}', en: 'Stamp collected: {place}' },
+  stampButton: { hi: 'Stamp lo', en: 'Collect stamp' },
+  stampHave: { hi: 'Stamp mil chuka hai', en: 'Stamp already collected' },
+  stampCount: { hi: 'Jaipur Darshan stamps', en: 'Jaipur Darshan stamps' },
   loading: { hi: 'Ruko zara, gali khul rahi hai…', en: 'One moment, the lane is opening…' },
   noWebgl: {
     hi: 'Is phone/browser pe 3D nahi chal raha. Chrome mein kholo — wahan chalega.',
