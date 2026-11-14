@@ -1,4 +1,5 @@
-import type { DistrictId } from './net/protocol'
+import type { SkyParams } from './live/sky'
+import type { CitySnapshot, DistrictId } from './net/protocol'
 import type { Vec2 } from './world/types'
 
 /** What Playwright specs can ask of the running city. Grows task by task. */
@@ -13,6 +14,12 @@ export interface GgTestApi {
   teleport(x: number, z: number): void
   /** The district the player is in. */
   district(): DistrictId
+  /** The sky as last painted. */
+  sky(): SkyParams
+  /** Merges into the city snapshot and repaints the sky now. */
+  setSnapshot(partial: Partial<CitySnapshot>): void
+  /** Freezes the clock the sky runs on at an ISO instant, and repaints now. */
+  setNow(iso: string): void
 }
 
 declare global {

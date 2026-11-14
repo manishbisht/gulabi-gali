@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { PALETTE } from './palette'
 import { archOpening, bake, box, cylinder, merge } from './kit/parts'
 import type { AABB, PropSpec } from './types'
 
@@ -48,7 +49,6 @@ const MODELS: Record<Kind, () => THREE.BufferGeometry> = {
     merge([
       cylinder(0.12, 0.16, 0.4, 6, 0, 0, 0, 'road'),
       cylinder(0.06, 0.06, 3.6, 5, 0, 0.4, 0, 'road'),
-      box(0.36, 0.45, 0.36, 0, 4.0, 0, 'marigold'),
       cylinder(0.02, 0.28, 0.25, 4, 0, 4.45, 0, 'road'),
     ]),
   // Jaipur CNG auto: green body, yellow canopy, three wheels; nose to +z.
@@ -99,6 +99,23 @@ const MODELS: Record<Kind, () => THREE.BufferGeometry> = {
     ]),
 }
 
+/** Glowing bits, drawn apart from the vertex-coloured model so they can light up after dark. */
+const BULBS: Partial<Record<Kind, () => THREE.BufferGeometry>> = {
+  lamp: () => new THREE.BoxGeometry(0.36, 0.45, 0.36).translate(0, 4.225, 0),
+  tapri: () => new THREE.SphereGeometry(0.16, 6, 4).translate(0, 2.05, 0.6),
+}
+
+/** Warm emissive bulb material; `applySky` raises its emissive intensity at night (userData.nightGlow). */
+function bulbMaterial() {
+  const m = new THREE.MeshLambertMaterial({
+    color: PALETTE.marigold,
+    emissive: PALETTE.marigold,
+    emissiveIntensity: 0,
+  })
+  m.userData.nightGlow = 1.6
+  return m
+}
+
 /** The axis-aligned box around a w × d rectangle turned by `rot` degrees about its centre. */
 function turnedBox(s: PropSpec): AABB {
   const { w, d } = SIZE[s.kind]
@@ -119,6 +136,7 @@ export function buildProps(props: PropSpec[]): { group: THREE.Group; colliders: 
   const q = new THREE.Quaternion()
   const up = new THREE.Vector3(0, 1, 0)
   const one = new THREE.Vector3(1, 1, 1)
+  const bulbs = bulbMaterial() // one material for every lamp and tapri in the district
   for (const [kind, list] of byKind) {
     const mesh = new THREE.InstancedMesh(
       MODELS[kind](),
@@ -133,6 +151,15 @@ export function buildProps(props: PropSpec[]): { group: THREE.Group; colliders: 
     mesh.computeBoundingSphere()
     mesh.castShadow = true
     mesh.receiveShadow = true
+    const bulbGeometry = BULBS[kind]
+    if (bulbGeometry) {
+      // A child, sharing the parent's per-instance matrices: one more draw call per kind, no new buffers.
+      const bulb = new THREE.InstancedMesh(bulbGeometry(), bulbs, list.length)
+      bulb.instanceMatrix = mesh.instanceMatrix
+      bulb.name = `${kind}-bulb`
+      bulb.frustumCulled = false
+      mesh.add(bulb)
+    }
     group.add(mesh)
   }
   return { group, colliders: props.map(turnedBox) }

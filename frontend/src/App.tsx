@@ -4,8 +4,10 @@ import { createStage, type QualityTier } from './engine/stage'
 import { hasWebGL } from './engine/webgl'
 import { useLang } from './i18n/lang'
 import { t } from './i18n/strings'
-import { fetchCity } from './net/api'
-import type { CitySnapshot } from './net/protocol'
+import { cityLine } from './live/cityLine'
+import { applySky, skyParams, type SkyParams } from './live/sky'
+import { useLiveCity } from './live/useLiveCity'
+import { createWeatherFx } from './live/weatherFx'
 import { createControls, type Controls } from './player/controls'
 import { loadOrCreateLook } from './player/avatar'
 import { createPlayer } from './player/player'
@@ -22,24 +24,21 @@ import { installTestHooks } from './testHooks'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
 const SKY = '#BFD6DE'
+/** The sun moves slowly; the sky is recomputed from the clock this often. */
+const SKY_REFRESH_MS = 30_000
 
 export default function App() {
   const [lang, setLang] = useLang()
   const [entered, setEntered] = useState(false)
-  const [snapshot, setSnapshot] = useState<CitySnapshot | null>(null)
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [webgl] = useState(hasWebGL)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
   const { near, have, toast, collectHere, track } = useStamps(lang)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    void fetchCity(controller.signal).then((s) => {
-      if (!controller.signal.aborted) setSnapshot(s)
-    })
-    return () => controller.abort()
-  }, [])
+  const { snapshot, current, now, patch, freeze } = useLiveCity()
+  /** Re-paints the sky from the current snapshot and clock; set once the district is in. */
+  const repaint = useRef<() => void>(() => {})
+  useEffect(() => repaint.current(), [snapshot])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -68,8 +67,19 @@ export default function App() {
           occluders: district.occluders,
         })
         player.teleport(district.def.spawn.x, district.def.spawn.z)
+        const fx = createWeatherFx(stage)
+        let sky: SkyParams | null = null
+        const paint = () => {
+          sky = skyParams(current(), now())
+          applySky(stage, district, sky)
+          fx.set(sky)
+        }
+        repaint.current = paint
+        paint()
+        const skyTimer = setInterval(paint, SKY_REFRESH_MS)
         const offFrame = stage.onFrame((dt) => {
           player.update(dt)
+          fx.update(dt)
           district.focus(player.position())
           track(player.position(), district.def.landmarks, controls)
         })
@@ -80,8 +90,20 @@ export default function App() {
           position: player.position,
           teleport: player.teleport,
           district: () => district.def.id,
+          sky: () => sky!,
+          setSnapshot: (partial) => {
+            patch(partial)
+            paint()
+          },
+          setNow: (iso) => {
+            freeze(iso)
+            paint()
+          },
         })
         leave = () => {
+          clearInterval(skyTimer)
+          repaint.current = () => {}
+          fx.dispose()
           offFrame()
           offQuality()
           player.dispose()
@@ -100,7 +122,7 @@ export default function App() {
       controlsRef.current = null
       stage.dispose()
     }
-  }, [entered, track])
+  }, [entered, track, current, now, patch, freeze])
 
   if (!webgl) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
@@ -112,6 +134,7 @@ export default function App() {
           typeof place === 'string' ? t(place === 'failed' ? 'loadFailed' : 'loading', lang) : place[lang]
         }
         snapshot={snapshot}
+        line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}

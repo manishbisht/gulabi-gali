@@ -6,6 +6,8 @@ interface Props {
   /** The district's name, already in the current language. */
   place: string
   snapshot: CitySnapshot | null
+  /** One line of city small talk, shown under the chips. */
+  line?: string
   /** Stamp progress as `N/9`. */
   stamps: string
   lang: Lang
@@ -15,9 +17,8 @@ interface Props {
   bottom?: ReactNode
 }
 
-export function Hud({ place, snapshot, stamps, lang, onLang, top, bottom }: Props) {
-  const weather =
-    snapshot && snapshot.tempC !== null ? `${Math.round(snapshot.tempC)}°C` : t('weatherUnknown', lang)
+export function Hud({ place, snapshot, line, stamps, lang, onLang, top, bottom }: Props) {
+  const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
       <div className="hud-top">
@@ -35,8 +36,18 @@ export function Hud({ place, snapshot, stamps, lang, onLang, top, bottom }: Prop
           {t('langToggle', lang)}
         </button>
       </div>
+      {line && <p className="city-line">{line}</p>}
       {top}
       <div className="hud-bottom">{bottom}</div>
     </div>
   )
+}
+
+/** `31° · AQI 162`, with whichever half is known; null when nothing is, or the data is stale. */
+function weatherChip(s: CitySnapshot | null): string | null {
+  if (!s || s.stale) return null
+  const parts = []
+  if (typeof s.tempC === 'number') parts.push(`${Math.round(s.tempC)}°`)
+  if (typeof s.aqi === 'number') parts.push(`AQI ${Math.round(s.aqi)}`)
+  return parts.length ? parts.join(' · ') : null
 }

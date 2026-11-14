@@ -16,7 +16,7 @@ export const STRINGS = {
     hi: 'Gali nahi khul payi. Page reload karo.',
     en: "Couldn't open the lane. Reload the page.",
   },
-  weatherUnknown: { hi: 'Mausam ka pata nahi', en: 'Weather unavailable' },
+  weatherUnknown: { hi: '—', en: '—' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
   langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },
   joystickLabel: { hi: 'Chalne ka joystick', en: 'Walking joystick' },

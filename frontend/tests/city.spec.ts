@@ -84,3 +84,21 @@ test.describe('on a phone', () => {
     expect(distance(spawn, moving)).toBeGreaterThan(1)
   })
 })
+
+test('falls back when the weather API is down', async ({ page }) => {
+  await page.route('**/api/city', (route) => route.abort())
+  await enterCity(page)
+  await expect.poll(() => page.evaluate(() => window.__gg.framesSinceRestore())).toBeGreaterThan(5)
+  await expect(page.locator('.hud-top .hud-chip').nth(1)).toHaveText('—')
+})
+
+test('paints a hazy dusk with the lamps on', async ({ page }) => {
+  await enterCity(page)
+  await page.evaluate(() => {
+    window.__gg.setSnapshot({ aqiBand: 'severe', condition: 'clear', stale: false, tempC: 31, aqi: 162 })
+    window.__gg.setNow('2026-11-14T13:00:00Z')
+  })
+  const sky = await page.evaluate(() => window.__gg.sky())
+  expect(sky.fogDensity).toBe(0.03)
+  expect(sky.nightLights).toBe(true)
+})

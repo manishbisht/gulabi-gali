@@ -94,7 +94,14 @@ export function buildHawaMahal(): THREE.Group {
   parts.push(box(bayW * 3 + 0.2, 0.14, 0.6, 0, peak + 0.9, FACE_Z - 0.6, 'white'))
   parts.push(...archOpening(1.2, 0.3, 0.4, 0, peak + 0.15, FACE_Z - 0.34, 'white'))
 
-  const mesh = new THREE.Mesh(merge(parts), new THREE.MeshLambertMaterial({ vertexColors: true }))
+  // Floodlit after dark: `applySky` lifts the emissive from 0 to nightGlow when the lights come on.
+  const material = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    emissive: '#FF9A55',
+    emissiveIntensity: 0,
+  })
+  material.userData.nightGlow = 0.45
+  const mesh = new THREE.Mesh(merge(parts), material)
   mesh.name = 'hawa-mahal'
   mesh.castShadow = true
   mesh.receiveShadow = true
