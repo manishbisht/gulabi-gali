@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
-import { closePeople, hopTo, resident } from './support/people'
+import { closePeople, hopTo, resident, walk } from './support/people'
 
 test.afterEach(closePeople)
 
@@ -43,4 +43,50 @@ test('two residents sit at the same tapri, and what one says the other reads', a
   await atB.getByRole('button', { name: 'Utho' }).click()
   await expect(atB).toBeHidden()
   await expect(atA).toContainText('Abhi yahan sirf tum ho.')
+})
+
+test('request, accept, chat, unmatch', async ({ browser }) => {
+  const a = await resident(browser, 'Asha')
+  const b = await resident(browser, 'Ravi')
+  const reason = 'Chai pe chalein? JKK open mic ke baad'
+
+  // A walks up to B (they spawn together) and opens B's card with E
+  await walk(a.page, 'd', 300)
+  await a.page.keyboard.press('e')
+  const card = a.page.getByRole('region', { name: b.name })
+  await card.getByRole('button', { name: 'Milna hai' }).click()
+  await a.page.getByRole('textbox', { name: 'Aapki baat' }).fill(reason)
+  await a.page.getByRole('button', { name: 'Bhejo' }).click()
+  await expect(a.page.getByText('Bhej diya!')).toBeVisible()
+
+  // B sees the badge, reads the note, says yes
+  const bOpen = b.page.getByRole('button', { name: /Mulaqaatein/ })
+  await expect(bOpen.getByLabel('1 naye')).toBeVisible()
+  await bOpen.click()
+  const sheetB = b.page.getByRole('dialog', { name: 'Aapki mulaqaatein' })
+  await expect(sheetB).toContainText(reason)
+  await expect(bOpen.getByLabel('1 naye')).toBeHidden()
+  await sheetB.getByRole('button', { name: 'Haan' }).click()
+  await sheetB.getByRole('button', { name: new RegExp(a.name) }).click()
+
+  // both exchange a message
+  await sheetB.getByRole('textbox', { name: 'Chat mein likho' }).fill('Haan, chalo!')
+  await sheetB.getByRole('button', { name: 'Bhejo' }).click()
+  await expect(sheetB.getByText('Haan, chalo!')).toBeVisible()
+  await a.page.getByRole('button', { name: /Mulaqaatein/ }).click()
+  const sheetA = a.page.getByRole('dialog', { name: 'Aapki mulaqaatein' })
+  await sheetA.getByRole('tab', { name: /Baatein/ }).click()
+  await sheetA.getByRole('button', { name: new RegExp(b.name) }).click()
+  await expect(sheetA.getByText('Haan, chalo!')).toBeVisible()
+  await sheetA.getByRole('textbox', { name: 'Chat mein likho' }).fill('JKK ke gate pe milte hain')
+  await sheetA.getByRole('button', { name: 'Bhejo' }).click()
+  await expect(sheetB.getByText('JKK ke gate pe milte hain')).toBeVisible()
+
+  // A unmatches (in the sheet, not a native dialog); B's chat disappears
+  await sheetA.getByRole('button', { name: 'Unmatch' }).click()
+  await sheetA.getByRole('button', { name: 'Haan, unmatch karo' }).click()
+  await expect(sheetA.getByText('Abhi koi baat nahi')).toBeVisible()
+  await expect(sheetA.getByText(b.name)).toBeHidden()
+  await expect(sheetB.getByText('Abhi koi baat nahi')).toBeVisible()
+  await expect(sheetB.getByText(a.name)).toBeHidden()
 })

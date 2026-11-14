@@ -4,6 +4,7 @@ import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
 import { useMe } from './profile/useMe'
+import { useConnections } from './connections/useConnections'
 import { VisibilityChip } from './ui/VisibilityChip'
 import { loadOrCreateLook, lookFromWire } from './player/avatar'
 import { useLang } from './i18n/lang'
@@ -32,6 +33,7 @@ import { RequestComposer, type Sent } from './ui/RequestComposer'
 import { NoWebGL } from './ui/NoWebGL'
 import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
+import { Connections } from './ui/Connections'
 
 /** The bench notices that are a passing toast (`ghost` is a card, `rate` a line in the bench panel). */
 const BENCH_TOASTS: Partial<Record<BenchNotice, StringKey>> = {
@@ -139,6 +141,21 @@ export default function App() {
     liveAs.current = residentId
     session.current?.reconnectLive()
   }, [residentId, auth.token])
+  const conn = useConnections({ enabled: !!residentId, token: auth.token })
+  const [connOpen, setConnOpen] = useState(false)
+  const connShown = connOpen && !!residentId
+  // C opens and closes Connections, unless a text field has the keys
+  useEffect(() => {
+    if (!residentId) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyC' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return
+      const el = e.target as HTMLElement | null
+      if (el?.closest('input, textarea, select, [contenteditable]')) return
+      setConnOpen((was) => !was)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [residentId])
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
 
@@ -288,6 +305,8 @@ export default function App() {
         onLang={setLang}
         visibility={visibility}
         onProfile={auth.signedIn && me ? () => setProfileOpen(true) : undefined}
+        onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
+        connectionsBadge={conn.badge}
         top={
           <>
             {toast && (
@@ -373,6 +392,9 @@ export default function App() {
             void auth.signOut()
           }}
         />
+      )}
+      {connShown && (
+        <Connections conn={conn} lang={lang} token={auth.token} onClose={() => setConnOpen(false)} />
       )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
     </>

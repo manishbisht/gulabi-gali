@@ -736,3 +736,195 @@ button {
   color: var(--pink, #ff6b9d);
   opacity: 1;
 }
+
+/* Connections: a sheet over the lower screen while open, above the phone keyboard when it is up. */
+.conn-button {
+  position: relative;
+}
+
+.conn-badge,
+.conn-dot {
+  display: inline-block;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #2a1d24;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.conn-badge {
+  min-width: 1.2em;
+  padding: 3px 6px;
+  text-align: center;
+}
+
+.conn-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.conn-sheet {
+  position: fixed;
+  z-index: 20;
+  left: calc(10px + env(safe-area-inset-left));
+  right: calc(10px + env(safe-area-inset-right));
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+  max-height: min(70vh, 560px);
+}
+
+.conn-sheet[data-kb] {
+  bottom: calc(var(--kb) + 8px);
+  max-height: calc(var(--vvh) - 16px);
+  animation: none;
+}
+
+.conn-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.conn-tabs button {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--sandstone);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.conn-tabs button[data-on] {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: #2a1d24;
+  font-weight: 600;
+}
+
+.conn-body,
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-view {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.conn-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.conn-reason {
+  margin: 2px 0 6px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.conn-chat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.conn-last {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-confirm {
+  margin: 4px 0 8px;
+}
+
+.chat-lines {
+  flex: 1 1 auto;
+  min-height: 80px;
+  max-height: 38vh;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.conn-sheet[data-kb] .chat-lines {
+  max-height: none;
+}
+
+.chat-line {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgb(245 230 216 / 0.14);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chat-line[data-mine] {
+  align-self: flex-end;
+  background: rgb(240 140 170 / 0.35);
+}
+
+.chat-line[data-pending] {
+  opacity: 0.6;
+}
+
+.chat-older,
+.chat-empty {
+  text-align: center;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.landmark-card .chat-note {
+  margin: 0 0 6px;
+  font-style: italic;
+}

@@ -1,11 +1,7 @@
 import { API_BASE } from './api'
+import { reconnecting } from './reconnect'
 import { LIVE_CLOSE, type ClientMsg, type DistrictId, type ServerMsg } from './protocol'
 
-/** Waits between reconnects: 1, 2, 4, 8 s and so on, never more than this. */
-const BACKOFF_FIRST_MS = 1000
-const BACKOFF_MAX_MS = 15_000
-/** A socket that stayed up this long was healthy: the next drop starts the backoff over. */
-const STABLE_MS = 30_000
 /** Moves go out at most this often (10 Hz), and only when they say something new. */
 const MOVE_MS = 100
 const MOVE_MIN_M = 0.05
@@ -49,9 +45,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
   const Impl = opts.WebSocketImpl ?? WebSocket
   let ws: WebSocket | null = null
   let state: LiveState = 'connecting'
-  let attempt = 0
-  let openedAt = 0
-  let retry: ReturnType<typeof setTimeout> | null = null
+  const backoff = reconnecting(() => void open())
   let ping: ReturnType<typeof setTimeout> | null = null
   /** When anything last went out, for the idle ping. */
   let lastSend = 0
@@ -81,19 +75,14 @@ export function connectLive(opts: LiveOptions): LiveConn {
   }
 
   function stopTimers() {
-    if (retry) clearTimeout(retry)
+    backoff.stop()
     if (ping) clearTimeout(ping)
-    retry = ping = null
+    ping = null
   }
 
   function reconnectLater() {
     state = 'connecting'
-    const delay = Math.min(BACKOFF_FIRST_MS * 2 ** attempt, BACKOFF_MAX_MS)
-    attempt++
-    retry = setTimeout(() => {
-      retry = null
-      void open()
-    }, delay)
+    backoff.later()
   }
 
   async function open() {
@@ -114,7 +103,8 @@ export function connectLive(opts: LiveOptions): LiveConn {
     sock.onopen = () => {
       if (ws !== sock) return
       state = 'open'
-      openedAt = lastSend = Date.now()
+      backoff.opened()
+      lastSend = Date.now()
       sentAt = -Infinity
       sentX = sentZ = sentRy = NaN
       armPing(PING_MS)
@@ -138,9 +128,8 @@ export function connectLive(opts: LiveOptions): LiveConn {
         state = 'closed'
         return opts.onReplaced?.()
       }
-      if (openedAt && Date.now() - openedAt >= STABLE_MS) attempt = 0
-      openedAt = 0
-      reconnectLater()
+      state = 'connecting'
+      backoff.dropped()
     }
   }
 

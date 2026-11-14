@@ -18,6 +18,9 @@ interface Props {
   visibility?: ReactNode
   /** Present only when a user is signed in. */
   onProfile?: () => void
+  /** Present only for a resident: opens Connections, with the count of unread things on its badge. */
+  onConnections?: () => void
+  connectionsBadge?: number
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
@@ -33,6 +36,8 @@ export function Hud({
   onLang,
   visibility,
   onProfile,
+  onConnections,
+  connectionsBadge = 0,
   top,
   bottom,
 }: Props) {
@@ -54,12 +59,27 @@ export function Hud({
           {t('langToggle', lang)}
         </button>
       </div>
-      {(visibility || onProfile) && (
+      {(visibility || onProfile || onConnections) && (
         <div className="hud-identity">
           {visibility}
           {onProfile && (
             <button type="button" className="hud-chip profile-button" onClick={onProfile}>
               {t('profileOpen', lang)}
+            </button>
+          )}
+          {onConnections && (
+            <button
+              type="button"
+              className="hud-chip profile-button conn-button"
+              aria-keyshortcuts="C"
+              onClick={onConnections}
+            >
+              {t('connOpen', lang)}
+              {connectionsBadge > 0 && (
+                <span className="conn-badge" aria-label={t('connBadge', lang, { n: connectionsBadge })}>
+                  {connectionsBadge}
+                </span>
+              )}
             </button>
           )}
         </div>
