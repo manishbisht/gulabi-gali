@@ -1,5 +1,6 @@
 import type { Env } from './env'
-import { loadResident, residentRow } from './profiles'
+import { floating, notify, type Later } from './inbox'
+import { loadResident, publicOf, residentRow, type ProfileRow } from './profiles'
 import { MAX_REASON, MIN_REASON, REQUEST_TTL_MS, type RequestLists, type RequestView } from './protocol'
 
 /** The most requests either list returns: enough for a busy inbox, never an unbounded read. */
@@ -54,6 +55,13 @@ async function accept(
   return match?.id ?? null
 }
 
+/** Both people of a match made by crossed requests: each asked, so each hears `accepted` about the other. */
+const tellBoth = (env: Env, matchId: string, x: ProfileRow, y: ProfileRow) =>
+  Promise.all([
+    notify(env, x.user_id, { t: 'accepted', matchId, person: publicOf(y) }),
+    notify(env, y.user_id, { t: 'accepted', matchId, person: publicOf(x) }),
+  ])
+
 /** A live (unexpired) pending request from `from` to `to`, if there is one. */
 const pendingBetween = (env: Env, from: string, to: string, cutoff: number) =>
   env.DB.prepare(
@@ -62,11 +70,13 @@ const pendingBetween = (env: Env, from: string, to: string, cutoff: number) =>
     .bind(from, to, cutoff)
     .first<{ id: string }>()
 
+/** `later` runs the inbox notices after the response (`ctx.waitUntil`); they can never fail the request. */
 export async function sendRequest(
   env: Env,
   userId: string,
   raw: unknown,
   now = Date.now(),
+  later: Later = floating,
 ): Promise<Response> {
   const me = await residentRow(env, userId)
   if (!me) return fail('ghost', 403)
@@ -89,7 +99,10 @@ export async function sendRequest(
   if (crossed) {
     const matchId = await accept(env, [crossed.id], to, userId, now)
     // Swept or expired since it was read: it is no longer a yes, so this is an ordinary request.
-    if (matchId) return Response.json({ matched: matchId })
+    if (matchId) {
+      later(tellBoth(env, matchId, me, them))
+      return Response.json({ matched: matchId })
+    }
   }
 
   // Pending or declined (the sender is never told which) and still alive: one ask per pair.
@@ -120,8 +133,12 @@ export async function sendRequest(
   const reverse = await pendingBetween(env, to, userId, cutoff)
   if (reverse) {
     const matchId = await accept(env, [reverse.id, id], to, userId, now)
-    if (matchId) return Response.json({ matched: matchId })
+    if (matchId) {
+      later(tellBoth(env, matchId, me, them))
+      return Response.json({ matched: matchId })
+    }
   }
+  later(notify(env, to, { t: 'request', id }))
   return Response.json({ id }, { status: 201 })
 }
 
@@ -175,6 +192,7 @@ export async function acceptRequest(
   userId: string,
   id: string,
   now = Date.now(),
+  later: Later = floating,
 ): Promise<Response> {
   const row = await env.DB.prepare("SELECT * FROM requests WHERE id = ? AND to_id = ? AND state = 'pending'")
     .bind(id, userId)
@@ -182,11 +200,13 @@ export async function acceptRequest(
   if (!row) return fail('not-found', 404)
   if (row.created_at <= now - REQUEST_TTL_MS) return fail('expired', 410)
   // Both people must still be residents: a ban or a half-deleted profile ends it.
-  if (!(await residentRow(env, row.from_id)) || !(await residentRow(env, userId)))
-    return fail('not-found', 404)
+  const me = await residentRow(env, userId)
+  if (!me || !(await residentRow(env, row.from_id))) return fail('not-found', 404)
   const matchId = await accept(env, [id], row.from_id, userId, now)
   // The row went (the cron) or aged out between the read and the write.
   if (!matchId) return fail('expired', 410)
+  // Only the one who asked is told: the one accepting is right here.
+  later(notify(env, row.from_id, { t: 'accepted', matchId, person: publicOf(me) }))
   return Response.json({ matchId })
 }
 

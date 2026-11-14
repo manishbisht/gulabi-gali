@@ -199,10 +199,13 @@ export async function getProfile(env: Env, id: string): Promise<Response> {
   return Response.json(toFull(row))
 }
 
+/** The public face of a profile row. */
+export const publicOf = (row: ProfileRow): PublicPerson => toPublic(toFull(row))
+
 /** What the map may show of a resident, or null for anyone the map must not show. */
 export async function loadResident(env: Env, id: string): Promise<PublicPerson | null> {
   const row = await residentRow(env, id)
-  return row ? toPublic(toFull(row)) : null
+  return row ? publicOf(row) : null
 }
 
 /** DEV_AUTH only: trade a name for a dev token. The caller has already checked the flag. */

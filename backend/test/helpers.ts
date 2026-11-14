@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test'
 import { expect, vi } from 'vitest'
-import type { ClientMsg, DistrictId, ServerMsg } from '../src/protocol'
+import type { ClientMsg, DistrictId, InboxMsg, ServerMsg } from '../src/protocol'
 
 /** Long enough for a 100 ms move batch under a busy suite, short enough to fail fast. */
 export const WAIT = { timeout: 5_000, interval: 20 }
@@ -68,7 +68,7 @@ export interface LiveClient {
   close: () => void
 }
 
-const open: LiveClient[] = []
+const open: { close: () => void }[] = []
 
 export async function live(district: DistrictId, opts: { token?: string } = {}): Promise<LiveClient> {
   const res = await openLive(district, opts)
@@ -120,4 +120,59 @@ export async function live(district: DistrictId, opts: { token?: string } = {}):
 /** Closes every socket a test opened. */
 export function closeAll(): void {
   for (const client of open.splice(0)) client.close()
+}
+
+export function openInbox(
+  opts: { token?: string; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const query = opts.token ? `?token=${encodeURIComponent(opts.token)}` : ''
+  return SELF.fetch(`${API}/api/inbox${query}`, { headers: { Upgrade: 'websocket', ...opts.headers } })
+}
+
+export interface InboxClient {
+  ws: WebSocket
+  messages: InboxMsg[]
+  closes: number[]
+  /** The first message of type `t` that `match` accepts, once it arrives. */
+  next: <T extends InboxMsg['t']>(
+    t: T,
+    match?: (m: Extract<InboxMsg, { t: T }>) => boolean,
+  ) => Promise<Extract<InboxMsg, { t: T }>>
+  close: () => void
+}
+
+/** A resident's open inbox socket. */
+export async function inbox(token: string): Promise<InboxClient> {
+  const res = await openInbox({ token })
+  expect(res.status).toBe(101)
+  const ws = res.webSocket!
+  ws.accept()
+  const messages: InboxMsg[] = []
+  const closes: number[] = []
+  ws.addEventListener('message', (event) => {
+    messages.push(JSON.parse(event.data as string))
+  })
+  ws.addEventListener('close', (event) => {
+    closes.push(event.code)
+  })
+  const client: InboxClient = {
+    ws,
+    messages,
+    closes,
+    next: (t, match = () => true) =>
+      vi.waitFor(() => {
+        const found = messages.find((m) => m.t === t && match(m as never))
+        expect(found, `an inbox '${t}' message`).toBeDefined()
+        return found as never
+      }, WAIT),
+    close: () => {
+      try {
+        ws.close(1000, 'done')
+      } catch {
+        // Already closed.
+      }
+    },
+  }
+  open.push(client)
+  return client
 }

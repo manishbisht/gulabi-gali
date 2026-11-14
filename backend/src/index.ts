@@ -1,7 +1,9 @@
 import { resolveUser } from './auth'
+import { listMatches, listMessages, postMessage, unmatch } from './chat'
 import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
+import { floating, openInbox, type Later } from './inbox'
 import type { CitySnapshot } from './protocol'
 import { devLogin, getMe, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
@@ -63,8 +65,9 @@ async function readJson(request: Request): Promise<unknown> {
   return request.json().catch(() => null)
 }
 
-async function handleApi(request: Request, env: Env, pathname: string): Promise<Response> {
+async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
   const { method } = request
+  const { pathname } = url
   if (pathname === '/api/dev/login') {
     if (env.DEV_AUTH !== '1' || method !== 'POST')
       return Response.json({ error: 'not found' }, { status: 404 })
@@ -76,12 +79,24 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (pathname === '/api/me/profile' && method === 'PUT')
     return putProfile(env, user.id, await readJson(request))
   if (pathname === '/api/requests' && method === 'POST')
-    return sendRequest(env, user.id, await readJson(request))
+    return sendRequest(env, user.id, await readJson(request), Date.now(), later)
   if (pathname === '/api/requests' && method === 'GET') return Response.json(await listRequests(env, user.id))
   const act = pathname.match(/^\/api\/requests\/([^/]+)\/(accept|ignore)$/)
   if (act && method === 'POST') {
     const rid = act[1]
-    return act[2] === 'accept' ? acceptRequest(env, user.id, rid) : ignoreRequest(env, user.id, rid)
+    return act[2] === 'accept'
+      ? acceptRequest(env, user.id, rid, Date.now(), later)
+      : ignoreRequest(env, user.id, rid)
+  }
+  if (pathname === '/api/matches' && method === 'GET') return listMatches(env, user.id)
+  // Every route under one match answers 404 to anyone not in it, whatever the method.
+  const chat = pathname.match(/^\/api\/matches\/([^/]+)(\/messages)?$/)
+  if (chat) {
+    const [, mid, messages] = chat
+    if (messages && method === 'GET') return listMessages(env, user.id, mid, url.searchParams.get('before'))
+    if (messages && method === 'POST')
+      return postMessage(env, user.id, mid, await readJson(request), Date.now(), later)
+    if (!messages && method === 'DELETE') return unmatch(env, user.id, mid, later)
   }
   const match = pathname.match(/^\/api\/profiles\/([^/]+)$/)
   if (match && method === 'GET') {
@@ -95,19 +110,24 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
 }
 
 export { DistrictDO } from './district'
+export { InboxDO } from './inbox'
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  /** `ctx` is missing only when a test calls this directly; then notices just run (see `floating`). */
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const origin = allowedOrigin(request.headers.get('Origin'))
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: origin ? corsHeaders(origin) : undefined })
     }
-    const { pathname } = new URL(request.url)
+    const url = new URL(request.url)
+    const { pathname } = url
     if (pathname === '/health') return json({ ok: true }, 200, origin)
     if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
     const live = pathname.match(/^\/api\/districts\/([^/]+)\/live$/)
     if (live) return openDistrict(request, env, live[1])
-    if (pathname.startsWith('/api/')) return withCors(await handleApi(request, env, pathname), origin)
+    if (pathname === '/api/inbox') return openInbox(request, env)
+    const later: Later = ctx ? (work) => ctx.waitUntil(work) : floating
+    if (pathname.startsWith('/api/')) return withCors(await handleApi(request, env, url, later), origin)
     return json({ error: 'not found' }, 404, origin)
   },
   async scheduled(_controller, env, ctx) {

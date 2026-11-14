@@ -154,3 +154,52 @@ export const BENCH_SEATS = 4
  * tab, a reconnect) and must not reconnect, or two tabs would take turns knocking each other off.
  */
 export const LIVE_CLOSE = { replaced: 4001, invalid: 4002, idle: 4003 } as const
+
+/** A chat message is 1 to 500 characters (code points) once cleaned, on at most this many lines. */
+export const MAX_MESSAGE = 500
+export const MAX_MESSAGE_LINES = 10
+
+/** One message in a match's chat, as one member sees it. */
+export interface ChatMessage {
+  id: string
+  body: string
+  at: number
+  /** Sent by the viewer. */
+  mine: boolean
+}
+/**
+ * A page of a chat, newest last. `before` is an opaque cursor for the page older than this one, or null when
+ * this page reaches the start.
+ */
+export interface MessagePage {
+  messages: ChatMessage[]
+  before: string | null
+}
+/** A match, with the other person's public face and the last thing said, if anything has been. */
+export interface MatchView {
+  id: string
+  person: PublicPerson
+  last?: Omit<ChatMessage, 'id'>
+}
+/**
+ * `not-found` covers a match that does not exist and one the asker is not (or no longer may be) in alike.
+ * `ghost`: only a resident has a list of matches.
+ */
+export type ChatError = 'invalid' | 'rate' | 'not-found' | 'ghost'
+
+/**
+ * What a person's inbox socket hears: a nudge to refetch, never the content itself (a message notice names
+ * only its id). `accepted` goes to whoever asked (to both, when two requests crossed); `unmatched` only to the
+ * one who did not unmatch.
+ */
+export type InboxNotice =
+  | { t: 'request'; id: string }
+  | { t: 'accepted'; matchId: string; person: PublicPerson }
+  | { t: 'message'; matchId: string; id: string }
+  | { t: 'unmatched'; matchId: string }
+/**
+ * Everything the inbox socket sends. A client sends only `{"t":"ping"}`. The server may close it with
+ * `LIVE_CLOSE.replaced` (more tabs than one person may keep open: this, the oldest, must not reconnect) or
+ * `LIVE_CLOSE.invalid` (garbage or a flood).
+ */
+export type InboxMsg = InboxNotice | { t: 'pong' }
