@@ -133,7 +133,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     }
   }
   if (pathname === '/api/reports' && method === 'POST')
-    return fileReport(env, user.id, await readJson(request))
+    return fileReport(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')
     return sendRequest(env, user.id, await readJson(request), Date.now(), later)
   if (pathname === '/api/requests' && method === 'GET')

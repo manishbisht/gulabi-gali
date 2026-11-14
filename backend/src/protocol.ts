@@ -242,7 +242,11 @@ export interface ReportInput {
   reason: ReportReason
   note?: string
 }
-/** The 201 answer: `autoHidden` when this report was the one that took the person off the map. */
+/**
+ * The 201 answer: `autoHidden` when this report was the one that took the person off the map. `evidence:
+ * 'missing'`: filed, but the bench's record had already gone (the moderator still looks).
+ */
 export interface ReportResult {
   autoHidden: boolean
+  evidence?: 'missing'
 }

@@ -1,12 +1,14 @@
-import { applyD1Migrations, env, runInDurableObject } from 'cloudflare:test'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { applyD1Migrations, env, evictDurableObject, runInDurableObject } from 'cloudflare:test'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BENCH_POSITIONS, TRANSCRIPT_MS } from '../src/district'
 import type { Env } from '../src/env'
 import { EVIDENCE_MESSAGES } from '../src/evidence'
 import type { BenchLine, DistrictId } from '../src/protocol'
 import {
   EVIDENCE_MAX_BYTES,
+  fileReport,
   fitEvidence,
+  PURGE_STATEMENTS,
   purgeReportEvidence,
   REPORT_KEEP_MS,
   REPORTS_PER_DAY,
@@ -32,6 +34,7 @@ interface Row {
   note: string
   evidence: string | null
   state: string
+  unconfirmed: number
 }
 const rowsAbout = async (target: string) =>
   (
@@ -41,6 +44,12 @@ const rowsAbout = async (target: string) =>
   ).results
 const lastAbout = async (target: string) => (await rowsAbout(target)).at(-1)!
 const evidenceOf = (row: Row) => JSON.parse(row.evidence!) as Record<string, unknown>
+
+/** Lets the district vouch for the whole last 10 minutes, as one that has been awake that long does. */
+const remembering = (district: DistrictId, since = Date.now()) =>
+  runInDurableObject(stub(district), (i) => {
+    i.bornAt = since - TRANSCRIPT_MS - 60_000
+  })
 
 /** A resident at `bench`, seated. */
 async function sitter(name: string, district: DistrictId, bench: number): Promise<LiveClient> {
@@ -62,6 +71,7 @@ describe('reports', () => {
     const rani = await resident('Bench Reporter Rani')
     const lakhan = devId('Bench Loud Lakhan')
     const start = Date.now()
+    await remembering(district, start)
     try {
       // A line from eleven minutes ago, then one from now: only the second is still in the transcript.
       await runInDurableObject(uni, (i) => {
@@ -88,14 +98,16 @@ describe('reports', () => {
       expect(evidence.bench).toBe(bench)
       expect(evidence.lines.map((l) => [l.from, l.text])).toEqual([[lakhan, 'abhi ki baat']])
 
-      // Never there: nothing to carry, so no report.
+      // Never there: told so, and nothing is filed.
       const stranger = await resident('Bench Stranger Suraj')
-      expect((await report(stranger, { kind: 'bench', targetId: lakhan, bench })).status).toBe(404)
-      // There, but the person named never was.
+      const away = await report(stranger, { kind: 'bench', targetId: lakhan, bench })
+      expect(away.status).toBe(404)
+      expect(await away.json()).toEqual({ error: 'not-there' })
+      // There, but the person named never was (and the district remembers the whole 10 minutes).
       await resident('Bench Elsewhere Ela')
-      expect(
-        (await report(rani, { kind: 'bench', targetId: devId('Bench Elsewhere Ela'), bench })).status,
-      ).toBe(404)
+      const nobody = await report(rani, { kind: 'bench', targetId: devId('Bench Elsewhere Ela'), bench })
+      expect(nobody.status).toBe(404)
+      expect(await nobody.json()).toEqual({ error: 'not-found' })
       // A bench that is not a bench, and one left out.
       expect((await report(rani, { kind: 'bench', targetId: lakhan, bench: 'nowhere:2' })).status).toBe(400)
       expect((await report(rani, { kind: 'bench', targetId: lakhan })).status).toBe(400)
@@ -113,12 +125,106 @@ describe('reports', () => {
       }
       expect(await at(TRANSCRIPT_MS - 60_000)).toBe(201)
       expect(await at(TRANSCRIPT_MS + 60_000)).toBe(404)
+      expect((await rowsAbout(lakhan)).map((r) => r.unconfirmed)).toEqual([0, 0])
     } finally {
       await runInDurableObject(uni, (i) => {
         i.clock = Date.now
       })
     }
     expect((await rowsAbout(lakhan)).length).toBe(2)
+  })
+
+  it('a district that slept: a seated reporter still files, honestly, and it never counts toward auto-hide', async () => {
+    const district: DistrictId = 'malviya-nagar'
+    const bench = `${district}:1`
+    const gone = await sitter('Sleep Target Tara', district, 1)
+    const target = devId('Sleep Target Tara')
+    const seated = [
+      await sitter('Sleep Reporter One', district, 1),
+      await sitter('Sleep Reporter Two', district, 1),
+      await sitter('Sleep Reporter Three', district, 1),
+    ]
+    gone.send({ t: 'say', text: 'kuch bura' })
+    await seated[0]!.next('bench', (m) => m.text === 'kuch bura')
+    // Tara gets up, and one sitter gets up too; then the district is evicted: its memory is gone, its seats are not.
+    gone.send({ t: 'sit', bench: null })
+    await gone.next('seated', (m) => m.bench === null)
+    const left = await sitter('Sleep Left Lalit', district, 1)
+    left.send({ t: 'sit', bench: null })
+    await left.next('seated', (m) => m.bench === null)
+    // The keep-awake timer would hold the object in memory (an eviction waits on it), so stop it first: as
+    // after a deploy, or the runtime evicting it anyway.
+    await runInDurableObject(stub(district), (i) => {
+      const o = i as unknown as { awake: ReturnType<typeof setTimeout> | null }
+      if (o.awake !== null) clearTimeout(o.awake)
+      o.awake = null
+    })
+    await evictDurableObject(stub(district))
+
+    // Someone who got up before it slept can no longer be vouched for: told they were not there.
+    const lalit = await resident('Sleep Left Lalit')
+    const away = await report(lalit, { kind: 'bench', targetId: target, bench })
+    expect(await away.json()).toEqual({ error: 'not-there' })
+
+    // Three verified sitters report Tara: each is filed on their word, says the record is missing, and
+    // none of them counts toward auto-hide.
+    for (const name of ['Sleep Reporter One', 'Sleep Reporter Two', 'Sleep Reporter Three']) {
+      const res = await report(await resident(name), { kind: 'bench', targetId: target, bench })
+      expect(res.status).toBe(201)
+      expect(await res.json()).toEqual({ autoHidden: false, evidence: 'missing' })
+    }
+    const rows = await rowsAbout(target)
+    expect(rows).toHaveLength(3)
+    for (const row of rows) {
+      expect(row.unconfirmed).toBe(1)
+      expect(evidenceOf(row)).toEqual({ bench, lines: [], note: 'transcript-unavailable' })
+    }
+    const hidden = await testEnv.DB.prepare('SELECT hidden FROM users WHERE id = ?')
+      .bind(target)
+      .first<{ hidden: number }>()
+    expect(hidden?.hidden).toBe(0)
+
+    // Someone still seated after the wake is vouched for by their seat: a report about them counts.
+    const two = await resident('Sleep Reporter Two')
+    const res = await report(two, { kind: 'bench', targetId: devId('Sleep Reporter One'), bench })
+    expect(await res.json()).toEqual({ autoHidden: false, evidence: 'missing' })
+    expect((await lastAbout(devId('Sleep Reporter One'))).unconfirmed).toBe(0)
+  })
+
+  it('a district that cannot be reached: the report is filed without a transcript, never a 500', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await resident('Unreachable Reporter')
+    await resident('Unreachable Target')
+    const reporter = devId('Unreachable Reporter')
+    const target = devId('Unreachable Target')
+    const broken = {
+      ...testEnv,
+      DISTRICT: {
+        idFromName: (name: string) => name,
+        get: () => ({
+          benchWitness: async () => {
+            throw new Error('unreachable')
+          },
+        }),
+      },
+    } as unknown as Env
+    const res = await fileReport(broken, reporter, {
+      kind: 'bench',
+      targetId: target,
+      bench: 'walled-city:3',
+      reason: 'hate',
+    })
+    expect(res.status).toBe(201)
+    expect(await res.json()).toEqual({ autoHidden: false, evidence: 'missing' })
+    const row = await lastAbout(target)
+    expect(row.unconfirmed).toBe(1)
+    expect(evidenceOf(row)).toEqual({ bench: 'walled-city:3', lines: [], note: 'transcript-unavailable' })
+    expect(logged).toHaveBeenCalledWith(
+      'report: bench district unreachable',
+      'walled-city:3',
+      expect.any(Error),
+    )
+    logged.mockRestore()
   })
 
   it('chat report carries the last 30 messages and only for members', async () => {
@@ -232,6 +338,10 @@ describe('reports', () => {
     expect(await hidden()).toBe(1)
     expect((await api(`/api/profiles/${encodeURIComponent(target)}`, watcherToken)).status).toBe(404)
     expect(await rowsAbout(target)).toHaveLength(8)
+    // Only the report that hid them says so.
+    const v4 = await resident('Hide Verified Four')
+    expect(await (await report(v4, person)).json()).toEqual({ autoHidden: false })
+    expect(await hidden()).toBe(1)
 
     // Reports older than 7 days do not count.
     await resident('Hide Old Target')
@@ -247,6 +357,9 @@ describe('reports', () => {
     const reporter = await resident('Limit Reporter')
     await resident('Limit Target')
     const body = { kind: 'person', targetId: devId('Limit Target'), reason: 'spam' }
+    // Reports that could not be filed use none of the day's allowance.
+    for (let i = 0; i < 5; i++)
+      expect((await report(reporter, { ...body, targetId: 'dev:limit-nobody' })).status).toBe(404)
     for (let i = 0; i < REPORTS_PER_DAY; i++) expect((await report(reporter, body)).status).toBe(201)
     const res = await report(reporter, body)
     expect(res.status).toBe(429)
@@ -278,6 +391,19 @@ describe('reports', () => {
     })
     // The reports themselves stay: only what they carried goes.
     expect(results).toHaveLength(4)
+  })
+
+  it('the purge finds its rows by index, never by scanning every report', async () => {
+    const indexes = ['reports_closed_evidence', 'reports_evidence_age']
+    expect(PURGE_STATEMENTS).toHaveLength(2)
+    for (const [i, sql] of PURGE_STATEMENTS.entries()) {
+      const { results } = await testEnv.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .bind(...(sql.includes('?') ? [0] : []))
+        .all<{ detail: string }>()
+      const plan = results.map((r) => r.detail).join(' | ')
+      expect(plan, sql).toMatch(new RegExp(`SEARCH reports USING (COVERING )?INDEX ${indexes[i]}`))
+      expect(plan, sql).not.toMatch(/SCAN/)
+    }
   })
 
   it('evidence is kept under 64 KB by dropping the oldest lines', () => {

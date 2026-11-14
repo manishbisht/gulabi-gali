@@ -44,11 +44,18 @@ CREATE INDEX invites_owner ON invites(owner);
 -- did wrong, in a `target_kind` place. `evidence` is JSON the server put together itself (a profile
 -- snapshot without the link, a bench's last 10 minutes, a chat's last 30 messages), at most 64 KB, for
 -- admins only. The cron sets it to NULL once the report is closed, or 30 days after it was filed.
+-- `unconfirmed` = 1: the server could not confirm the person was there (a bench whose district had slept, or
+-- could not be reached), so the report rests on the reporter's word: it is queued, but never counts toward
+-- auto-hide.
 CREATE TABLE reports (
   id TEXT PRIMARY KEY, reporter TEXT NOT NULL,
   target_kind TEXT NOT NULL CHECK (target_kind IN ('person','bench','chat','poster')), target_id TEXT NOT NULL,
   reason TEXT NOT NULL CHECK (reason IN ('harassment','hate','spam','underage','other')),
   note TEXT NOT NULL DEFAULT '', evidence TEXT, created_at INTEGER NOT NULL,
-  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open','actioned','dismissed')), closed_at INTEGER);
+  state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open','actioned','dismissed')), closed_at INTEGER,
+  unconfirmed INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX reports_target ON reports(target_kind, target_id, created_at);
 CREATE INDEX reports_state ON reports(state, created_at);
+-- The cron's two sweeps, each over only the reports still holding evidence.
+CREATE INDEX reports_closed_evidence ON reports(state) WHERE evidence IS NOT NULL;
+CREATE INDEX reports_evidence_age ON reports(created_at) WHERE evidence IS NOT NULL;

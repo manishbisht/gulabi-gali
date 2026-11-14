@@ -35,6 +35,7 @@ const REASON_TEXT: Record<ReportReason, StringKey> = {
 const ERROR_TEXT: Record<ReportError | 'block', StringKey> = {
   rate: 'reportRate',
   words: 'wordsHint',
+  'not-there': 'reportNotThere',
   gone: 'reportGone',
   failed: 'reportFailed',
   block: 'blockFailed',
@@ -50,7 +51,8 @@ export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock,
   const [alsoBlock, setAlsoBlock] = useState(false)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<ReportError | 'block' | null>(null)
-  const [sent, setSent] = useState(false)
+  /** Filed; `missing` when the server no longer had the bench's record to send with it. */
+  const [sent, setSent] = useState<'ok' | 'missing' | null>(null)
   const alive = useRef(true)
   useEffect(() => {
     alive.current = true
@@ -83,7 +85,7 @@ export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock,
     const blocked = alsoBlock && onBlock ? await onBlock().catch(() => false) : true
     if (!alive.current) return
     setBusy(false)
-    setSent(true)
+    setSent(out.evidence === 'missing' ? 'missing' : 'ok')
     if (!blocked) setProblem('block')
   }
 
@@ -93,7 +95,7 @@ export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock,
       <h3>{title}</h3>
       {sent ? (
         <>
-          <p role="status">{t('reportThanks', lang)}</p>
+          <p role="status">{t(sent === 'missing' ? 'reportThanksMissing' : 'reportThanks', lang)}</p>
           {problem && (
             <p className="chat-note" role="alert">
               {t(ERROR_TEXT[problem], lang)}

@@ -297,8 +297,11 @@ export async function getBlocks(token: string, signal?: AbortSignal): Promise<Bl
   return (await res.json()) as BlockedPerson[]
 }
 
-/** `gone`: nothing left to report (a bench you left over 10 minutes ago, a chat that is over). */
-export type ReportError = 'rate' | 'words' | 'gone' | 'failed'
+/**
+ * `not-there`: a bench you were not at in the last 10 minutes. `gone`: nothing else left to report (no such
+ * person, a chat that is over).
+ */
+export type ReportError = 'rate' | 'words' | 'not-there' | 'gone' | 'failed'
 export type ReportOutcome = ({ ok: true } & ReportResult) | { ok: false; error: ReportError }
 
 /** Files a report; the server gathers what goes with it. Never rejects. */
@@ -311,7 +314,7 @@ export async function sendReport(token: string, input: ReportInput): Promise<Rep
     })
     if (res.ok) return { ok: true, ...((await res.json()) as ReportResult) }
     const error = ((await res.json().catch(() => null)) as { error?: string } | null)?.error
-    if (res.status === 404) return { ok: false, error: 'gone' }
+    if (res.status === 404) return { ok: false, error: error === 'not-there' ? error : 'gone' }
     return { ok: false, error: error === 'rate' || error === 'words' ? error : 'failed' }
   } catch {
     return { ok: false, error: 'failed' }

@@ -350,6 +350,14 @@ export const STRINGS = {
     hi: 'Shukriya! Moderator isse khud dekhenge.',
     en: 'Thank you. The moderator will take a look.',
   },
+  reportThanksMissing: {
+    hi: 'Report mil gayi. Us baat-cheet ka record ab nahi raha, phir bhi moderator dekhenge.',
+    en: 'Report received. The record of that chat has run out, but the moderator will still look.',
+  },
+  reportNotThere: {
+    hi: 'Tum pichhle 10 minute mein is bench pe nahi the, isliye yahan se report nahi ho sakti.',
+    en: "You weren't on this bench in the last 10 minutes, so you can't report from it.",
+  },
   reportFailed: { hi: 'Report nahi ja payi. Dobara try karo.', en: "Couldn't send the report. Try again." },
   reportRate: {
     hi: 'Aaj ki reports poori ho gayi. Kal phir bhej sakte ho.',

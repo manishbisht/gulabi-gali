@@ -133,6 +133,54 @@ it('ReportSheet: "Also block?" blocks after the report goes, and only then', asy
   expect(onBlock).toHaveBeenCalledTimes(1)
 })
 
+it('ReportSheet: a bench report filed without its record says so, honestly', async () => {
+  stubFetch(() => json({ autoHidden: false, evidence: 'missing' }, 201))
+  const host = await render(
+    <ReportSheet
+      kind="bench"
+      targetId="p2"
+      bench="walled-city:4"
+      name="Ravi"
+      lang="hi"
+      token={async () => 'tok'}
+      onClose={() => {}}
+    />,
+  )
+  await click(host, 'Kuch aur')
+  await click(host, 'Report bhejo')
+  await settle()
+  const said = host.querySelector('[role="status"]')?.textContent
+  expect(said).toBe('Report mil gayi. Us baat-cheet ka record ab nahi raha, phir bhi moderator dekhenge.')
+})
+
+it("ReportSheet: someone who wasn't at the bench is told so, apart from other refusals", async () => {
+  let error = 'not-there'
+  stubFetch(() => json({ error }, 404))
+  const host = await render(
+    <ReportSheet
+      kind="bench"
+      targetId="p2"
+      bench="walled-city:4"
+      name="Ravi"
+      lang="en"
+      token={async () => 'tok'}
+      onClose={() => {}}
+    />,
+  )
+  await click(host, 'Spam')
+  await click(host, 'Send report')
+  await settle()
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+    "You weren't on this bench in the last 10 minutes, so you can't report from it.",
+  )
+  error = 'not-found'
+  await click(host, 'Send report')
+  await settle()
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+    "This can't be reported now: there's nothing left to send with it.",
+  )
+})
+
 it('ReportSheet: a note with words the server refuses keeps the sheet open', async () => {
   stubFetch(() => json({ error: 'words', field: 'note' }, 400))
   const host = await render(

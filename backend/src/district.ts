@@ -369,6 +369,14 @@ function benchAt(district: DistrictId, id: string): { x: number; z: number } | n
   return BENCH_POSITIONS[district][Number(n)] ?? null
 }
 
+/** What a district can say about a bench for a report (see `DistrictDO.benchWitness`). */
+export interface BenchWitness {
+  reporter: boolean
+  target: boolean
+  remembers: boolean
+  lines: BenchLine[]
+}
+
 /** The district bench `id` belongs to (whose object keeps its transcript), or null for anything not a bench. */
 export function benchDistrict(id: string): DistrictId | null {
   if (id.length > MAX_BENCH_ID) return null
@@ -400,7 +408,8 @@ function livePerson(seat: Seat): LivePerson {
  * ephemeral. Since a report of a bench carries its last 10 minutes, a bench with any line still in its
  * transcript keeps the object awake with a self-renewing timer (`stayAwake`), which lets go 10 minutes after
  * the last line; `sat` remembers who sat where for as long, so someone who only listened can still report. A
- * deploy, or the runtime evicting the object anyway, still loses both: that is accepted.
+ * deploy, or the runtime evicting the object anyway, still loses both: that is accepted, and a report then
+ * rests on the seats, which survive (see `benchWitness`).
  *
  * Trust (blocks, mutes): each connected person's, in `trust`, loaded from D1 when they connect and again when
  * `refresh` says it changed. Memory only, never in an attachment (a long block list would break its size
@@ -411,6 +420,12 @@ function livePerson(seat: Seat): LivePerson {
 export class DistrictDO extends DurableObject<Env> {
   /** Now, in ms. A test swaps it to step past `IDLE_MS` without waiting. */
   clock: () => number = Date.now
+  /**
+   * When this instance began, by `clock`. Its memory of benches (`sat`, `transcripts`) covers only the time
+   * since: a fresh instance (after hibernation or an eviction) cannot say who was *not* there (see
+   * `benchWitness`). A test may move it back.
+   */
+  bornAt = this.clock()
   private seats = new WeakMap<WebSocket, Seat>()
   private dirty = new Set<WebSocket>()
   private batch: ReturnType<typeof setTimeout> | null = null
@@ -984,6 +999,21 @@ export class DistrictDO extends DurableObject<Env> {
     if (this.sitters(bench).some((s) => s.seat.userId === userId)) return true
     const at = this.sat.get(bench)?.get(userId)
     return at !== undefined && this.clock() - at <= TRANSCRIPT_MS
+  }
+
+  /**
+   * RPC, for a bench report, in one call: whether `reporter` and `target` sit at `bench` now or sat there in
+   * the last `TRANSCRIPT_MS` (seats survive hibernation, the log of who sat does not), whether this instance
+   * has been up for that whole window (`remembers`: only then does "not there" mean not there), and the
+   * transcript.
+   */
+  benchWitness(bench: string, reporter: string, target: string): BenchWitness {
+    return {
+      reporter: this.satRecently(bench, reporter),
+      target: this.satRecently(bench, target),
+      remembers: this.clock() - this.bornAt >= TRANSCRIPT_MS,
+      lines: this.benchTranscript(bench),
+    }
   }
 
   /**
