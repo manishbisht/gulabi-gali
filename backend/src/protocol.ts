@@ -136,8 +136,12 @@ export type ServerMsg =
    * stand, and again whenever someone else joins or leaves their bench. `seat` is null exactly when `bench` is.
    */
   | { t: 'seated'; bench: string | null; seat: number | null; with: string[] }
-  /** `far`: a sit from further than the server allows from the bench, by the last point it accepted. */
-  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' }
+  /**
+   * `far`: a sit from further than the server allows from the bench, by the last point it accepted. `full`: a
+   * bench with every seat taken, or (followed by a close with `LIVE_CLOSE.full`) a district or an address with
+   * as many sockets as it may hold. `muted`: a moderator has muted this person, so `say` and `status` are refused.
+   */
+  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' | 'muted' }
   /** A refused step carries the last point the server accepted: the client goes back there. */
   | { t: 'error'; code: 'too-fast'; x: number; z: number; ry: number }
   | { t: 'pong' }
@@ -151,9 +155,12 @@ export const BENCH_SEATS = 4
 
 /**
  * How the server may end a district socket. A replaced socket lost to a newer one for the same person (another
- * tab, a reconnect) and must not reconnect, or two tabs would take turns knocking each other off.
+ * tab, a reconnect) and must not reconnect, or two tabs would take turns knocking each other off. `banned`: a
+ * moderator banned this person (on the inbox, also hidden them): the inbox must not reconnect, and a district
+ * socket that does comes back as a ghost. `full`: the district, or this address, holds as many sockets as it
+ * may; try again later.
  */
-export const LIVE_CLOSE = { replaced: 4001, invalid: 4002, idle: 4003 } as const
+export const LIVE_CLOSE = { replaced: 4001, invalid: 4002, idle: 4003, banned: 4004, full: 4005 } as const
 
 /** A chat message is 1 to 500 characters (code points) once cleaned, on at most this many lines. */
 export const MAX_MESSAGE = 500
@@ -199,7 +206,8 @@ export type InboxNotice =
   | { t: 'unmatched'; matchId: string }
 /**
  * Everything the inbox socket sends. A client sends only `{"t":"ping"}`. The server may close it with
- * `LIVE_CLOSE.replaced` (more tabs than one person may keep open: this, the oldest, must not reconnect) or
- * `LIVE_CLOSE.invalid` (garbage or a flood).
+ * `LIVE_CLOSE.replaced` (more tabs than one person may keep open: this, the oldest, must not reconnect),
+ * `LIVE_CLOSE.banned` (no longer a resident: banned or hidden; must not reconnect) or `LIVE_CLOSE.invalid`
+ * (garbage or a flood).
  */
 export type InboxMsg = InboxNotice | { t: 'pong' }

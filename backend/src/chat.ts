@@ -1,6 +1,8 @@
 import type { Env } from './env'
+import { holdEvidence } from './evidence'
 import { floating, notify, type Later } from './inbox'
-import { residentRow, toPublic } from './profiles'
+import { RESIDENT, residentRow, toPublic } from './profiles'
+import { pairOf } from './requests'
 import {
   MAX_MESSAGE,
   MAX_MESSAGE_LINES,
@@ -122,7 +124,7 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
      JOIN users u ON u.id = p.user_id
      LEFT JOIN messages l ON l.id = (
        SELECT id FROM messages WHERE match_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1)
-     WHERE (m.a = ?1 OR m.b = ?1) AND u.banned = 0 AND p.adult = 1 AND p.pledge = 1
+     WHERE (m.a = ?1 OR m.b = ?1) AND ${RESIDENT}
      ORDER BY COALESCE(l.created_at, m.created_at) DESC, m.id DESC
      LIMIT ?2`,
   )
@@ -217,12 +219,7 @@ export async function postMessage(
 }
 
 /**
- * `DELETE /api/matches/:id`: the match goes, and its messages with it (cascade), for both people. The
- * accepted requests that made it go too; an ignored one stays and blocks for its 14 days. In their place the
- * other person gets an ignored request to the one who unmatched, dated now: the same 14-day block a decline
- * gives, so they cannot ask straight back, while the one who unmatched may ask again whenever they like. It
- * carries an empty reason (a real one is 10 to 140 characters), which is how `listRequests` knows to leave it
- * out.
+ * `DELETE /api/matches/:id`: the match ends for both people (see `endMatch`), and the other one is told.
  */
 export async function unmatch(
   env: Env,
@@ -232,21 +229,64 @@ export async function unmatch(
 ): Promise<Response> {
   const match = await member(env, userId, matchId, false)
   if (!match) return notFound()
-  const [, , gone] = await env.DB.batch([
-    // Only while the match is still there: if the other side unmatched first, theirs is the block that
-    // stands.
-    env.DB.prepare(
-      `INSERT INTO requests (id, from_id, to_id, reason, created_at, state)
-       SELECT ?1, ?2, ?3, '', ?4, 'ignored' WHERE EXISTS (SELECT 1 FROM matches WHERE id = ?5)`,
-    ).bind(crypto.randomUUID(), match.other, userId, Date.now(), match.id),
-    env.DB.prepare(
-      `DELETE FROM requests WHERE state = 'accepted'
-       AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,
-    ).bind(userId, match.other),
-    env.DB.prepare('DELETE FROM matches WHERE id = ?').bind(match.id),
-  ])
   // The other side unmatched first.
-  if (!gone.meta.changes) return notFound()
+  if ((await endMatch(env, userId, match.other, 'unmatch')) !== match.id) return notFound()
   later(notify(env, match.other, { t: 'unmatched', matchId: match.id }))
   return new Response(null, { status: 204 })
+}
+
+/**
+ * Ends the match between `userId` and `other`, in one batch: its latest messages are held as evidence (see
+ * `holdEvidence`), then the match goes, and its messages with it (cascade). Answers the match id when this
+ * call ended it, or null when there was none (never matched, or the other side ended it first). Nobody is
+ * notified here: that is the caller's.
+ *
+ * - `unmatch`: the accepted requests that made it go too; an ignored one stays and blocks for its 14 days.
+ *   In their place the other person gets an ignored request to the one who unmatched, dated now: the same
+ *   14-day block a decline gives, so they cannot ask straight back, while the one who unmatched may ask again
+ *   whenever they like. It carries an empty reason (a real one is 10 to 140 characters), which is how
+ *   `listRequests` knows to leave it out.
+ * - `block`: every request between them goes, whatever its state; the block itself keeps them apart.
+ */
+export async function endMatch(
+  env: Env,
+  userId: string,
+  other: string,
+  why: 'unmatch' | 'block',
+  now = Date.now(),
+): Promise<string | null> {
+  const [a, b] = pairOf(userId, other)
+  const match = await env.DB.prepare('SELECT id FROM matches WHERE a = ? AND b = ?')
+    .bind(a, b)
+    .first<{ id: string }>()
+  const requests =
+    why === 'unmatch'
+      ? [
+          // Only while the match is still there: if the other side unmatched first, theirs is the block that
+          // stands.
+          env.DB.prepare(
+            `INSERT INTO requests (id, from_id, to_id, reason, created_at, state)
+             SELECT ?1, ?2, ?3, '', ?4, 'ignored' WHERE EXISTS (SELECT 1 FROM matches WHERE id = ?5)`,
+          ).bind(crypto.randomUUID(), other, userId, now, match?.id ?? ''),
+          env.DB.prepare(
+            `DELETE FROM requests WHERE state = 'accepted'
+             AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,
+          ).bind(userId, other),
+        ]
+      : [
+          env.DB.prepare(
+            'DELETE FROM requests WHERE (from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1)',
+          ).bind(userId, other),
+        ]
+  if (!match) {
+    // Nothing to end, but a block still clears the requests.
+    if (why === 'block') await env.DB.batch(requests)
+    return null
+  }
+  const results = await env.DB.batch([
+    holdEvidence(env, match.id, userId, other, now),
+    ...requests,
+    env.DB.prepare('DELETE FROM matches WHERE id = ?').bind(match.id),
+  ])
+  return results.at(-1)!.meta.changes ? match.id : null
 }

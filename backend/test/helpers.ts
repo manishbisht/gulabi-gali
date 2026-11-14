@@ -176,3 +176,32 @@ export async function inbox(token: string): Promise<InboxClient> {
   open.push(client)
   return client
 }
+
+/** A signed-in API call. */
+export const api = (path: string, token: string, init: RequestInit = {}) =>
+  SELF.fetch(`${API}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
+    },
+  })
+
+/** The dev user id a `resident(name)` gets. */
+export const devId = (name: string) => `dev:${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+
+/** Two residents, matched: their tokens, their ids and the match id. */
+export async function pair(x: string, y: string) {
+  const a = await resident(x)
+  const b = await resident(y)
+  const sent = await api('/api/requests', a, {
+    method: 'POST',
+    body: JSON.stringify({ to: devId(y), reason: 'Mujhe bhi pencil sketching pasand hai' }),
+  })
+  expect(sent.status).toBe(201)
+  const { id: rid } = (await sent.json()) as { id: string }
+  const res = await api(`/api/requests/${rid}/accept`, b, { method: 'POST' })
+  expect(res.status).toBe(200)
+  const { matchId } = (await res.json()) as { matchId: string }
+  return { a, b, aId: devId(x), bId: devId(y), matchId }
+}

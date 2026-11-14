@@ -62,6 +62,16 @@ it('reconnects with backoff and says it is open again, so the lists are fetched 
   expect(onOpen).toHaveBeenCalledTimes(2)
 })
 
+it('does not reconnect once the person is no longer a resident (4004: banned or hidden)', async () => {
+  const a = inbox()
+  await vi.advanceTimersByTimeAsync(0)
+  last().onopen!()
+  last().onclose!({ code: LIVE_CLOSE.banned })
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(FakeSocket.all).toHaveLength(1)
+  expect(a.onReplaced).not.toHaveBeenCalled()
+})
+
 it('does not reconnect after another tab took the inbox (4001), and not after close()', async () => {
   const a = inbox()
   await vi.advanceTimersByTimeAsync(0)

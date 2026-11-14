@@ -69,13 +69,14 @@ describe('the live route', () => {
       const who: Who = {
         userId: 'dev:x',
         person: { id: 'dev:x', name, look: { skin: 1, outfit: 'pink', head: 'none' }, status: 'चाय ☕' },
+        ip: '2001:db8::7',
       }
       const header = whoHeader(who)
       expect(header).toMatch(/^[\x21-\x7e]+$/)
       expect(readWho(header)).toEqual(who)
     }
-    expect(readWho('{"userId":"dev:x"')).toEqual({ userId: null, person: null })
-    expect(readWho('%E0%A4')).toEqual({ userId: null, person: null })
+    expect(readWho('{"userId":"dev:x"')).toEqual({ userId: null, person: null, ip: null })
+    expect(readWho('%E0%A4')).toEqual({ userId: null, person: null, ip: null })
   })
 
   it('a Devanagari or emoji name reaches the street intact', async () => {
@@ -510,6 +511,7 @@ describe('DistrictDO', () => {
         look: { skin: 1, outfit: 'pink', head: 'none' },
         status: '',
       },
+      ip: null,
     }
     // All in one turn, while the replaced socket is still closing: a second socket takes over, the object
     // forgets everything it held in memory (as a wake from hibernation does), and both sockets send a move.
@@ -560,7 +562,7 @@ describe('DistrictDO', () => {
       await instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x: 2.5, z: 2, ry: 0 }))
       const res = await instance.fetch(
         new Request('https://district.internal/university', {
-          headers: { Upgrade: 'websocket', 'X-GG-Who': whoHeader({ userId: null, person: null }) },
+          headers: { Upgrade: 'websocket', 'X-GG-Who': whoHeader({ userId: null, person: null, ip: null }) },
         }),
       )
       const client = res.webSocket!

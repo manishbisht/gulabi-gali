@@ -169,8 +169,20 @@ it('gives the default snapshot when upstream hangs, within the timeout', async (
   expect(((await res.json()) as CitySnapshot).stale).toBe(true)
 })
 
-it('the scheduled handler refreshes KV', async () => {
+it('the scheduled handler refreshes KV, and purges held evidence and counters past their time', async () => {
   await env.CITY.delete('now')
+  const day = 24 * 3600 * 1000
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO held_evidence (id, owner, other, match_id, messages, created_at) VALUES (?, 'dev:x', 'dev:y', ?, '[]', ?)",
+    ).bind('held-old', 'm-old', Date.now() - 31 * day),
+    env.DB.prepare(
+      "INSERT INTO held_evidence (id, owner, other, match_id, messages, created_at) VALUES (?, 'dev:x', 'dev:y', ?, '[]', ?)",
+    ).bind('held-new', 'm-new', Date.now() - 29 * day),
+    env.DB.prepare(
+      "INSERT INTO counters (user_id, bucket, window_start, n) VALUES ('dev:x', 'reads', ?, 3)",
+    ).bind(Date.now() - 3 * day),
+  ])
   const realFetch = globalThis.fetch
   globalThis.fetch = live
   try {
@@ -181,4 +193,7 @@ it('the scheduled handler refreshes KV', async () => {
     globalThis.fetch = realFetch
   }
   expect(JSON.parse((await env.CITY.get('now'))!)).toMatchObject({ stale: false, tempC: 25 })
+  const { results } = await env.DB.prepare('SELECT id FROM held_evidence').all<{ id: string }>()
+  expect(results.map((r) => r.id)).toEqual(['held-new'])
+  expect(await env.DB.prepare("SELECT 1 FROM counters WHERE user_id = 'dev:x'").first()).toBeNull()
 })

@@ -4,6 +4,7 @@ import { allowedOrigin } from './cors'
 import type { Env } from './env'
 import benches from './benches.json'
 import { cleanText, loadResident, MAX_STATUS, toPublic } from './profiles'
+import type { RefreshWhy } from './refresh'
 import {
   BENCH_SEATS,
   LIVE_CLOSE,
@@ -43,9 +44,22 @@ export const TRANSCRIPT_LINES = 200
 export const WHO_HEADER = 'X-GG-Who'
 export interface Who {
   userId: string | null
-  /** Set only for a resident: a complete profile whose owner is not banned. */
+  /** Set only for a resident (see `RESIDENT`): a complete profile whose owner is neither banned nor hidden. */
   person: PublicPerson | null
+  /** The address the socket came from (`CF-Connecting-IP`), for the per-address cap; null when unknown. */
+  ip: string | null
 }
+
+/** A district holds at most this many sockets, ghosts and residents alike, unless `MAX_DISTRICT_SOCKETS` says. */
+export const DEFAULT_MAX_SOCKETS = 400
+/** And at most this many from one address. Loopback (local dev, the stress script) is exempt. */
+export const MAX_SOCKETS_PER_IP = 6
+/**
+ * While any bench remembers a line, a timer this often keeps the object out of hibernation (which would forget
+ * the lines): never longer than `TRANSCRIPT_MS` after the last one. Hibernation needs ~10 s with no pending
+ * timer, so this stays under that.
+ */
+export const AWAKE_MS = 5_000
 
 /** Moves are coalesced per person and sent out at most this often. */
 export const MOVE_BATCH_MS = 100
@@ -101,6 +115,7 @@ const INVALID = { t: 'error', code: 'invalid' } as const
 const RATE = { t: 'error', code: 'rate' } as const
 const FULL = { t: 'error', code: 'full' } as const
 const FAR = { t: 'error', code: 'far' } as const
+const MUTED = { t: 'error', code: 'muted' } as const
 const STOOD: ServerMsg = { t: 'seated', bench: null, seat: null, with: [] }
 
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
@@ -121,7 +136,7 @@ export async function openDistrict(request: Request, env: Env, id: string): Prom
   const user = await resolveUser(new Request(request.url, { headers }), env)
   // A database hiccup makes this visit a ghost one rather than no visit at all.
   const person = user ? await loadResident(env, user.id).catch(() => null) : null
-  const who: Who = { userId: user?.id ?? null, person }
+  const who: Who = { userId: user?.id ?? null, person, ip: request.headers.get('CF-Connecting-IP') }
   // A fresh request: nothing of the client's (its token included) goes past this point but the upgrade.
   return env.DISTRICT.get(env.DISTRICT.idFromName(id)).fetch(`https://district.internal/${id}`, {
     headers: { Upgrade: 'websocket', [WHO_HEADER]: whoHeader(who) },
@@ -184,10 +199,54 @@ export function readWho(raw: string | null): Who {
     const who = JSON.parse(decodeURIComponent(raw ?? '')) as Partial<Who>
     const userId = typeof who.userId === 'string' ? who.userId : null
     const person = userId && who.person?.id === userId ? toPublic(who.person) : null
-    return { userId, person }
+    const ip = typeof who.ip === 'string' && who.ip.length <= 64 ? who.ip : null
+    return { userId, person, ip }
   } catch {
-    return { userId: null, person: null }
+    return { userId: null, person: null, ip: null }
   }
+}
+
+const isLoopback = (ip: string) => ip === '::1' || ip.startsWith('127.') || ip === '::ffff:127.0.0.1'
+
+/**
+ * What a district keeps in memory about a connected person, loaded from D1 (see `loadTrust`): whether they are
+ * banned, until when they are muted, and everyone on either side of a block with them. Never in a socket's
+ * attachment, which has a size cap that a long block list would break.
+ */
+export interface Trust {
+  banned: boolean
+  mutedUntil: number | null
+  /** Ids blocked by, or blocking, this person: they never see each other. */
+  blocked: Set<string>
+}
+
+const noTrust = (): Trust => ({ banned: false, mutedUntil: null, blocked: new Set() })
+
+/** `ids`' trust state from D1, in one round trip. Someone with no row has none. */
+export async function loadTrust(env: Env, ids: readonly string[]): Promise<Map<string, Trust>> {
+  const out = new Map<string, Trust>()
+  if (!ids.length) return out
+  for (const id of ids) out.set(id, noTrust())
+  const list = JSON.stringify(ids)
+  const [users, blocks] = await env.DB.batch([
+    env.DB.prepare(
+      'SELECT id, banned, muted_until FROM users WHERE id IN (SELECT value FROM json_each(?1))',
+    ).bind(list),
+    env.DB.prepare(
+      `SELECT a, b FROM blocks WHERE a IN (SELECT value FROM json_each(?1))
+       UNION SELECT a, b FROM blocks WHERE b IN (SELECT value FROM json_each(?1))`,
+    ).bind(list),
+  ])
+  for (const u of users.results as { id: string; banned: number; muted_until: number | null }[]) {
+    const t = out.get(u.id)!
+    t.banned = u.banned === 1
+    t.mutedUntil = u.muted_until
+  }
+  for (const { a, b } of blocks.results as { a: string; b: string }[]) {
+    out.get(a)?.blocked.add(b)
+    out.get(b)?.blocked.add(a)
+  }
+  return out
 }
 
 /** The last accepted point, when it was accepted, and how many metres of burst are left (see `SPEED_BURST_M`). */
@@ -227,6 +286,8 @@ interface Seat {
   flood: { since: number; at: number } | null
   /** The bench this person sits at, and which of its seats. Kept here, so it survives hibernation. */
   bench: { id: string; seat: number } | null
+  /** Where the socket came from, for the per-address cap (see `Who`). */
+  ip?: string | null
 }
 
 const fullLanes = (now: number): Record<Lane, Bucket> => ({
@@ -279,9 +340,17 @@ function livePerson(seat: Seat): LivePerson {
  * last socket has gone.
  *
  * Benches: who sits where lives in each socket's attachment, so it survives hibernation like the rest. What
- * is said there lives only in `transcripts`, in memory, and is never written to storage: an object that
- * hibernates forgets it. That is the design (bench chat is ephemeral), and a bench where people are talking
- * keeps its object awake anyway.
+ * is said there lives only in `transcripts`, in memory, and is never written to storage: bench chat is
+ * ephemeral. Since a report of a bench carries its last 10 minutes, a bench with any line still in its
+ * transcript keeps the object awake with a self-renewing timer (`stayAwake`), which lets go 10 minutes after
+ * the last line; `sat` remembers who sat where for as long, so someone who only listened can still report. A
+ * deploy, or the runtime evicting the object anyway, still loses both: that is accepted.
+ *
+ * Trust (blocks, mutes): each connected person's, in `trust`, loaded from D1 when they connect and again when
+ * `refresh` says it changed. Memory only, never in an attachment (a long block list would break its size
+ * cap): after a wake the first frame, or the alarm, loads it for everyone still connected before anything is
+ * relayed (`ready`). Two people blocked either way never hear of each other: no join, leave, move, status or
+ * bench line about one reaches the other.
  */
 export class DistrictDO extends DurableObject<Env> {
   /** Now, in ms. A test swaps it to step past `IDLE_MS` without waiting. */
@@ -295,6 +364,15 @@ export class DistrictDO extends DurableObject<Env> {
   private saving: ReturnType<typeof setTimeout> | null = null
   /** Each bench's recent lines, oldest first (see `benchTranscript`). Memory only. */
   private transcripts = new Map<string, BenchLine[]>()
+  /** Per bench, who sat there and when they last got up (or sat down), for `TRANSCRIPT_MS`. Memory only. */
+  private sat = new Map<string, Map<string, number>>()
+  /** Set while a bench remembers a line (see `stayAwake`). */
+  private awake: ReturnType<typeof setTimeout> | null = null
+  /** Each connected person's trust state, by user id (see the class note). */
+  private trust = new Map<string, Trust>()
+  /** Whether `trust` holds everyone connected since this instance started; `warming` while it loads. */
+  private warm = false
+  private warming: Promise<boolean> | null = null
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -307,6 +385,10 @@ export class DistrictDO extends DurableObject<Env> {
     const district = new URL(request.url).pathname.slice(1) as DistrictId
     if (!DISTRICT_IDS.includes(district)) return notFound()
     const who = readWho(request.headers.get(WHO_HEADER))
+    // Blocks and mutes, theirs and everyone's already here, before anyone is told of anyone.
+    if (!(await this.ready()) || (who.userId && !(await this.load([who.userId]))))
+      return new Response('try again', { status: 503 })
+    if (this.crowded(who)) return this.turnAway(who.userId)
     const now = this.clock()
     // Newest socket wins: the old one closes, and the new one stands where it stood.
     let before: Seat | null = null
@@ -337,6 +419,7 @@ export class DistrictDO extends DurableObject<Env> {
       lanes: fullLanes(now),
       flood: null,
       bench: null,
+      ip: who.ip,
     }
     this.write(server, seat)
     this.send(server, {
@@ -344,13 +427,174 @@ export class DistrictDO extends DurableObject<Env> {
       you: { id: who.userId, visible: who.person !== null },
       people: this.people(who.userId),
     })
-    if (seat.shown) this.broadcast({ t: 'join', p: livePerson(seat) }, server)
-    else if (before?.shown) this.broadcast({ t: 'leave', id: who.userId! }, server)
+    if (seat.shown) this.broadcast({ t: 'join', p: livePerson(seat) }, who.userId, server)
+    else if (before?.shown) this.broadcast({ t: 'leave', id: who.userId! }, who.userId, server)
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(now + IDLE_MS)
     return new Response(null, { status: 101, webSocket: client })
   }
 
+  /**
+   * Whether a new socket for `who` would be one too many: for the district (`MAX_DISTRICT_SOCKETS`), or for
+   * its address (`MAX_SOCKETS_PER_IP`). A person's own socket, which the new one replaces, does not count.
+   */
+  private crowded(who: Who): boolean {
+    const max = Number(this.env.MAX_DISTRICT_SOCKETS) || DEFAULT_MAX_SOCKETS
+    let all = 0
+    let fromIp = 0
+    const capIp = who.ip !== null && !isLoopback(who.ip)
+    for (const ws of this.sockets()) {
+      const seat = this.seat(ws)
+      if (who.userId && seat.userId === who.userId) continue
+      all++
+      if (capIp && seat.ip === who.ip) fromIp++
+    }
+    return all >= max || fromIp >= MAX_SOCKETS_PER_IP
+  }
+
+  /**
+   * Answers the upgrade, says `full` and closes with `LIVE_CLOSE.full`. Not a hibernatable socket: it is never
+   * listed, and it is gone at once.
+   */
+  private turnAway(userId: string | null): Response {
+    if (userId && !this.sockets().some((ws) => this.seat(ws).userId === userId)) this.trust.delete(userId)
+    const pair = new WebSocketPair()
+    const [client, server] = [pair[0], pair[1]]
+    server.accept()
+    server.send(JSON.stringify(FULL))
+    server.close(LIVE_CLOSE.full, 'full')
+    return new Response(null, { status: 101, webSocket: client })
+  }
+
+  /**
+   * True once `trust` holds everyone connected; after a wake, it loads them first (one D1 round trip, shared
+   * by whatever arrives meanwhile). False when D1 could not be reached: the caller must not relay anything.
+   */
+  private ready(): Promise<boolean> {
+    if (this.warm) return Promise.resolve(true)
+    const ids = new Set<string>()
+    for (const ws of this.sockets()) {
+      const { userId } = this.seat(ws)
+      if (userId) ids.add(userId)
+    }
+    this.warming ??= this.load([...ids]).then((ok) => {
+      this.warm = ok
+      this.warming = null
+      return ok
+    })
+    return this.warming
+  }
+
+  /** Loads `ids`' trust state into memory. False (and logged) when D1 could not be reached. */
+  private async load(ids: string[]): Promise<boolean> {
+    try {
+      const got = await loadTrust(this.env, ids)
+      for (const [id, t] of got) this.setTrust(id, t, true)
+      return true
+    } catch (err) {
+      console.error('district: trust load failed', err)
+      return false
+    }
+  }
+
+  /**
+   * Records `id`'s trust state and keeps everyone else's in step with its blocks (a block is one row, but
+   * each side's set names the other). `keep` false updates the others only: for someone not connected here.
+   */
+  private setTrust(id: string, t: Trust, keep: boolean): void {
+    if (keep) this.trust.set(id, t)
+    for (const [other, theirs] of this.trust) {
+      if (other === id) continue
+      if (t.blocked.has(other)) theirs.blocked.add(id)
+      else theirs.blocked.delete(id)
+    }
+  }
+
+  /** Whether `a` and `b` are kept apart by a block, either way. */
+  private apart(a: string | null, b: string | null): boolean {
+    if (!a || !b || a === b) return false
+    return this.trust.get(a)?.blocked.has(b) === true || this.trust.get(b)?.blocked.has(a) === true
+  }
+
+  private muted(userId: string | null, now: number): boolean {
+    const until = userId ? this.trust.get(userId)?.mutedUntil : null
+    return until !== null && until !== undefined && until > now
+  }
+
+  /**
+   * RPC, from `refreshUser`: `userId`'s state changed in D1. Reloads it (ban, mute, blocks, public face) and
+   * acts on it here at once: a ban closes their sockets with `LIVE_CLOSE.banned`; blocks made or lifted take
+   * people out of, or put them back into, each other's view; someone who is no longer a resident (hidden) is
+   * taken off the map and told they are a ghost, and one who is again is told they are visible (their next move
+   * lists them); a changed face (or `profile`) goes out as a `join`. Throws when D1 cannot be reached.
+   */
+  async refresh(userId: string, why: RefreshWhy): Promise<void> {
+    if (!(await this.ready())) throw new Error('district: trust state unavailable')
+    const [got, person] = await Promise.all([loadTrust(this.env, [userId]), loadResident(this.env, userId)])
+    const t = got.get(userId) ?? noTrust()
+    const mine = this.sockets().filter((ws) => this.seat(ws).userId === userId)
+    const before = this.trust.get(userId)?.blocked ?? new Set<string>()
+    this.setTrust(userId, t, mine.length > 0)
+    if (!mine.length) return
+    if (t.banned) {
+      for (const ws of mine) this.drop(ws, LIVE_CLOSE.banned, 'banned')
+      return
+    }
+    this.reblock(userId, mine, before, t.blocked)
+    for (const ws of mine) this.reface(ws, person, why)
+  }
+
+  /** After `userId`'s blocks changed from `before` to `after`: each side hears the other leave, or come back. */
+  private reblock(userId: string, mine: WebSocket[], before: Set<string>, after: Set<string>): void {
+    const benches = new Set<string>()
+    for (const other of this.sockets()) {
+      const theirs = this.seat(other)
+      if (!theirs.userId || theirs.userId === userId) continue
+      const blocked = after.has(theirs.userId)
+      if (blocked === before.has(theirs.userId)) continue
+      if (theirs.bench) benches.add(theirs.bench.id)
+      for (const ws of mine) {
+        const seat = this.seat(ws)
+        if (blocked) {
+          if (theirs.shown) this.send(ws, { t: 'leave', id: theirs.userId })
+          if (seat.shown) this.send(other, { t: 'leave', id: userId })
+        } else {
+          if (theirs.shown && theirs.pos && theirs.person) this.send(ws, { t: 'join', p: livePerson(theirs) })
+          if (seat.shown && seat.pos && seat.person) this.send(other, { t: 'join', p: livePerson(seat) })
+        }
+      }
+    }
+    // Who sits beside whom, as each now may see it.
+    for (const bench of benches) this.tellBench(bench)
+  }
+
+  /** Brings `ws`'s person up to date with `person` (null: no longer a resident). */
+  private reface(ws: WebSocket, person: PublicPerson | null, why: RefreshWhy): void {
+    const seat = this.seat(ws)
+    const userId = seat.userId!
+    if (!person) {
+      if (!seat.person) return
+      // Off the map, and up from any bench: a ghost from here on.
+      if (seat.shown) this.broadcast({ t: 'leave', id: userId }, userId, ws)
+      this.write(ws, { ...seat, person: null, shown: false, bench: null })
+      if (seat.bench) {
+        this.noteSat(seat.bench.id, userId, this.clock())
+        this.tellBench(seat.bench.id)
+      }
+      return this.send(ws, { t: 'welcome', you: { id: userId, visible: false }, people: this.people(userId) })
+    }
+    const next = { ...seat, person }
+    this.write(ws, next)
+    if (!seat.person)
+      return this.send(ws, { t: 'welcome', you: { id: userId, visible: true }, people: this.people(userId) })
+    const changed = JSON.stringify(seat.person) !== JSON.stringify(person)
+    if (!changed && why !== 'profile') return
+    if (seat.shown && seat.pos) this.broadcast({ t: 'join', p: livePerson(next) }, userId, ws)
+    if (seat.bench) this.tellBench(seat.bench.id)
+  }
+
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+    // After a wake, nothing is relayed until everyone's blocks are back; without them, the frame is dropped.
+    if (!this.warm && !(await this.ready())) return
     const seat = this.seat(ws)
     if (seat.closed) return
     // Measured before parsing, so an oversized frame costs nothing but this.
@@ -372,11 +616,13 @@ export class DistrictDO extends DurableObject<Env> {
       case 'move':
         return this.move(ws, seat, msg, now)
       case 'status':
-        return seat.person ? this.status(ws, seat, msg.text) : this.send(ws, GHOST)
+        if (!seat.person) return this.send(ws, GHOST)
+        return this.muted(seat.userId, now) ? this.send(ws, MUTED) : this.status(ws, seat, msg.text)
       case 'sit':
         return seat.person ? this.sit(ws, seat, msg.bench) : this.send(ws, GHOST)
       case 'say':
-        return seat.person ? this.say(ws, seat, msg.text, now) : this.send(ws, GHOST)
+        if (!seat.person) return this.send(ws, GHOST)
+        return this.muted(seat.userId, now) ? this.send(ws, MUTED) : this.say(ws, seat, msg.text, now)
     }
   }
 
@@ -386,6 +632,8 @@ export class DistrictDO extends DurableObject<Env> {
     } catch {
       // Already answered.
     }
+    // So the leave skips anyone blocked; if D1 is down it goes regardless.
+    if (!this.warm) await this.ready()
     this.depart(ws)
   }
 
@@ -408,10 +656,13 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
+    if (!this.warm) await this.ready()
     this.depart(ws)
   }
 
   async alarm(): Promise<void> {
+    // So the leaves the sweep sends skip anyone blocked; if D1 is down the sweep runs regardless.
+    await this.ready()
     const now = this.clock()
     this.sweep(now)
     let next = Infinity
@@ -455,10 +706,11 @@ export class DistrictDO extends DurableObject<Env> {
       seat.bench = null
       this.write(ws, seat)
       this.send(ws, STOOD)
+      this.noteSat(bench.id, seat.userId, now)
       this.tellBench(bench.id)
     } else if (arriving) this.write(ws, seat)
     else this.keep(ws, seat, now)
-    if (arriving) this.broadcast({ t: 'join', p: livePerson(seat) }, ws)
+    if (arriving) this.broadcast({ t: 'join', p: livePerson(seat) }, seat.userId, ws)
     else if (seat.shown) {
       this.dirty.add(ws)
       this.batch ??= setTimeout(() => this.flush(), MOVE_BATCH_MS)
@@ -498,7 +750,7 @@ export class DistrictDO extends DurableObject<Env> {
     seat.person = { ...seat.person!, status: text }
     this.write(ws, seat)
     const msg = { t: 'status', id: userId, text } as const
-    if (seat.shown) this.broadcast(msg)
+    if (seat.shown) this.broadcast(msg, userId)
     else this.send(ws, msg)
     this.ctx.waitUntil(
       this.env.DB.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE user_id = ?')
@@ -515,11 +767,15 @@ export class DistrictDO extends DurableObject<Env> {
    */
   private sit(ws: WebSocket, seat: Seat, id: string | null): void {
     const was = seat.bench
+    const now = this.clock()
     if (id === null) {
       seat.bench = null
       this.write(ws, seat)
       this.send(ws, STOOD)
-      if (was) this.tellBench(was.id)
+      if (was) {
+        this.noteSat(was.id, seat.userId, now)
+        this.tellBench(was.id)
+      }
       return
     }
     const at = benchAt(seat.district, id)
@@ -532,11 +788,18 @@ export class DistrictDO extends DurableObject<Env> {
     while (taken.includes(free)) free++
     seat.bench = { id, seat: free }
     this.write(ws, seat)
-    if (was) this.tellBench(was.id)
+    this.noteSat(id, seat.userId, now)
+    if (was) {
+      this.noteSat(was.id, seat.userId, now)
+      this.tellBench(was.id)
+    }
     this.tellBench(id)
   }
 
-  /** A seated resident's line, to everyone on that bench (the speaker too), and into its transcript. */
+  /**
+   * A seated resident's line, to everyone on that bench (the speaker too) but anyone blocked either way, and
+   * into its transcript, which then keeps the object awake (see `stayAwake`).
+   */
   private say(ws: WebSocket, seat: Seat, text: string, now: number): void {
     const bench = seat.bench
     if (!bench) return this.send(ws, INVALID)
@@ -546,7 +809,41 @@ export class DistrictDO extends DurableObject<Env> {
     if (lines.length > TRANSCRIPT_LINES) lines.splice(0, lines.length - TRANSCRIPT_LINES)
     this.transcripts.set(bench.id, lines)
     const out = JSON.stringify({ t: 'bench', bench: bench.id, ...line } satisfies ServerMsg)
-    for (const s of this.sitters(bench.id)) this.sendRaw(s.ws, out)
+    for (const s of this.sitters(bench.id))
+      if (!this.apart(seat.userId, s.seat.userId)) this.sendRaw(s.ws, out)
+    if (!this.awake) this.stayAwake()
+  }
+
+  /**
+   * Keeps the object in memory while any bench remembers a line: drops lines past `TRANSCRIPT_MS`, and while
+   * any are left arms a timer that runs this again in `AWAKE_MS` (a pending timer keeps a hibernatable object
+   * awake). Once every transcript is empty it arms nothing, and the object may hibernate.
+   */
+  private stayAwake(): void {
+    if (this.awake) clearTimeout(this.awake)
+    this.awake = null
+    const now = this.clock()
+    for (const bench of [...this.transcripts.keys()]) this.transcript(bench, now)
+    if (this.transcripts.size) this.awake = setTimeout(() => this.stayAwake(), AWAKE_MS)
+  }
+
+  /** Notes that `userId` sat at, or got up from, `bench` at `now`, and forgets anyone gone for 10 minutes. */
+  private noteSat(bench: string, userId: string | null, now: number): void {
+    if (!userId) return
+    const log = this.sat.get(bench) ?? new Map<string, number>()
+    for (const [id, at] of log) if (now - at > TRANSCRIPT_MS) log.delete(id)
+    log.set(userId, now)
+    this.sat.set(bench, log)
+  }
+
+  /**
+   * RPC, for a bench report: whether `userId` sits at `bench` now, or sat there in the last `TRANSCRIPT_MS`.
+   * Memory only, like the transcript.
+   */
+  satRecently(bench: string, userId: string): boolean {
+    if (this.sitters(bench).some((s) => s.seat.userId === userId)) return true
+    const at = this.sat.get(bench)?.get(userId)
+    return at !== undefined && this.clock() - at <= TRANSCRIPT_MS
   }
 
   /**
@@ -577,7 +874,7 @@ export class DistrictDO extends DurableObject<Env> {
     return out.sort((a, b) => a.seat.bench!.seat - b.seat.bench!.seat)
   }
 
-  /** Tells everyone at `bench` (or just `only`) where they sit and who with. */
+  /** Tells everyone at `bench` (or just `only`) where they sit and who with (but anyone blocked). */
   private tellBench(bench: string, only?: WebSocket): void {
     const all = this.sitters(bench)
     for (const { ws, seat } of all)
@@ -586,7 +883,9 @@ export class DistrictDO extends DurableObject<Env> {
           t: 'seated',
           bench,
           seat: seat.bench!.seat,
-          with: all.filter((s) => s.ws !== ws).map((s) => s.seat.person!.name),
+          with: all
+            .filter((s) => s.ws !== ws && !this.apart(seat.userId, s.seat.userId))
+            .map((s) => s.seat.person!.name),
         })
   }
 
@@ -610,7 +909,7 @@ export class DistrictDO extends DurableObject<Env> {
       for (const m of movers) {
         const dx = m.x - pos.x
         const dz = m.z - pos.z
-        if (m.id === userId || dx * dx + dz * dz > reach) continue
+        if (m.id === userId || dx * dx + dz * dz > reach || this.apart(m.id, userId)) continue
         list += list ? `,${m.json}` : m.json
       }
       if (list) this.sendRaw(ws, `{"t":"moves","m":[${list}]}`)
@@ -641,7 +940,10 @@ export class DistrictDO extends DurableObject<Env> {
     const seat = this.seat(ws)
     if (seat.closed) return
     this.retire(ws)
-    if (seat.shown && seat.userId) this.broadcast({ t: 'leave', id: seat.userId })
+    if (seat.shown && seat.userId) this.broadcast({ t: 'leave', id: seat.userId }, seat.userId)
+    // Their last socket here: their trust state goes with it (the others' sets keep naming them, as they should).
+    if (seat.userId && !this.sockets().some((s) => this.seat(s).userId === seat.userId))
+      this.trust.delete(seat.userId)
   }
 
   /** Marks a socket closed and unlisted, and tells its bench (if any) that it got up. */
@@ -649,15 +951,19 @@ export class DistrictDO extends DurableObject<Env> {
     const seat = this.seat(ws)
     this.dirty.delete(ws)
     this.write(ws, { ...seat, shown: false, closed: true, bench: null })
-    if (seat.bench) this.tellBench(seat.bench.id)
+    if (seat.bench) {
+      this.noteSat(seat.bench.id, seat.userId, this.clock())
+      this.tellBench(seat.bench.id)
+    }
   }
 
-  /** Everyone listed, but `except` (the asker themself). */
-  private people(except: string | null): LivePerson[] {
+  /** Everyone listed, but `asker` themself and anyone blocked either way with them. */
+  private people(asker: string | null): LivePerson[] {
     const out: LivePerson[] = []
     for (const ws of this.sockets()) {
       const seat = this.seat(ws)
-      if (seat.shown && seat.pos && seat.person && seat.userId !== except) out.push(livePerson(seat))
+      if (seat.shown && seat.pos && seat.person && seat.userId !== asker && !this.apart(asker, seat.userId))
+        out.push(livePerson(seat))
     }
     return out
   }
@@ -680,6 +986,7 @@ export class DistrictDO extends DurableObject<Env> {
         lanes: fullLanes(0),
         flood: null,
         bench: null,
+        ip: null,
       }
       this.seats.set(ws, seat)
     }
@@ -712,9 +1019,10 @@ export class DistrictDO extends DurableObject<Env> {
     }
   }
 
-  /** Serialised once, whoever it goes to. */
-  private broadcast(msg: ServerMsg, except?: WebSocket): void {
+  /** To every socket but `except` and anyone blocked either way with `about`, whom it is about. Serialised once. */
+  private broadcast(msg: ServerMsg, about: string | null, except?: WebSocket): void {
     const text = JSON.stringify(msg)
-    for (const ws of this.sockets()) if (ws !== except) this.sendRaw(ws, text)
+    for (const ws of this.sockets())
+      if (ws !== except && !this.apart(about, this.seat(ws).userId)) this.sendRaw(ws, text)
   }
 }

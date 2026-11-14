@@ -528,6 +528,9 @@ it('a refused sit is reported; a new socket or leaving the district stands the s
   ws.say({ t: 'seated', bench: 'walled-city:4', seat: 0, with: [] })
   ws.say({ t: 'error', code: 'rate' })
   expect(bench.refused).toHaveBeenLastCalledWith('rate')
+  // and a muted sitter's line is the server's `muted`
+  ws.say({ t: 'error', code: 'muted' })
+  expect(bench.refused).toHaveBeenLastCalledWith('muted')
   // and not seated, a say goes nowhere
   ws.say({ t: 'seated', bench: null, seat: null, with: [] })
   expect(bench.seated).toHaveBeenLastCalledWith(null)

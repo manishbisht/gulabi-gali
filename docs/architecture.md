@@ -162,6 +162,19 @@ change or a close at once.
 - **Benches** (`benches.json`, the tapris and benches of each district, 4 seats each): a resident within 3 m
   sits, lines go to everyone on that bench and into an in-memory transcript (last 10 minutes, at most 200
   lines). Bench chat is never written to D1 or any other storage. Walking more than 2.5 m away stands you up.
+  So that a bench report can carry those 10 minutes, a bench with any line left keeps its object awake with a
+  self-renewing timer (it lets go 10 minutes after the last line), and the object remembers who sat where for
+  as long, so someone who only listened can still report. A deploy, or the runtime evicting the object anyway,
+  still loses both.
+- **Caps:** a district holds at most `MAX_DISTRICT_SOCKETS` sockets (400 unless the var says otherwise), ghosts
+  included, and at most 6 from one address (`CF-Connecting-IP`, carried in `X-GG-Who`; loopback is exempt for
+  local dev). One more is told `full` and closed with 4005.
+- **Trust** (phase 3): each connected person's blocks and mute live in the object's memory, never in an
+  attachment (whose size is capped), loaded from D1 on connect and, after a wake, before the first frame is
+  handled. Two people blocked either way never hear of each other. Any change to a person (ban, hide, mute,
+  block, profile) goes through `refreshUser` (`backend/src/refresh.ts`), which tells all four districts and
+  the person's inbox to reload them: a ban closes their sockets with 4004, a hide makes them a ghost on the
+  spot, a mute refuses `say` and `status` with `muted`.
 - The client side: `src/world/session.ts` wires a district's systems on enter and disposes them on leave;
   `src/world/people.ts` draws remote residents (shadows only at tier 2);
   `useBench.ts` and `ui/BenchChat.tsx` are the bench UI.
@@ -188,7 +201,7 @@ D1 (`backend/migrations/0001_people.sql`) is the system of record:
 
 | Table      | Holds                                                                                                                                    |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`    | id (`clerk:...` or `dev:...`), `created_at`, `banned`                                                                                    |
+| `users`    | id (`clerk:...` or `dev:...`), `created_at`, `banned`; from `0002_trust.sql`: `hidden`, `muted_until`, `verified`, `verified_by`         |
 | `profiles` | one per user: name, `look`, home area, status, here-for, about, link, `adult`, `pledge`, `pause_requests`                                |
 | `requests` | from, to, reason (10 to 140 characters), `state` (`pending`, `accepted`, `ignored`); one pending request per pair; expires after 14 days |
 | `matches`  | a pair (`a` < `b`), created when a request is accepted                                                                                   |

@@ -22,7 +22,7 @@ export function cleanReason(x: unknown): string | null {
 }
 
 /** The two ids in the order a match stores them (`a < b`). */
-const pairOf = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x])
+export const pairOf = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x])
 
 /**
  * Accepts the pending, unexpired requests `ids` between two people in one batch: the states flip and the match is

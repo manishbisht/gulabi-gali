@@ -183,14 +183,20 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
   return Response.json(await getMe(env, userId))
 }
 
-/** A resident's profile row: complete, and its owner not banned. Anyone else is a ghost. */
+/**
+ * Who is a resident, as SQL over `profiles p JOIN users u ON u.id = p.user_id`: a complete profile (adult and
+ * pledge) whose owner is neither banned nor hidden. The one definition: every query that asks whether someone
+ * is a resident uses this, and anyone it leaves out is a ghost everywhere (the map, profiles, lists, chats).
+ */
+export const RESIDENT = 'u.banned = 0 AND u.hidden = 0 AND p.adult = 1 AND p.pledge = 1'
+
+/** A resident's profile row (see `RESIDENT`). Anyone else is a ghost. */
 export async function residentRow(env: Env, id: string): Promise<ProfileRow | null> {
-  const row = await env.DB.prepare(
-    'SELECT p.* FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? AND u.banned = 0',
+  return env.DB.prepare(
+    `SELECT p.* FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? AND ${RESIDENT}`,
   )
     .bind(id)
     .first<ProfileRow>()
-  return row && isComplete(row) ? row : null
 }
 
 export async function getProfile(env: Env, id: string): Promise<Response> {

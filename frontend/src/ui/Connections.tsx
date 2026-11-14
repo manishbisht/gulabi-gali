@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { Connections as ConnectionsState } from '../connections/useConnections'
 import { t, type Lang } from '../i18n/strings'
+import type { MatchView } from '../net/protocol'
 import { ChatView } from './ChatView'
 import { useKeyboard } from './useKeyboard'
 
@@ -24,7 +25,8 @@ interface Props {
  */
 export function Connections({ conn, lang, token, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('incoming')
-  const [chat, setChat] = useState<string | null>(null)
+  /** The chat open, as it was when opened: kept to show it ended, once the other side unmatches. */
+  const [chat, setChat] = useState<MatchView | null>(null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const { keyboard, height } = useKeyboard()
@@ -35,9 +37,11 @@ export function Connections({ conn, lang, token, onClose }: Props) {
     if (tab === 'incoming' && !chat) seeIncoming()
   }, [tab, chat, seeIncoming, incoming])
 
-  const open = chat ? conn.matches.find((m) => m.id === chat) : undefined
-  // the chat went (unmatched, here or from the other side): back to the list
-  const showing = chat && open ? open : null
+  const open = chat ? conn.matches.find((m) => m.id === chat.id) : undefined
+  // The other side unmatched: the chat stays, saying it has ended. Unmatched here (or gone any other way):
+  // back to the list.
+  const ended = chat !== null && !open && conn.ended.has(chat.id)
+  const showing = open ?? (ended ? chat : null)
   const style = keyboard ? ({ '--kb': `${keyboard}px`, '--vvh': `${height}px` } as CSSProperties) : undefined
 
   const accept = async (id: string) => {
@@ -71,6 +75,7 @@ export function Connections({ conn, lang, token, onClose }: Props) {
           lang={lang}
           token={token}
           tick={(conn.messageTicks[showing.id] ?? 0) + conn.reconnects}
+          ended={ended}
           onRead={(id) => conn.markRead(showing.id, id)}
           onBack={() => setChat(null)}
           onUnmatch={async () => {
@@ -162,7 +167,7 @@ export function Connections({ conn, lang, token, onClose }: Props) {
                 <ul className="conn-list">
                   {conn.matches.map((m) => (
                     <li key={m.id}>
-                      <button type="button" className="conn-chat" onClick={() => setChat(m.id)}>
+                      <button type="button" className="conn-chat" onClick={() => setChat(m)}>
                         <b>{m.person.name}</b>
                         {conn.chatUnread(m.id) && (
                           <span className="conn-dot" aria-label={t('connUnread', lang)} />

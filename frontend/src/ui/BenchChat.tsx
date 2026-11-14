@@ -67,6 +67,7 @@ export function BenchChat({ seat, lines, me, notice, lang, onSay, onStand }: Pro
         )}
       </ol>
       {notice === 'rate' && <p className="bench-note">{t('benchRate', lang)}</p>}
+      {notice === 'muted' && <p className="bench-note">{t('benchMuted', lang)}</p>}
       <form className="bench-say" onSubmit={submit}>
         <input
           aria-label={t('benchSay', lang)}

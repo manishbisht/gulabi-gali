@@ -23,4 +23,6 @@
     { "tag": "v2", "new_sqlite_classes": ["InboxDO"] },
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
+  // The most live sockets one district holds, ghosts included (see DistrictDO).
+  "vars": { "MAX_DISTRICT_SOCKETS": "400" },
 }

@@ -10,6 +10,8 @@ interface Props {
   token(): Promise<string | null>
   /** Moves when a `message` notice arrives for this chat: the newest page is fetched again. */
   tick: number
+  /** The other person ended the match: what was said stays on screen, but nothing more can be sent. */
+  ended?: boolean
   /** The newest message id this view has shown, so the chat counts as read. */
   onRead(messageId: string): void
   onBack(): void
@@ -42,7 +44,7 @@ const NOTE_TEXT: Record<Exclude<Note, null>, StringKey> = {
  * One match's chat: the newest 50 messages (older ones on request), a composer that sends at once and
  * confirms after, and Unmatch behind a confirm in the sheet. Bodies are text, never markup.
  */
-export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, onUnmatch }: Props) {
+export function ChatView({ matchId, person, lang, token, tick, ended, onRead, onBack, onUnmatch }: Props) {
   const [lines, setLines] = useState<Line[]>([])
   const [older, setOlder] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -157,13 +159,13 @@ export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, o
           {t('chatBack', lang)}
         </button>
         <h3>{person.name}</h3>
-        {!confirming && (
+        {!confirming && !ended && (
           <button type="button" className="person-close" onClick={() => setConfirming(true)}>
             {t('chatUnmatch', lang)}
           </button>
         )}
       </div>
-      {confirming && (
+      {confirming && !ended && (
         <div className="chat-confirm" role="alertdialog" aria-label={t('chatUnmatch', lang)}>
           <p>{t('chatUnmatchAsk', lang, { name: person.name })}</p>
           <div className="person-actions">
@@ -204,25 +206,33 @@ export function ChatView({ matchId, person, lang, token, tick, onRead, onBack, o
           </li>
         ))}
       </ol>
-      {note && (
+      {ended ? (
         <p className="chat-note" role="status">
-          {t(NOTE_TEXT[note], lang)}
+          {t('chatEnded', lang)}
         </p>
+      ) : (
+        note && (
+          <p className="chat-note" role="status">
+            {t(NOTE_TEXT[note], lang)}
+          </p>
+        )
       )}
-      <form className="bench-say" onSubmit={(e) => void submit(e)}>
-        <input
-          aria-label={t('chatLabel', lang)}
-          placeholder={t('chatHint', lang)}
-          value={text}
-          maxLength={MAX_MESSAGE}
-          enterKeyHint="send"
-          autoComplete="off"
-          onChange={(e) => setText(e.target.value)}
-        />
-        <button type="submit" className="landmark-stamp" disabled={busy}>
-          {t(busy ? 'chatSending' : 'chatSend', lang)}
-        </button>
-      </form>
+      {!ended && (
+        <form className="bench-say" onSubmit={(e) => void submit(e)}>
+          <input
+            aria-label={t('chatLabel', lang)}
+            placeholder={t('chatHint', lang)}
+            value={text}
+            maxLength={MAX_MESSAGE}
+            enterKeyHint="send"
+            autoComplete="off"
+            onChange={(e) => setText(e.target.value)}
+          />
+          <button type="submit" className="landmark-stamp" disabled={busy}>
+            {t(busy ? 'chatSending' : 'chatSend', lang)}
+          </button>
+        </form>
+      )}
     </div>
   )
 }

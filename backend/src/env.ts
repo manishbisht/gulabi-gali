@@ -11,4 +11,6 @@ export interface Env {
   /** '1' enables /api/dev/login and dev tokens. Set only in .dev.vars and tests, never in wrangler.jsonc. */
   DEV_AUTH?: string
   DEV_AUTH_SECRET?: string
+  /** The most sockets one district holds at once, ghosts and residents alike. A number; 400 when unset. */
+  MAX_DISTRICT_SOCKETS?: string
 }

@@ -132,9 +132,14 @@ The city snapshot is one cron every 15 minutes plus cached reads (`cache-control
 adds Durable Object requests and duration (live sockets; hibernation means an idle district costs almost
 nothing), D1 reads and writes, and Worker requests for the API, so watch those on the same dashboard.
 
-Bench chat is kept only in the district object's memory, by design: what was said at a bench is lost when the
-object hibernates (nobody there for a while) and on every deploy, which restarts every object. Nothing about it
-needs backing up, and a deploy in the middle of an evening empties every bench's last ten minutes.
+Bench chat is kept only in the district object's memory, by design. While a bench has a line from the last ten
+minutes, a timer keeps its object from hibernating, so a report can still carry them; but every deploy restarts
+every object, and the runtime may evict one anyway. Nothing about it needs backing up, and a deploy in the middle
+of an evening empties every bench's last ten minutes (and the memory of who sat where).
+
+The deploy job applies D1 migrations (`wrangler d1 migrations apply gulabi-gali --remote`) before it deploys the
+Worker. Keep every migration additive (new tables, new columns with defaults, new indexes), so the Worker still
+running between the two steps works against the migrated database.
 
 ## Local development
 

@@ -23,7 +23,7 @@ export type Later = (work: Promise<unknown>) => void
 /** For callers with no execution context (tests, scripts): the work just runs. It never rejects (see `notify`). */
 export const floating: Later = (work) => void work
 
-const inboxOf = (env: Env, userId: string) => env.INBOX.get(env.INBOX.idFromName(`inbox:${userId}`))
+export const inboxOf = (env: Env, userId: string) => env.INBOX.get(env.INBOX.idFromName(`inbox:${userId}`))
 
 /**
  * Tells `userId`'s open inbox sockets about `n`, over RPC. It never throws or rejects: a notice is a nudge to
@@ -93,6 +93,15 @@ export class InboxDO extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server)
     this.write(server, { opened, bad: 0, tokens: LANE.burst, at: now })
     return new Response(null, { status: 101, webSocket: client })
+  }
+
+  /**
+   * RPC, from `refreshUser`: someone who is no longer a resident (banned, hidden, profile gone) has no inbox,
+   * so every socket closes with `LIVE_CLOSE.banned`, which the client does not reconnect after.
+   */
+  async refresh(userId: string): Promise<void> {
+    if (await loadResident(this.env, userId)) return
+    for (const ws of this.sockets()) this.drop(ws, LIVE_CLOSE.banned, 'not a resident')
   }
 
   /** RPC: sends `n` to every open socket, serialised once. Answers how many it went to. */

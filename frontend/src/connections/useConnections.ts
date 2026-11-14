@@ -35,6 +35,8 @@ export interface Connections {
   reconnects: number
   /** Per match, how many `message` notices have arrived: a chat that is open refetches when its count moves. */
   messageTicks: Record<string, number>
+  /** Matches the other person ended (an `unmatched` notice): an open one says so instead of vanishing. */
+  ended: ReadonlySet<string>
   /** The match id on success, null if it could not be accepted. The lists are fresh when it resolves. */
   accept(id: string): Promise<string | null>
   ignore(id: string): Promise<void>
@@ -63,6 +65,7 @@ export function useConnections({
   /** The newest message id known per match, from a notice or a fetch. */
   const [latest, setLatest] = useState<Record<string, string>>({})
   const [messageTicks, setTicks] = useState<Record<string, number>>({})
+  const [ended, setEnded] = useState<ReadonlySet<string>>(new Set())
   const [reconnects, setReconnects] = useState(0)
   /** Moves with every sign-out or user change: an answer from before it is dropped. */
   const gen = useRef(0)
@@ -142,6 +145,7 @@ export function useConnections({
           // a message changes a chat's last line, never a request
           return void refresh('chats')
         }
+        if (n.t === 'unmatched') setEnded((was) => new Set([...was, n.matchId]))
         void refresh()
       },
     })
@@ -154,6 +158,7 @@ export function useConnections({
       setSeen(new Set())
       setLatest({})
       setTicks({})
+      setEnded(new Set())
     }
   }, [user, refresh])
 
@@ -241,6 +246,7 @@ export function useConnections({
     markRead,
     reconnects,
     messageTicks,
+    ended,
     accept,
     ignore,
     unmatch: leave,

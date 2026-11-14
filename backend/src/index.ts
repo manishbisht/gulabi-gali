@@ -3,7 +3,9 @@ import { listMatches, listMessages, postMessage, unmatch } from './chat'
 import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
+import { purgeEvidence } from './evidence'
 import { floating, openInbox, type Later } from './inbox'
+import { purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
 import { devLogin, getMe, getProfile, putProfile, residentRow } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
@@ -80,7 +82,8 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     return putProfile(env, user.id, await readJson(request))
   if (pathname === '/api/requests' && method === 'POST')
     return sendRequest(env, user.id, await readJson(request), Date.now(), later)
-  if (pathname === '/api/requests' && method === 'GET') return Response.json(await listRequests(env, user.id))
+  if (pathname === '/api/requests' && method === 'GET')
+    return (await readLimit(env, user.id, 'requests')) ?? Response.json(await listRequests(env, user.id))
   const act = pathname.match(/^\/api\/requests\/([^/]+)\/(accept|ignore)$/)
   if (act && method === 'POST') {
     const rid = act[1]
@@ -102,6 +105,8 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   if (match && method === 'GET') {
     // A full profile is for residents only: a token alone (no profile, half a one, a ban) is still a ghost.
     if (!(await residentRow(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
+    const limited = await readLimit(env, user.id, 'profile')
+    if (limited) return limited
     try {
       return await getProfile(env, decodeURIComponent(match[1]))
     } catch {
@@ -136,5 +141,7 @@ export default {
     ctx.waitUntil(refreshCity(env, fetch, new Date()))
     // A failed sweep is only logged: it must not take the city refresh with it, and the next run tries again.
     ctx.waitUntil(expireRequests(env).catch((err) => console.error('request sweep failed', err)))
+    ctx.waitUntil(purgeEvidence(env).catch((err) => console.error('evidence sweep failed', err)))
+    ctx.waitUntil(purgeCounters(env).catch((err) => console.error('counter sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

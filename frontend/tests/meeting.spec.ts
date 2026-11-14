@@ -82,11 +82,14 @@ test('request, accept, chat, unmatch', async ({ browser }) => {
   await sheetA.getByRole('button', { name: 'Bhejo' }).click()
   await expect(sheetB.getByText('JKK ke gate pe milte hain')).toBeVisible()
 
-  // A unmatches (in the sheet, not a native dialog); B's chat disappears
+  // A unmatches (in the sheet, not a native dialog); B's open chat says it has ended, then is gone
   await sheetA.getByRole('button', { name: 'Unmatch' }).click()
   await sheetA.getByRole('button', { name: 'Haan, unmatch karo' }).click()
   await expect(sheetA.getByText('Abhi koi baat nahi')).toBeVisible()
   await expect(sheetA.getByText(b.name)).toBeHidden()
+  await expect(sheetB.getByText('Ye baat-cheet khatam ho gayi')).toBeVisible()
+  await expect(sheetB.getByRole('textbox', { name: 'Chat mein likho' })).toBeHidden()
+  await sheetB.getByRole('button', { name: 'Wapas' }).click()
   await expect(sheetB.getByText('Abhi koi baat nahi')).toBeVisible()
   await expect(sheetB.getByText(a.name)).toBeHidden()
 })

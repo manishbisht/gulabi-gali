@@ -243,3 +243,30 @@ it('a chats-only refetch never lets an older request list win', async () => {
   await settle()
   expect(host.querySelector('[data-testid=incoming]')!.textContent).toBe('1')
 })
+
+it('an open chat the other person ended says so, and takes no more messages', async () => {
+  const { host, q, button, click } = await mount()
+  await click(q('[data-testid=open]'))
+  await settle()
+  await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
+  await click(button(/Ravi/))
+  await settle()
+  expect(host.textContent).toContain('hello')
+  // Ravi unmatches: the match is gone from the server, and the inbox says so
+  matches = matches.filter((m) => m.id !== 'm1')
+  await act(async () =>
+    FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'unmatched', matchId: 'm1' }) }),
+  )
+  await settle()
+  // still on the chat, with the lines already read, and told it has ended
+  expect(host.textContent).toContain('Ravi')
+  expect(host.textContent).toContain('hello')
+  expect(host.textContent).toContain('This conversation has ended')
+  expect(host.querySelector('input[aria-label="Write in the chat"]')).toBeNull()
+  expect(button(/^Unmatch$/)).toBeUndefined()
+  // back goes to the list, where it is gone
+  await click(button(/^Back$/))
+  await settle()
+  expect(host.textContent).not.toContain('Ravi')
+  expect(host.textContent).not.toContain('This conversation has ended')
+})

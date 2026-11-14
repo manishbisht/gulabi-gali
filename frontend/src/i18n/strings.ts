@@ -188,6 +188,10 @@ export const STRINGS = {
     en: "Couldn't sit down just now. Try again.",
   },
   benchRate: { hi: 'Zara aaram se: ek second mein ek baat.', en: 'Easy does it: one line a second.' },
+  benchMuted: {
+    hi: 'Moderator ne abhi aapko chup karaya hai. Kuch der baad likh paoge.',
+    en: 'A moderator has muted you for now. You can write again later.',
+  },
   connOpen: { hi: 'Mulaqaatein', en: 'Connections' },
   connBadge: { hi: '{n} naye', en: '{n} new' },
   connTitle: { hi: 'Aapki mulaqaatein', en: 'Your connections' },
@@ -243,6 +247,7 @@ export const STRINGS = {
   chatUnmatchYes: { hi: 'Haan, unmatch karo', en: 'Yes, unmatch' },
   chatUnmatchNo: { hi: 'Rehne do', en: 'Keep chat' },
   chatUnmatchFailed: { hi: 'Unmatch nahi ho paya. Dobara try karo.', en: "Couldn't unmatch. Try again." },
+  chatEnded: { hi: 'Ye baat-cheet khatam ho gayi', en: 'This conversation has ended' },
   benchNoticeClose: { hi: 'Theek hai', en: 'OK' },
 } as const satisfies Record<string, Record<Lang, string>>
 

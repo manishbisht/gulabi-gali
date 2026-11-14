@@ -35,7 +35,10 @@ import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
 
-/** The bench notices that are a passing toast (`ghost` is a card, `rate` a line in the bench panel). */
+/**
+ * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
+ * panel).
+ */
 const BENCH_TOASTS: Partial<Record<BenchNotice, StringKey>> = {
   full: 'benchFull',
   far: 'benchFar',
