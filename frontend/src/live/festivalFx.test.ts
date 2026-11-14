@@ -1,19 +1,29 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import type { Stage } from '../engine/stage'
-import type { District } from '../world/district'
+import { loadDistrict, type District } from '../world/district'
 import { FLOOR_H } from '../world/kit/parts'
 import type { BuildingSpec } from '../world/types'
 import type { SkyParams } from './sky'
-import { createFestivalFx, festivalParticleCount, festivalSky, roofDiyas } from './festivalFx'
+import {
+  createFestivalFx,
+  festivalParticleCount,
+  festivalSky,
+  processionCount,
+  roofDiyas,
+} from './festivalFx'
 
 describe('festivalParticleCount', () => {
   it('scales particles by quality tier', () => {
     expect([2, 1, 0].map((q) => festivalParticleCount('sankranti', q as 0 | 1 | 2))).toEqual([120, 60, 25])
     expect([2, 1, 0].map((q) => festivalParticleCount('holi', q as 0 | 1 | 2))).toEqual([80, 40, 15])
+    // gangaur and teej throw no particles: they have a procession instead, and jlf is banner-only
     expect(festivalParticleCount('gangaur', 2)).toBe(0)
     expect(festivalParticleCount('teej', 0)).toBe(0)
     expect(festivalParticleCount('jlf', 1)).toBe(0)
+    expect([2, 1, 0].map((q) => processionCount('gangaur', q as 0 | 1 | 2))).toEqual([40, 20, 8])
+    expect(processionCount('teej', 1)).toBeGreaterThan(0)
+    expect(processionCount('jlf', 2)).toBe(0)
   })
 })
 
@@ -87,5 +97,29 @@ describe('createFestivalFx', () => {
     }
     fx.dispose()
     expect(scene.getObjectByName('festival-fx')).toBeUndefined()
+  })
+
+  it('walks a procession for Gangaur and Teej, rebuilt on a tier change and gone with the festival', async () => {
+    const scene = new THREE.Scene()
+    const district = await loadDistrict('walled-city')
+    const fx = createFestivalFx({ scene } as Stage, district)
+    expect(fx.processionCount()).toBe(0)
+    fx.set('gangaur', 2)
+    expect(fx.processionCount()).toBe(40)
+    const first = scene.getObjectByName('procession')
+    fx.set('gangaur', 2) // the sky repaints now and then: the same procession keeps walking
+    expect(scene.getObjectByName('procession')).toBe(first)
+    fx.update(1 / 30)
+    fx.set('gangaur', 0)
+    expect(fx.processionCount()).toBe(8)
+    fx.set('teej', 0)
+    expect(scene.getObjectByName('procession-jhula')).toBeDefined()
+    fx.set('holi', 2)
+    expect(fx.processionCount()).toBe(0)
+    expect(scene.getObjectByName('procession')).toBeUndefined()
+    fx.set('teej', 1)
+    fx.dispose()
+    expect(scene.getObjectByName('procession')).toBeUndefined()
+    district.dispose()
   })
 })

@@ -162,6 +162,13 @@ const malviyaNagar: DistrictDef = {
   spawn: { x: 6, z: 46 },
   station: { x: -40.4, z: 61 },
   centre: { x: 0, z: 27 },
+  /** A short stretch of JLN Marg, out along its carriageway and back. */
+  processionRoute: [
+    { x: -10, z: 45 },
+    { x: 34, z: 45 },
+    { x: 34, z: 50 },
+    { x: -10, z: 50 },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

@@ -239,6 +239,13 @@ const miRoad: DistrictDef = {
   spawn: { x: 2, z: 54 },
   station: { x: -20.4, z: 66 },
   centre: { x: 0, z: HALL_AT.z + 18 },
+  /** A short stretch of MI Road, out along its carriageway and back. */
+  processionRoute: [
+    { x: -18, z: 49.5 },
+    { x: 17, z: 49.5 },
+    { x: 17, z: 54.5 },
+    { x: -18, z: 54.5 },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

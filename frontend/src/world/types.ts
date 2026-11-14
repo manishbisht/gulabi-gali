@@ -61,6 +61,11 @@ export interface DistrictDef {
   station: Vec2
   /** Where people gather: Holi colour rises here. Open ground, clear of buildings and landmarks. */
   centre: Vec2
+  /**
+   * The festival procession's loop along the main street, closed (the last leg returns to the first point),
+   * clear of every collider by at least 1.3 m. Gangaur and Teej walk it.
+   */
+  processionRoute: Vec2[]
   /** Spawn points of the street animals: 3-5 dogs, 2-3 cats and one cow, on open ground. */
   animals: { dogs: Vec2[]; cats: Vec2[]; cow: Vec2 }
   ground: PaletteKey

@@ -281,6 +281,22 @@ button {
   text-align: center;
 }
 
+.procession-line {
+  position: absolute;
+  top: 156px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(42 29 36 / 0.65);
+  color: var(--cream);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
 .npc-bubbles {
   position: fixed;
   inset: 0;

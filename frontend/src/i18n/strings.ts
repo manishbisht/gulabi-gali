@@ -31,6 +31,14 @@ export const STRINGS = {
   festivalHoli: { hi: 'Holi mubarak! Rang barse 🎨', en: 'Happy Holi! Colours in the air 🎨' },
   festivalGangaur: { hi: 'Gangaur ki shubhkamnayein! 🌸', en: 'Happy Gangaur! 🌸' },
   festivalTeej: { hi: 'Teej ki shubhkamnayein! 🌿', en: 'Happy Teej! 🌿' },
+  festivalGangaurLine: {
+    hi: 'Gangaur ki sawari Tripolia se nikal rahi hai',
+    en: 'The Gangaur procession is leaving Tripolia',
+  },
+  festivalTeejLine: {
+    hi: 'Hari lehariya mein Teej ka jhoola gali-gali ghoom raha hai',
+    en: 'The Teej swing cart is out, with a train of green lehariya behind it',
+  },
   festivalDiwali: { hi: 'Diwali mubarak! Diye jagmagaye 🪔', en: 'Happy Diwali! The diyas are lit 🪔' },
   festivalJlf: { hi: 'Jaipur Literature Festival ki dhoom! 📚', en: 'Jaipur Literature Festival is on! 📚' },
   npcNotReal: {

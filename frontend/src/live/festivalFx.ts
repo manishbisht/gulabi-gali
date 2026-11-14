@@ -5,16 +5,19 @@ import { FLOOR_H } from '../world/kit/parts'
 import type { District } from '../world/district'
 import type { BuildingSpec, BuildingStyle } from '../world/types'
 import { PALETTE } from '../world/palette'
+import { createProcession, processionCount, type Procession } from './procession'
 import type { SkyParams } from './sky'
 
 type Tier = 0 | 1 | 2
 
-/** Instances drawn per quality tier (index 0 is the lowest tier); festivals with no effect yet draw none. */
+/** Particles drawn per quality tier (index 0 is the lowest tier); Gangaur and Teej have a procession instead. */
 const COUNTS: Partial<Record<FestivalId, readonly [number, number, number]>> = {
   sankranti: [25, 60, 120],
   holi: [15, 40, 80],
   diwali: [60, 150, 300],
 }
+
+export { processionCount }
 
 export function festivalParticleCount(id: FestivalId, quality: Tier): number {
   return COUNTS[id]?.[quality] ?? 0
@@ -29,6 +32,8 @@ export function festivalSky(sky: SkyParams, id: FestivalId | null, sunsetIso: st
 export interface FestivalFx {
   set(id: FestivalId | null, quality: Tier): void
   update(dt: number): void
+  /** Women and drummers in the procession now walking (Gangaur and Teej), 0 when there is none. */
+  processionCount(): number
   dispose(): void
 }
 
@@ -193,12 +198,28 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
   diyas.instanceMatrix.needsUpdate = true
   group.add(diyas)
 
+  // ---- Gangaur and Teej: the procession, rebuilt only when the festival or the tier changes
+  let procession: Procession | null = null
+  let processionKey = ''
+  const setProcession = (next: FestivalId | null, quality: Tier) => {
+    const key = next === 'gangaur' || next === 'teej' ? `${next}:${quality}` : ''
+    if (key === processionKey) return
+    processionKey = key
+    procession?.dispose()
+    procession = null
+    if (key) {
+      procession = createProcession(district, next as 'gangaur' | 'teej', quality)
+      group.add(procession.group)
+    }
+  }
+
   let id: FestivalId | null = null
   let time = 0
 
   return {
     set(next, quality) {
       id = next
+      setProcession(next, quality)
       const n = next ? festivalParticleCount(next, quality) : 0
       kites.visible = next === 'sankranti'
       strings.visible = next === 'sankranti' && quality > 0
@@ -214,6 +235,7 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
     update(dt) {
       if (!id) return
       time += dt
+      procession?.update(dt)
       if (id === 'sankranti') {
         const n = kites.count
         for (let i = 0; i < n; i++) {
@@ -255,7 +277,10 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
         puffs.instanceMatrix.needsUpdate = true
       }
     },
+    processionCount: () => procession?.count ?? 0,
     dispose() {
+      procession?.dispose()
+      procession = null
       group.removeFromParent()
       kites.dispose()
       puffs.dispose()

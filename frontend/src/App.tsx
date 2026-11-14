@@ -70,6 +70,12 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
   jlf: 'festivalJlf',
 }
 
+/** The line under the banner while a procession is out. */
+const PROCESSIONS: Partial<Record<FestivalId, StringKey>> = {
+  gangaur: 'festivalGangaurLine',
+  teej: 'festivalTeejLine',
+}
+
 /** `?gg-festival=<id>` stands in for the live festival, in test mode only. */
 function festivalOverride(): FestivalId | null {
   const q = new URLSearchParams(location.search)
@@ -446,6 +452,7 @@ export default function App() {
         snapshot={snapshot}
         line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
         banner={festival ? t(FESTIVALS[festival], lang) : undefined}
+        procession={festival && PROCESSIONS[festival] ? t(PROCESSIONS[festival], lang) : undefined}
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}

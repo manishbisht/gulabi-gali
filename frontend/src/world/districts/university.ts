@@ -229,6 +229,13 @@ const university: DistrictDef = {
   spawn: { x: -40, z: 42 },
   station: { x: 11.6, z: 56 },
   centre: { x: JKK_AT.x, z: 22 },
+  /** A short stretch of JLN Marg, out along its carriageway and back. */
+  processionRoute: [
+    { x: -5, z: 37.5 },
+    { x: 34, z: 37.5 },
+    { x: 34, z: 42.5 },
+    { x: -5, z: 42.5 },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

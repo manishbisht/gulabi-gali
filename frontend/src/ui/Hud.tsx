@@ -10,6 +10,8 @@ interface Props {
   line?: string
   /** A festival greeting, already in the current language. */
   banner?: string
+  /** A line under the banner while a procession is on the street, already in the current language. */
+  procession?: string
   /** Stamp progress as `N/9`. */
   stamps: string
   lang: Lang
@@ -35,6 +37,7 @@ export function Hud({
   snapshot,
   line,
   banner,
+  procession,
   stamps,
   lang,
   onLang,
@@ -111,6 +114,11 @@ export function Hud({
       {banner && (
         <p className="festival-banner" role="status">
           {banner}
+        </p>
+      )}
+      {procession && (
+        <p className="procession-line" role="status">
+          {procession}
         </p>
       )}
       {top}

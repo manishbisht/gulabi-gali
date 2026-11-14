@@ -363,6 +363,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       freezeAnimals: animals.freeze,
       festival: hooks.festival,
       sky: sky.params,
+      procession: () => ({ count: sky.procession() }),
       posters: () =>
         (posters?.all() ?? []).map(({ poster, at }) => {
           const p = at.clone().project(stage.camera)
@@ -461,7 +462,7 @@ function createSky(
   stage: Stage,
   district: District,
   hooks: SessionHooks,
-): DistrictSystem & { paint(): void; params(): SkyParams } {
+): DistrictSystem & { paint(): void; params(): SkyParams; procession(): number } {
   const { current, now } = hooks.live
   const fx = createWeatherFx(stage)
   const festivalFx = createFestivalFx(stage, district)
@@ -478,6 +479,7 @@ function createSky(
   return {
     paint,
     params: () => sky!,
+    procession: festivalFx.processionCount,
     update(dt: number) {
       fx.update(dt)
       festivalFx.update(dt)

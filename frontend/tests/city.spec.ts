@@ -249,3 +249,12 @@ test('the sound switch is remembered', async ({ page }) => {
   await expect(sound).toHaveAttribute('aria-pressed', 'false')
   expect(await page.evaluate(() => localStorage.getItem('gg-sound'))).toBe('off')
 })
+
+test('a Gangaur procession walks the street, with its line on screen', async ({ page }) => {
+  await page.goto('/?gg-test=1&gg-festival=gangaur')
+  await page.getByRole('button', { name: 'Padharo!' }).click()
+  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  expect(await page.evaluate(() => window.__gg.festival())).toBe('gangaur')
+  await expect.poll(() => page.evaluate(() => window.__gg.procession().count)).toBeGreaterThan(0)
+  await expect(page.getByText('Gangaur ki sawari Tripolia se nikal rahi hai')).toBeVisible()
+})

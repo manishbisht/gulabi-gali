@@ -17,6 +17,8 @@ export interface GgTestApi {
   district(): DistrictId
   /** The sky as last painted. */
   sky(): SkyParams
+  /** The Gangaur or Teej procession on the street: how many women and drummers walk in it (0 for none). */
+  procession(): { count: number }
   /** The festival in effect (the `gg-festival` override, else the snapshot's). */
   festival(): FestivalId | null
   /** Each character on screen: where it stands (metres) and where its chest is on the page (CSS px). */
