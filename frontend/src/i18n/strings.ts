@@ -269,6 +269,26 @@ export const STRINGS = {
     hi: 'Auto yahin chhod diya — paidal nikal jao.',
     en: 'Left the auto here — walk out on foot.',
   },
+  animalCall: { hi: 'Saath chalo', en: 'Come along' },
+  animalHome: { hi: 'Ghar jao', en: 'Go home' },
+  animalGreetCow: { hi: 'Gaay ko namaste', en: 'Greet the cow' },
+  animalWaiting: {
+    hi: '{name} station pe intezaar kar raha hai',
+    en: '{name} is waiting at the station',
+  },
+  animalCow1: { hi: 'Gaay mata apni marzi ki maalik hain', en: 'The cow does as she pleases' },
+  animalCow2: {
+    hi: 'Gaay mata ne ek nazar dekha, phir aaram se jugaali karti rahin',
+    en: 'The cow glanced over, then went back to her unhurried chewing',
+  },
+  animalCow3: {
+    hi: 'Sadak unki hai — hum bas thoda ghoom ke nikal jaate hain',
+    en: 'The road is hers; we simply walk around',
+  },
+  animalCow4: {
+    hi: 'Gaay mata ne sab dekha hai, kuch bolti nahi — bas shaant khadi hain',
+    en: 'She has seen it all and says nothing, calm as ever',
+  },
   soundOn: { hi: 'Awaaz: chalu', en: 'Sound: on' },
   soundOff: { hi: 'Awaaz: band', en: 'Sound: off' },
   soundToggleLabel: { hi: 'Awaaz chalu ya band karo', en: 'Turn sound on or off' },

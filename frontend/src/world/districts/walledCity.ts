@@ -285,6 +285,21 @@ const walledCity: DistrictDef = {
   spawn: { x: 1.5, z: 44 },
   station: { x: -7.2, z: 11 },
   centre: CHAUPAR_AT,
+  /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
+  animals: {
+    dogs: [
+      { x: 2, z: 38 },
+      { x: -10, z: 0 },
+      { x: 0, z: -10 },
+      { x: 10, z: 0 },
+    ],
+    cats: [
+      { x: -2, z: 58 },
+      { x: 8, z: 60 },
+      { x: 6, z: -18 },
+    ],
+    cow: { x: 0, z: 10 },
+  },
   ground: 'sandstone',
   paving,
   buildings,

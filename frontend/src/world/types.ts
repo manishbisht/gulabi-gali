@@ -61,6 +61,8 @@ export interface DistrictDef {
   station: Vec2
   /** Where people gather: Holi colour rises here. Open ground, clear of buildings and landmarks. */
   centre: Vec2
+  /** Spawn points of the street animals: 3-5 dogs, 2-3 cats and one cow, on open ground. */
+  animals: { dogs: Vec2[]; cats: Vec2[]; cow: Vec2 }
   ground: PaletteKey
   paving: Paving[]
   buildings: BuildingSpec[]

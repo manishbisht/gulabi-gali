@@ -162,6 +162,20 @@ const malviyaNagar: DistrictDef = {
   spawn: { x: 6, z: 46 },
   station: { x: -40.4, z: 61 },
   centre: { x: 0, z: 27 },
+  /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
+  animals: {
+    dogs: [
+      { x: 0, z: 44 },
+      { x: 10, z: 40 },
+      { x: -6, z: 34 },
+      { x: 10, z: 26 },
+    ],
+    cats: [
+      { x: -10, z: 24 },
+      { x: 0, z: 16 },
+    ],
+    cow: { x: 0, z: 26 },
+  },
   ground: 'sandstone',
   paving,
   buildings,

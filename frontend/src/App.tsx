@@ -21,6 +21,7 @@ import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
 import { useBench, type BenchNotice } from './world/useBench'
+import { useAnimals } from './world/useAnimals'
 import { useDrive } from './world/useDrive'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
@@ -100,6 +101,9 @@ export default function App() {
   /** Driving a parked auto: one in reach, at the wheel, and "no room to get out". */
   const drive = useDrive()
   const { hooks: driveHooks, bind: bindDrive } = drive
+  /** The street animals: the one in reach, the one following, and their passing lines. */
+  const animals = useAnimals()
+  const { hooks: animalHooks, bind: bindAnimals } = animals
   const [sound, setSound] = useState(soundOn)
   /** The line for room when the city is full (`MAX_LIVE`): this resident waits in it as a ghost. */
   const queue = useQueue()
@@ -249,6 +253,7 @@ export default function App() {
         bench: benchHooks,
         posters: posterHooks,
         drive: driveHooks,
+        animals: animalHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -260,8 +265,10 @@ export default function App() {
     bindBench(city)
     bindPosters(city)
     bindDrive(city)
+    bindAnimals(city)
 
     return () => {
+      bindAnimals(null)
       bindDrive(null)
       bindPosters(null)
       bindBench(null)
@@ -292,6 +299,8 @@ export default function App() {
     bindPosters,
     driveHooks,
     bindDrive,
+    animalHooks,
+    bindAnimals,
     current,
     now,
     patch,
@@ -491,6 +500,11 @@ export default function App() {
                     {t('driveRescued', lang)}
                   </div>
                 )}
+                {animals.notice && (
+                  <div className="toast" role="status">
+                    {t(animals.notice.key, lang, animals.notice.vars)}
+                  </div>
+                )}
                 {benchToast && (
                   <div className="toast" role="status">
                     {t(benchToast, lang)}
@@ -533,6 +547,27 @@ export default function App() {
                     {t('posterPin', lang)}
                   </button>
                 )}
+                {!drive.near &&
+                  !nearStation &&
+                  !bench.near &&
+                  !bench.seat &&
+                  !posters.near &&
+                  !near &&
+                  !sheetOpen &&
+                  !card && (
+                    <>
+                      {animals.near && (
+                        <button type="button" className="metro-button animal-button" onClick={animals.call}>
+                          {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                        </button>
+                      )}
+                      {animals.following && (
+                        <button type="button" className="metro-button animal-button" onClick={animals.home}>
+                          {t('animalHome', lang)}
+                        </button>
+                      )}
+                    </>
+                  )}
                 {bench.seat ? (
                   // seated, the bench panel holds the bottom; a tapped character or person shows over it
                   card || (

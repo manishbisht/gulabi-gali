@@ -83,11 +83,11 @@ function hooks(): SessionHooks {
   }
 }
 
-function open(start: DistrictId = 'walled-city') {
+function open(start: DistrictId = 'walled-city', extra: Partial<SessionHooks> = {}) {
   const s = fakeStage()
   const canvas = document.body.appendChild(document.createElement('canvas'))
   const bubbleHost = document.body.appendChild(document.createElement('div'))
-  const h = hooks()
+  const h = { ...hooks(), ...extra }
   const session = createCitySession({ stage: s.stage, controls, canvas, bubbleHost, start, hooks: h })
   return { ...s, session, hooks: h }
 }
@@ -785,5 +785,43 @@ it('a cancelled trip disposes the district that arrives late and keeps the old o
   expect(late.dispose).toHaveBeenCalled()
   expect(session.district()).toBe(first)
   expect(first.dispose).not.toHaveBeenCalled()
+  session.dispose()
+})
+
+it('a follower waits at the station through a metro ride and rejoins on the way back', async () => {
+  const animals = { near: vi.fn(), following: vi.fn(), notice: vi.fn() }
+  const { session } = open('walled-city', { animals })
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  session.player()!.teleport(2, 38.5) // beside the dog at (2, 38)
+  session.callAnimal()
+  expect(animals.following).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'dog' }))
+  const dog = animals.following.mock.lastCall![0] as { id: string; name: string }
+
+  const out = session.travelTo('mi-road')
+  loads[1]!.resolve(fakeDistrict(miRoad))
+  await out
+  expect(animals.notice).toHaveBeenCalledWith({ kind: 'waiting', name: dog.name })
+  expect(animals.following).toHaveBeenLastCalledWith(null) // Mi Road has its own animals
+
+  const back = session.travelTo('walled-city')
+  loads[2]!.resolve(fakeDistrict(walledCity))
+  await back
+  expect(animals.following).toHaveBeenLastCalledWith(expect.objectContaining({ id: dog.id }))
+  session.dispose()
+})
+
+it('a failed trip leaves the follower where it is', async () => {
+  const animals = { near: vi.fn(), following: vi.fn(), notice: vi.fn() }
+  const { session } = open('walled-city', { animals })
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  session.player()!.teleport(2, 38.5)
+  session.callAnimal()
+  const trip = session.travelTo('mi-road')
+  loads[1]!.reject(new Error('chunk failed'))
+  await expect(trip).rejects.toThrow()
+  expect(animals.notice).not.toHaveBeenCalled()
+  expect(animals.following).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'dog' }))
   session.dispose()
 })

@@ -229,6 +229,20 @@ const university: DistrictDef = {
   spawn: { x: -40, z: 42 },
   station: { x: 11.6, z: 56 },
   centre: { x: JKK_AT.x, z: 22 },
+  /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
+  animals: {
+    dogs: [
+      { x: 50, z: 22 },
+      { x: -46, z: 40 },
+      { x: -34, z: 40 },
+    ],
+    cats: [
+      { x: 40, z: 22 },
+      { x: 50, z: 32 },
+      { x: 60, z: 22 },
+    ],
+    cow: { x: -40, z: 32 },
+  },
   ground: 'grass',
   paving,
   buildings,

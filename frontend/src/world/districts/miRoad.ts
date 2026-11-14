@@ -239,6 +239,21 @@ const miRoad: DistrictDef = {
   spawn: { x: 2, z: 54 },
   station: { x: -20.4, z: 66 },
   centre: { x: 0, z: HALL_AT.z + 18 },
+  /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
+  animals: {
+    dogs: [
+      { x: 0, z: -6 },
+      { x: -4, z: 52 },
+      { x: 8, z: 52 },
+      { x: 2, z: 44 },
+      { x: -10, z: -10 },
+    ],
+    cats: [
+      { x: 10, z: -10 },
+      { x: -12, z: 0 },
+    ],
+    cow: { x: 0, z: 4 },
+  },
   ground: 'sandstone',
   paving,
   buildings,

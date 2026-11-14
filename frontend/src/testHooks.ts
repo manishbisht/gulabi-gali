@@ -27,6 +27,10 @@ export interface GgTestApi {
   setNow(iso: string): void
   /** Pauses (or resumes) every walking character, so a test can aim at one that stands still. */
   freezeNpcs(on: boolean): void
+  /** Each street animal: where it stands (metres), whether it follows, and where it is on the page (CSS px). */
+  animals(): { id: string; kind: string; x: number; z: number; following: boolean; sx: number; sy: number }[]
+  /** Stops (or resumes) every animal wandering; a follower still follows. */
+  freezeAnimals(on: boolean): void
   /** The district socket: `connecting` (also while waiting to retry), `open`, or `closed` for good. */
   liveState(): LiveState
   /** Each other person in the district: where their body is drawn (metres) and their chest on the page (CSS px). */

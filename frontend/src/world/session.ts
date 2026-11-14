@@ -13,6 +13,7 @@ import { closeAudio } from '../audio/horn'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
+import { createAnimals, createStationMemory, type AnimalHooks, type Animals } from './animals'
 import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
@@ -100,6 +101,8 @@ export interface SessionHooks {
   posters?: SessionPosterHooks
   /** Driving a parked auto: what it tells React (see useDrive). */
   drive?: DriveHooks
+  /** The street animals: the one in reach, the one following, and their passing lines (see useAnimals). */
+  animals?: AnimalHooks
 }
 
 export interface CitySessionOptions {
@@ -151,6 +154,10 @@ export interface CitySession {
   exitAuto(): void
   /** The horn: only while driving, at most twice a second, and only heard here. */
   honk(): void
+  /** "Saath chalo": calls the animal in reach (the cow answers with a line instead). */
+  callAnimal(): void
+  /** "Ghar jao": the follower goes back to where it lives. */
+  animalHome(): void
   /** A poster this page just pinned goes up on its wall at once (the socket's word on it may lag). */
   pinned(p: PosterView): void
   /** One of this page's own posters came down. */
@@ -177,7 +184,10 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sitting: Sitting | null
     posters: Posters | null
     driving: Driving
+    animals: Animals
   } | null = null
+  /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
+  const stationMemory = createStationMemory()
   let repaint = () => {}
   let disposed = false
 
@@ -214,6 +224,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       if (at === 'spawn') hooks.place(null)
       throw new Error(`Could not load ${id}`)
     }
+    // the follower waits at this district's station; the toast says so
+    if (at === 'station') here?.animals.beginTravel()
     leave()
     stage.scene.add(district.root)
     const player = createPlayer({
@@ -227,6 +239,13 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     const start = district.def[at]
     player.teleport(start.x, start.z)
     const npcs = createNpcs(district.def.npcs, stage.scene)
+    const animals = createAnimals(district.def, stage.scene, {
+      colliders: district.colliders,
+      memory: stationMemory,
+      hooks: hooks.animals,
+      quality: stage.quality,
+    })
+    const offAnimalQuality = stage.onQuality(animals.setQuality)
     const sky = createSky(stage, district, hooks)
     // made here, not in the presence, so taps and E can reach the people too
     const people = hooks.presence ? createPeople(stage.scene) : null
@@ -254,10 +273,29 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     })
     const systems: DistrictSystem[] = [
       npcs,
+      {
+        update: animals.update,
+        dispose() {
+          offAnimalQuality()
+          animals.dispose()
+        },
+      },
       sky,
       createLights(stage, district),
       { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
-      createInteraction(canvas, stage, controls, district, npcs, people, sitting, posters, driving, hooks),
+      createInteraction(
+        canvas,
+        stage,
+        controls,
+        district,
+        npcs,
+        people,
+        sitting,
+        posters,
+        driving,
+        animals,
+        hooks,
+      ),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
     ]
     if (posters)
@@ -288,7 +326,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, sitting, posters, driving }
+    here = { district, player, systems, presence, sitting, posters, driving, animals }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -309,6 +347,20 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           }
         }),
       freezeNpcs: npcs.freeze,
+      animals: () =>
+        animals.list().map((a) => {
+          const p = new THREE.Vector3(a.x, 0.5, a.z).project(stage.camera)
+          return {
+            id: a.id,
+            kind: a.kind,
+            x: a.x,
+            z: a.z,
+            following: a.following,
+            sx: ((p.x + 1) / 2) * innerWidth,
+            sy: ((1 - p.y) / 2) * innerHeight,
+          }
+        }),
+      freezeAnimals: animals.freeze,
       festival: hooks.festival,
       sky: sky.params,
       posters: () =>
@@ -372,6 +424,10 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     mount: () => here?.driving.mount(),
     exitAuto: () => here?.driving.exit(),
     honk: () => here?.driving.honk(),
+    callAnimal() {
+      if (here) here.animals.call(here.player.position())
+    },
+    animalHome: () => here?.animals.sendHome(),
     pinned: (p) => here?.posters?.upsert(p),
     unpinned: (id) => here?.posters?.remove(id),
     refreshPosters: () => here?.posters?.refresh(),
@@ -444,8 +500,8 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 }
 
 /**
- * E and taps: a landmark's stamp, the metro, a bench, the character card and the person card, in that order
- * of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
+ * E and taps: a landmark's stamp, the metro, a bench, a poster wall, an auto, the character card and the person
+ * card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
  * the landmark and metro wait until they do. A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
  */
@@ -459,8 +515,11 @@ function createInteraction(
   sitting: Sitting | null,
   posters: Posters | null,
   drive: Driving,
+  animals: Animals,
   hooks: SessionHooks,
 ): DistrictSystem {
+  /** Where the player stands, for a tap on an animal. */
+  const at: Vec2 = { x: 0, z: 0 }
   const ray = new THREE.Raycaster()
   const ndc = new THREE.Vector2()
   let landmarkNear = false
@@ -483,16 +542,23 @@ function createInteraction(
     const who = people?.pick(ray)
     if (who) return hooks.personCard.tap(who, landmarkNear || hooks.npcCard.isOpen())
     const poster = posters?.pick(ray)
-    if (poster && !landmarkNear) {
+    if (poster) {
+      if (landmarkNear) return
       hooks.npcCard.close()
       hooks.personCard.close()
-      hooks.posters?.tap(poster)
+      return hooks.posters?.tap(poster)
     }
+    // last: an animal, unless a card is up, a landmark has the screen or the player is seated
+    if (landmarkNear || hooks.npcCard.isOpen() || hooks.personCard.isOpen() || sitting?.seated()) return
+    const pet = animals.pick(ray)
+    if (pet) animals.call(at, pet.id)
   }
   canvas.addEventListener('pointerdown', onDown)
   canvas.addEventListener('pointerup', onUp)
   return {
     update(_dt, pos) {
+      at.x = pos.x
+      at.z = pos.z
       const key = controls.interact()
       // at the wheel E means get out, and nothing else hears it; Space is the horn
       const driving = drive.driving()
@@ -546,6 +612,20 @@ function createInteraction(
             (meeting || (!metro && !hooks.npcCard.isOpen())),
           landmarkNear,
         )
+      // E by an animal, only when nothing above wanted it (a card that just opened has it)
+      if (
+        pressed &&
+        !card &&
+        !seated &&
+        !landmarkNear &&
+        !metro &&
+        !bench &&
+        !wall &&
+        !auto &&
+        !hooks.npcCard.isOpen() &&
+        !hooks.personCard.isOpen()
+      )
+        animals.call(pos)
     },
     dispose() {
       canvas.removeEventListener('pointerdown', onDown)
