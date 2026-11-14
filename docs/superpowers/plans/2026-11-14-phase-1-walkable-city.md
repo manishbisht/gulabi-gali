@@ -45,8 +45,8 @@ files where a task says so. Read it; never modify it.
 - **Nothing copied from peopleofdelhi.com:** no text, art, names or layout.
 - City time is **IST (Asia/Kolkata)**, whatever the device's timezone.
 - **Production origins:**
-  - site: `https://jaipur.manishbisht.me`
-  - API: `https://api.jaipur.manishbisht.me`
+  - site: `https://gulabi-gali.manishbisht.me`
+  - API: `https://api.gulabi-gali.manishbisht.me`
   - dev: `http://127.0.0.1:5173` and `http://localhost:5173`, with the API on `http://127.0.0.1:8787`
 - `localStorage` keys are prefixed `gg-`. Every read and write goes through `frontend/src/storage.ts`,
   which never throws.
@@ -183,7 +183,7 @@ it('answers /health', async () => {
 })
 
 it('allows the production site and local dev origins only', async () => {
-  for (const origin of ['https://jaipur.manishbisht.me', 'http://127.0.0.1:5173', 'http://localhost:5173']) {
+  for (const origin of ['https://gulabi-gali.manishbisht.me', 'http://127.0.0.1:5173', 'http://localhost:5173']) {
     const res = await SELF.fetch('https://api.test/health', { headers: { Origin: origin } })
     expect(res.headers.get('access-control-allow-origin')).toBe(origin)
   }
@@ -220,7 +220,7 @@ it('404s unknown paths as JSON', async () => {
   - the manifest link
   - a `<div id="root">`
 
-  `public/CNAME` contains `jaipur.manishbisht.me`. `App.tsx` renders `<main>Padharo!</main>` for now.
+  `public/CNAME` contains `gulabi-gali.manishbisht.me`. `App.tsx` renders `<main>Padharo!</main>` for now.
 - [ ] **Step 8: Protocol copy and check.** Write `backend/src/protocol.ts` with `DistrictId` and copy it
   to `frontend/src/net/protocol.ts`. `scripts/check-protocol.mjs` reads both files and, if they differ,
   prints `protocol.ts copies differ: edit backend/src/protocol.ts and copy it to frontend/src/net/protocol.ts`
@@ -232,7 +232,7 @@ it('404s unknown paths as JSON', async () => {
     typecheck. There is no shared step.
   - The `e2e`, `build`, `deploy` and `deploy-api` jobs stay as in `games`.
   - The build env has only `VITE_API_URL` and `VITE_RELEASE`.
-  - The Pages comment names `jaipur.manishbisht.me`.
+  - The Pages comment names `gulabi-gali.manishbisht.me`.
 - [ ] **Step 11: Verify the whole thing.** Run `npm run lint && npm test && npm run build`. Expected: all
   green, and `frontend/dist/index.html` exists.
 - [ ] **Step 12: Commit.** `git add -A && git commit -m "chore: scaffold frontend and backend workspaces with CI"`
@@ -993,14 +993,14 @@ it('every NPC route stays out of colliders', async () => { /* for each district:
   from `games`) and include a row for **opening the link from an Instagram DM on Android**: the canvas
   shows, the joystick works and nothing scrolls the page.
 - [ ] **Step 4: Go-live wiring.**
-  - Add `routes: [{ pattern: "api.jaipur.manishbisht.me", custom_domain: true }]` to `wrangler.jsonc`.
+  - Add `routes: [{ pattern: "api.gulabi-gali.manishbisht.me", custom_domain: true }]` to `wrangler.jsonc`.
     This needs the `manishbisht.me` zone on Cloudflare. If it isn't there, `deployment.md` says to use the
     `workers.dev` URL as `VITE_API_BASE_URL` until it is moved.
   - `deployment.md` lists:
     - the GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `VITE_API_BASE_URL`
       in the `github-pages` environment
     - `wrangler kv namespace create CITY`
-    - the Pages custom domain `jaipur.manishbisht.me` (CNAME to `<user>.github.io`)
+    - the Pages custom domain `gulabi-gali.manishbisht.me` (CNAME to `<user>.github.io`)
     - Cloudflare budget alerts
 - [ ] **Step 5: Architecture doc.** Write `docs/architecture.md` in the style of `games`: the packages
   table, a mermaid diagram (browser ↔ `/api/city` ← cron ← Open-Meteo), how districts stream, the test

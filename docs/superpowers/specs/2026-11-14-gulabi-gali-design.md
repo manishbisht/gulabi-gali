@@ -71,7 +71,7 @@ date is **flexible**: it happens when phases 1–3 are solid, ideally timed to a
 - **18+ only.** Self-declared at sign-up and stated in the rules.
 - **Budget: roughly $5–20 a month.** That covers Cloudflare Workers Paid plus free tiers (Clerk, D1, and
   email sending). Nothing paid per user, such as SMS, is in scope. Budget alerts are set in Cloudflare.
-- **Domain:** the site is at `jaipur.manishbisht.me` and the API at `api.jaipur.manishbisht.me`, so both
+- **Domain:** the site is at `gulabi-gali.manishbisht.me` and the API at `api.gulabi-gali.manishbisht.me`, so both
   share a root domain and sign-in sessions work across them.
 
 ## Approaches considered
@@ -225,7 +225,7 @@ if one is near (Holi 2027 is the leading candidate). There is no public preview 
 - Reports carry proof: a ~10-minute in-memory bench buffer and recent 1:1 messages, visible only to the
   owner.
 - Budget of about $5–20 a month, so there is no SMS phone verification.
-- Domain: `jaipur.manishbisht.me`, with the API at `api.jaipur.manishbisht.me`.
+- Domain: `gulabi-gali.manishbisht.me`, with the API at `api.gulabi-gali.manishbisht.me`.
 
 ## My calls (the owner can override)
 

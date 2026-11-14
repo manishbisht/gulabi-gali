@@ -120,7 +120,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Configure GitHub Pages
-        # Custom domain: jaipur.manishbisht.me, set in repository Settings > Pages.
+        # Custom domain: gulabi-gali.manishbisht.me, set in repository Settings > Pages.
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 

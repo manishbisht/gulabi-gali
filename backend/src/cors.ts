@@ -1,5 +1,5 @@
 const ALLOWED_ORIGINS = new Set([
-  'https://jaipur.manishbisht.me',
+  'https://gulabi-gali.manishbisht.me',
   'http://127.0.0.1:5173',
   'http://localhost:5173',
 ])
