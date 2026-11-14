@@ -34,6 +34,6 @@ declare global {
 
 /** Merges into `window.__gg`, only on pages opened with `?gg-test=1`. */
 export function installTestHooks(api: Partial<GgTestApi>): void {
-  if (!location.search.includes('gg-test=1')) return
+  if (new URLSearchParams(location.search).get('gg-test') !== '1') return
   window.__gg = { ...window.__gg, ...api }
 }

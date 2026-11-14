@@ -25,3 +25,14 @@ it('fetchCity returns the live snapshot when the API answers', async () => {
   vi.stubGlobal('fetch', () => Promise.resolve(Response.json(live)))
   expect(await fetchCity()).toEqual(live)
 })
+
+it('strips trailing slashes from the API base', async () => {
+  vi.stubEnv('VITE_API_URL', 'https://api.example.com//')
+  vi.resetModules()
+  const { fetchCity: fresh } = await import('./api')
+  const fetchMock = vi.fn(() => Promise.reject(new TypeError('offline')))
+  vi.stubGlobal('fetch', fetchMock)
+  await fresh()
+  expect(fetchMock.mock.calls[0]).toEqual(['https://api.example.com/api/city', { signal: undefined }])
+  vi.unstubAllEnvs()
+})

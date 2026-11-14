@@ -97,5 +97,6 @@ backend file, then copy it over.
   opts in to the local Worker (e2e and previews).
 - A Content-Security-Policy `<meta>` is generated at build time (`vite.config.ts`) from that origin, with
   any inline script allowed by hash. Google Fonts load from `index.html` (`preconnect` plus a `display=swap`
-  stylesheet), not from CSS, so they do not block first paint.
+  stylesheet), not from CSS, so they are no longer chained behind the CSS bundle; preconnect + display=swap keeps text
+  visible while the font loads.
 - The Worker's CORS list (`backend/src/cors.ts`) is the site's origin plus the local dev origins.

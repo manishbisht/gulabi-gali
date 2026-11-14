@@ -2,7 +2,7 @@
 !.idea/runConfigurations/
 node_modules/
 .claude/worktrees/
-# Local Worker secrets (backend/.dev.vars holds the dev VAPID private key).
+# Local Worker secrets.
 .dev.vars
 dist/
 test-results/

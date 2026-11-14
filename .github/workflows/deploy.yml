@@ -131,7 +131,7 @@ jobs:
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           VITE_API_URL: ${{ secrets.VITE_API_BASE_URL }}
-          # Stamped on client error reports, so a log line names the deploy it came from.
+          # Build id, for future error reporting.
           VITE_RELEASE: ${{ github.sha }}
         run: npm run build -w frontend -- --base "${PAGES_BASE_PATH}/"
 

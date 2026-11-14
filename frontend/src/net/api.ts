@@ -1,6 +1,6 @@
 import type { CitySnapshot } from './protocol'
 
-export const API_BASE: string = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787'
+export const API_BASE: string = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787').replace(/\/+$/, '')
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 

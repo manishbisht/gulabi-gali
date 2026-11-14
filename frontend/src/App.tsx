@@ -96,7 +96,7 @@ export default function App() {
     try {
       stage = createStage(canvas)
     } catch {
-      setStageFailed(true)
+      queueMicrotask(() => setStageFailed(true)) // not synchronously: this is an effect body
       return
     }
     stage.scene.background = new THREE.Color(SKY) // until the live sky takes over

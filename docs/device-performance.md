@@ -75,7 +75,8 @@ is separate, and the other three districts are 2.1 to 3.1 kB each, loaded on tra
 
 **Fixes made in this pass.** Nothing missed a target, so no render-path fixes were needed. Go-live fixes from
 the same pass: Google Fonts moved from a render-blocking CSS `@import` to `preconnect` plus a `display=swap`
-stylesheet `<link>` in `index.html`; the `three` chunk now has an explicit `chunkSizeWarningLimit`, so the
+stylesheet `<link>` in `index.html` (no longer chained behind the CSS bundle; preconnect + display=swap
+keeps text visible while the font loads); the `three` chunk now has an explicit `chunkSizeWarningLimit`, so the
 build is warning-free.
 
 **What this cannot show:** the phone's GPU. WebGL here runs on the M3's GPU, so fill rate and shader cost

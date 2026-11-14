@@ -42,6 +42,8 @@ export function useLiveCity(): LiveCity {
     const load = () =>
       void fetchCity(controller.signal).then((s) => {
         if (controller.signal.aborted) return
+        // One failed refresh must not replace good live data with the stale default.
+        if (s.stale && latest.current && !latest.current.stale) return
         latest.current = s
         setSnapshot(s)
       })
