@@ -1,4 +1,4 @@
-import { devices, expect, test } from '@playwright/test'
+import { devices, expect, test, type Page } from '@playwright/test'
 import { enterCity } from './support/city'
 
 test('shows the no-3D screen without WebGL', async ({ page }) => {
@@ -60,6 +60,29 @@ test('collects a stamp at Hawa Mahal', async ({ page }) => {
   await expect(page.locator('.stamp-count')).toHaveText('1/9')
 })
 
+/** Stands the player two metres south of a character, so the fixed camera has it dead ahead. */
+async function standBeside(page: Page, id: string) {
+  const npc = (await page.evaluate(() => window.__gg.npcs())).find((n) => n.id === id)!
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 2), npc)
+  await expect(page.locator('.npc-bubble:not([hidden])').first()).toBeVisible()
+  return (await page.evaluate(() => window.__gg.npcs())).find((n) => n.id === id)!
+}
+
+test('E opens the nearest character, who says they are not real', async ({ page }) => {
+  await enterCity(page)
+  await standBeside(page, 'ramesh')
+  await page.keyboard.press('e') // before he has walked out of the 3 m reach
+  await expect(page.locator('.npc-bubble:not([hidden])')).toContainText('Ek lassi, aur saari thakaan gayab.')
+  const card = page.getByRole('region', { name: 'Ramesh ji' })
+  await expect(card).toContainText('Lassiwala')
+  await expect(card).toContainText('Ye ek kirdaar hai, asli insaan nahi — asli log jald aa rahe hain.')
+  await expect(card.getByRole('button')).toHaveCount(1) // Close only: there is no message button
+  await page.getByRole('button', { name: 'Bhasha badlo: English' }).click()
+  await expect(card).toContainText('This is a character, not a real person. Real people are coming soon.')
+  await page.keyboard.press('e') // E again closes it
+  await expect(card).toHaveCount(0)
+})
+
 test.describe('on a phone', () => {
   const { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent } = devices['Pixel 7']
   test.use({ viewport, deviceScaleFactor, isMobile, hasTouch, userAgent })
@@ -82,6 +105,17 @@ test.describe('on a phone', () => {
     const moving = await page.evaluate(() => window.__gg.position())
     await touch('touchEnd', y - 40)
     expect(distance(spawn, moving)).toBeGreaterThan(1)
+  })
+
+  test('tapping a character opens their card', async ({ page }) => {
+    await enterCity(page)
+    const npc = await standBeside(page, 'imran')
+    await page.touchscreen.tap(npc.sx, npc.sy)
+    const card = page.getByRole('region', { name: 'Imran' })
+    await expect(card).toContainText('Blue pottery kaarigar')
+    await expect(card).toContainText('Ye ek kirdaar hai, asli insaan nahi')
+    await card.getByRole('button', { name: 'Band karo' }).click()
+    await expect(card).toHaveCount(0)
   })
 })
 

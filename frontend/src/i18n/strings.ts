@@ -28,6 +28,12 @@ export const STRINGS = {
   festivalTeej: { hi: 'Teej ki shubhkamnayein! 🌿', en: 'Happy Teej! 🌿' },
   festivalDiwali: { hi: 'Diwali mubarak! Diye jagmagaye 🪔', en: 'Happy Diwali! The diyas are lit 🪔' },
   festivalJlf: { hi: 'Jaipur Literature Festival ki dhoom! 📚', en: 'Jaipur Literature Festival is on! 📚' },
+  npcNotReal: {
+    hi: 'Ye ek kirdaar hai, asli insaan nahi — asli log jald aa rahe hain.',
+    en: 'This is a character, not a real person. Real people are coming soon.',
+  },
+  npcClose: { hi: 'Band karo', en: 'Close' },
+  npcBadge: { hi: 'Kirdaar', en: 'Character' },
   joystickLabel: { hi: 'Chalne ka joystick', en: 'Walking joystick' },
 } as const satisfies Record<string, Record<Lang, string>>
 

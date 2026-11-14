@@ -1,10 +1,11 @@
 import type * as THREE from 'three'
+import { CAST } from '../cast'
 import { footprint } from '../kit'
 import { BADI_CHAUPAR, buildBadiChaupar } from '../landmarks/badiChaupar'
 import { buildHawaMahal, HAWA_MAHAL } from '../landmarks/hawaMahal'
 import { buildJantarMantar, JANTAR_MANTAR } from '../landmarks/jantarMantar'
 import { buildTripoliaGate, TRIPOLIA_GATE } from '../landmarks/tripoliaGate'
-import type { AABB, BuildingSpec, DistrictDef, LandmarkDef, Paving, PropSpec, Vec2 } from '../types'
+import type { AABB, BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec, Vec2 } from '../types'
 
 /*
  * The Walled City, 240 × 240 m, with Badi Chaupar at the origin; x is east and -z is north. A loose take
@@ -313,6 +314,39 @@ const props: PropSpec[] = [
   ),
 ]
 
+// ---- the cast --------------------------------------------------------------------------------
+
+const npcs: NpcDef[] = [
+  // the lassiwala works the stretch of Johari Bazaar just north of where you arrive
+  {
+    ...CAST.ramesh,
+    route: [
+      { x: 1, z: 38 },
+      { x: 1, z: 20 },
+    ],
+    speed: 0.8,
+  },
+  // the blue-pottery kaarigar strolls the west end of the main bazaar
+  {
+    ...CAST.imran,
+    route: [
+      { x: -62, z: -2 },
+      { x: -46, z: -2 },
+    ],
+    speed: 0.9,
+  },
+  // the auto driver paces between the autos waiting west of the Chaupar
+  {
+    ...CAST.raju,
+    route: [
+      { x: -28, z: 1 },
+      { x: -18, z: 1 },
+      { x: -18, z: -3 },
+    ],
+    speed: 1,
+  },
+]
+
 const walledCity: DistrictDef = {
   id: 'walled-city',
   name: { hi: 'Gulabi Shahar', en: 'Pink City' },
@@ -324,7 +358,7 @@ const walledCity: DistrictDef = {
   paving,
   buildings,
   landmarks,
-  npcs: [],
+  npcs,
   props,
 }
 

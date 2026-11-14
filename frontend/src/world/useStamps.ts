@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Controls } from '../player/controls'
 import type { Lang } from '../i18n/strings'
 import { t } from '../i18n/strings'
 import type { LandmarkDef, Vec2 } from './types'
@@ -29,15 +28,16 @@ export function useStamps(lang: Lang) {
     timer.current = setTimeout(() => setToast(null), TOAST_MS)
   }, [])
 
-  /** Call every frame; re-renders only when the nearby landmark changes. */
+  /** Call every frame; re-renders only when the nearby landmark changes. Returns that landmark. */
   const track = useCallback(
-    (pos: Vec2, landmarks: LandmarkDef[], controls: Controls) => {
+    (pos: Vec2, landmarks: LandmarkDef[], pressed: boolean) => {
       const found = nearestLandmark(pos, landmarks)
       if (found?.id !== nearRef.current?.id) {
         nearRef.current = found
         setNear(found)
       }
-      if (controls.interact()) collectHere()
+      if (pressed) collectHere()
+      return found
     },
     [collectHere],
   )

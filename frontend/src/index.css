@@ -252,3 +252,43 @@ button {
   font-size: 0.9rem;
   text-align: center;
 }
+
+.npc-bubbles {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.npc-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 190px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  background: rgb(246 239 228 / 0.94);
+  color: #2a1d24;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-align: center;
+  will-change: transform;
+}
+
+.npc-bubble[hidden] {
+  display: none;
+}
+
+.npc-badge {
+  color: var(--pink);
+  font-weight: 700;
+}
+
+.npc-card .npc-role {
+  margin: 0 0 6px;
+  opacity: 0.8;
+}
+
+.npc-card .npc-notreal {
+  font-style: italic;
+}

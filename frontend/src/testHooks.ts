@@ -18,6 +18,8 @@ export interface GgTestApi {
   sky(): SkyParams
   /** The festival in effect (the `gg-festival` override, else the snapshot's). */
   festival(): FestivalId | null
+  /** Each character on screen: where it stands (metres) and where its chest is on the page (CSS px). */
+  npcs(): { id: string; x: number; z: number; sx: number; sy: number }[]
   /** Merges into the city snapshot and repaints the sky now. */
   setSnapshot(partial: Partial<CitySnapshot>): void
   /** Freezes the clock the sky runs on at an ISO instant, and repaints now. */

@@ -13,6 +13,9 @@ import { createControls, type Controls } from './player/controls'
 import { loadOrCreateLook } from './player/avatar'
 import { createPlayer } from './player/player'
 import { loadDistrict } from './world/district'
+import { createBubbles } from './world/npcBubbles'
+import { createNpcs } from './world/npcs'
+import { useNpcCard } from './world/useNpcCard'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
 import type { FestivalId } from './net/protocol'
@@ -21,6 +24,7 @@ import { Hud } from './ui/Hud'
 import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
 import { Joystick } from './ui/Joystick'
+import { NpcCard } from './ui/NpcCard'
 import { NoWebGL } from './ui/NoWebGL'
 import { installTestHooks } from './testHooks'
 
@@ -28,6 +32,9 @@ import { installTestHooks } from './testHooks'
 const SKY = '#BFD6DE'
 /** The sun moves slowly; the sky is recomputed from the clock this often. */
 const SKY_REFRESH_MS = 30_000
+/** A tap moves less than this many px and lasts less than this many ms. */
+const TAP_SLOP = 10
+const TAP_MS = 500
 const FESTIVALS: Record<FestivalId, StringKey> = {
   sankranti: 'festivalSankranti',
   holi: 'festivalHoli',
@@ -52,6 +59,12 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
   const { near, have, toast, collectHere, track } = useStamps(lang)
+  const { npc: talking, open: openNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
+  const bubbleHost = useRef<HTMLDivElement>(null)
+  const langRef = useRef(lang)
+  useEffect(() => {
+    langRef.current = lang
+  }, [lang])
   const { snapshot, current, now, patch, freeze } = useLiveCity()
   /** Re-paints the sky from the current snapshot and clock; set once the district is in. */
   const repaint = useRef<() => void>(() => {})
@@ -102,12 +115,42 @@ export default function App() {
         repaint.current = paint
         paint()
         const skyTimer = setInterval(paint, SKY_REFRESH_MS)
+        const npcs = createNpcs(district.def.npcs, stage.scene)
+        const bubbles = createBubbles(bubbleHost.current!)
+        // A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD
+        // buttons never reach the canvas, since those capture their own pointers.
+        const ray = new THREE.Raycaster()
+        let down: { x: number; y: number; at: number } | null = null
+        const onDown = (e: PointerEvent) => void (down = { x: e.clientX, y: e.clientY, at: e.timeStamp })
+        const onUp = (e: PointerEvent) => {
+          const d = down
+          down = null
+          if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP || e.timeStamp - d.at > TAP_MS)
+            return
+          const r = canvas.getBoundingClientRect()
+          ray.setFromCamera(
+            new THREE.Vector2(
+              ((e.clientX - r.left) / r.width) * 2 - 1,
+              -((e.clientY - r.top) / r.height) * 2 + 1,
+            ),
+            stage.camera,
+          )
+          const hit = npcs.pick(ray)
+          if (hit) openNpc(hit)
+        }
+        canvas.addEventListener('pointerdown', onDown)
+        canvas.addEventListener('pointerup', onUp)
         const offFrame = stage.onFrame((dt) => {
           player.update(dt)
+          npcs.update(dt)
           fx.update(dt)
           festivalFx.update(dt)
           district.focus(player.position())
-          track(player.position(), district.def.landmarks, controls)
+          const pos = player.position()
+          const pressed = controls.interact()
+          const landmark = track(pos, district.def.landmarks, pressed && !npcOpen())
+          stepNpc(pos, npcs, pressed, landmark !== null)
+          bubbles.update(stage.camera, npcs, pos, langRef.current)
         })
         setPlace(district.def.name)
         installTestHooks({
@@ -116,6 +159,17 @@ export default function App() {
           position: player.position,
           teleport: player.teleport,
           district: () => district.def.id,
+          npcs: () =>
+            npcs.entries.map(({ def, body }) => {
+              const p = body.position.clone().setY(1.2).project(stage.camera)
+              return {
+                id: def.id,
+                x: body.position.x,
+                z: body.position.z,
+                sx: ((p.x + 1) / 2) * innerWidth,
+                sy: ((1 - p.y) / 2) * innerHeight,
+              }
+            }),
           festival: festivalNow,
           sky: () => sky!,
           setSnapshot: (partial) => {
@@ -133,6 +187,11 @@ export default function App() {
           fx.dispose()
           festivalFx.dispose()
           offFrame()
+          canvas.removeEventListener('pointerdown', onDown)
+          canvas.removeEventListener('pointerup', onUp)
+          bubbles.dispose()
+          npcs.dispose()
+          closeNpc()
           offQuality()
           player.dispose()
           district.dispose()
@@ -150,13 +209,14 @@ export default function App() {
       controlsRef.current = null
       stage.dispose()
     }
-  }, [entered, track, current, now, patch, freeze, override])
+  }, [entered, track, openNpc, closeNpc, npcOpen, stepNpc, current, now, patch, freeze, override])
 
   if (!webgl) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
   return (
     <>
       <canvas ref={canvasRef} className="stage" />
+      <div ref={bubbleHost} className="npc-bubbles" aria-hidden="true" />
       <Hud
         place={
           typeof place === 'string' ? t(place === 'failed' ? 'loadFailed' : 'loading', lang) : place[lang]
@@ -177,7 +237,8 @@ export default function App() {
         bottom={
           <>
             <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />
-            {near && (
+            {talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />}
+            {near && !talking && (
               <LandmarkCard
                 landmark={near}
                 lang={lang}
