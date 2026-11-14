@@ -109,3 +109,15 @@ export function buildAvatar(look: AvatarLook, { castShadow = true }: AvatarOptio
   mesh.castShadow = castShadow
   return mesh
 }
+
+/**
+ * Frees the shared geometry and material. three hangs dispose listeners off every resource it renders,
+ * tied to that renderer, so the owner of a stage calls this when the stage goes; the next `buildAvatar`
+ * rebuilds what it needs.
+ */
+export function disposeAvatarCache(): void {
+  for (const g of geometries.values()) g.dispose()
+  geometries.clear()
+  material?.dispose()
+  material = null
+}

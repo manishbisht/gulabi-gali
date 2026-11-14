@@ -225,3 +225,15 @@ it('keeps the old district running when the new one fails to load, and says so',
   expect(window.__gg.district()).toBe('university')
   await act(async () => root.unmount())
 }, 20000)
+
+it('releases the shared avatar geometry and material when the city goes', async () => {
+  const { root } = await openCity()
+  const avatar = stage.scene.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh)!
+  const geo = vi.fn()
+  const mat = vi.fn()
+  avatar.geometry.addEventListener('dispose', geo)
+  ;(avatar.material as THREE.Material).addEventListener('dispose', mat)
+  await act(async () => root.unmount())
+  expect(geo).toHaveBeenCalled()
+  expect(mat).toHaveBeenCalled()
+}, 20000)

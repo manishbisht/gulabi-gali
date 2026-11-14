@@ -15,9 +15,12 @@ try {
     stdio: 'inherit',
   })
   const assets = join(out, 'assets')
-  const leaks = readdirSync(assets)
-    .filter((f) => f.endsWith('.js'))
-    .filter((f) => readFileSync(join(assets, f), 'utf8').includes('__gg'))
+  const scripts = readdirSync(assets).filter((f) => f.endsWith('.js'))
+  if (!scripts.length) {
+    console.error(`no .js files in ${assets}: the build output moved, so this check would pass for nothing`)
+    process.exit(1)
+  }
+  const leaks = scripts.filter((f) => readFileSync(join(assets, f), 'utf8').includes('__gg'))
   if (leaks.length) {
     console.error(`test hooks leaked into the production build: ${leaks.join(', ')}`)
     process.exit(1)

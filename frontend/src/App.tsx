@@ -11,6 +11,7 @@ import { createFestivalFx, festivalSky } from './live/festivalFx'
 import { createWeatherFx } from './live/weatherFx'
 import { createControls, type Controls } from './player/controls'
 import { loadOrCreateLook } from './player/avatar'
+import { disposeAvatarCache } from './player/avatar'
 import { createPlayer } from './player/player'
 import { loadDistrict } from './world/district'
 import { createBubbles } from './world/npcBubbles'
@@ -245,6 +246,7 @@ export default function App() {
       cancelled = true
       bindTravel(null)
       leave()
+      disposeAvatarCache() // after the last player and NPC, before the renderer that drew them goes
       controls.dispose()
       controlsRef.current = null
       stage.dispose()

@@ -1,8 +1,8 @@
 import * as THREE from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { storage } from '../storage'
 import { PALETTE } from '../world/palette'
-import { buildAvatar, loadOrCreateLook, randomLook } from './avatar'
+import { buildAvatar, disposeAvatarCache, loadOrCreateLook, randomLook } from './avatar'
 
 function triangleCount(group: THREE.Object3D): number {
   let n = 0
@@ -70,5 +70,30 @@ describe('avatar', () => {
     const made = loadOrCreateLook()
     expect(storage.getJSON('gg-look', null)).toEqual(made)
     expect(loadOrCreateLook()).toEqual(made)
+  })
+})
+
+describe('disposeAvatarCache', () => {
+  const look = { skin: 1, outfit: 'pink', head: 'cap' } as const
+
+  it('disposes the cached geometry and material, and the next avatar is fresh and usable', () => {
+    const old = buildAvatar(look)
+    const geoDispose = vi.fn()
+    const matDispose = vi.fn()
+    old.geometry.addEventListener('dispose', geoDispose)
+    ;(old.material as THREE.Material).addEventListener('dispose', matDispose)
+    disposeAvatarCache()
+    expect(geoDispose).toHaveBeenCalledTimes(1)
+    expect(matDispose).toHaveBeenCalledTimes(1)
+    const fresh = buildAvatar(look)
+    expect(fresh.geometry).not.toBe(old.geometry)
+    expect(fresh.material).not.toBe(old.material)
+    expect(fresh.geometry.getAttribute('position').count).toBeGreaterThan(0)
+    expect(buildAvatar({ ...look }).geometry).toBe(fresh.geometry) // caching works again
+  })
+
+  it('is safe to call twice', () => {
+    disposeAvatarCache()
+    expect(() => disposeAvatarCache()).not.toThrow()
   })
 })
