@@ -28,6 +28,7 @@ import { LandmarkCard } from './ui/LandmarkCard'
 import { Joystick } from './ui/Joystick'
 import { NpcCard } from './ui/NpcCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
+import { RequestComposer, type Sent } from './ui/RequestComposer'
 import { NoWebGL } from './ui/NoWebGL'
 import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
@@ -77,13 +78,12 @@ export default function App() {
   } = usePersonCard()
   const bench = useBench()
   const { hooks: benchHooks, bind: bindBench } = bench
-  /** Until the request composer lands, "Milna hai" says so in a toast. */
-  const [soon, setSoon] = useState(false)
-  useEffect(() => {
-    if (!soon) return
-    const id = setTimeout(() => setSoon(false), 2500)
-    return () => clearTimeout(id)
-  }, [soon])
+  /** The person whose request note is being written, and who has been asked this session. */
+  const [composing, setComposing] = useState<string | null>(null)
+  const [asked, setAsked] = useState<Record<string, Sent>>({})
+  // however the card closes (its button, E, a landmark), the note does not wait for the next time
+  const meetingId = meeting?.person.id ?? null
+  if (!meetingId && composing) setComposing(null)
   const {
     fading,
     failed: travelFailed,
@@ -221,15 +221,28 @@ export default function App() {
   /** A character's or a person's card, when one is up. */
   const card =
     (talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />) ||
+    (meeting && composing === meeting.person.id && (
+      <RequestComposer
+        person={meeting.person}
+        lang={lang}
+        token={auth.token}
+        onDone={(result) => {
+          setAsked((was) => ({ ...was, [meeting.person.id]: result }))
+          setComposing(null)
+        }}
+        onClose={() => setComposing(null)}
+      />
+    )) ||
     (meeting && (
       <PersonCard
         person={meeting.person}
         gone={meeting.gone}
         viewer={viewer}
+        sent={asked[meeting.person.id]}
         lang={lang}
         token={auth.token}
         onVisible={onVisible}
-        onRequest={() => setSoon(true)}
+        onRequest={(person) => setComposing(person.id)}
         onClose={closePerson}
       />
     ))
@@ -280,11 +293,6 @@ export default function App() {
             {toast && (
               <div className="toast" role="status">
                 {toast}
-              </div>
-            )}
-            {soon && (
-              <div className="toast" role="status">
-                {t('personSoon', lang)}
               </div>
             )}
             {replaced && (

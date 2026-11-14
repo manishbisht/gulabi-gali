@@ -711,3 +711,28 @@ button {
 .auth-form .pick[aria-pressed='true'] {
   border-color: var(--cream);
 }
+
+.request-composer textarea {
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 14px;
+  background: rgb(245 230 216 / 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* any smaller and iOS zooms the page on focus */
+  resize: none;
+}
+
+.request-count {
+  margin: 4px 0 8px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.request-count[data-over] {
+  color: var(--pink, #ff6b9d);
+  opacity: 1;
+}

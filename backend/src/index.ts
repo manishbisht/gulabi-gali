@@ -4,6 +4,7 @@ import { openDistrict } from './district'
 import type { Env } from './env'
 import type { CitySnapshot } from './protocol'
 import { devLogin, getMe, getProfile, putProfile } from './profiles'
+import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
 
 const CITY_KEY = 'now'
@@ -74,6 +75,14 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (pathname === '/api/me' && method === 'GET') return Response.json(await getMe(env, user.id))
   if (pathname === '/api/me/profile' && method === 'PUT')
     return putProfile(env, user.id, await readJson(request))
+  if (pathname === '/api/requests' && method === 'POST')
+    return sendRequest(env, user.id, await readJson(request))
+  if (pathname === '/api/requests' && method === 'GET') return Response.json(await listRequests(env, user.id))
+  const act = pathname.match(/^\/api\/requests\/([^/]+)\/(accept|ignore)$/)
+  if (act && method === 'POST') {
+    const rid = act[1]
+    return act[2] === 'accept' ? acceptRequest(env, user.id, rid) : ignoreRequest(env, user.id, rid)
+  }
   const match = pathname.match(/^\/api\/profiles\/([^/]+)$/)
   if (match && method === 'GET') {
     try {
@@ -103,5 +112,7 @@ export default {
   },
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(refreshCity(env, fetch, new Date()))
+    // A failed sweep is only logged: it must not take the city refresh with it, and the next run tries again.
+    ctx.waitUntil(expireRequests(env).catch((err) => console.error('request sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

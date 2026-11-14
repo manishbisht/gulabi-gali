@@ -1,7 +1,11 @@
-import { createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test'
-import { expect, it } from 'vitest'
+import { applyD1Migrations, createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test'
+import { beforeAll, expect, it } from 'vitest'
 import worker, { handleCity, refreshCity } from '../src/index'
 import type { CitySnapshot } from '../src/protocol'
+
+beforeAll(async () => {
+  await applyD1Migrations(env.DB, (env as unknown as { TEST_MIGRATIONS: never }).TEST_MIGRATIONS)
+})
 
 const stored: CitySnapshot = {
   fetchedAt: '2026-11-14T06:30:00.000Z',

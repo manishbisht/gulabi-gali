@@ -92,6 +92,26 @@ export interface Me {
   complete: boolean
 }
 
+/** What a person's `Milna hai` request says: 10 to 140 characters (code points), once cleaned. */
+export const MIN_REASON = 10
+export const MAX_REASON = 140
+/** A request nobody answered is gone from every list after this, and can no longer be accepted. */
+export const REQUEST_TTL_MS = 14 * 24 * 3600 * 1000
+
+/** `person` is the other side. A sender only ever sees `pending` or `accepted`: a decline is never revealed. */
+export interface RequestView {
+  id: string
+  person: PublicPerson
+  reason: string
+  createdAt: number
+  state: 'pending' | 'accepted'
+}
+export interface RequestLists {
+  incoming: RequestView[]
+  sent: RequestView[]
+}
+export type RequestError = 'invalid' | 'ghost' | 'no-such-person' | 'already' | 'paused'
+
 /** A person on the live map: their public face and where they stand. */
 export type LivePerson = PublicPerson & { x: number; z: number; ry: number }
 

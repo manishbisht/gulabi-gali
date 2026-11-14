@@ -18,7 +18,7 @@ export const MAX_STATUS = 80
 const MAX_ABOUT = 200
 const MAX_LINK = 200
 
-interface ProfileRow {
+export interface ProfileRow {
   user_id: string
   name: string
   look: string
@@ -184,7 +184,7 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
 }
 
 /** A resident's profile row: complete, and its owner not banned. Anyone else is a ghost. */
-async function residentRow(env: Env, id: string): Promise<ProfileRow | null> {
+export async function residentRow(env: Env, id: string): Promise<ProfileRow | null> {
   const row = await env.DB.prepare(
     'SELECT p.* FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ? AND u.banned = 0',
   )

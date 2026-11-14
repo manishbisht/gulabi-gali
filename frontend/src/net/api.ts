@@ -83,3 +83,26 @@ export async function getProfile(
   if (!res.ok) throw new Error(`profile ${res.status}`)
   return (await res.json()) as FullProfile
 }
+
+type RequestError = 'invalid' | 'ghost' | 'no-such-person' | 'already' | 'paused'
+export type RequestOutcome =
+  { ok: true; kind: 'sent' | 'matched' } | { ok: false; error: RequestError | 'failed' }
+
+const REQUEST_ERRORS: readonly string[] = ['invalid', 'ghost', 'no-such-person', 'already', 'paused']
+
+/** Asks someone to meet. Never rejects: a 201 is `sent`, a crossed request's 200 is `matched`, the rest a typed error. */
+export async function sendMeetRequest(token: string, to: string, reason: string): Promise<RequestOutcome> {
+  try {
+    const res = await fetch(`${API_BASE}/api/requests`, {
+      method: 'POST',
+      headers: { ...bearer(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, reason }),
+    })
+    if (res.ok) return { ok: true, kind: res.status === 201 ? 'sent' : 'matched' }
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    const error = body?.error
+    return { ok: false, error: error && REQUEST_ERRORS.includes(error) ? (error as RequestError) : 'failed' }
+  } catch {
+    return { ok: false, error: 'failed' }
+  }
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getProfile } from '../net/api'
 import type { FullProfile, LivePerson } from '../net/protocol'
 import { t, type Lang } from '../i18n/strings'
+import type { Sent } from './RequestComposer'
 import { areaLabel, HERE_FOR_LABEL } from '../profile/homeAreas'
 
 /** Who is looking: nobody visible yet, signed in without a finished profile, or a resident. */
@@ -12,6 +13,8 @@ interface Props {
   /** They left the district while the card was up: it keeps what it showed, and cannot start a request. */
   gone: boolean
   viewer: Viewer
+  /** A request already sent to this person this session: confirmed in the card, and "Milna hai" is off. */
+  sent?: Sent
   lang: Lang
   token(): Promise<string | null>
   /** The ghost's CTA: sign in, or finish the profile. */
@@ -26,7 +29,17 @@ type Loaded = { id: string; profile: FullProfile | null } | null
  * The bottom card for another person. A ghost sees only the live name and status (no profile is fetched for
  * them); a resident also gets the full profile, and a failed or missing one never leaves the card blank.
  */
-export function PersonCard({ person, gone, viewer, lang, token, onVisible, onRequest, onClose }: Props) {
+export function PersonCard({
+  person,
+  gone,
+  viewer,
+  sent,
+  lang,
+  token,
+  onVisible,
+  onRequest,
+  onClose,
+}: Props) {
   const resident = viewer === 'resident'
   const [loaded, setLoaded] = useState<Loaded>(null)
   useEffect(() => {
@@ -66,10 +79,16 @@ export function PersonCard({ person, gone, viewer, lang, token, onVisible, onReq
       )}
       {resident && !done && <p className="person-note">{t('personLoading', lang)}</p>}
       {resident && done && !profile && <p className="person-note">{t('personNoProfile', lang)}</p>}
+      {sent && <p className="person-note">{t(sent === 'sent' ? 'requestSent' : 'requestMatched', lang)}</p>}
       {gone && <p className="person-note">{t('personGone', lang)}</p>}
       <div className="person-actions">
         {resident ? (
-          <button type="button" className="landmark-stamp" disabled={gone} onClick={() => onRequest(person)}>
+          <button
+            type="button"
+            className="landmark-stamp"
+            disabled={gone || !!sent}
+            onClick={() => onRequest(person)}
+          >
             {t('personMeet', lang)}
           </button>
         ) : (
