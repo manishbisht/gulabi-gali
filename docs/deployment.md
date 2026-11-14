@@ -77,18 +77,31 @@ numbered files in `backend/migrations/`, applied with the same command.
 3. Set the allowed origin to `https://gulabi-gali.manishbisht.me` (Clerk, Configure, Domains / allowed
    origins), so Clerk accepts sign-ins from the site. The Worker also checks that a token was minted for one
    of our origins.
-4. From Clerk's API keys page, set two secrets on the Worker (from `backend/`; each command asks for the value):
+4. From Clerk's API keys page, set two secrets on the Worker (from `backend/`):
 
    ```sh
    npx wrangler secret put CLERK_SECRET_KEY
-   npx wrangler secret put CLERK_JWT_KEY
+   npx wrangler secret put CLERK_JWT_KEY < key.pem
    ```
 
-   `CLERK_SECRET_KEY` is the `sk_...` key; `CLERK_JWT_KEY` is the instance's PEM public key. With the JWT key
-   the Worker verifies tokens without calling Clerk; with only the secret key it fetches Clerk's key set and
-   caches it. Set both. Without either, every token is refused and everyone is a ghost.
+   `CLERK_SECRET_KEY` is the `sk_...` key; the command asks for it. `CLERK_JWT_KEY` is the instance's PEM
+   public key (API keys, "Show JWT public key", PEM): save it as `key.pem` and pipe it in as above, since the
+   interactive prompt takes a single line and would cut the PEM off after its first. Delete `key.pem`
+   afterwards. With the JWT key the Worker verifies tokens without calling Clerk; with only the secret key it
+   fetches Clerk's key set and caches it. Set both. Without either, every token is refused and everyone is a
+   ghost.
 
 5. The publishable key (`pk_...`) goes to GitHub as `VITE_CLERK_PUBLISHABLE_KEY`, in section 2.
+6. **A production instance needs DNS.** Clerk's development instance works anywhere, but a production
+   instance only starts once its DNS records are in place: Clerk, Configure, Domains lists them. They are the
+   **Frontend API** `CNAME` (`clerk.gulabi-gali.manishbisht.me` pointing at Clerk), the **email DKIM**
+   `CNAME`s (so sign-in codes are not sent as spam), and any others it lists. Add each at the DNS host
+   (DNS only, grey cloud, on Cloudflare) and wait for Clerk to show them verified before switching the site
+   to the production `pk_live_...` key.
+7. **Smoke check** once the site and the API are both up: sign in on the real site once, then confirm the
+   API accepts the session. In the browser's developer tools, the Network tab shows a request to
+   `https://api.gulabi-gali.manishbisht.me/api/me`; it must answer **200** with your id. A 401 means the
+   Worker refused the token: check both secrets above, and that the site's origin is one Clerk allows.
 
 ## 2. GitHub Pages (`frontend/`)
 
@@ -118,6 +131,10 @@ Cloudflare dashboard, Notifications, Add:
 The city snapshot is one cron every 15 minutes plus cached reads (`cache-control: public, max-age=300`). Phase 2
 adds Durable Object requests and duration (live sockets; hibernation means an idle district costs almost
 nothing), D1 reads and writes, and Worker requests for the API, so watch those on the same dashboard.
+
+Bench chat is kept only in the district object's memory, by design: what was said at a bench is lost when the
+object hibernates (nobody there for a while) and on every deploy, which restarts every object. Nothing about it
+needs backing up, and a deploy in the middle of an evening empties every bench's last ten minutes.
 
 ## Local development
 

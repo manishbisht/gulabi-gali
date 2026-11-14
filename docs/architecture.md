@@ -130,10 +130,10 @@ flowchart LR
 
 Tiers (phase 2):
 
-| Tier         | Who                                                                          | What it gets                                                                                          |
-| ------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Ghost**    | no token, or a token with no complete profile (or a banned user)             | Receives the city and the people in it. Is never shown to others; cannot sit, speak or send requests. |
-| **Resident** | a token plus a complete profile: name, look, home area, `adult` and `pledge` | Is shown on the map, can set a status, sit on benches, send and answer requests, chat with matches.   |
+| Tier         | Who                                                                          | What it gets                                                                                                                |
+| ------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Ghost**    | no token, or a token with no complete profile (or a banned user)             | Receives the city and the people in it. Is never shown to others; cannot sit, speak or send requests.                       |
+| **Resident** | a token plus a complete profile: name, look, home area, `adult` and `pledge` | Is shown on the map (name, look and the profile's status), sits on benches, sends and answers requests, chats with matches. |
 
 Anyone may be sent a request by any resident who has not paused requests. A verified tier above resident is
 coming in phase 3; today every resident has the same rights.
@@ -143,14 +143,22 @@ coming in phase 3; today every resident has the same rights.
 One `DistrictDO` per district (`walled-city`, `mi-road`, `university`, `malviya-nagar`), named by district id.
 The client opens `GET /api/districts/:id/live` (`src/net/live.ts`); the Worker checks the district and the
 page's Origin, resolves the caller, **drops any client-sent `X-GG-Who` header** and hands the upgrade to the
-object with a fresh `X-GG-Who` of its own, which the object trusts. Sockets are hibernating (the object sleeps
-while nobody moves), and what must survive a sleep (who sits where) is kept in socket attachments.
+object with a fresh `X-GG-Who` of its own (the JSON percent-encoded, so any name is plain ASCII), which the
+object trusts. Sockets are hibernating (the object sleeps while nobody moves), and what must survive a sleep
+(who sits where, each point) is kept in socket attachments; a point is written at most once a second, a seat
+change or a close at once.
 
+- The object learns a resident's name, look and status when their socket opens. A saved profile that changes
+  any of them makes the client reconnect, and the new socket shows the new face to everyone (the socket's own
+  `status` message works but the client does not use it).
 - Moves are validated (finite, in range, at most 8 m/s with a one-second burst allowance), coalesced per
-  person and sent out every 100 ms to sockets within 60 m of the mover's last point.
-- Each socket has token-bucket lanes (`move`, `status`, `say`, `other`); refusals touch memory only, a flood
-  is told `rate` once and closed after 3 s. Five bad frames in a row close the socket. A socket silent for 30 s
-  is closed and its person leaves. A second socket for the same person replaces the first.
+  person and sent out every 100 ms to sockets within 60 m of the mover's last point. A resident's client sends
+  at most 10 a second, a ghost's 2; the client hides bodies more than 55 m away, and empties the street when
+  its socket is replaced or has been down for 3 s.
+- Each socket has token-bucket lanes (`move` 12 a second with a burst of 15, `status`, `say`, `other`);
+  refusals touch memory only, a flood is told `rate` once and closed after 3 s. Five bad frames in a row close
+  the socket. A socket silent for 30 s is closed and its person leaves. A second socket for the same person
+  replaces the first.
 - **Benches** (`benches.json`, the tapris and benches of each district, 4 seats each): a resident within 3 m
   sits, lines go to everyone on that bench and into an in-memory transcript (last 10 minutes, at most 200
   lines). Bench chat is never written to D1 or any other storage. Walking more than 2.5 m away stands you up.
@@ -190,6 +198,9 @@ Routes (all need a token except `/api/dev/login`, which exists only under `DEV_A
 `PUT /api/me/profile`, `GET /api/profiles/:id`, `POST /api/requests`, `GET /api/requests`,
 `POST /api/requests/:id/accept|ignore`, `GET /api/matches`, `DELETE /api/matches/:id` (unmatch),
 `GET|POST /api/matches/:id/messages`. Anything in a match is a 404 to someone who is not in it.
+`GET /api/profiles/:id` is for residents only (anyone else is 403 `ghost`). Unmatching leaves an `ignored`
+request from the other person to the one who unmatched, dated then, so the other cannot ask straight back for
+14 days; it is never listed.
 
 `InboxDO` (one per user, `inbox:<userId>`) holds that user's open `GET /api/inbox` sockets (up to 5; a sixth
 closes the oldest; residents only). It carries **notices only**: after a request, an accept, a message or an
