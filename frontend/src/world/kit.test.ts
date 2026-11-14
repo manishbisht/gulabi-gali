@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as THREE from 'three'
 import type { BuildingSpec, BuildingStyle } from './types'
 import { buildBlock } from './kit'
 import { PALETTE } from './palette'
@@ -51,6 +52,22 @@ describe('buildBlock', () => {
     expect(b.min.y).toBeGreaterThan(-1e-3)
     const c = mesh.geometry.getAttribute('color')
     expect(c.count).toBe(mesh.geometry.getAttribute('position').count)
+  })
+
+  it('shows the shop shutter through its arch, not a white disc over it', () => {
+    const { mesh } = buildBlock([{ x: 0, z: 0, w: 9, d: 8, floors: 2, style: 'shop', tint: 'pink' }])
+    const shutter = new THREE.Color(PALETTE.teal)
+    const colour = new THREE.Color()
+    const colours = mesh.geometry.getAttribute('color')
+    // Middle bay (bays are 3 m): look at the shutter and at the arch head above it, straight on.
+    for (const y of [1.4, 2.5]) {
+      const hit = new THREE.Raycaster(
+        new THREE.Vector3(0, y, 20),
+        new THREE.Vector3(0, 0, -1),
+      ).intersectObject(mesh)[0]!
+      colour.fromBufferAttribute(colours, hit.face!.a)
+      expect(colour.getHexString(), `y=${y}`).toBe(shutter.getHexString())
+    }
   })
 
   it('returns an empty-safe mesh for an empty block', () => {

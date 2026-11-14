@@ -1,0 +1,144 @@
+import * as THREE from 'three'
+import type { DistrictId } from '../net/protocol'
+import { buildBlock } from './kit'
+import { bake, merge } from './kit/parts'
+import { PALETTE } from './palette'
+import { buildProps } from './props'
+import type { AABB, DistrictDef, Paving, Vec2 } from './types'
+
+/** Districts that exist so far; the others arrive with their own task. */
+export const DISTRICTS: DistrictId[] = ['walled-city']
+
+/** Each district is its own chunk, fetched only when the player goes there. */
+const SOURCES: Partial<Record<DistrictId, () => Promise<{ default: DistrictDef }>>> = {
+  'walled-city': () => import('./districts/walledCity'),
+}
+
+export interface District {
+  def: DistrictDef
+  /** Everything the district draws, lights included. Add it to the scene. */
+  root: THREE.Group
+  /** Buildings, landmark footprints, props and an outer boundary. */
+  colliders: AABB[]
+  /** The tall colliders (buildings and landmarks): the chase camera pulls in rather than enter them. */
+  occluders: AABB[]
+  /** One sky/ground fill and one sun. The live sky drives both; the sun casts shadows only at tier 2. */
+  lights: { hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight }
+  /** Keeps the sun's shadow box centred on `p` (where the player is) without turning the sun. */
+  focus(p: Vec2): void
+  dispose(): void
+}
+
+/** Building blocks are merged per cell of this size: few draw calls, still culled off-screen. */
+const CELL = 60
+/** The sun's shadow box: half-width around the player, in metres. */
+const SHADOW_REACH = 45
+
+export async function loadDistrict(id: DistrictId): Promise<District> {
+  const source = SOURCES[id]
+  if (!source) throw new Error(`District not built yet: ${id}`)
+  const def = (await source()).default
+  const root = new THREE.Group()
+  root.name = def.id
+
+  root.add(buildGround(def))
+
+  const cells = new Map<string, DistrictDef['buildings']>()
+  for (const b of def.buildings) {
+    const key = `${Math.floor(b.x / CELL)},${Math.floor(b.z / CELL)}`
+    cells.set(key, [...(cells.get(key) ?? []), b])
+  }
+  const colliders: AABB[] = []
+  for (const specs of cells.values()) {
+    const block = buildBlock(specs)
+    block.mesh.castShadow = true
+    block.mesh.receiveShadow = true
+    root.add(block.mesh)
+    colliders.push(...block.colliders)
+  }
+
+  for (const model of await Promise.all(def.landmarks.map((l) => l.build()))) root.add(model)
+  colliders.push(...def.landmarks.map((l) => l.footprint))
+  const occluders = [...colliders]
+
+  const props = buildProps(def.props)
+  root.add(props.group)
+  colliders.push(...props.colliders)
+  colliders.push(...boundary(def.size / 2))
+
+  const hemi = new THREE.HemisphereLight('#E4EEF4', PALETTE.sandstone, 1.6)
+  const sun = new THREE.DirectionalLight('#FFF7EE', 2.2)
+  sun.position.set(40, 70, 45)
+  sun.shadow.mapSize.set(1024, 1024)
+  Object.assign(sun.shadow.camera, {
+    left: -SHADOW_REACH,
+    right: SHADOW_REACH,
+    top: SHADOW_REACH,
+    bottom: -SHADOW_REACH,
+    near: 1,
+    far: 220,
+  })
+  sun.shadow.bias = -0.0005
+  sun.shadow.normalBias = 0.03
+  root.add(hemi, sun, sun.target)
+
+  return {
+    def,
+    root,
+    colliders,
+    occluders,
+    lights: { hemi, sun },
+    focus(p) {
+      const offset = sun.position.clone().sub(sun.target.position)
+      sun.target.position.set(p.x, 0, p.z)
+      sun.position.copy(sun.target.position).add(offset)
+    },
+    dispose() {
+      root.removeFromParent()
+      root.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return
+        if (o instanceof THREE.InstancedMesh) o.dispose() // its per-instance buffers
+        ;(o.geometry as THREE.BufferGeometry).dispose()
+        const m = o.material as THREE.Material | THREE.Material[]
+        for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
+      })
+      sun.dispose()
+      hemi.dispose()
+    },
+  }
+}
+
+/** Four slabs just outside the district's edges, so nothing walks off the map. */
+function boundary(half: number): AABB[] {
+  const t = 10
+  return [
+    { minX: -half - t, maxX: -half, minZ: -half - t, maxZ: half + t },
+    { minX: half, maxX: half + t, minZ: -half - t, maxZ: half + t },
+    { minX: -half, maxX: half, minZ: -half - t, maxZ: -half },
+    { minX: -half, maxX: half, minZ: half, maxZ: half + t },
+  ]
+}
+
+/** The ground and its paving, merged into one mesh. A patch lies a little above any it overlaps. */
+function buildGround(def: DistrictDef): THREE.Mesh {
+  const quad = (r: AABB, y: number, color: Paving['color']) => {
+    const g = new THREE.PlaneGeometry(r.maxX - r.minX, r.maxZ - r.minZ)
+    g.rotateX(-Math.PI / 2)
+    g.translate((r.minX + r.maxX) / 2, y, (r.minZ + r.maxZ) / 2)
+    return bake(g, color)
+  }
+  const span = def.size * 2.5 // reaches past the walls to the horizon
+  const parts = [quad({ minX: -span / 2, maxX: span / 2, minZ: -span / 2, maxZ: span / 2 }, 0, def.ground)]
+  const levels: number[] = []
+  def.paving.forEach((p, i) => {
+    const under = def.paving.slice(0, i).map((q, j) => (overlap(p, q) ? levels[j]! : 0))
+    levels.push(Math.max(0, ...under) + 1)
+    parts.push(quad(p, levels[i]! * 0.02, p.color))
+  })
+  const mesh = new THREE.Mesh(merge(parts), new THREE.MeshLambertMaterial({ vertexColors: true }))
+  mesh.name = 'ground'
+  mesh.receiveShadow = true
+  return mesh
+}
+
+const overlap = (a: AABB, b: AABB) => a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ

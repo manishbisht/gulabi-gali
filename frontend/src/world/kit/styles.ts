@@ -1,7 +1,7 @@
 import type * as THREE from 'three'
 import type { PaletteKey } from '../palette'
 import type { BuildingSpec } from '../types'
-import { box, chhatri, cylinder, dome, FLOOR_H, merge, spire } from './parts'
+import { archOpening, box, chhatri, cylinder, dome, FLOOR_H, merge, spire } from './parts'
 
 type Parts = THREE.BufferGeometry[]
 
@@ -53,12 +53,8 @@ export function shop(s: BuildingSpec) {
   const parts: Parts = [box(s.w, H, s.d, 0, 0, 0, base), box(s.w + 0.2, 0.3, s.d + 0.2, 0, 0, 0, 'white')]
   for (let i = 0; i < bays; i++) {
     const x = -s.w / 2 + bw * (i + 0.5)
-    parts.push(box(bw - 0.9, 2.1, 0.16, x, 0.3, zf + 0.04, shutter))
-    // arch head: a six-sided disc standing in front of the shutter
-    const arch = cylinder((bw - 0.6) / 2, (bw - 0.6) / 2, 0.2, 6, 0, 0, 0, 'white')
-    arch.rotateX(Math.PI / 2)
-    arch.translate(x, 2.4, zf + 0.06)
-    parts.push(arch)
+    // shutter under a shallow arch, framed in white
+    parts.push(...archOpening(bw - 0.9, 2.0, 0.5, x, 0.3, zf + 0.005, shutter))
     parts.push(box(0.35, 2.7, 0.3, -s.w / 2 + bw * i + (i === 0 ? 0.18 : 0), 0, zf + 0.08, 'white'))
   }
   parts.push(box(0.35, 2.7, 0.3, s.w / 2 - 0.18, 0, zf + 0.08, 'white'))

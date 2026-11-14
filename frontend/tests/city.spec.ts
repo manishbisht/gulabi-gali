@@ -28,6 +28,14 @@ test('recovers after the WebGL context is lost', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__gg.framesSinceRestore())).toBeGreaterThan(5)
 })
 
+test('opens on the Pink City', async ({ page }) => {
+  await enterCity(page)
+  expect(await page.evaluate(() => window.__gg.district())).toBe('walled-city')
+  await expect(page.locator('.hud-top')).toContainText('Gulabi Shahar')
+  await page.getByRole('button', { name: 'Bhasha badlo: English' }).click()
+  await expect(page.locator('.hud-top')).toContainText('Pink City')
+})
+
 const distance = (a: { x: number; z: number }, b: { x: number; z: number }) =>
   Math.hypot(a.x - b.x, a.z - b.z)
 

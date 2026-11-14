@@ -28,7 +28,12 @@ export type AvatarLook = {
 export interface PropSpec {
   kind: 'tapri' | 'tree' | 'lamp' | 'auto' | 'bench' | 'poster-wall' | 'station'
   at: Vec2
+  /** Degrees, the same turn as `BuildingSpec.rot`: 90 sends the front (+z) to -x. */
   rot?: number
+}
+/** A flat patch of ground colour (a road, a kerb line, a paved court). Later patches lie on top. */
+export interface Paving extends AABB {
+  color: PaletteKey
 }
 export interface LandmarkDef {
   id: string
@@ -55,6 +60,7 @@ export interface DistrictDef {
   spawn: Vec2
   station: Vec2
   ground: PaletteKey
+  paving: Paving[]
   buildings: BuildingSpec[]
   landmarks: LandmarkDef[]
   npcs: NpcDef[]

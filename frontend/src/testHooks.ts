@@ -1,3 +1,4 @@
+import type { DistrictId } from './net/protocol'
 import type { Vec2 } from './world/types'
 
 /** What Playwright specs can ask of the running city. Grows task by task. */
@@ -10,6 +11,8 @@ export interface GgTestApi {
   position(): Vec2
   /** Puts the player at (x, z), skipping collision. */
   teleport(x: number, z: number): void
+  /** The district the player is in. */
+  district(): DistrictId
 }
 
 declare global {

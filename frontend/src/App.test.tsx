@@ -13,6 +13,7 @@ vi.mock('./engine/stage', () => ({
     scene: new THREE.Scene(),
     camera: new THREE.PerspectiveCamera(),
     onFrame: () => () => {},
+    onQuality: () => () => {},
     framesSinceRestore: () => 0,
     dispose: () => {},
   }),
@@ -39,11 +40,13 @@ it('shows the intro, then the HUD over a canvas after Padharo, and persists the 
 
   await act(async () => enter!.click())
   expect(host.querySelector('canvas')).not.toBeNull()
-  expect(host.textContent).toContain('Walled City')
+  expect(host.textContent).toContain('Ruko zara') // the district is still loading
+  await vi.waitFor(() => expect(host.textContent).toContain('Gulabi Shahar'))
 
   const toggle = host.querySelector<HTMLButtonElement>('.lang-toggle')!
   await act(async () => toggle.click())
   expect(localStorage.getItem('gg-lang')).toBe('en')
+  expect(host.textContent).toContain('Pink City')
   await act(async () => root.unmount())
 })
 

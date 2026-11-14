@@ -22,6 +22,9 @@ export function clampDelta(ms: number): number {
 }
 
 const QUALITY_KEY = 'gg-quality'
+/** Vertical field of view, in degrees: landscape screens, and phones held upright. */
+const FOV = 60
+const PORTRAIT_FOV = 70
 /** Pixel ratio ceiling per tier. */
 const RATIO_CAP: Record<QualityTier, number> = { 2: 2, 1: 1.25, 0: 1 }
 
@@ -40,7 +43,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
   renderer.shadowMap.type = THREE.PCFShadowMap
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 400)
+  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400)
 
   const frameListeners = new Set<(dt: number) => void>()
   const qualityListeners = new Set<(q: QualityTier) => void>()
@@ -60,6 +63,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
     renderer.setSize(width, height, false)
     camera.aspect = width / height
+    // A phone held upright sees a narrow slice of street; open the lens a little so a lane fits.
+    camera.fov = camera.aspect < 1 ? PORTRAIT_FOV : FOV
     camera.updateProjectionMatrix()
   }
 

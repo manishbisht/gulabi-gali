@@ -9,6 +9,10 @@ export const STRINGS = {
     hi: 'Is phone/browser pe 3D nahi chal raha. Chrome mein kholo — wahan chalega.',
     en: "3D doesn't run on this phone/browser. Open in Chrome and it should work.",
   },
+  loadFailed: {
+    hi: 'Gali nahi khul payi. Page reload karo.',
+    en: "Couldn't open the lane. Reload the page.",
+  },
   weatherUnknown: { hi: 'Mausam ka pata nahi', en: 'Weather unavailable' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
   langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },

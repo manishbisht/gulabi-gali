@@ -15,13 +15,15 @@ interface Options {
   look: AvatarLook
   /** Read every frame, so the world can add and drop colliders as districts stream in. */
   colliders: AABB[]
+  /** Tall things (buildings, landmarks) the chase camera must not end up inside. */
+  occluders?: AABB[]
 }
 
 /** Owns the avatar and the chase camera: input, then collision, then avatar and camera. */
-export function createPlayer({ scene, camera, controls, look, colliders }: Options) {
+export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
   const avatar = buildAvatar(look)
   scene.add(avatar)
-  const follow = createFollowCamera(camera)
+  const follow = createFollowCamera(camera, occluders)
   const fwd = new THREE.Vector3()
   let pos: Vec2 = { x: 0, z: 0 }
 
