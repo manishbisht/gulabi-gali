@@ -325,6 +325,73 @@ it('shows remote people from the live socket and drops them with the district', 
   expect(stage.scene.getObjectByName('person-dev:asha')).toBeUndefined()
 })
 
+const asha = {
+  id: 'dev:asha',
+  name: 'Asha',
+  look: { skin: 1, outfit: 'teal', head: 'none' },
+  status: '',
+  x: 1,
+  z: 2,
+  ry: 0,
+} as const
+
+/** A live district whose socket has welcomed Asha, standing near the player. */
+async function withAsha() {
+  const live = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [asha] })
+  live.tick(1 / 30)
+  const drawn = () => live.stage.scene.getObjectByName('person-dev:asha')
+  expect(drawn()).toBeDefined()
+  return { ...live, ws, drawn }
+}
+
+it('clears the street when another tab takes over: nobody stays frozen in place', async () => {
+  const { session, ws, drawn } = await withAsha()
+  ws.onclose?.({ code: 4001 })
+  expect(drawn()).toBeUndefined()
+  session.dispose()
+})
+
+it('clears the street after 3 s without a socket, and not before', async () => {
+  const { session, ws, drawn } = await withAsha()
+  vi.useFakeTimers()
+  try {
+    ws.onclose?.({ code: 1006 }) // a tunnel: the socket is gone, a reconnect is on its way
+    await vi.advanceTimersByTimeAsync(2900)
+    expect(drawn()).toBeDefined()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(drawn()).toBeUndefined()
+    // back up: the welcome brings everyone back
+    const again = sockets().at(-1)!
+    expect(again).not.toBe(ws)
+    again.onopen?.()
+    again.say({ t: 'welcome', you: { id: null, visible: false }, people: [asha] })
+    expect(drawn()).toBeDefined()
+  } finally {
+    vi.useRealTimers()
+    session.dispose()
+  }
+})
+
+it('a quick reconnect keeps the street as it is', async () => {
+  const { session, ws, drawn } = await withAsha()
+  vi.useFakeTimers()
+  try {
+    ws.onclose?.({ code: 1006 })
+    await vi.advanceTimersByTimeAsync(1000)
+    sockets().at(-1)!.onopen?.()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(drawn()).toBeDefined()
+  } finally {
+    vi.useRealTimers()
+    session.dispose()
+  }
+})
+
 /** Opens a live district with one person dead ahead of the camera, and gives back the pieces to tap with. */
 async function withPersonAhead() {
   const live = openLive()

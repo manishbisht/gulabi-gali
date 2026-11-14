@@ -45,7 +45,8 @@ export interface Connections {
 
 /**
  * A resident's requests, matches and unread state, kept fresh by the inbox socket. A notice only says "look
- * again": every list is refetched (also on each (re)connect, so a notice missed offline is still caught).
+ * again": a `message` refetches the chats, any other notice every list (and so does each (re)connect, so a
+ * notice missed offline is still caught).
  */
 export function useConnections({
   user,
@@ -63,8 +64,10 @@ export function useConnections({
   const [latest, setLatest] = useState<Record<string, string>>({})
   const [messageTicks, setTicks] = useState<Record<string, number>>({})
   const [reconnects, setReconnects] = useState(0)
-  /** Moves with every refresh and every sign-out or user change; an answer from an older one is dropped. */
+  /** Moves with every sign-out or user change: an answer from before it is dropped. */
   const gen = useRef(0)
+  /** Each list's newest fetch: an older answer that lands after a newer one is dropped. */
+  const seq = useRef({ requests: 0, matches: 0 })
   const tokenRef = useRef(token)
   const alive = useRef(true)
   const asked = useRef(new Set<string>())
@@ -87,34 +90,40 @@ export function useConnections({
     })
   }, [])
 
-  const refresh = useCallback(async () => {
-    const g = ++gen.current
-    const tok = await tokenRef.current().catch(() => null)
-    if (!tok || g !== gen.current) return
-    const [req, mat] = await Promise.allSettled([getRequests(tok), getMatches(tok)])
-    if (!alive.current || g !== gen.current) return
-    if (req.status === 'fulfilled') setLists(req.value)
-    if (mat.status === 'fulfilled') {
-      setMatches(mat.value)
-      const ids = new Set(mat.value.map((m) => m.id))
-      // read marks of matches that are gone would pile up for good
-      writeRead((r) => {
-        const keep = Object.keys(r).filter((k) => ids.has(k))
-        return keep.length === Object.keys(r).length ? r : Object.fromEntries(keep.map((k) => [k, r[k]!]))
-      })
-      // A chat's last line carries no id: for a chat read before, ask once what its newest id is
-      for (const m of mat.value) {
-        if (!m.last || m.last.mine || asked.current.has(m.id)) continue
-        asked.current.add(m.id)
-        void getMessages(tok, m.id)
-          .then((page) => {
-            const id = page?.messages.at(-1)?.id
-            if (id && alive.current && g === gen.current) setLatest((l) => ({ ...l, [m.id]: id }))
-          })
-          .catch(() => asked.current.delete(m.id))
+  /** Refetches the matches, and the request lists too unless `only` says chats. */
+  const refresh = useCallback(
+    async (only?: 'chats') => {
+      const g = gen.current
+      const m = ++seq.current.matches
+      const r = only ? null : ++seq.current.requests
+      const tok = await tokenRef.current().catch(() => null)
+      if (!tok || g !== gen.current) return
+      const [req, mat] = await Promise.allSettled([r === null ? null : getRequests(tok), getMatches(tok)])
+      if (!alive.current || g !== gen.current) return
+      if (r === seq.current.requests && req.status === 'fulfilled' && req.value) setLists(req.value)
+      if (m === seq.current.matches && mat.status === 'fulfilled') {
+        setMatches(mat.value)
+        const ids = new Set(mat.value.map((m) => m.id))
+        // read marks of matches that are gone would pile up for good
+        writeRead((r) => {
+          const keep = Object.keys(r).filter((k) => ids.has(k))
+          return keep.length === Object.keys(r).length ? r : Object.fromEntries(keep.map((k) => [k, r[k]!]))
+        })
+        // A chat's last line carries no id: for a chat read before, ask once what its newest id is
+        for (const m of mat.value) {
+          if (!m.last || m.last.mine || asked.current.has(m.id)) continue
+          asked.current.add(m.id)
+          void getMessages(tok, m.id)
+            .then((page) => {
+              const id = page?.messages.at(-1)?.id
+              if (id && alive.current && g === gen.current) setLatest((l) => ({ ...l, [m.id]: id }))
+            })
+            .catch(() => asked.current.delete(m.id))
+        }
       }
-    }
-  }, [writeRead])
+    },
+    [writeRead],
+  )
 
   useEffect(() => {
     if (!user) return
@@ -130,6 +139,8 @@ export function useConnections({
         if (n.t === 'message') {
           setLatest((l) => ({ ...l, [n.matchId]: n.id }))
           setTicks((t) => ({ ...t, [n.matchId]: (t[n.matchId] ?? 0) + 1 }))
+          // a message changes a chat's last line, never a request
+          return void refresh('chats')
         }
         void refresh()
       },

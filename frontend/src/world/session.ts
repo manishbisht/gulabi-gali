@@ -5,7 +5,7 @@ import { createFestivalFx, festivalSky } from '../live/festivalFx'
 import { applySky, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
-import { connectLive, type LiveConn } from '../net/live'
+import { connectLive, type LiveConn, type LiveState } from '../net/live'
 import type { ClientMsg, DistrictId, FestivalId, LivePerson, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
 import type { Controls } from '../player/controls'
@@ -25,6 +25,11 @@ const SKY_REFRESH_MS = 30_000
 /** A tap moves less than this many px and lasts less than this many ms. */
 const TAP_SLOP = 10
 const TAP_MS = 500
+/**
+ * Without a live socket for this long, the other people are taken off the street: they would only stand there
+ * frozen. The next welcome brings back whoever is still about.
+ */
+const STALE_MS = 3000
 
 export type Player = ReturnType<typeof createPlayer>
 
@@ -436,7 +441,9 @@ type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void }
 /**
  * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
  * read them. The player's own position goes out every frame (the socket throttles it), and straight after
- * every welcome, since a socket that has not said where it stands hears nobody move.
+ * every welcome, since a socket that has not said where it stands hears nobody move. People last heard of on
+ * a socket that is gone do not linger: replaced by another tab, the street empties at once; reconnecting,
+ * after `STALE_MS`.
  */
 function createPresence(
   stage: Stage,
@@ -470,14 +477,26 @@ function createPresence(
       sendMove(player.position())
     }
   }
-  const connect = (): LiveConn =>
-    connectLive({
+  let stale: ReturnType<typeof setTimeout> | null = null
+  const onState = (s: LiveState) => {
+    if (stale) clearTimeout(stale)
+    stale = s === 'connecting' ? setTimeout(() => people.clear(), STALE_MS) : null
+  }
+  const connect = (): LiveConn => {
+    const c = connectLive({
       district: district.def.id,
       token: hooks.token,
       onMsg,
-      onReplaced: () => hooks.replaced(true),
+      onReplaced: () => {
+        people.clear()
+        hooks.replaced(true)
+      },
+      onState,
       WebSocketImpl,
     })
+    onState('connecting') // where every socket starts
+    return c
+  }
   let conn = connect()
   installTestHooks({
     liveState: () => conn.state(),
@@ -496,7 +515,7 @@ function createPresence(
   return {
     update(dt, pos) {
       sendMove(pos)
-      people.update(dt)
+      people.update(dt, pos)
       labels.update(stage.camera, people, pos)
     },
     reconnect() {
@@ -506,7 +525,7 @@ function createPresence(
     },
     send: (m) => conn.send(m),
     dispose() {
-      conn.close()
+      conn.close() // its 'closed' stops the stale timer
       offQuality()
       labels.dispose()
       people.dispose()

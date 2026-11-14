@@ -134,8 +134,8 @@ it('hands parsed server messages on and ignores garbage', async () => {
   conn.close()
 })
 
-it('throttles moves to 10 Hz and skips tiny ones', async () => {
-  const { conn } = live()
+it("throttles a resident's moves to 10 Hz and skips tiny ones", async () => {
+  const { conn } = live(vi.fn(), vi.fn(), async () => 'dev.asha.1')
   await vi.advanceTimersByTimeAsync(0)
   const ws = last()
   conn.send({ t: 'move', x: 0, z: 0, ry: 0 }) // not open yet: dropped
@@ -167,6 +167,32 @@ it('throttles moves to 10 Hz and skips tiny ones', async () => {
   await vi.advanceTimersByTimeAsync(200)
   conn.send({ ...at, x: at.x + 0.06, ry: (3 * Math.PI) / 180 }) // 6 cm
   expect(moves()).toHaveLength(n + 2)
+  conn.close()
+})
+
+it("a ghost's moves go out every 500 ms (2 Hz): nobody watches a ghost walk", async () => {
+  const { conn } = live()
+  await vi.advanceTimersByTimeAsync(0)
+  const ws = last()
+  ws.open()
+  const moves = () => ws.sent.map((s) => JSON.parse(s)).filter((m) => m.t === 'move')
+  let x = 0
+  const step = () => conn.send({ t: 'move', x: (x += 0.07), z: 0, ry: 0 })
+  step()
+  expect(moves()).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(499)
+  step()
+  expect(moves()).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(1)
+  step()
+  expect(moves()).toHaveLength(2)
+  // two seconds of frames, walking: three or four more, never the twenty a resident's would be
+  for (let i = 0; i < 125; i++) {
+    await vi.advanceTimersByTimeAsync(16)
+    step()
+  }
+  expect(moves().length).toBeGreaterThanOrEqual(5)
+  expect(moves().length).toBeLessThanOrEqual(6)
   conn.close()
 })
 

@@ -213,3 +213,33 @@ it('an open chat catches up after the inbox reconnects', async () => {
   await settle()
   expect(host.textContent).toContain('sent while you were away')
 })
+
+it('a message notice refetches the chats only; any other notice refetches both lists', async () => {
+  await mount()
+  const notice = (n: unknown) => act(async () => FakeSocket.all[0]!.onmessage!({ data: JSON.stringify(n) }))
+  let from = calls.length
+  await notice({ t: 'message', matchId: 'm1', id: 'z10' })
+  await settle()
+  expect(calls.slice(from)).toEqual(['GET /api/matches'])
+  from = calls.length
+  await notice({ t: 'request', id: 'r-p9' })
+  await settle()
+  expect(calls.slice(from).sort()).toEqual(['GET /api/matches', 'GET /api/requests'])
+})
+
+it('a chats-only refetch never lets an older request list win', async () => {
+  armed = true // the first refresh (the socket opening) is slow on requests
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () => createRoot(host).render(<Probe sheet={false} />))
+  await settle()
+  await act(async () => FakeSocket.all[0]!.onopen!())
+  await settle()
+  // a message arrives meanwhile: chats only, and the slow request list still lands
+  await act(async () =>
+    FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'message', matchId: 'm1', id: 'z10' }) }),
+  )
+  await settle()
+  await act(async () => release(requests))
+  await settle()
+  expect(host.querySelector('[data-testid=incoming]')!.textContent).toBe('1')
+})

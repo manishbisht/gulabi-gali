@@ -2,8 +2,13 @@ import { API_BASE } from './api'
 import { reconnecting } from './reconnect'
 import { LIVE_CLOSE, type ClientMsg, type DistrictId, type ServerMsg } from './protocol'
 
-/** Moves go out at most this often (10 Hz), and only when they say something new. */
+/** A resident's moves go out at most this often (10 Hz), and only when they say something new. */
 const MOVE_MS = 100
+/**
+ * A ghost's, at most this often (2 Hz). Nobody sees a ghost; the server only needs its point now and then, to
+ * know whose moves are near enough to send it.
+ */
+const GHOST_MOVE_MS = 500
 const MOVE_MIN_M = 0.05
 const MOVE_MIN_TURN = (2 * Math.PI) / 180
 /** With nothing else sent for this long, a ping keeps the server from calling the socket idle. */
@@ -29,6 +34,8 @@ export interface LiveOptions {
   onMsg: (m: ServerMsg) => void
   /** Another tab of the same person took this place over (close code 4001). Nothing reconnects after it. */
   onReplaced?: () => void
+  /** Each change of `state()`, as it happens. */
+  onState?: (s: LiveState) => void
   WebSocketImpl?: typeof WebSocket
 }
 
@@ -45,10 +52,17 @@ export function connectLive(opts: LiveOptions): LiveConn {
   const Impl = opts.WebSocketImpl ?? WebSocket
   let ws: WebSocket | null = null
   let state: LiveState = 'connecting'
+  const setState = (s: LiveState) => {
+    if (s === state) return
+    state = s
+    opts.onState?.(s)
+  }
   const backoff = reconnecting(() => void open())
   let ping: ReturnType<typeof setTimeout> | null = null
   /** When anything last went out, for the idle ping. */
   let lastSend = 0
+  /** This socket's move throttle: a resident's or a ghost's, by the token it opened with. */
+  let moveMs = MOVE_MS
   /** The last move this socket sent; NaN until it sends one, so the first always goes. */
   let sentAt = -Infinity
   let sentX = NaN
@@ -81,7 +95,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
   }
 
   function reconnectLater() {
-    state = 'connecting'
+    setState('connecting')
     backoff.later()
   }
 
@@ -100,9 +114,10 @@ export function connectLive(opts: LiveOptions): LiveConn {
       return reconnectLater()
     }
     ws = sock
+    moveMs = token ? MOVE_MS : GHOST_MOVE_MS
     sock.onopen = () => {
       if (ws !== sock) return
-      state = 'open'
+      setState('open')
       backoff.opened()
       lastSend = Date.now()
       sentAt = -Infinity
@@ -125,10 +140,10 @@ export function connectLive(opts: LiveOptions): LiveConn {
       stopTimers()
       if (state === 'closed') return
       if (e.code === LIVE_CLOSE.replaced) {
-        state = 'closed'
+        setState('closed')
         return opts.onReplaced?.()
       }
-      state = 'connecting'
+      setState('connecting')
       backoff.dropped()
     }
   }
@@ -140,7 +155,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
       if (state !== 'open' || !ws) return
       if (m.t === 'move') {
         const now = Date.now()
-        if (now - sentAt < MOVE_MS) return
+        if (now - sentAt < moveMs) return
         const moved = Math.hypot(m.x - sentX, m.z - sentZ)
         // NaN (nothing sent yet) compares false both ways, so the first move always goes
         if (moved <= MOVE_MIN_M && turn(m.ry, sentRy) <= MOVE_MIN_TURN) return
@@ -153,7 +168,7 @@ export function connectLive(opts: LiveOptions): LiveConn {
     },
     close() {
       if (state === 'closed') return
-      state = 'closed'
+      setState('closed')
       stopTimers()
       const sock = ws
       ws = null

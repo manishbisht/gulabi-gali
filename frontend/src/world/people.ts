@@ -7,6 +7,12 @@ import type { AvatarLook, Vec2 } from './types'
 const FOLLOW_S = 0.12
 /** Further than this from where a body is drawn, it jumps instead of gliding (a rejoin, a missed stretch). */
 const SNAP_M = 20
+/**
+ * Bodies further than this from the player are hidden: the server sends moves only within 60 m of the viewer,
+ * so past it a body would stand frozen where it was last heard of. A little short of 60, for the server's
+ * view of where the player is lagging behind.
+ */
+export const DRAW_RANGE = 55
 /** The invisible tap target around each body, as for the characters. */
 const TAP_RADIUS = 0.75
 const TAP_HEIGHT = 2.2
@@ -24,12 +30,15 @@ export interface Remote {
 
 export interface People {
   apply(m: ServerMsg): void
-  update(dt: number): void
+  /** Eases every body toward its person's point, and hides those more than `DRAW_RANGE` from `from`. */
+  update(dt: number, from: Vec2): void
   pick(ray: THREE.Raycaster): LivePerson | null
   /** Everyone listed, where they are drawn now. */
   list(): LivePerson[]
   /** Everyone listed, without copying: replaced when someone joins or leaves, never mutated. */
   entries(): readonly Remote[]
+  /** Takes everyone off the street (the socket that listed them is gone); the next welcome lists them again. */
+  clear(): void
   setShadows(on: boolean): void
   dispose(): void
 }
@@ -153,25 +162,36 @@ export function createPeople(scene: THREE.Object3D): People {
         }
       }
     },
-    update(dt) {
+    update(dt, from) {
       // Exponential easing: each frame closes the same share of the gap, so a body never passes its target.
       const k = Math.exp(-dt / FOLLOW_S)
+      const range = DRAW_RANGE * DRAW_RANGE
       for (let i = 0; i < all.length; i++) {
         const { person, body } = all[i]!
         const pos = body.position
         pos.x = person.x - (person.x - pos.x) * k
         pos.z = person.z - (person.z - pos.z) * k
         body.rotation.y = wrap(person.ry - wrap(person.ry - body.rotation.y) * k)
+        const dx = pos.x - from.x
+        const dz = pos.z - from.z
+        body.visible = dx * dx + dz * dz <= range
       }
     },
     pick(ray) {
       for (let i = 0; i < all.length; i++) all[i]!.body.updateMatrixWorld(true)
-      const hit = ray.intersectObjects(taps, false)[0]
+      // a ray hits a hidden body's tap target as well: the nearest one that is drawn is the one tapped
+      const hit = ray.intersectObjects(taps, false).find((h) => h.object.parent?.visible)
       const e = hit && all.find((x) => x.body === hit.object.parent)
       return e ? drawn(e) : null
     },
     list: () => all.map(drawn),
     entries: () => all,
+    clear() {
+      if (!all.length) return
+      for (const e of all) e.body.removeFromParent()
+      byId.clear()
+      reindex()
+    },
     setShadows(on) {
       shadows = on
       for (let i = 0; i < all.length; i++) all[i]!.avatar.castShadow = on

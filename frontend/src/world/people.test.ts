@@ -23,6 +23,9 @@ function welcome(people: LivePerson[], you: string | null = null) {
   return { t: 'welcome', you: { id: you, visible: you !== null }, people } as const
 }
 
+/** Where the player stands, unless a test says otherwise. */
+const HERE = { x: 0, z: 0 }
+
 const bodies = (scene: THREE.Scene) => scene.children.filter((c) => c.name.startsWith('person-'))
 
 it('people interpolate without overshoot and remove on leave', () => {
@@ -37,13 +40,13 @@ it('people interpolate without overshoot and remove on leave', () => {
 
   people.apply({ t: 'moves', m: [['dev:asha', 4, 0, Math.PI / 2]] })
   // 120 ms time constant: one constant in, about 63% of the way
-  people.update(0.12)
+  people.update(0.12, HERE)
   const x1 = people.list()[0]!.x
   expect(x1).toBeGreaterThan(2.4)
   expect(x1).toBeLessThan(2.6)
   let prev = x1
   for (let i = 0; i < 200; i++) {
-    people.update(1 / 30)
+    people.update(1 / 30, HERE)
     const { x } = people.list()[0]!
     expect(x).toBeGreaterThanOrEqual(prev)
     expect(x).toBeLessThanOrEqual(4)
@@ -52,7 +55,7 @@ it('people interpolate without overshoot and remove on leave', () => {
   expect(prev).toBeCloseTo(4, 3)
   // a long stall lands exactly on the target, never past it
   people.apply({ t: 'moves', m: [['dev:asha', 10, 0, 0]] })
-  people.update(5)
+  people.update(5, HERE)
   expect(people.list()[0]!.x).toBe(10)
 
   people.apply({ t: 'leave', id: 'dev:asha' })
@@ -62,11 +65,42 @@ it('people interpolate without overshoot and remove on leave', () => {
   expect(bodies(scene)).toHaveLength(0)
 })
 
+it('hides a body more than 55 m from the player: past 60 m the server stops sending its moves', () => {
+  const scene = new THREE.Scene()
+  const people = createPeople(scene)
+  people.apply(welcome([asha, { ...ravi, x: 55.5, z: 0 }]))
+  const shown = (id: string) => scene.getObjectByName(`person-${id}`)!.visible
+  people.update(0, HERE)
+  expect(shown('dev:asha')).toBe(true)
+  expect(shown('dev:ravi')).toBe(false)
+  // nor can a hidden body be tapped
+  const ray = new THREE.Raycaster(new THREE.Vector3(55.5, 1, 20), new THREE.Vector3(0, 0, -1))
+  expect(people.pick(ray)).toBeNull()
+  // the player walks closer: there again
+  people.update(0, { x: 10, z: 0 })
+  expect(shown('dev:ravi')).toBe(true)
+  expect(people.pick(ray)?.id).toBe('dev:ravi')
+  people.dispose()
+})
+
+it('clear takes everyone off the street, and a welcome brings them back', () => {
+  const scene = new THREE.Scene()
+  const people = createPeople(scene)
+  people.apply(welcome([asha, ravi]))
+  people.clear()
+  expect(bodies(scene)).toHaveLength(0)
+  expect(people.list()).toEqual([])
+  expect(people.entries()).toEqual([])
+  people.apply(welcome([asha]))
+  expect(people.list().map((p) => p.id)).toEqual(['dev:asha'])
+  people.dispose()
+})
+
 it('turns the short way round', () => {
   const people = createPeople(new THREE.Scene())
   people.apply(welcome([{ ...asha, ry: 3 }]))
   people.apply({ t: 'moves', m: [['dev:asha', 0, 0, -3]] })
-  people.update(0.05)
+  people.update(0.05, HERE)
   // from 3 to -3 is 0.28 rad across ±π, not 6 rad back through 0
   const { ry } = people.list()[0]!
   expect(Math.abs(ry)).toBeGreaterThan(3)
