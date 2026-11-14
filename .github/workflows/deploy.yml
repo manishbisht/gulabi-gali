@@ -134,6 +134,8 @@ jobs:
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           VITE_API_URL: ${{ secrets.VITE_API_BASE_URL }}
+          # Empty keeps none-mode (everyone is a ghost); set it to turn Clerk sign-in on.
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
           # Build id, for future error reporting.
           VITE_RELEASE: ${{ github.sha }}
         run: npm run build -w frontend -- --base "${PAGES_BASE_PATH}/"

@@ -5,6 +5,8 @@ export type AuthMode = 'clerk' | 'dev' | 'none'
 export interface AuthState {
   mode: AuthMode
   signedIn: boolean
+  /** False while the provider is still finding out who this is (Clerk loading); the sign-in button waits for it. */
+  ready: boolean
   /** A fresh bearer token for the API, or null when signed out. */
   token(): Promise<string | null>
   /** Opens the sign-in sheet. A no-op in `none` mode. */
@@ -21,6 +23,7 @@ export function authMode(): AuthMode {
 export const SIGNED_OUT: AuthState = {
   mode: 'none',
   signedIn: false,
+  ready: true,
   token: async () => null,
   openSignIn: () => undefined,
   signOut: async () => undefined,

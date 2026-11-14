@@ -7,7 +7,7 @@ import type { AuthState } from './useAuth'
 // Everything that touches @clerk/react lives here, so the SDK is its own lazily loaded chunk and a
 // build with no publishable key never downloads it.
 
-export type ClerkSession = Pick<AuthState, 'signedIn' | 'token' | 'signOut'>
+export type ClerkSession = Pick<AuthState, 'signedIn' | 'ready' | 'token' | 'signOut'>
 
 // Email code is the primary way in; Google is hidden where Google refuses to sign in.
 const HIDE_GOOGLE = { socialButtonsRoot: { display: 'none' }, dividerRow: { display: 'none' } }
@@ -21,13 +21,13 @@ interface Props {
 
 /** Renders no app content: it reports who is signed in and shows the sheet, so the app tree never remounts. */
 function Bridge({ open, onClose, onSession }: Omit<Props, 'publishableKey'>) {
-  const { isSignedIn, getToken } = useClerkAuth()
+  const { isLoaded, isSignedIn, getToken } = useClerkAuth()
   const { signOut } = useClerk()
   const signedIn = Boolean(isSignedIn)
   useEffect(() => {
     // getToken() returns Clerk's cached session token and refreshes it when it is about to expire.
-    onSession({ signedIn, token: () => getToken(), signOut: () => signOut() })
-  }, [onSession, signedIn, getToken, signOut])
+    onSession({ signedIn, ready: Boolean(isLoaded), token: () => getToken(), signOut: () => signOut() })
+  }, [onSession, signedIn, isLoaded, getToken, signOut])
   useEffect(() => {
     if (signedIn) onClose() // signing in closes the sheet, so signing out does not reopen it
   }, [signedIn, onClose])

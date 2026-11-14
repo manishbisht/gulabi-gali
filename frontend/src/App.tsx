@@ -152,7 +152,7 @@ export default function App() {
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
-        onSignIn={auth.mode !== 'none' && !auth.signedIn ? auth.openSignIn : undefined}
+        onSignIn={auth.mode !== 'none' && auth.ready && !auth.signedIn ? auth.openSignIn : undefined}
         top={
           <>
             {toast && (

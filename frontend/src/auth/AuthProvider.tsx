@@ -1,10 +1,21 @@
-import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from 'react'
 import DevAuth from './dev'
 import type { ClerkSession } from './clerk'
 import { AuthContext, authMode, SIGNED_OUT, type AuthState } from './useAuth'
 
 // Loaded only in clerk mode: a build with no key keeps the SDK out of the entry chunk.
 const ClerkAuth = lazy(() => import('./clerk'))
+
+/** A failed Clerk chunk or a throwing SDK must not take the city down: render nothing, stay signed out. */
+class ClerkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
+}
 
 /**
  * The app sits above the Clerk module, not inside it: the SDK arrives later and reports in, so the
@@ -14,21 +25,23 @@ function ClerkMode({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [session, setSession] = useState<ClerkSession | null>(null)
   const value = useMemo<AuthState>(
-    () => ({ ...SIGNED_OUT, ...session, mode: 'clerk', openSignIn: () => setOpen(true) }),
+    () => ({ ...SIGNED_OUT, ready: false, ...session, mode: 'clerk', openSignIn: () => setOpen(true) }),
     [session],
   )
   const close = useCallback(() => setOpen(false), [])
   return (
     <>
       <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-      <Suspense fallback={null}>
-        <ClerkAuth
-          publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY!}
-          open={open}
-          onClose={close}
-          onSession={setSession}
-        />
-      </Suspense>
+      <ClerkBoundary>
+        <Suspense fallback={null}>
+          <ClerkAuth
+            publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY!}
+            open={open}
+            onClose={close}
+            onSession={setSession}
+          />
+        </Suspense>
+      </ClerkBoundary>
     </>
   )
 }

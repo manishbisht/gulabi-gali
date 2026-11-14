@@ -39,6 +39,13 @@ function contentSecurityPolicy(): Plugin {
       env = config.env
       // A production bundle that quietly points at 127.0.0.1 would ship a site whose sky and
       // festivals can never load, and a CSP that blocks the real API. Say so at build time.
+      // The dev sign-in sheet needs no password: only a build against a local Worker may carry it.
+      if (env.VITE_DEV_AUTH === '1' && process.env.GG_ALLOW_LOCAL_API !== '1') {
+        throw new Error(
+          'VITE_DEV_AUTH=1 would ship a sign-in that needs only a name. It is for e2e and local builds only: ' +
+            'unset it, or set GG_ALLOW_LOCAL_API=1 to build against a local Worker on purpose.',
+        )
+      }
       if (config.mode === 'production' && !env.VITE_API_URL && process.env.GG_ALLOW_LOCAL_API !== '1') {
         throw new Error(
           'VITE_API_URL is not set. A production build needs the API origin (the GitHub secret VITE_API_BASE_URL, ' +

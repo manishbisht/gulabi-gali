@@ -35,7 +35,7 @@ export function AuthShell({ mode, signedIn, token, signOut, form, children }: Pr
   const [open, setOpen] = useState(false)
   if (signedIn && open) setOpen(false) // signing in closes the sheet
   const value = useMemo<AuthState>(
-    () => ({ mode, signedIn, token, signOut, openSignIn: () => setOpen(true) }),
+    () => ({ mode, signedIn, ready: true, token, signOut, openSignIn: () => setOpen(true) }),
     [mode, signedIn, token, signOut],
   )
   return (
