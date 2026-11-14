@@ -2,6 +2,7 @@ import { useCallback, useState, type FormEvent, type ReactNode } from 'react'
 import { useLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
 import { API_BASE } from '../net/api'
+import { fetchNoting } from '../net/rateNotice'
 import { AuthShell } from './AuthShell'
 
 // The one `gg-` key outside storage.ts: that rule covers localStorage, and this is a per-tab
@@ -37,7 +38,7 @@ function DevForm({ onToken }: { onToken: (token: string) => void }) {
     setBusy(true)
     setFailed(false)
     try {
-      const res = await fetch(`${API_BASE}/api/dev/login`, {
+      const res = await fetchNoting(`${API_BASE}/api/dev/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed }),

@@ -1,4 +1,5 @@
 import type { Env } from './env'
+import { requestLimit } from './limits'
 import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
 import { isVerified } from './trust'
@@ -121,6 +122,9 @@ export async function sendRequest(
   if (dup) return fail('already', 409)
   if (them.pause_requests === 1) return fail('paused', 409)
 
+  // After every refusal above, so only a request that would be sent counts against the day's allowance.
+  const limited = await requestLimit(env, userId, now)
+  if (limited) return limited
   const id = crypto.randomUUID()
   try {
     await env.DB.batch([

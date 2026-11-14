@@ -7,11 +7,11 @@ import type { Env } from './env'
 import { purgeEvidence } from './evidence'
 import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
-import { purgeCounters, readLimit } from './limits'
+import { inviteIpLimit, ipLimit, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
 import { fileReport, purgeReportEvidence } from './reports'
 import { devVerify, listInvites, redeemInvite } from './trust'
-import { activeRow, devLogin, getMe, getProfile, putProfile } from './profiles'
+import { activeRow, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
 
@@ -100,12 +100,27 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
+/**
+ * Clerk does the sign-in; the call that would create an account row (the first `/api/me`, or a profile saved
+ * without one) is what counts against the address's sign-in limit. Null while within it, or when the account exists.
+ */
+async function bootstrapLimit(env: Env, request: Request, userId: string): Promise<Response | null> {
+  return (await userExists(env, userId)) ? null : ipLimit(env.SIGNIN_LIMITER, request)
+}
+
 async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
   const { method } = request
   const { pathname } = url
+  // Every write counts against its address, whoever signed it (dev login included).
+  if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
+    const slow = await ipLimit(env.WRITES_LIMITER, request)
+    if (slow) return slow
+  }
   if (pathname === '/api/dev/login') {
     if (env.DEV_AUTH !== '1' || method !== 'POST')
       return Response.json({ error: 'not found' }, { status: 404 })
+    const slow = await ipLimit(env.SIGNIN_LIMITER, request)
+    if (slow) return slow
     return devLogin(env, await readJson(request))
   }
   if (pathname === '/api/dev/verify') {
@@ -115,12 +130,19 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   }
   const user = await resolveUser(request, env)
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
-  if (pathname === '/api/me' && method === 'GET') return Response.json(await getMe(env, user.id))
+  if (pathname === '/api/me' && method === 'GET') {
+    const slow = await bootstrapLimit(env, request, user.id)
+    return slow ?? Response.json(await getMe(env, user.id))
+  }
   if (pathname === '/api/me/profile' && method === 'PUT')
-    return putProfile(env, user.id, await readJson(request))
+    return (await bootstrapLimit(env, request, user.id)) ?? putProfile(env, user.id, await readJson(request))
   if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
-  if (pathname === '/api/invites/redeem' && method === 'POST')
+  if (pathname === '/api/invites/redeem' && method === 'POST') {
+    // Per address as well as per person (which `redeemInvite` counts): one person cannot spread guesses over accounts.
+    const slow = await inviteIpLimit(env, request)
+    if (slow) return slow
     return redeemInvite(env, user.id, await readJson(request), later)
+  }
   if (pathname === '/api/blocks' && method === 'GET') return listBlocks(env, user.id)
   if (pathname === '/api/blocks' && method === 'POST')
     return blockUser(env, user.id, await readJson(request), later)
@@ -191,8 +213,12 @@ export default {
     }
     if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
     const live = pathname.match(/^\/api\/districts\/([^/]+)\/live$/)
-    if (live) return openDistrict(request, env, live[1])
-    if (pathname === '/api/inbox') return openInbox(request, env)
+    if (live || pathname === '/api/inbox') {
+      // Every socket open counts, ghosts and reconnects included.
+      const slow = await ipLimit(env.SOCKETS_LIMITER, request)
+      if (slow) return slow
+      return live ? openDistrict(request, env, live[1]) : openInbox(request, env)
+    }
     const later: Later = ctx ? (work) => ctx.waitUntil(work) : floating
     if (pathname.startsWith('/api/')) return withCors(await handleApi(request, env, url, later), origin)
     return json({ error: 'not found' }, 404, origin)

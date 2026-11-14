@@ -151,6 +151,10 @@ export function parseProfile(raw: unknown): { ok: true; value: Parsed } | { ok: 
   }
 }
 
+/** Whether `userId` already has an account row (the first `getMe` makes it). */
+export const userExists = async (env: Env, userId: string): Promise<boolean> =>
+  (await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(userId).first()) !== null
+
 export async function getMe(env: Env, userId: string): Promise<Me> {
   await env.DB.prepare('INSERT OR IGNORE INTO users (id, created_at) VALUES (?, ?)')
     .bind(userId, Date.now())

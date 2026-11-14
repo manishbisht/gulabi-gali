@@ -4,6 +4,7 @@ import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
 import { useMe } from './profile/useMe'
+import { useRateNotice } from './net/useRateNotice'
 import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
 import { VisibilityChip } from './ui/VisibilityChip'
@@ -152,6 +153,7 @@ export default function App() {
     session.current?.reconnectLive()
   }, [liveKey, auth.token])
   const conn = useConnections({ user: residentId, token: auth.token })
+  const slowed = useRateNotice()
   const { block, toast: blockToast } = useBlock(auth.token, lang)
   const [connOpen, setConnOpen] = useState(false)
   // signing out shuts the sheet, so the next resident does not find it open
@@ -336,12 +338,17 @@ export default function App() {
         connectionsBadge={conn.badge}
         top={
           <>
-            {blockToast && (
+            {slowed && (
+              <div className="toast" role="status">
+                {t('slowDown', lang)}
+              </div>
+            )}
+            {!slowed && blockToast && (
               <div className="toast" role="status">
                 {blockToast}
               </div>
             )}
-            {!blockToast && (
+            {!slowed && !blockToast && (
               <>
                 {toast && (
                   <div className="toast" role="status">

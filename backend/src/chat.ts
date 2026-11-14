@@ -1,4 +1,5 @@
 import type { Env } from './env'
+import { messageLimit, rateLimited } from './limits'
 import { holdEvidence } from './evidence'
 import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
@@ -210,6 +211,8 @@ export async function postMessage(
   const body = cleanMessage(typeof raw === 'object' && raw !== null ? (raw as { body?: unknown }).body : null)
   if (body === null) return fail('invalid', 400)
   if (!wordsOk(body)) return Response.json({ error: 'words', field: 'body' }, { status: 400 })
+  const limited = await messageLimit(env, userId, now)
+  if (limited) return limited
   const id = crypto.randomUUID()
   const { meta } = await env.DB.prepare(
     `INSERT INTO messages (id, match_id, sender, body, created_at)
@@ -222,7 +225,7 @@ export async function postMessage(
   if (!meta.changes) {
     // Either too soon, or the match went (an unmatch) since it was read.
     const still = await env.DB.prepare('SELECT 1 AS x FROM matches WHERE id = ?').bind(match.id).first()
-    return still ? fail('rate', 429) : notFound()
+    return still ? rateLimited(MESSAGE_GAP_MS, now) : notFound()
   }
   later(notify(env, match.other, { t: 'message', matchId: match.id, id }))
   const sent: ChatMessage = { id, body, at: now, mine: true }

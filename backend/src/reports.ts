@@ -3,7 +3,7 @@ import type { Env } from './env'
 import { chatEvidence, HOLD_MS } from './evidence'
 import { wordsOk } from './filter/server'
 import { floating, type Later } from './inbox'
-import { allow, rateLimited } from './limits'
+import { allow, DAY_MS, rateLimited } from './limits'
 import { activeRow, cleanText, toPublic, type ProfileRow } from './profiles'
 import {
   MAX_REPORT_NOTE,
@@ -23,7 +23,6 @@ export const EVIDENCE_MAX_BYTES = 64 * 1024
 export const REPORT_KEEP_MS = 30 * 24 * 3600 * 1000
 /** Reports one account may file in a day. */
 export const REPORTS_PER_DAY = 20
-const DAY_MS = 24 * 3600 * 1000
 /**
  * Auto-hide: this many distinct verified reporters about one person, in open reports filed within `windowMs`,
  * take that person off the map until an admin acts. Residents' reports never count, so fresh accounts made

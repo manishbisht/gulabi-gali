@@ -22,6 +22,16 @@
     { "tag": "v1", "new_sqlite_classes": ["DistrictDO"] },
     { "tag": "v2", "new_sqlite_classes": ["InboxDO"] },
   ],
+  // Per-address brakes (see src/limits.ts; loopback never counts). Periods may only be 10 or 60 seconds, so the
+  // hourly invite limit is counted in D1 instead. `namespace_id` is any integer unique within the account.
+  "ratelimits": [
+    // Opening live and inbox sockets: generous, since every reconnect is one.
+    { "name": "SOCKETS_LIMITER", "namespace_id": "51001", "simple": { "limit": 120, "period": 60 } },
+    // Account bootstrap: Clerk does the sign-in; this is the first /api/me that creates an account, and dev login.
+    { "name": "SIGNIN_LIMITER", "namespace_id": "51002", "simple": { "limit": 20, "period": 60 } },
+    // Every API write (POST, PUT, DELETE).
+    { "name": "WRITES_LIMITER", "namespace_id": "51003", "simple": { "limit": 60, "period": 60 } },
+  ],
   "triggers": { "crons": ["*/15 * * * *"] },
   // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64.
   "vars": { "MAX_DISTRICT_SOCKETS": "400", "MAX_IP_SOCKETS": "24" },

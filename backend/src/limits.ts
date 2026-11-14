@@ -67,3 +67,104 @@ export async function purgeCounters(env: Env, now = Date.now()): Promise<void> {
     .bind(now - COUNTER_KEEP_MS)
     .run()
 }
+
+/**
+ * Per-account allowances. Each is a fixed window counted with `allow` (bucket names never shared, see
+ * `READ_LIMIT`).
+ */
+export const DAY_MS = 24 * 3600 * 1000
+export const ACCOUNT_LIMIT = {
+  /** New requests: an account under a week old gets the smaller allowance. */
+  newAccountAge: 7 * DAY_MS,
+  requestsNew: 5,
+  requestsOld: 20,
+  /** Chat messages by one sender across every match (on top of the 1/s per match). */
+  messagesPerMinute: 30,
+} as const
+
+/**
+ * A person's new-request allowance for today: 5 while the account is under 7 days old (`users.created_at`),
+ * 20 after. Null while within it, else the 429.
+ */
+export async function requestLimit(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
+  const row = await env.DB.prepare('SELECT created_at FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ created_at: number }>()
+  const young = !row || now - row.created_at < ACCOUNT_LIMIT.newAccountAge
+  const limit = young ? ACCOUNT_LIMIT.requestsNew : ACCOUNT_LIMIT.requestsOld
+  return (await allow(env, userId, 'requests', limit, DAY_MS, now)) ? null : rateLimited(DAY_MS, now)
+}
+
+/** One chat message's allowance against the per-minute cap. Null while within it, else the 429. */
+export async function messageLimit(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
+  const { messagesPerMinute } = ACCOUNT_LIMIT
+  return (await allow(env, userId, 'messages', messagesPerMinute, 60_000, now))
+    ? null
+    : rateLimited(60_000, now)
+}
+
+/*
+ * Per-address limits. The Workers Rate Limiting bindings (wrangler.jsonc `ratelimits`) take only 10 or 60
+ * second periods, so the 1-hour one (invite redemptions) is counted in D1 under the key `ip:<address>`.
+ *
+ * Trust assumption: `CF-Connecting-IP` is set by Cloudflare's edge on every request that reaches this Worker
+ * in production, replacing anything the client sent, and a client cannot reach the Worker any other way. So
+ * it is the connecting address, and no other header (`X-Forwarded-For`, `X-Real-IP`) is ever read. A request
+ * with none, or with a loopback one, did not come through the edge: only `wrangler dev`, tests and CI.
+ */
+
+/** How long a refused address is told to wait: the longest period of any binding in wrangler.jsonc. */
+export const IP_RETRY_AFTER_S = 60
+
+const LOOPBACK = /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/i
+
+/** The first four groups of an IPv6 address (its /64), so one subscriber is one key; IPv4 is as it is. */
+function normalise(ip: string): string {
+  const a = ip.toLowerCase().split('%')[0]!
+  if (!a.includes(':')) return a
+  const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped) return mapped[1]!
+  const [head, tail] = a.split('::') as [string, string | undefined]
+  const h = head ? head.split(':') : []
+  const t = tail ? tail.split(':') : []
+  const groups =
+    tail === undefined ? h : [...h, ...Array<string>(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t]
+  return `${groups
+    .slice(0, 4)
+    .map((g) => (parseInt(g, 16) || 0).toString(16))
+    .join(':')}::/64`
+}
+
+/** The key a request counts against, or null when it never counts (loopback, or no edge address). */
+export function clientKey(request: Request): string | null {
+  const ip = request.headers.get('CF-Connecting-IP')?.trim()
+  if (!ip || LOOPBACK.test(ip)) return null
+  return normalise(ip)
+}
+
+/** The 429 for a per-address limit. */
+export const ipRateLimited = (): Response =>
+  Response.json({ error: 'rate' }, { status: 429, headers: { 'Retry-After': String(IP_RETRY_AFTER_S) } })
+
+/** Whether `request`'s address is over `limiter`. An absent binding limits nothing. */
+export async function overLimit(limiter: RateLimit | undefined, request: Request): Promise<boolean> {
+  const key = clientKey(request)
+  if (!limiter || key === null) return false
+  const { success } = await limiter.limit({ key })
+  return !success
+}
+
+/** Null while within `limiter`, else the 429. */
+export async function ipLimit(limiter: RateLimit | undefined, request: Request): Promise<Response | null> {
+  return (await overLimit(limiter, request)) ? ipRateLimited() : null
+}
+
+export const INVITE_IP_LIMIT = { perWindow: 10, windowMs: 3600_000, bucket: 'redeem-ip' } as const
+
+/** Invite redemptions per address, 10 an hour, in addition to the per-person limit. Null while within it. */
+export async function inviteIpLimit(env: Env, request: Request, now = Date.now()): Promise<Response | null> {
+  const key = clientKey(request)
+  if (key === null) return null
+  const { perWindow, windowMs, bucket } = INVITE_IP_LIMIT
+  return (await allow(env, `ip:${key}`, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
+}

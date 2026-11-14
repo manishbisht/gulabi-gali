@@ -14,6 +14,7 @@ import type {
   ReportResult,
   RequestLists,
 } from './protocol'
+import { fetchNoting } from './rateNotice'
 
 export const API_BASE: string = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787').replace(/\/+$/, '')
 
@@ -39,7 +40,7 @@ export function fallbackSnapshot(now: Date): CitySnapshot {
 /** Never rejects: any failure yields the stale default. */
 export async function fetchCity(signal?: AbortSignal): Promise<CitySnapshot> {
   try {
-    const res = await fetch(`${API_BASE}/api/city`, { signal })
+    const res = await fetchNoting(`${API_BASE}/api/city`, { signal })
     if (!res.ok) return fallbackSnapshot(new Date())
     return (await res.json()) as CitySnapshot
   } catch {
@@ -64,7 +65,7 @@ export interface ProfileInput {
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` })
 
 export async function getMe(token: string, signal?: AbortSignal): Promise<Me> {
-  const res = await fetch(`${API_BASE}/api/me`, { headers: bearer(token), signal })
+  const res = await fetchNoting(`${API_BASE}/api/me`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`me ${res.status}`)
   return (await res.json()) as Me
 }
@@ -74,7 +75,7 @@ export type SaveResult = { ok: true; me: Me } | { ok: false; fields: string[]; w
 
 /** A 400 gives the offending fields; any other failure rejects. */
 export async function putProfile(token: string, input: ProfileInput): Promise<SaveResult> {
-  const res = await fetch(`${API_BASE}/api/me/profile`, {
+  const res = await fetchNoting(`${API_BASE}/api/me/profile`, {
     method: 'PUT',
     headers: { ...bearer(token), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -97,7 +98,7 @@ export async function getProfile(
   id: string,
   signal?: AbortSignal,
 ): Promise<FullProfile | null> {
-  const res = await fetch(`${API_BASE}/api/profiles/${encodeURIComponent(id)}`, {
+  const res = await fetchNoting(`${API_BASE}/api/profiles/${encodeURIComponent(id)}`, {
     headers: bearer(token),
     signal,
   })
@@ -123,7 +124,7 @@ const REQUEST_ERRORS: readonly string[] = [
 /** Asks someone to meet. Never rejects: a 201 is `sent`, a crossed request's 200 is `matched`, the rest a typed error. */
 export async function sendMeetRequest(token: string, to: string, reason: string): Promise<RequestOutcome> {
   try {
-    const res = await fetch(`${API_BASE}/api/requests`, {
+    const res = await fetchNoting(`${API_BASE}/api/requests`, {
       method: 'POST',
       headers: { ...bearer(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ to, reason }),
@@ -140,7 +141,7 @@ export async function sendMeetRequest(token: string, to: string, reason: string)
 const json = (token: string) => ({ ...bearer(token), 'Content-Type': 'application/json' })
 
 export async function getRequests(token: string, signal?: AbortSignal): Promise<RequestLists> {
-  const res = await fetch(`${API_BASE}/api/requests`, { headers: bearer(token), signal })
+  const res = await fetchNoting(`${API_BASE}/api/requests`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`requests ${res.status}`)
   return (await res.json()) as RequestLists
 }
@@ -148,7 +149,7 @@ export async function getRequests(token: string, signal?: AbortSignal): Promise<
 /** The new match's id, or null when the request could not be accepted (gone, expired, not yours). Never rejects. */
 export async function acceptRequest(token: string, id: string): Promise<string | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/requests/${encodeURIComponent(id)}/accept`, {
+    const res = await fetchNoting(`${API_BASE}/api/requests/${encodeURIComponent(id)}/accept`, {
       method: 'POST',
       headers: bearer(token),
     })
@@ -162,7 +163,7 @@ export async function acceptRequest(token: string, id: string): Promise<string |
 /** Whether the request is now ignored. Never rejects. */
 export async function ignoreRequest(token: string, id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/requests/${encodeURIComponent(id)}/ignore`, {
+    const res = await fetchNoting(`${API_BASE}/api/requests/${encodeURIComponent(id)}/ignore`, {
       method: 'POST',
       headers: bearer(token),
     })
@@ -173,7 +174,7 @@ export async function ignoreRequest(token: string, id: string): Promise<boolean>
 }
 
 export async function getMatches(token: string, signal?: AbortSignal): Promise<MatchView[]> {
-  const res = await fetch(`${API_BASE}/api/matches`, { headers: bearer(token), signal })
+  const res = await fetchNoting(`${API_BASE}/api/matches`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`matches ${res.status}`)
   return (await res.json()) as MatchView[]
 }
@@ -186,7 +187,7 @@ export async function getMessages(
   signal?: AbortSignal,
 ): Promise<MessagePage | null> {
   const q = before ? `?before=${encodeURIComponent(before)}` : ''
-  const res = await fetch(`${API_BASE}/api/matches/${encodeURIComponent(matchId)}/messages${q}`, {
+  const res = await fetchNoting(`${API_BASE}/api/matches/${encodeURIComponent(matchId)}/messages${q}`, {
     headers: bearer(token),
     signal,
   })
@@ -219,7 +220,7 @@ export async function sendMessage(token: string, matchId: string, body: string):
 /** True once the match is gone: an unmatch, or one the other side made first (404). Never rejects. */
 export async function unmatch(token: string, matchId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/matches/${encodeURIComponent(matchId)}`, {
+    const res = await fetchNoting(`${API_BASE}/api/matches/${encodeURIComponent(matchId)}`, {
       method: 'DELETE',
       headers: bearer(token),
     })
@@ -231,7 +232,7 @@ export async function unmatch(token: string, matchId: string): Promise<boolean> 
 
 /** The caller's invite codes. Rejects on failure. */
 export async function getInvites(token: string, signal?: AbortSignal): Promise<InviteView[]> {
-  const res = await fetch(`${API_BASE}/api/invites`, { headers: bearer(token), signal })
+  const res = await fetchNoting(`${API_BASE}/api/invites`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`invites ${res.status}`)
   return ((await res.json()) as { codes: InviteView[] }).codes
 }
@@ -260,7 +261,7 @@ export async function redeemInvite(token: string, code: string): Promise<RedeemR
 /** Blocks `id`: true once it is done (the server answers 204 whether or not they exist). Never rejects. */
 export async function blockPerson(token: string, id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/blocks`, {
+    const res = await fetchNoting(`${API_BASE}/api/blocks`, {
       method: 'POST',
       headers: json(token),
       body: JSON.stringify({ id }),
@@ -274,7 +275,7 @@ export async function blockPerson(token: string, id: string): Promise<boolean> {
 /** True once `id` is no longer blocked. Never rejects. */
 export async function unblockPerson(token: string, id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/blocks/${encodeURIComponent(id)}`, {
+    const res = await fetchNoting(`${API_BASE}/api/blocks/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: bearer(token),
     })
@@ -292,7 +293,7 @@ export interface BlockedPerson {
 
 /** The people the caller has blocked, by first name. Rejects on failure. */
 export async function getBlocks(token: string, signal?: AbortSignal): Promise<BlockedPerson[]> {
-  const res = await fetch(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
+  const res = await fetchNoting(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`blocks ${res.status}`)
   return (await res.json()) as BlockedPerson[]
 }

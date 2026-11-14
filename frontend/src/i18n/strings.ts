@@ -325,6 +325,10 @@ export const STRINGS = {
   blockYes: { hi: 'Haan, block karo', en: 'Yes, block' },
   blockNo: { hi: 'Rehne do', en: 'Never mind' },
   blockFailed: { hi: 'Block nahi ho paya. Dobara try karo.', en: "Couldn't block. Try again." },
+  slowDown: {
+    hi: 'Thoda ruko. Bahut jaldi ho raha hai, zara der baad phir try karo.',
+    en: 'Slow down a little. That was a lot at once, try again in a moment.',
+  },
   blockDone: { hi: '{name} block ho gaye', en: '{name} is blocked' },
   blockedTitle: { hi: 'Block kiye hue log', en: 'People you blocked' },
   blockedNone: { hi: 'Abhi kisi ko block nahi kiya.', en: "You haven't blocked anyone." },

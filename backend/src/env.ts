@@ -6,6 +6,10 @@ export interface Env {
   DB: D1Database
   DISTRICT: DurableObjectNamespace<DistrictDO>
   INBOX: DurableObjectNamespace<InboxDO>
+  /** Per-address Workers Rate Limiting bindings (wrangler.jsonc `ratelimits`); absent ones limit nothing. */
+  SOCKETS_LIMITER?: RateLimit
+  SIGNIN_LIMITER?: RateLimit
+  WRITES_LIMITER?: RateLimit
   CLERK_SECRET_KEY?: string
   CLERK_JWT_KEY?: string
   /** '1' enables /api/dev/login and dev tokens. Set only in .dev.vars and tests, never in wrangler.jsonc. */
