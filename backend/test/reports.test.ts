@@ -408,6 +408,30 @@ describe('reports', () => {
     })
   })
 
+  it('one open report per reporter, person and kind: a repeat updates the note and adds no row', async () => {
+    const reporter = await resident('Repeat Reporter')
+    await resident('Repeat Target')
+    const target = devId('Repeat Target')
+    const person = { kind: 'person', targetId: target }
+    expect((await report(reporter, { ...person, note: 'pehli baar' })).status).toBe(201)
+    for (const note of ['doosri baar', '']) {
+      const again = await report(reporter, { ...person, note })
+      expect(again.status).toBe(201)
+      expect(await again.json()).toEqual({ autoHidden: false })
+    }
+    // One row; the note is the latest one written (an empty repeat keeps it).
+    expect((await rowsAbout(target)).map((r) => [r.target_kind, r.note])).toEqual([['person', 'doosri baar']])
+    // Another kind about them is its own report; so is one from someone else.
+    const { a } = await pair('Repeat Chat Asha', 'Repeat Chat Bilal')
+    expect((await report(a, { kind: 'chat', targetId: devId('Repeat Chat Bilal') })).status).toBe(201)
+    expect((await report(a, { kind: 'person', targetId: devId('Repeat Chat Bilal') })).status).toBe(201)
+    expect(await rowsAbout(devId('Repeat Chat Bilal'))).toHaveLength(2)
+    // Once it is closed, a new report is a new row.
+    await testEnv.DB.prepare("UPDATE reports SET state = 'dismissed' WHERE target_id = ?").bind(target).run()
+    expect((await report(reporter, person)).status).toBe(201)
+    expect((await rowsAbout(target)).map((r) => r.state)).toEqual(['dismissed', 'open'])
+  })
+
   it('a reporter files at most 20 a day', async () => {
     const reporter = await resident('Limit Reporter')
     await resident('Limit Target')

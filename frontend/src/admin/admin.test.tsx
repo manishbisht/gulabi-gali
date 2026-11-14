@@ -254,6 +254,45 @@ it('a failed ban keeps the report open and says so', async () => {
   expect(host.querySelector('[role="alert"]')!.textContent).toBe("That didn't work. Try again.")
 })
 
+it('the queue shows each person once, with how many open reports there are; a ban clears them all', async () => {
+  const ravi = { ...chatReport.target, openReports: 3 }
+  const meera = person('dev:meera', 'Meera', { openReports: 1 })
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      // As the server sends it: grouped by person, in order.
+      'GET /api/admin/reports': () =>
+        json({
+          reports: [
+            { ...chatReport, id: 'r-1', target: ravi },
+            { ...chatReport, id: 'r-2', target: ravi, reason: 'spam' },
+            { ...chatReport, id: 'r-3', target: meera },
+          ],
+          next: null,
+        }),
+      'POST /api/admin/users/dev%3Aravi/ban': () => json({ ...ravi, banned: true, openReports: 0 }),
+      'POST /api/admin/reports/r-1/action': () => json({ id: 'r-1', state: 'actioned', closedAt: 1 }),
+    }),
+  )
+  const host = await render()
+  const groups = [...host.querySelectorAll('.admin-group')]
+  expect(groups.map((g) => g.querySelector('h3')!.textContent)).toEqual([
+    'Ravi Kumar · open reports: 3',
+    'Meera · open reports: 1',
+  ])
+  expect(groups[0]!.querySelectorAll('[data-report]')).toHaveLength(2)
+  await click(groups[0]!.querySelector('[data-report="r-1"]')!, 'Close + ban')
+  await click(host, 'Yes, ban')
+  await settle()
+  expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+    '/api/admin/users/dev%3Aravi/ban',
+    '/api/admin/reports/r-1/action',
+  ])
+  // The ban closed every report about him on the server: none of them stays on the page.
+  expect([...host.querySelectorAll('[data-report]')].map((c) => c.getAttribute('data-report'))).toEqual([
+    'r-3',
+  ])
+})
+
 it('the queue loads 20 more with the cursor it was given', async () => {
   const calls = stubApi(
     ADMIN_ROUTES({

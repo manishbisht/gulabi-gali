@@ -200,9 +200,10 @@ async function autoHide(env: Env, target: string, now: number, later: Later): Pr
  * `words`, field `note`). The evidence is the server's own (see `personEvidence`, `benchEvidence`,
  * `chatWith`), never anything the client sent. With none to carry it is 404: `not-there` for a bench the
  * reporter was not at, `not-found` for the rest (no such person, a chat you are not in); nothing is filed.
- * `evidence: 'missing'` says a bench report was filed without its transcript. Only a filed report uses one of
- * the day's 20 (429 `rate`). After the insert, a verified reporter's report may auto-hide the person (see
- * `autoHide`); `autoHidden` is true only for the report that did.
+ * `evidence: 'missing'` says a bench report was filed without its transcript. A report that could be filed
+ * uses one of the day's 20 (429 `rate`), a repeat included. A reporter has at most one open report per person
+ * and kind: a repeat is a 201 that updates its note and adds no row. After the insert, a verified reporter's
+ * report may auto-hide the person (see `autoHide`); `autoHidden` is true only for the report that did.
  */
 export async function fileReport(
   env: Env,
@@ -224,15 +225,20 @@ export async function fileReport(
         : found(await chatWith(env, userId, targetId, now))
   if ('error' in gathered) return fail(gathered.error, 404)
   if (!(await allow(env, userId, 'report', REPORTS_PER_DAY, DAY_MS, now))) return rateLimited(DAY_MS, now)
-  await env.DB.prepare(
+  // At most one open report per reporter, person and kind, so nobody can flood the queue: the insert is
+  // guarded in the same statement, and a repeat only brings its note (an empty one keeps what was written).
+  const same = 'reporter = ?1 AND target_id = ?2 AND target_kind = ?3 AND state = ?4'
+  const { meta } = await env.DB.prepare(
     `INSERT INTO reports (id, reporter, target_kind, target_id, reason, note, evidence, created_at, state, unconfirmed)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+     SELECT ?5, ?1, ?3, ?2, ?6, ?7, ?8, ?9, ?4, ?10
+     WHERE NOT EXISTS (SELECT 1 FROM reports WHERE ${same})`,
   )
     .bind(
-      crypto.randomUUID(),
       userId,
-      kind,
       targetId,
+      kind,
+      'open',
+      crypto.randomUUID(),
       reason,
       note,
       gathered.evidence,
@@ -240,6 +246,10 @@ export async function fileReport(
       gathered.unconfirmed ? 1 : 0,
     )
     .run()
+  if (!meta.changes && note)
+    await env.DB.prepare(`UPDATE reports SET note = ?5 WHERE ${same}`)
+      .bind(userId, targetId, kind, 'open', note)
+      .run()
   const reporter = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
     .bind(userId)
     .first<{ verified: number }>()

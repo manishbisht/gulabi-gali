@@ -107,8 +107,8 @@ interface UserRow {
   open_reports: number
 }
 
-/** Someone with no account row: a deleted reporter, or an id nothing has. */
-const unknownUser = (id: string): AdminUser => ({
+/** Someone with no account row (a deleted reporter, or an id nothing has): only their open reports are known. */
+const unknownUser = (id: string, openReports = 0): AdminUser => ({
   id,
   createdAt: null,
   verified: false,
@@ -116,7 +116,7 @@ const unknownUser = (id: string): AdminUser => ({
   banned: false,
   hidden: false,
   mutedUntil: null,
-  openReports: 0,
+  openReports,
   profile: null,
 })
 
@@ -126,30 +126,34 @@ async function loadUsers(env: Env, ids: readonly string[]): Promise<Map<string, 
   const out = new Map<string, AdminUser>()
   if (!unique.length) return out
   const { results } = await env.DB.prepare(
-    `SELECT u.id, u.created_at, u.verified, u.verified_by, u.banned, u.hidden, u.muted_until,
+    `SELECT j.value AS id, u.created_at, u.verified, u.verified_by, u.banned, u.hidden, u.muted_until,
        p.name, p.status, p.home_area, p.about,
        (SELECT COUNT(*) FROM reports r
-        WHERE r.target_kind IN ${PERSON_KINDS} AND r.target_id = u.id AND r.state = 'open') AS open_reports
-     FROM users u LEFT JOIN profiles p ON p.user_id = u.id
-     WHERE u.id IN (SELECT value FROM json_each(?1))`,
+        WHERE r.target_kind IN ${PERSON_KINDS} AND r.target_id = j.value AND r.state = 'open') AS open_reports
+     FROM json_each(?1) j LEFT JOIN users u ON u.id = j.value LEFT JOIN profiles p ON p.user_id = j.value`,
   )
     .bind(JSON.stringify(unique))
-    .all<UserRow>()
+    .all<Omit<UserRow, 'created_at'> & { created_at: number | null }>()
   for (const r of results)
-    out.set(r.id, {
-      id: r.id,
-      createdAt: r.created_at,
-      verified: r.verified === 1,
-      verifiedBy: r.verified_by,
-      banned: r.banned === 1,
-      hidden: r.hidden === 1,
-      mutedUntil: r.muted_until,
-      openReports: r.open_reports,
-      profile:
-        r.name === null
-          ? null
-          : { name: r.name, status: r.status ?? '', homeArea: r.home_area ?? '', about: r.about ?? '' },
-    })
+    out.set(
+      r.id,
+      r.created_at === null
+        ? unknownUser(r.id, r.open_reports)
+        : {
+            id: r.id,
+            createdAt: r.created_at,
+            verified: r.verified === 1,
+            verifiedBy: r.verified_by,
+            banned: r.banned === 1,
+            hidden: r.hidden === 1,
+            mutedUntil: r.muted_until,
+            openReports: r.open_reports,
+            profile:
+              r.name === null
+                ? null
+                : { name: r.name, status: r.status ?? '', homeArea: r.home_area ?? '', about: r.about ?? '' },
+          },
+    )
   for (const id of unique) if (!out.has(id)) out.set(id, unknownUser(id))
   return out
 }
@@ -168,26 +172,43 @@ interface ReportRow {
   unconfirmed: number
 }
 
-/** The cursor after `row`: opaque to the client, `[created_at, id]` to us. */
-function cursorOf(row: ReportRow): string {
-  const bytes = new TextEncoder().encode(JSON.stringify([row.created_at, row.id]))
+/**
+ * Where a report sits in the open queue, as SQL over `reports`: each person's reports together, the people with
+ * an `underage` report first, then those with a `harassment` one, then the rest; within each, whoever has waited
+ * longest first, and their reports oldest first. `urgency` and `first_at` are the person's, over their open
+ * reports, so a person's place moves only as their reports do.
+ */
+const QUEUE_ORDER = `MIN(CASE reason WHEN 'underage' THEN 0 WHEN 'harassment' THEN 1 ELSE 2 END)
+    OVER (PARTITION BY target_id) AS urgency,
+  MIN(created_at) OVER (PARTITION BY target_id) AS first_at`
+
+type QueueRow = ReportRow & { urgency?: number; first_at?: number }
+
+/**
+ * The cursor after `row`: opaque to the client. To us, the open queue's place (`[urgency, first_at, target_id,
+ * created_at, id]`, see `QUEUE_ORDER`), or a closed list's `[created_at, id]`.
+ */
+function cursorOf(row: QueueRow, open: boolean): string {
+  const place = open
+    ? [row.urgency, row.first_at, row.target_id, row.created_at, row.id]
+    : [row.created_at, row.id]
+  const bytes = new TextEncoder().encode(JSON.stringify(place))
   return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '')
 }
 
-function parseCursor(raw: string): [number, string] | null {
+/** A cursor of ours for the open queue (`open`) or a closed list, else null. */
+function parseCursor(raw: string, open: boolean): unknown[] | null {
   try {
     const binary = atob(raw.replace(/-/g, '+').replace(/_/g, '/'))
     const value = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0))))
-    if (
-      Array.isArray(value) &&
-      value.length === 2 &&
-      Number.isFinite(value[0]) &&
-      typeof value[1] === 'string'
-    )
-      return value as [number, string]
+    if (!Array.isArray(value)) return null
+    const shape = open ? ['n', 'n', 's', 'n', 's'] : ['n', 's']
+    const fits = (x: unknown, kind: string) =>
+      kind === 'n' ? typeof x === 'number' && Number.isFinite(x) : typeof x === 'string'
+    if (value.length === shape.length && shape.every((kind, i) => fits(value[i], kind))) return value
   } catch {
     // Not one of ours.
   }
@@ -247,23 +268,32 @@ function evidenceOf(raw: string | null, users: Map<string, AdminUser>): AdminEvi
 }
 
 /**
- * `GET /api/admin/reports?state=open&cursor=`: `PAGE_SIZE` at a time, by `(created_at, id)`. The open queue
- * runs oldest first, so nothing waits forever; closed lists run newest first. 400 for a state or cursor that
- * is not one.
+ * `GET /api/admin/reports?state=open&cursor=`: `PAGE_SIZE` at a time. The open queue comes grouped by person,
+ * the most urgent first (see `QUEUE_ORDER`), so nothing waits forever behind a flood and each card's
+ * `target.openReports` says how many there are about them; closed lists run newest first, by
+ * `(created_at, id)`. 400 for a state or cursor that is not one.
  */
 async function listReports(env: Env, params: URLSearchParams): Promise<Response> {
   const state = (params.get('state') || 'open') as ReportState
   if (!STATES.includes(state)) return invalid()
+  const open = state === 'open'
   const raw = params.get('cursor')
-  const after = raw ? parseCursor(raw) : null
+  const after = raw ? parseCursor(raw, open) : null
   if (raw && !after) return invalid()
-  const [cmp, order] = state === 'open' ? ['>', 'ASC'] : ['<', 'DESC']
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM reports WHERE state = ?1 ${after ? `AND (created_at, id) ${cmp} (?3, ?4)` : ''}
-     ORDER BY created_at ${order}, id ${order} LIMIT ?2`,
+  const { results } = await (
+    open
+      ? env.DB.prepare(
+          `SELECT * FROM (SELECT *, ${QUEUE_ORDER} FROM reports WHERE state = 'open')
+           ${after ? 'WHERE (urgency, first_at, target_id, created_at, id) > (?2, ?3, ?4, ?5, ?6)' : ''}
+           ORDER BY urgency, first_at, target_id, created_at, id LIMIT ?1`,
+        )
+      : env.DB.prepare(
+          `SELECT * FROM reports WHERE state = ?2 ${after ? 'AND (created_at, id) < (?3, ?4)' : ''}
+           ORDER BY created_at DESC, id DESC LIMIT ?1`,
+        )
   )
-    .bind(state, PAGE_SIZE + 1, ...(after ?? []))
-    .all<ReportRow>()
+    .bind(PAGE_SIZE + 1, ...(open ? [] : [state]), ...(after ?? []))
+    .all<QueueRow>()
   const rows = results.slice(0, PAGE_SIZE)
   const users = await loadUsers(
     env,
@@ -283,7 +313,7 @@ async function listReports(env: Env, params: URLSearchParams): Promise<Response>
       target: users.get(r.target_id)!,
       evidence: evidenceOf(r.evidence, users),
     })),
-    next: results.length > PAGE_SIZE ? cursorOf(rows.at(-1)!) : null,
+    next: results.length > PAGE_SIZE ? cursorOf(rows.at(-1)!, open) : null,
   }
   return Response.json(page)
 }
@@ -312,8 +342,9 @@ type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unverify' | 
  * account (but see `ban`). Every action is idempotent: a repeat finds the state already set and answers it.
  *
  * - `ban`: off the map and out of every list (`ACTIVE`), their district and inbox sockets closed before this
- *   answers, and `/api/me` says `banned`. Their unused invite codes are deleted (a code is their word for
- *   someone). `unban` restores the rest. An id whose account was deleted, but that a report, held chat or
+ *   answers, and `/api/me` says `banned`. Every open report about them is closed as `actioned` (the queue is
+ *   done with them), and their unused invite codes are deleted (a code is their word for someone). `unban`
+ *   restores the rest. An id whose account was deleted, but that a report, held chat or
  *   block still names, gets a tombstone row that is banned, so signing in again with it is refused.
  * - `unverify`: back to a resident (`verified_by` cleared), and their unused codes deleted.
  * - `mute`: no writes for `MUTE_MS` (see `muteGate`); a repeat while muted keeps the end it has. `unmute`.
@@ -340,6 +371,10 @@ async function actOn(env: Env, id: string, action: UserAction, later: Later): Pr
       await env.DB.batch([
         env.DB.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(id),
         env.DB.prepare('DELETE FROM invites WHERE owner = ? AND used_by IS NULL').bind(id),
+        env.DB.prepare(
+          `UPDATE reports SET state = 'actioned', closed_at = ? WHERE target_kind IN ${PERSON_KINDS}
+           AND target_id = ? AND state = 'open'`,
+        ).bind(now, id),
       ])
       // Always told again: a repeat also mends a live object that missed the first.
       await refreshUser(env, id, 'ban')

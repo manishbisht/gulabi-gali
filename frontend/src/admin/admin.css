@@ -125,6 +125,17 @@
   font-size: 0.9rem;
 }
 
+/* one person's open reports, together */
+.admin-group > h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-vouched {
+  margin-top: 8px;
+}
+
 .admin-card {
   padding: 12px;
   border-radius: 12px;

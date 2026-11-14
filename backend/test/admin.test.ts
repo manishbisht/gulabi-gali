@@ -47,15 +47,22 @@ const insertReport = (
   reporter: string,
   target: string,
   createdAt: number,
-  extra: { kind?: string; evidence?: string | null; state?: string; unconfirmed?: number } = {},
+  extra: {
+    kind?: string
+    evidence?: string | null
+    state?: string
+    unconfirmed?: number
+    reason?: string
+  } = {},
 ) =>
   sql(
     `INSERT INTO reports (id, reporter, target_kind, target_id, reason, note, evidence, created_at, state, unconfirmed)
-     VALUES (?, ?, ?, ?, 'harassment', 'note', ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'note', ?, ?, ?, ?)`,
     id,
     reporter,
     extra.kind ?? 'person',
     target,
+    extra.reason ?? 'harassment',
     extra.evidence === undefined ? null : extra.evidence,
     createdAt,
     extra.state ?? 'open',
@@ -484,6 +491,48 @@ describe('admin', () => {
     // A cursor that is not one of ours, or a state that is not one, is a 400.
     expect((await asOwner('/api/admin/reports?state=open&cursor=%%%')).status).toBe(400)
     expect((await asOwner('/api/admin/reports?state=whatever')).status).toBe(400)
+  })
+
+  it('the queue is grouped by person, the underage and harassment ones first', async () => {
+    const base = Date.now() - 7200_000
+    // Interleaved in time, and the most urgent filed last.
+    await insertReport('group-x1', 'dev:group-r1', 'dev:group-x', base, { reason: 'spam' })
+    await insertReport('group-z1', 'dev:group-r1', 'dev:group-z', base + 1000, { reason: 'hate' })
+    await insertReport('group-x2', 'dev:group-r2', 'dev:group-x', base + 2000, { reason: 'other' })
+    await insertReport('group-h1', 'dev:group-r2', 'dev:group-h', base + 3000, { reason: 'spam' })
+    await insertReport('group-z2', 'dev:group-r3', 'dev:group-z', base + 4000, { reason: 'harassment' })
+    await insertReport('group-u1', 'dev:group-r3', 'dev:group-u', base + 5000, { reason: 'underage' })
+    await insertReport('group-h2', 'dev:group-r4', 'dev:group-h', base + 6000, { reason: 'harassment' })
+    const ids = (await everyReport()).map((r) => r.id).filter((id) => id.startsWith('group-'))
+    // Underage first; then harassment, the person waiting longest first; then the rest. Oldest first in each.
+    expect(ids).toEqual(['group-u1', 'group-z1', 'group-z2', 'group-h1', 'group-h2', 'group-x1', 'group-x2'])
+    // Each card says how many open reports there are about that person.
+    const page = await everyReport()
+    expect(page.find((r) => r.id === 'group-x1')!.target.openReports).toBe(2)
+  })
+
+  it('a ban closes every open report about that person as actioned', async () => {
+    await resident('Flood Target')
+    const target = devId('Flood Target')
+    for (const n of [1, 2, 3])
+      await insertReport(`flood-${n}`, `dev:flood-r${n}`, target, Date.now() - n * 1000)
+    await insertReport('flood-done', 'dev:flood-r9', target, Date.now() - 9000, { state: 'dismissed' })
+    await insertReport('flood-other', 'dev:flood-r1', 'dev:flood-someone-else', Date.now())
+    expect((await userAction(target, 'ban')).status).toBe(200)
+    const states = (
+      await testEnv.DB.prepare('SELECT id, state, closed_at FROM reports WHERE id LIKE ? ORDER BY id')
+        .bind('flood-%')
+        .all<{ id: string; state: string; closed_at: number | null }>()
+    ).results.map((r) => [r.id, r.state, r.closed_at !== null])
+    expect(states).toEqual([
+      ['flood-1', 'actioned', true],
+      ['flood-2', 'actioned', true],
+      ['flood-3', 'actioned', true],
+      // Already closed: kept as it was. About someone else: still open.
+      ['flood-done', 'dismissed', false],
+      ['flood-other', 'open', false],
+    ])
+    expect((await everyReport()).map((r) => r.id)).not.toContain('flood-1')
   })
 
   it('a report carries its people, the target as they are now, and its evidence as text', async () => {

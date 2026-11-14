@@ -145,7 +145,23 @@ function ReportCard({
   )
 }
 
-/** The open reports, oldest first, 20 at a time. `onChanged`: something the stats and hidden list show moved. */
+/** Consecutive reports about one person, as the server sends the queue: grouped, most urgent first. */
+function byTarget(reports: AdminReport[]): AdminReport[][] {
+  const groups: AdminReport[][] = []
+  for (const r of reports) {
+    const last = groups.at(-1)
+    if (last && last[0]!.target.id === r.target.id) last.push(r)
+    else groups.push([r])
+  }
+  return groups
+}
+
+/**
+ * The open reports, 20 at a time, grouped by the person they are about (the server puts the people with an
+ * underage or harassment report first), each group saying how many open reports there are about them. A ban
+ * closes every report about the person, so their whole group leaves the page. `onChanged`: something the
+ * stats and hidden list show moved.
+ */
 export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Token; onChanged(): void }) {
   const [reports, setReports] = useState<AdminReport[] | null>(null)
   const [next, setNext] = useState<string | null>(null)
@@ -180,11 +196,14 @@ export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Tok
     setReports(
       (was) =>
         was &&
-        was.map((r) => ({
-          ...r,
-          target: r.target.id === user.id ? user : r.target,
-          reporter: r.reporter.id === user.id ? user : r.reporter,
-        })),
+        was
+          // A ban closed every open report about them on the server.
+          .filter((r) => !(user.banned && r.target.id === user.id))
+          .map((r) => ({
+            ...r,
+            target: r.target.id === user.id ? user : r.target,
+            reporter: r.reporter.id === user.id ? user : r.reporter,
+          })),
     )
     onChanged()
   }
@@ -195,9 +214,26 @@ export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Tok
       {reports && reports.length === 0 && <p className="admin-empty">{t('adminQueueEmpty', lang)}</p>}
       {reports && reports.length > 0 && (
         <ul className="admin-list">
-          {reports.map((r) => (
-            <ReportCard key={r.id} report={r} lang={lang} token={token} onClosed={closed} onTarget={target} />
-          ))}
+          {byTarget(reports).map((group) => {
+            const { target: who } = group[0]!
+            return (
+              <li key={group[0]!.id} className="admin-group">
+                <h3>{t('adminGroup', lang, { name: who.profile?.name ?? who.id, n: who.openReports })}</h3>
+                <ul className="admin-list">
+                  {group.map((r) => (
+                    <ReportCard
+                      key={r.id}
+                      report={r}
+                      lang={lang}
+                      token={token}
+                      onClosed={closed}
+                      onTarget={target}
+                    />
+                  ))}
+                </ul>
+              </li>
+            )
+          })}
         </ul>
       )}
       {failed && (

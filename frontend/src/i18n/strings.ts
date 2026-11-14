@@ -474,6 +474,7 @@ export const STRINGS = {
   },
   adminReports: { hi: 'Reports', en: 'Reports' },
   adminQueueEmpty: { hi: 'Koi khuli report nahi.', en: 'No open reports.' },
+  adminGroup: { hi: '{name} · khuli reports: {n}', en: '{name} · open reports: {n}' },
   adminMore: { hi: 'Aur dikhao', en: 'Load more' },
   adminReportedBy: { hi: 'Report kisne ki', en: 'Reported by' },
   adminAbout: { hi: 'Kiske baare mein', en: 'About' },
