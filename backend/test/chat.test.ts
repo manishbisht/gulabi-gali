@@ -113,17 +113,28 @@ describe('chat', () => {
       expect((await api(`/api/matches/${matchId}/messages`, token)).status).toBe(404)
       expect(await (await api('/api/matches', token)).json()).toEqual([])
     }
-    // The accepted request went with it, so either may ask again.
+    // The accepted request went with it.
     expect(
       await count(
-        'SELECT COUNT(*) n FROM requests WHERE from_id = ? AND to_id = ?',
+        "SELECT COUNT(*) n FROM requests WHERE from_id = ? AND to_id = ? AND state = 'accepted'",
         id('chata2'),
         id('chatb2'),
       ),
     ).toBe(0)
-    const again = await api('/api/requests', b, {
+    // The one who was unmatched cannot ask straight back: that reads as any other refused ask.
+    const back = await api('/api/requests', b, {
       method: 'POST',
       body: JSON.stringify({ to: id('chata2'), reason: REASON }),
+    })
+    expect(back.status).toBe(409)
+    expect(await back.json()).toEqual({ error: 'already' })
+    // Nor do they see a request of their own they never sent.
+    for (const token of [a, b])
+      expect(await (await api('/api/requests', token)).json()).toEqual({ incoming: [], sent: [] })
+    // The one who unmatched may still ask again later.
+    const again = await api('/api/requests', a, {
+      method: 'POST',
+      body: JSON.stringify({ to: id('chatb2'), reason: REASON }),
     })
     expect(again.status).toBe(201)
     expect((await api(`/api/matches/${matchId}`, a, { method: 'DELETE' })).status).toBe(404)

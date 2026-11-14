@@ -174,8 +174,9 @@ export async function listRequests(env: Env, userId: string, now = Date.now()): 
     )
       .bind(userId, cutoff, LIST_LIMIT)
       .all<RequestRow>(),
+    // An unmatch's block (an empty reason, see `unmatch`) is no request its sender made: never listed.
     env.DB.prepare(
-      "SELECT * FROM requests WHERE from_id = ? AND (state = 'accepted' OR created_at > ?) ORDER BY created_at DESC LIMIT ?",
+      "SELECT * FROM requests WHERE from_id = ? AND reason != '' AND (state = 'accepted' OR created_at > ?) ORDER BY created_at DESC LIMIT ?",
     )
       .bind(userId, cutoff, LIST_LIMIT)
       .all<RequestRow>(),

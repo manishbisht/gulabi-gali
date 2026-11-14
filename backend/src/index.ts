@@ -5,7 +5,7 @@ import { openDistrict } from './district'
 import type { Env } from './env'
 import { floating, openInbox, type Later } from './inbox'
 import type { CitySnapshot } from './protocol'
-import { devLogin, getMe, getProfile, putProfile } from './profiles'
+import { devLogin, getMe, getProfile, putProfile, residentRow } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
 
@@ -100,6 +100,8 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   }
   const match = pathname.match(/^\/api\/profiles\/([^/]+)$/)
   if (match && method === 'GET') {
+    // A full profile is for residents only: a token alone (no profile, half a one, a ban) is still a ghost.
+    if (!(await residentRow(env, user.id))) return Response.json({ error: 'ghost' }, { status: 403 })
     try {
       return await getProfile(env, decodeURIComponent(match[1]))
     } catch {

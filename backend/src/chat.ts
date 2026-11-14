@@ -217,8 +217,12 @@ export async function postMessage(
 }
 
 /**
- * `DELETE /api/matches/:id`: the match goes, and its messages with it (cascade), for both people. The accepted
- * requests that made it go too, so either may ask again; an ignored one stays and blocks for its 14 days.
+ * `DELETE /api/matches/:id`: the match goes, and its messages with it (cascade), for both people. The
+ * accepted requests that made it go too; an ignored one stays and blocks for its 14 days. In their place the
+ * other person gets an ignored request to the one who unmatched, dated now: the same 14-day block a decline
+ * gives, so they cannot ask straight back, while the one who unmatched may ask again whenever they like. It
+ * carries an empty reason (a real one is 10 to 140 characters), which is how `listRequests` knows to leave it
+ * out.
  */
 export async function unmatch(
   env: Env,
@@ -228,7 +232,13 @@ export async function unmatch(
 ): Promise<Response> {
   const match = await member(env, userId, matchId, false)
   if (!match) return notFound()
-  const [, gone] = await env.DB.batch([
+  const [, , gone] = await env.DB.batch([
+    // Only while the match is still there: if the other side unmatched first, theirs is the block that
+    // stands.
+    env.DB.prepare(
+      `INSERT INTO requests (id, from_id, to_id, reason, created_at, state)
+       SELECT ?1, ?2, ?3, '', ?4, 'ignored' WHERE EXISTS (SELECT 1 FROM matches WHERE id = ?5)`,
+    ).bind(crypto.randomUUID(), match.other, userId, Date.now(), match.id),
     env.DB.prepare(
       `DELETE FROM requests WHERE state = 'accepted'
        AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,

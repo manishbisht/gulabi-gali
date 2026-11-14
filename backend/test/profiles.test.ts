@@ -132,8 +132,30 @@ describe('profiles API', () => {
     expect(res.status).toBe(401)
   })
 
+  it('GET /api/profiles/:id is for residents only: anyone else is 403 ghost', async () => {
+    const viewer = await login('halfviewer')
+    const seen = await login('seenbyhalf')
+    await call('/api/me/profile', { method: 'PUT', body: body() }, seen)
+    const ghost = async () => {
+      const res = await call('/api/profiles/dev:seenbyhalf', {}, viewer)
+      expect(res.status).toBe(403)
+      expect(await res.json()).toEqual({ error: 'ghost' })
+    }
+    // Signed in with no profile, then an incomplete one.
+    await ghost()
+    await call('/api/me/profile', { method: 'PUT', body: body({ pledge: false }) }, viewer)
+    await ghost()
+    // Complete: a resident, who may look.
+    await call('/api/me/profile', { method: 'PUT', body: body() }, viewer)
+    expect((await call('/api/profiles/dev:seenbyhalf', {}, viewer)).status).toBe(200)
+    // Banned: a ghost again.
+    await testEnv.DB.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind('dev:halfviewer').run()
+    await ghost()
+  })
+
   it('GET /api/profiles/:id shows a complete profile, hides incomplete and banned ones', async () => {
     const a = await login('viewer')
+    await call('/api/me/profile', { method: 'PUT', body: body() }, a)
     const b = await login('seen')
     await call('/api/me/profile', { method: 'PUT', body: body() }, b)
     const ok = await call(`/api/profiles/${encodeURIComponent('dev:seen')}`, {}, a)
