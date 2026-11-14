@@ -4,6 +4,7 @@ import { chatEvidence, HOLD_MS } from './evidence'
 import { wordsOk } from './filter/server'
 import { floating, type Later } from './inbox'
 import { allow, DAY_MS, rateLimited } from './limits'
+import { posterAutoHide, posterEvidence } from './posters'
 import { activeRow, cleanText, toPublic, type ProfileRow } from './profiles'
 import {
   MAX_REPORT_NOTE,
@@ -198,12 +199,17 @@ async function autoHide(env: Env, target: string, now: number, later: Later): Pr
  * `POST /api/reports {kind, targetId, bench?, reason, note?}`: 201 `{ autoHidden, evidence? }`. The reporter
  * must be a resident (403 `ghost`) and may not report themself (400 `invalid`); a note is word-filtered (400
  * `words`, field `note`). The evidence is the server's own (see `personEvidence`, `benchEvidence`,
- * `chatWith`), never anything the client sent. With none to carry it is 404: `not-there` for a bench the
- * reporter was not at, `not-found` for the rest (no such person, a chat you are not in); nothing is filed.
- * `evidence: 'missing'` says a bench report was filed without its transcript. A report that could be filed
- * uses one of the day's 20 (429 `rate`), a repeat included. A reporter has at most one open report per person
- * and kind: a repeat is a 201 that updates its note and adds no row. After the insert, a verified reporter's
- * report may auto-hide the person (see `autoHide`); `autoHidden` is true only for the report that did.
+ * `chatWith`, `posterEvidence`), never anything the client sent. With none to carry it is 404: `not-there` for
+ * a bench the reporter was not at, `not-found` for the rest (no such person, a chat you are not in, a poster no
+ * longer up); nothing is filed. `evidence: 'missing'` says a bench report was filed without its transcript. A
+ * report that could be filed uses one of the day's 20 (429 `rate`), a repeat included. A reporter has at most
+ * one open report per person and kind (per poster, for posters): a repeat is a 201 that updates its note and
+ * adds no row. After the insert, a verified reporter's report may auto-hide the person (see `autoHide`); a
+ * poster report, its poster instead (see `posterAutoHide`), never the person. `autoHidden` is true only for
+ * the report that did.
+ *
+ * A poster report's `targetId` is the poster's id; it is filed about the poster's owner (`target_id`), so the
+ * queue shows it with everything else about them, and names the poster in `poster_id`.
  */
 export async function fileReport(
   env: Env,
@@ -216,28 +222,40 @@ export async function fileReport(
   const report = parse(raw)
   if (!report || report.targetId === userId) return fail('invalid', 400)
   if (!wordsOk(report.note, 'note')) return fail('words', 400, { field: 'note' })
-  const { kind, targetId, bench, reason, note } = report
-  const gathered =
-    kind === 'person'
-      ? found(await personEvidence(env, targetId))
-      : kind === 'bench'
-        ? await benchEvidence(env, userId, targetId, bench!)
-        : found(await chatWith(env, userId, targetId, now))
+  const { kind, bench, reason, note } = report
+  let { targetId } = report
+  let posterId: string | null = null
+  let gathered: Gathered
+  if (kind === 'poster') {
+    const poster = await posterEvidence(env, targetId, now)
+    if (poster?.owner === userId) return fail('invalid', 400)
+    posterId = targetId
+    targetId = poster?.owner ?? ''
+    gathered = found(poster?.evidence ?? null)
+  } else
+    gathered =
+      kind === 'person'
+        ? found(await personEvidence(env, targetId))
+        : kind === 'bench'
+          ? await benchEvidence(env, userId, targetId, bench!)
+          : found(await chatWith(env, userId, targetId, now))
   if ('error' in gathered) return fail(gathered.error, 404)
   if (!(await allow(env, userId, 'report', REPORTS_PER_DAY, DAY_MS, now))) return rateLimited(DAY_MS, now)
-  // At most one open report per reporter, person and kind, so nobody can flood the queue: the insert is
-  // guarded in the same statement, and a repeat only brings its note (an empty one keeps what was written).
-  const same = 'reporter = ?1 AND target_id = ?2 AND target_kind = ?3 AND state = ?4'
+  // At most one open report per reporter, person and kind (and poster), so nobody can flood the queue: the
+  // insert is guarded in the same statement, and a repeat only brings its note (an empty one keeps what was
+  // written).
+  const same =
+    "reporter = ?1 AND target_id = ?2 AND target_kind = ?3 AND state = 'open' AND COALESCE(poster_id, '') = ?4"
   const { meta } = await env.DB.prepare(
-    `INSERT INTO reports (id, reporter, target_kind, target_id, reason, note, evidence, created_at, state, unconfirmed)
-     SELECT ?5, ?1, ?3, ?2, ?6, ?7, ?8, ?9, ?4, ?10
+    `INSERT INTO reports (id, reporter, target_kind, target_id, reason, note, evidence, created_at, state, unconfirmed, poster_id)
+     SELECT ?5, ?1, ?3, ?2, ?6, ?7, ?8, ?9, 'open', ?10, NULLIF(?4, '')
      WHERE NOT EXISTS (SELECT 1 FROM reports WHERE ${same})`,
   )
     .bind(
       userId,
       targetId,
       kind,
-      'open',
+      posterId ?? '',
       crypto.randomUUID(),
       reason,
       note,
@@ -248,13 +266,17 @@ export async function fileReport(
     .run()
   if (!meta.changes && note)
     await env.DB.prepare(`UPDATE reports SET note = ?5 WHERE ${same}`)
-      .bind(userId, targetId, kind, 'open', note)
+      .bind(userId, targetId, kind, posterId ?? '', note)
       .run()
   const reporter = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
     .bind(userId)
     .first<{ verified: number }>()
   const autoHidden =
-    reporter?.verified === 1 && !gathered.unconfirmed && (await autoHide(env, targetId, now, later))
+    reporter?.verified === 1 &&
+    !gathered.unconfirmed &&
+    (posterId !== null
+      ? await posterAutoHide(env, posterId, targetId, now, later)
+      : await autoHide(env, targetId, now, later))
   const out: ReportResult = { autoHidden, ...(gathered.missing ? { evidence: 'missing' as const } : {}) }
   return Response.json(out, { status: 201 })
 }

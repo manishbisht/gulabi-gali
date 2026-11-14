@@ -722,7 +722,8 @@ button {
   border-color: var(--cream);
 }
 
-.request-composer textarea {
+.request-composer textarea,
+.poster-composer textarea {
   width: 100%;
   min-height: 88px;
   box-sizing: border-box;
@@ -1134,4 +1135,31 @@ small.words-hint {
 .delete-go:not(:disabled) {
   border-color: #e0707a;
   background: rgb(224 112 122 / 0.25);
+}
+
+/* Deewar: the composer and a poster's card share the person card's look. */
+.poster-when {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.poster-when input {
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 16px; /* any smaller and iOS zooms the page on focus */
+  color-scheme: dark;
+}
+
+.poster-card .poster-text {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }

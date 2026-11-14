@@ -16,6 +16,7 @@ import {
   type ClientMsg,
   type DistrictId,
   type LivePerson,
+  type PosterView,
   type PublicPerson,
   type ServerMsg,
 } from './protocol'
@@ -132,6 +133,8 @@ const MUTED = { t: 'error', code: 'muted' } as const
 /** Not a bad frame, so never a strike: the line was fine to send, just not fit to show. */
 const WORDS = { t: 'error', code: 'words' } as const
 const STOOD: ServerMsg = { t: 'seated', bench: null, seat: null, with: [] }
+/** What the walls may show this person changed (a block made or lifted): they fetch them again. */
+const POSTERS: ServerMsg = { t: 'posters' }
 
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
 
@@ -812,6 +815,10 @@ export class DistrictDO extends DurableObject<Env> {
       return
     }
     this.reblock(userId, mine, before, t)
+    // Their own blocks are theirs to apply to the walls: told on every block refresh (made or lifted, either
+    // side), and whenever the backstop finds the set changed.
+    if (why === 'block' || before.size !== t.blocked.size || [...before].some((id) => !t.blocked.has(id)))
+      for (const ws of mine) this.send(ws, POSTERS)
     const face = t.hidden ? null : person
     if (face !== undefined) for (const ws of mine) this.reface(ws, face, why)
   }
@@ -1185,6 +1192,38 @@ export class DistrictDO extends DurableObject<Env> {
       remembers: this.clock() - this.bornAt >= TRANSCRIPT_MS,
       lines: this.benchTranscript(bench),
     }
+  }
+
+  /**
+   * RPC, from the posters API: `poster` went up on one of this district's walls, owned by `owner` (an id that
+   * never leaves this object), after `gone` came down to make room. Everyone here hears the removals; the new
+   * one goes to everyone but anyone blocked either way with its owner, and the owner's own sockets hear it as
+   * `mine`. Without trust state (D1 unreachable) only the removals go: nobody blocked may see it, and the next
+   * fetch of the walls brings it to everyone else.
+   */
+  async posterAdded(poster: PosterView, owner: string, gone: string[]): Promise<void> {
+    if (!this.sockets().length) return
+    this.posterRemoved(gone)
+    if (!(await this.ready())) return
+    // Named field by field: nothing else that rode along on the RPC goes out.
+    const { id, wall, slot, text: words, when, name } = poster
+    const plain: PosterView = { id, wall, slot, text: words, when, name }
+    const text = JSON.stringify({ t: 'poster', op: 'add', poster: plain } satisfies ServerMsg)
+    const own = JSON.stringify({
+      t: 'poster',
+      op: 'add',
+      poster: { ...plain, mine: true },
+    } satisfies ServerMsg)
+    for (const ws of this.sockets()) {
+      const { userId } = this.seat(ws)
+      if (userId === owner) this.sendRaw(ws, own)
+      else if (!this.apart(owner, userId)) this.sendRaw(ws, text)
+    }
+  }
+
+  /** RPC, from the posters API and the cron: these posters came down. Everyone here hears it. */
+  posterRemoved(ids: string[]): void {
+    for (const id of ids) this.broadcast({ t: 'poster', op: 'remove', id }, null)
   }
 
   /**

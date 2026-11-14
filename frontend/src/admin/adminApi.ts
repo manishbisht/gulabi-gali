@@ -51,6 +51,11 @@ export const getVouched = (token: Token, userId: string) =>
 export type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unverify' | 'unhide'
 export const actOn = (token: Token, userId: string, action: UserAction) =>
   call<AdminUser>(token, `/api/admin/users/${id(userId)}/${action}`, { method: 'POST' })
+/** Takes a poster down off every wall; the server closes every open report about it as actioned. */
+export const removePoster = (token: Token, posterId: string) =>
+  call<{ id: string; removed: boolean; closed: number }>(token, `/api/admin/posters/${id(posterId)}`, {
+    method: 'DELETE',
+  })
 export const closeReport = (token: Token, reportId: string, how: 'dismiss' | 'action') =>
   call<AdminReportClosed>(token, `/api/admin/reports/${id(reportId)}/${how}`, { method: 'POST' })
 

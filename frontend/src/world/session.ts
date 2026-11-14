@@ -5,8 +5,9 @@ import { createFestivalFx, festivalSky } from '../live/festivalFx'
 import { applySky, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
+import { getPosters } from '../net/api'
 import { connectLive, type LiveConn, type LiveState } from '../net/live'
-import type { ClientMsg, DistrictId, FestivalId, LivePerson, ServerMsg } from '../net/protocol'
+import type { ClientMsg, DistrictId, FestivalId, LivePerson, PosterView, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
@@ -16,6 +17,8 @@ import { loadDistrict, type District } from './district'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
 import { createPeople, createPeopleLabels, type People } from './people'
+import { createPosters, type Posters } from './posters'
+import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
@@ -91,6 +94,8 @@ export interface SessionHooks {
   }
   /** Tapris and benches: what the sitting system tells React (see useBench). Needs `presence`. */
   bench?: BenchHooks
+  /** The poster walls: what they tell React (see usePosters). Read with the presence token when there is one. */
+  posters?: SessionPosterHooks
 }
 
 export interface CitySessionOptions {
@@ -136,6 +141,12 @@ export interface CitySession {
   stand(): void
   /** Says a line at the player's bench; false when not seated or the line is blank. */
   say(text: string): boolean
+  /** A poster this page just pinned goes up on its wall at once (the socket's word on it may lag). */
+  pinned(p: PosterView): void
+  /** One of this page's own posters came down. */
+  unpinned(id: string): void
+  /** Fetches the walls again (after a block, whose effect on them only the server knows). */
+  refreshPosters(): void
   /** Leaves the district and stops; a district still loading is disposed when it arrives. */
   dispose(): void
 }
@@ -154,6 +165,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     systems: DistrictSystem[]
     presence: Presence | null
     sitting: Sitting | null
+    posters: Posters | null
   } | null = null
   let repaint = () => {}
   let disposed = false
@@ -208,13 +220,31 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       hooks.presence && hooks.bench
         ? createSitting({ def: district.def, player, hooks: hooks.bench, send: (m) => presence?.send(m) })
         : null
+    const posterHooks = hooks.posters
+    const posters = posterHooks
+      ? createPosters({
+          scene: stage.scene,
+          def: district.def,
+          hooks: posterHooks,
+          // the presence's token: a ghost's list is everyone's, a resident's leaves out their blocks
+          load: async (signal) => getPosters(id, (await hooks.presence?.token()) ?? null, signal),
+        })
+      : null
     const systems: DistrictSystem[] = [
       npcs,
       sky,
       createLights(stage, district),
-      createInteraction(canvas, stage, controls, district, npcs, people, sitting, hooks),
+      createInteraction(canvas, stage, controls, district, npcs, people, sitting, posters, hooks),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
     ]
+    if (posters)
+      systems.push({
+        update: (_dt, pos) => posters.update(pos),
+        dispose() {
+          posters.dispose()
+          posterHooks!.left()
+        },
+      })
     // one live socket per tab: `leave` above closed the last district's before this one opens
     presence =
       hooks.presence && people
@@ -225,14 +255,17 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
             bubbleHost,
             people,
             sitting,
+            posters,
             hooks.presence,
             opts.WebSocketImpl,
           )
         : null
     if (presence) systems.push(presence)
+    // without a socket there is no welcome to fetch the walls on: fetch them now
+    else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, sitting }
+    here = { district, player, systems, presence, sitting, posters }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -255,6 +288,18 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       freezeNpcs: npcs.freeze,
       festival: hooks.festival,
       sky: sky.params,
+      posters: () =>
+        (posters?.all() ?? []).map(({ poster, at }) => {
+          const p = at.clone().project(stage.camera)
+          return {
+            id: poster.id,
+            wall: poster.wall,
+            slot: poster.slot,
+            text: poster.text,
+            sx: ((p.x + 1) / 2) * innerWidth,
+            sy: ((1 - p.y) / 2) * innerHeight,
+          }
+        }),
       setSnapshot: (partial) => {
         hooks.live.patch(partial)
         sky.paint()
@@ -291,6 +336,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sit: () => here?.sitting?.sit(),
     stand: () => here?.sitting?.stand(),
     say: (text) => here?.sitting?.say(text) ?? false,
+    pinned: (p) => here?.posters?.upsert(p),
+    unpinned: (id) => here?.posters?.remove(id),
+    refreshPosters: () => here?.posters?.refresh(),
     dispose() {
       if (disposed) return
       disposed = true
@@ -372,6 +420,7 @@ function createInteraction(
   npcs: Npcs,
   people: People | null,
   sitting: Sitting | null,
+  posters: Posters | null,
   hooks: SessionHooks,
 ): DistrictSystem {
   const ray = new THREE.Raycaster()
@@ -392,7 +441,13 @@ function createInteraction(
       return hooks.npcCard.tap(hit, landmarkNear)
     }
     const who = people?.pick(ray)
-    if (who) hooks.personCard.tap(who, landmarkNear || hooks.npcCard.isOpen())
+    if (who) return hooks.personCard.tap(who, landmarkNear || hooks.npcCard.isOpen())
+    const poster = posters?.pick(ray)
+    if (poster && !landmarkNear) {
+      hooks.npcCard.close()
+      hooks.personCard.close()
+      hooks.posters?.tap(poster)
+    }
   }
   canvas.addEventListener('pointerdown', onDown)
   canvas.addEventListener('pointerup', onUp)
@@ -413,13 +468,29 @@ function createInteraction(
       // E by a bench sits there (seated, it stands up), unless a card or the metro has it
       const bench = !!sitting && pressed && !card && (seated || (!landmarkNear && !metro && sitting.near()))
       if (bench) sitting.toggle()
-      hooks.npcCard.step(pos, npcs, pressed && !meeting && !bench && (chatting || !metro), landmarkNear)
+      // E by a poster wall opens the composer, unless anything above has it or a poster's own UI is up
+      const wall =
+        pressed &&
+        !card &&
+        !seated &&
+        !landmarkNear &&
+        !metro &&
+        !bench &&
+        posters?.near() != null &&
+        !hooks.posters!.isOpen()
+      if (wall) hooks.posters!.compose()
+      hooks.npcCard.step(
+        pos,
+        npcs,
+        pressed && !meeting && !bench && !wall && (chatting || !metro),
+        landmarkNear,
+      )
       // a character that just opened (or closed on this very E) keeps the key from the person card
       if (people)
         hooks.personCard.step(
           pos,
           people,
-          pressed && !chatting && !bench && (meeting || (!metro && !hooks.npcCard.isOpen())),
+          pressed && !chatting && !bench && !wall && (meeting || (!metro && !hooks.npcCard.isOpen())),
           landmarkNear,
         )
     },
@@ -462,6 +533,7 @@ function createPresence(
   host: HTMLElement,
   people: People,
   sitting: Sitting | null,
+  posters: Posters | null,
   hooks: NonNullable<SessionHooks['presence']>,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
@@ -480,6 +552,7 @@ function createPresence(
   const onMsg = (m: ServerMsg) => {
     if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
     if (m.t === 'queued') return hooks.queued?.(m.position, false)
+    if (m.t === 'poster' || m.t === 'posters') return posters?.apply(m)
     people.apply(m)
     sitting?.apply(m)
     if (m.t === 'welcome') {
@@ -487,6 +560,8 @@ function createPresence(
       hooks.replaced(false)
       sitting?.reset() // a new socket: the server stood the old one up
       sendMove(player.position())
+      // who this socket is may have changed (signed in or out), and news may have been missed while away
+      posters?.refresh()
     }
   }
   let stale: ReturnType<typeof setTimeout> | null = null

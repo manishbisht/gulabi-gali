@@ -3,6 +3,7 @@ import type { Env } from './env'
 import { floating, notify, type Later } from './inbox'
 import { allow, rateLimited } from './limits'
 import { firstName } from './names'
+import { posterOwner } from './posters'
 import { refreshUser } from './refresh'
 
 /**
@@ -28,7 +29,7 @@ const fail = (error: string, status: number) => Response.json({ error }, { statu
 const noContent = () => new Response(null, { status: 204 })
 
 /**
- * `POST /api/blocks {id}`: always 204 (blocking twice, or someone who does not exist, changes nothing and tells
+ * `POST /api/blocks {id}` (or `{poster}`: the poster's owner, who may already have taken it down): always 204 (blocking twice, or someone who does not exist, changes nothing and tells
  * nothing). Blocking yourself is 400. Blocks and unblocks share `BLOCKS_PER_HOUR` per account (429 `rate`):
  * each one wakes every district and two inboxes. Otherwise: the block is written, every request between the two goes, any
  * match ends (held as evidence first; only the blocker's own tabs hear `unmatched`), and both people's live
@@ -42,11 +43,16 @@ export async function blockUser(
   later: Later = floating,
   now = Date.now(),
 ): Promise<Response> {
-  const id = typeof raw === 'object' && raw !== null ? (raw as { id?: unknown }).id : null
-  if (typeof id !== 'string' || !id || id.length > MAX_ID) return fail('invalid', 400)
+  const body = (typeof raw === 'object' && raw !== null ? raw : {}) as { id?: unknown; poster?: unknown }
+  const named = body.id ?? body.poster
+  if (typeof named !== 'string' || !named || named.length > MAX_ID) return fail('invalid', 400)
+  if (body.id !== undefined && body.poster !== undefined) return fail('invalid', 400)
+  // From a poster, the person is its owner: their id never reaches the page, the poster's is enough.
+  const id = body.poster !== undefined ? await posterOwner(env, named) : named
   if (id === userId) return fail('invalid', 400)
   const slow = await blockLimit(env, userId, now)
   if (slow) return slow
+  if (id === null) return noContent()
   const exists = await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(id).first()
   if (!exists) return noContent()
   // Their first name as of now is all the list will ever show of them (never live profile data).

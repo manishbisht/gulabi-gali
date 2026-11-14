@@ -1,4 +1,5 @@
 import type {
+  DistrictId,
   AvatarLookWire,
   ChatError,
   ChatMessage,
@@ -11,6 +12,9 @@ import type {
   MatchView,
   Me,
   MessagePage,
+  PosterError,
+  PosterInput,
+  PosterView,
   ReportInput,
   ReportResult,
   RequestLists,
@@ -378,5 +382,80 @@ export async function joinWaitlist(email: string): Promise<WaitlistOutcome> {
     return res.ok ? 'ok' : res.status === 400 ? 'invalid' : 'failed'
   } catch {
     return 'failed'
+  }
+}
+
+/**
+ * A district's posters, wall by wall. With a token, the list leaves out anyone blocked either way and marks
+ * your own; without one it is everyone's. Rejects on failure.
+ */
+export async function getPosters(
+  district: DistrictId,
+  token: string | null,
+  signal?: AbortSignal,
+): Promise<PosterView[]> {
+  const res = await fetchNoting(`${API_BASE}/api/districts/${district}/posters`, {
+    headers: token ? bearer(token) : {},
+    signal,
+  })
+  if (!res.ok) throw new Error(`posters ${res.status}`)
+  return (await res.json()) as PosterView[]
+}
+
+export type PinOutcome =
+  { ok: true; poster: PosterView } | { ok: false; error: PosterError | 'failed'; field?: string }
+
+const PIN_ERRORS: readonly string[] = ['invalid', 'words', 'ghost', 'not-verified', 'muted', 'limit', 'rate']
+
+/**
+ * Pins a plan on a wall. Never rejects: the poster as it went up, or the typed reason it did not. Plain `fetch`:
+ * the composer has its own line for the day's limit.
+ */
+export async function pinPoster(token: string, input: PosterInput): Promise<PinOutcome> {
+  try {
+    const res = await fetch(`${API_BASE}/api/posters`, {
+      method: 'POST',
+      headers: json(token),
+      body: JSON.stringify(input),
+    })
+    if (res.ok) return { ok: true, poster: (await res.json()) as PosterView }
+    const body = (await res.json().catch(() => null)) as {
+      error?: string
+      field?: string
+      scope?: string
+    } | null
+    // The per-address ceiling is not the day's five: just try again later.
+    if (body?.error === 'rate' && body.scope === 'ip') return { ok: false, error: 'failed' }
+    const error = body?.error && PIN_ERRORS.includes(body.error) ? (body.error as PosterError) : 'failed'
+    return { ok: false, error, ...(body?.field ? { field: body.field } : {}) }
+  } catch {
+    return { ok: false, error: 'failed' }
+  }
+}
+
+/** Takes your own poster down: true once it is down (or already was). Never rejects. */
+export async function takeDownPoster(token: string, id: string): Promise<boolean> {
+  try {
+    const res = await fetchNoting(`${API_BASE}/api/posters/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: bearer(token),
+    })
+    return res.ok || res.status === 404
+  } catch {
+    return false
+  }
+}
+
+/** Blocks a poster's owner, whose id the page never has: true once done. Never rejects. */
+export async function blockPosterOwner(token: string, posterId: string): Promise<boolean> {
+  try {
+    const res = await fetchNoting(`${API_BASE}/api/blocks`, {
+      method: 'POST',
+      headers: json(token),
+      body: JSON.stringify({ poster: posterId }),
+    })
+    return res.ok
+  } catch {
+    return false
   }
 }

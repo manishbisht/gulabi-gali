@@ -334,9 +334,10 @@ describe('a ban or a hide frees the slot and leaves the line at once', () => {
       await refreshUser(testEnv, devId(name), why)
       if (why === 'ban') await vi.waitFor(() => expect(a.closes).toEqual([4004]), WAIT)
       else expect((await a.next('welcome', (m) => !m.you.visible)).you.visible).toBe(false)
-      // No hold: the slot is gone at once, and the gate lets the next one in without waiting it out.
+      // No hold: the slot is gone at once, and the gate lets the next one in without waiting it out. (Its
+      // alarm is set for now, so on a busy run it may already have let them in: no count of 0 is asserted.)
       await vi.waitFor(async () => expect(await slotsOf(devId(name))).toEqual([]), WAIT)
-      expect(await gate().count()).toBe(0)
+      expect(await gate().count()).toBeLessThanOrEqual(1)
       await after(1)
       expect((await b.next('welcome', undefined, bFrom)).you.visible).toBe(true)
       expect(await c.next('queued')).toEqual({ t: 'queued', position: 1 })

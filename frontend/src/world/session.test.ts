@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Stage } from '../engine/stage'
 import { fallbackSnapshot } from '../net/api'
-import type { DistrictId, ServerMsg } from '../net/protocol'
+import type { DistrictId, PosterView, ServerMsg } from '../net/protocol'
 import type { Controls } from '../player/controls'
 import type { District } from './district'
 import miRoad from './districts/miRoad'
@@ -225,7 +225,7 @@ class FakeSocket {
   }
 }
 
-function openLive(token: () => Promise<string | null> = async () => null) {
+function openLive(token: () => Promise<string | null> = async () => null, over: Partial<SessionHooks> = {}) {
   FakeSocket.all = []
   const s = fakeStage()
   const canvas = document.body.appendChild(document.createElement('canvas'))
@@ -234,6 +234,7 @@ function openLive(token: () => Promise<string | null> = async () => null) {
     ...hooks(),
     presence: { token, replaced: vi.fn(), queued: vi.fn() },
     bench: { near: vi.fn(), seated: vi.fn(), line: vi.fn(), refused: vi.fn() },
+    ...over,
   }
   const session = createCitySession({
     stage: s.stage,
@@ -589,4 +590,82 @@ it('E sits at a bench in reach and stands up again, unless a card has the key', 
   expect(sent().at(-1)).toEqual({ t: 'sit', bench: null })
   pressed.mockRestore()
   session.dispose()
+})
+
+it('the walls: fetched on each welcome as this person, kept current by the socket, and E by one opens the composer', async () => {
+  const up: PosterView = {
+    id: 'p1',
+    wall: 0,
+    slot: 2,
+    text: 'Chess at the Chaupar, 5pm',
+    when: null,
+    name: 'Ravi',
+  }
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify([up]), { status: 200 }))
+  vi.stubGlobal('fetch', fetchMock)
+  const ctx = { fillRect() {}, fillText() {}, measureText: (t: string) => ({ width: t.length * 8 }) }
+  // Only the posters' sheets (640 px wide) draw on the stand-in; the sky's canvas is left as it was.
+  const real = HTMLCanvasElement.prototype.getContext
+  const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (
+    this: HTMLCanvasElement,
+    ...args: Parameters<typeof real>
+  ) {
+    return this.width === 640 ? (ctx as never) : real.apply(this, args)
+  })
+  const posters = {
+    near: vi.fn(),
+    tap: vi.fn(),
+    compose: vi.fn(),
+    isOpen: vi.fn(() => false),
+    left: vi.fn(),
+  }
+  const { session, stage, tick, hooks: h } = openLive(async () => 'dev.asha.1', { posters })
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  ws.say({ t: 'welcome', you: { id: 'dev:asha', visible: true }, people: [] })
+  await settle()
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+  expect(url).toMatch(/\/api\/districts\/walled-city\/posters$/)
+  expect(init.headers).toEqual({ Authorization: 'Bearer dev.asha.1' })
+  const wall = () => stage.scene.getObjectByName('posters-0')!
+  expect(wall().visible).toBe(true)
+  // A tap where slot 2 hangs (top right, as the wall faces you: its face is to +x) opens that poster.
+  const canvas = document.querySelector('canvas')!
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect
+  stage.camera.position.set(-1, 2, 46.8)
+  stage.camera.lookAt(-5.775, 2, 46.8)
+  stage.camera.updateMatrixWorld(true)
+  const at = { clientX: 50, clientY: 50 }
+  canvas.dispatchEvent(Object.assign(new Event('pointerdown'), at))
+  canvas.dispatchEvent(Object.assign(new Event('pointerup'), at))
+  expect(posters.tap).toHaveBeenCalledWith(up)
+  ws.say({ t: 'poster', op: 'remove', id: 'p1' })
+  expect(wall().visible).toBe(false)
+  // A block changed what this person may see: the walls are fetched again.
+  ws.say({ t: 'posters' })
+  await settle()
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(wall().visible).toBe(true)
+
+  // 1.5 m from the Johari Bazaar wall (it stands turned, its face along z): in reach, so E opens the composer.
+  session.player()!.teleport(-4.5, 48)
+  tick(1 / 30)
+  expect(posters.near).toHaveBeenLastCalledWith(expect.objectContaining({ index: 0 }), false)
+  const person = vi.spyOn(h.personCard, 'step')
+  const pressed = vi.spyOn(controls, 'interact').mockReturnValue(true)
+  tick(1 / 30)
+  expect(posters.compose).toHaveBeenCalledTimes(1)
+  expect(person.mock.calls.at(-1)![2]).toBe(false) // the wall took the key
+  posters.isOpen.mockReturnValue(true) // the composer is up: E leaves the wall alone
+  tick(1 / 30)
+  expect(posters.compose).toHaveBeenCalledTimes(1)
+  pressed.mockRestore()
+
+  session.dispose()
+  expect(stage.scene.getObjectByName('posters-0')).toBeUndefined()
+  expect(posters.left).toHaveBeenCalled()
+  getContext.mockRestore()
+  vi.unstubAllGlobals()
 })

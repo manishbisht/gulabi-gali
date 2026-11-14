@@ -21,6 +21,7 @@ import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useQueue } from './world/useQueue'
+import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
 import { DISTRICT_NAMES } from './world/districtNames'
@@ -33,6 +34,8 @@ import { LandmarkCard } from './ui/LandmarkCard'
 import { Joystick } from './ui/Joystick'
 import { NpcCard } from './ui/NpcCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
+import { PosterCard } from './ui/PosterCard'
+import { PosterComposer } from './ui/PosterComposer'
 import { RequestComposer, type Sent } from './ui/RequestComposer'
 import { NoWebGL } from './ui/NoWebGL'
 import { TravelSheet } from './ui/TravelSheet'
@@ -94,6 +97,9 @@ export default function App() {
   const queue = useQueue()
   const { queued } = queue
   const { hooks: benchHooks, bind: bindBench } = bench
+  /** The poster walls: the one in reach, the composer, a tapped poster's card. */
+  const posters = usePosters()
+  const { hooks: posterHooks, bind: bindPosters } = posters
   /** The person whose request note is being written, and who has been asked this session. */
   const [composing, setComposing] = useState<string | null>(null)
   const [asked, setAsked] = useState<Record<string, Sent>>({})
@@ -174,7 +180,7 @@ export default function App() {
   }, [liveKey, auth.token])
   const conn = useConnections({ user: residentId, token: auth.token, onBanned: refresh })
   const slowed = useRateNotice()
-  const { block, toast: blockToast } = useBlock(auth.token, lang)
+  const { block, blockPoster, toast: blockToast } = useBlock(auth.token, lang)
   const [connOpen, setConnOpen] = useState(false)
   // signing out shuts the sheet, so the next resident does not find it open
   if (!residentId && connOpen) setConnOpen(false)
@@ -230,6 +236,7 @@ export default function App() {
           queued,
         },
         bench: benchHooks,
+        posters: posterHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -239,8 +246,10 @@ export default function App() {
     session.current = city
     bindTravel(city.travelTo)
     bindBench(city)
+    bindPosters(city)
 
     return () => {
+      bindPosters(null)
       bindBench(null)
       bindTravel(null)
       session.current = null
@@ -265,6 +274,8 @@ export default function App() {
     bindTravel,
     benchHooks,
     bindBench,
+    posterHooks,
+    bindPosters,
     current,
     now,
     patch,
@@ -316,6 +327,36 @@ export default function App() {
           return done
         }}
         onClose={closePerson}
+      />
+    )) ||
+    (posters.composing && posters.near && (
+      <PosterComposer
+        district={here}
+        wall={posters.near.wall.index}
+        viewer={viewer}
+        empty={posters.near.empty}
+        lang={lang}
+        token={auth.token}
+        onPinned={posters.pinned}
+        onVisible={onVisible}
+        onGetVerified={() => setInviteOpen(true)}
+        onClose={posters.closeComposer}
+      />
+    )) ||
+    (posters.open && (
+      <PosterCard
+        poster={posters.open}
+        viewer={viewer}
+        lang={lang}
+        token={auth.token}
+        onBlock={async (p, stay) => {
+          const done = await blockPoster(p.id, p.name)
+          if (done) posters.blocked()
+          if (done && !stay) posters.close()
+          return done
+        }}
+        onTakenDown={posters.takenDown}
+        onClose={posters.close}
       />
     ))
   const visibility =
@@ -441,6 +482,11 @@ export default function App() {
             {bench.near && !bench.seat && !near && !sheetOpen && (
               <button type="button" className="metro-button bench-button" onClick={bench.sit}>
                 {t('benchSit', lang)}
+              </button>
+            )}
+            {posters.near && !bench.near && !bench.seat && !near && !sheetOpen && !card && (
+              <button type="button" className="metro-button poster-button" onClick={posters.compose}>
+                {t('posterPin', lang)}
               </button>
             )}
             {bench.seat ? (

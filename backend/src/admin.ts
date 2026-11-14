@@ -3,6 +3,7 @@ import type { Env } from './env'
 import { GATE_NAME } from './gate'
 import { floating, type Later } from './inbox'
 import { firstName } from './names'
+import { adminRemovePoster, takeDownAllOf, tellRemoved, type Placed } from './posters'
 import type {
   AdminEvidence,
   AdminHidden,
@@ -12,6 +13,7 @@ import type {
   AdminReportPage,
   AdminStats,
   AdminUser,
+  DistrictId,
   ReportKind,
   ReportReason,
   ReportState,
@@ -29,8 +31,8 @@ const HIDDEN_REPORTS = 20
 const SEARCH_LIMIT = 20
 const MAX_QUERY = 100
 const STATES: readonly ReportState[] = ['open', 'actioned', 'dismissed']
-/** Report kinds whose `target_id` is a person (a poster's is the poster). */
-const PERSON_KINDS = "('person', 'bench', 'chat')"
+/** Report kinds whose `target_id` is a person: all of them (a poster's is its owner; `poster_id` names it). */
+const PERSON_KINDS = "('person', 'bench', 'chat', 'poster')"
 
 /** The one answer anyone who is not an admin ever gets, the same as for a route that does not exist. */
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
@@ -53,8 +55,7 @@ export function isAdmin(env: Pick<Env, 'ADMIN_USER_IDS' | 'DEV_AUTH'>, userId: s
  * Every `/api/admin/*` route. Anyone not in `ADMIN_USER_IDS`, signed in or not, gets the plain 404 a signed-in
  * caller gets for an unknown route (never a 403), decided from the token alone, before anything else of the
  * request is read. (Signed out, an unknown route is a 401 while these are 404: that much is visible, by choice.)
- * No admin route reads a body. `DELETE /api/admin/posters/:id` is a 404 for everyone until posters exist
- * (phase 4).
+ * No admin route reads a body.
  */
 export async function handleAdmin(
   request: Request,
@@ -74,6 +75,10 @@ export async function handleAdmin(
     if (pathname === '/api/admin/waitlist.csv') return waitlistCsv(env)
     const vouched = pathname.match(/^\/api\/admin\/users\/([^/]+)\/verified$/)
     if (vouched) return listVouched(env, decode(vouched[1]!))
+  }
+  if (method === 'DELETE') {
+    const poster = pathname.match(/^\/api\/admin\/posters\/([^/]+)$/)
+    return poster ? adminRemovePoster(env, decode(poster[1]!)) : notFound()
   }
   if (method !== 'POST') return notFound()
   const report = pathname.match(/^\/api\/admin\/reports\/([^/]+)\/(dismiss|action)$/)
@@ -161,7 +166,7 @@ async function loadUsers(env: Env, ids: readonly string[]): Promise<Map<string, 
 interface ReportRow {
   id: string
   reporter: string
-  target_kind: ReportKind | 'poster'
+  target_kind: ReportKind
   target_id: string
   reason: ReportReason
   note: string
@@ -247,6 +252,17 @@ function evidenceOf(raw: string | null, users: Map<string, AdminUser>): AdminEvi
     text: str(text),
     at: num(at),
   })
+  if (typeof e.poster === 'object' && e.poster !== null) {
+    const p = e.poster as Record<string, unknown>
+    return {
+      kind: 'poster',
+      posterId: str(p.id),
+      district: str(p.district) as DistrictId,
+      wall: num(p.wall),
+      text: str(p.text),
+      when: typeof p.when === 'number' ? p.when : null,
+    }
+  }
   if (Array.isArray(e.lines))
     return {
       kind: 'lines',
@@ -343,7 +359,8 @@ type UserAction = 'ban' | 'unban' | 'mute' | 'unmute' | 'verify' | 'unverify' | 
  *
  * - `ban`: off the map and out of every list (`ACTIVE`), their district and inbox sockets closed before this
  *   answers, and `/api/me` says `banned`. Every open report about them is closed as `actioned` (the queue is
- *   done with them), and their unused invite codes are deleted (a code is their word for someone). `unban`
+ *   done with them), their unused invite codes are deleted (a code is their word for someone), and every
+ *   poster they have up comes down off the walls. `unban`
  *   restores the rest. An id whose account was deleted, but that a report, held chat or
  *   block still names, gets a tombstone row that is banned, so signing in again with it is refused.
  * - `unverify`: back to a resident (`verified_by` cleared), and their unused codes deleted.
@@ -367,18 +384,20 @@ async function actOn(env: Env, id: string, action: UserAction, later: Later): Pr
       .bind(...args, id)
       .run()
   switch (action) {
-    case 'ban':
-      await env.DB.batch([
+    case 'ban': {
+      const [, , , posters] = await env.DB.batch([
         env.DB.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(id),
         env.DB.prepare('DELETE FROM invites WHERE owner = ? AND used_by IS NULL').bind(id),
         env.DB.prepare(
           `UPDATE reports SET state = 'actioned', closed_at = ? WHERE target_kind IN ${PERSON_KINDS}
            AND target_id = ? AND state = 'open'`,
         ).bind(now, id),
+        takeDownAllOf(env, id),
       ])
       // Always told again: a repeat also mends a live object that missed the first.
-      await refreshUser(env, id, 'ban')
+      await Promise.all([refreshUser(env, id, 'ban'), tellRemoved(env, posters!.results as Placed[])])
       break
+    }
     case 'unban':
       await set('banned = 0')
       await refreshUser(env, id, 'ban')

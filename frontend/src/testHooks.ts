@@ -31,6 +31,8 @@ export interface GgTestApi {
   liveState(): LiveState
   /** Each other person in the district: where their body is drawn (metres) and their chest on the page (CSS px). */
   people(): { id: string; x: number; z: number; sx: number; sy: number }[]
+  /** Every poster up on this district's walls, and where its middle is on the page (CSS px). */
+  posters(): { id: string; wall: number; slot: number; text: string; sx: number; sy: number }[]
 }
 
 declare global {

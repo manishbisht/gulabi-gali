@@ -248,6 +248,46 @@ it('Close + mute mutes and closes; Dismiss only closes', async () => {
   expect(host.querySelectorAll('[data-report]')).toHaveLength(0)
 })
 
+it('a poster report shows the poster as text, and taking it down clears every report about it', async () => {
+  const poster = (id: string, posterId: string): AdminReport => ({
+    ...chatReport,
+    id,
+    kind: 'poster',
+    unconfirmed: false,
+    evidence: {
+      kind: 'poster',
+      posterId,
+      district: 'walled-city',
+      wall: 2,
+      text: '<b>Cheap</b> phones, DM me',
+      when: AT,
+    },
+  })
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/reports': () =>
+        json({ reports: [poster('r-p1', 'poster-1'), poster('r-p2', 'poster-1'), chatReport], next: null }),
+      'DELETE /api/admin/posters/poster-1': () => json({ id: 'poster-1', removed: true, closed: 2 }),
+    }),
+  )
+  const host = await render()
+  const card = host.querySelector('[data-report="r-p1"]')!
+  expect(host.querySelector('b')).toBeNull()
+  expect(card.textContent).toContain('<b>Cheap</b> phones, DM me')
+  expect(card.textContent).toContain('Pink City, wall 3')
+  expect(card.textContent).toContain(`When: ${when(AT)}`)
+  // Only a poster report has the button.
+  expect(buttons(host.querySelector('[data-report="r-chat"]')!, 'Take the poster down')).toHaveLength(0)
+  await click(card, 'Take the poster down')
+  await settle()
+  expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toEqual([
+    '/api/admin/posters/poster-1',
+  ])
+  expect([...host.querySelectorAll('[data-report]')].map((c) => c.getAttribute('data-report'))).toEqual([
+    'r-chat',
+  ])
+})
+
 it('a failed ban keeps the report open and says so', async () => {
   stubApi(ADMIN_ROUTES({ 'POST /api/admin/users/dev%3Aravi/ban': () => json({}, 500) }))
   const host = await render()

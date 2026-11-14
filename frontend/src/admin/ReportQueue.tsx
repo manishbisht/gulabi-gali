@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import type { AdminEvidence, AdminReport, AdminUser } from '../net/protocol'
-import { actOn, closeReport, getReports, KINDS, REASONS, when, type Token } from './adminApi'
+import { DISTRICT_NAMES } from '../world/districtNames'
+import { actOn, closeReport, getReports, KINDS, REASONS, removePoster, when, type Token } from './adminApi'
 import { ConfirmBan, UserSummary } from './UserLookup'
 
 /**
@@ -18,6 +19,19 @@ function Evidence({ evidence, lang }: { evidence: AdminEvidence | null; lang: La
         <dd>{evidence.status}</dd>
         <dd>{evidence.homeArea}</dd>
         <dd className="admin-about">{evidence.about}</dd>
+      </dl>
+    )
+  if (evidence.kind === 'poster')
+    return (
+      <dl className="admin-snapshot" aria-label={t('adminKindPoster', lang)}>
+        <dt>
+          {t('adminPosterAt', lang, {
+            place: DISTRICT_NAMES[evidence.district]?.[lang] ?? evidence.district,
+            n: evidence.wall + 1,
+          })}
+        </dt>
+        <dd className="admin-about">{evidence.text}</dd>
+        {evidence.when !== null && <dd>{t('adminPosterWhen', lang, { when: when(evidence.when) })}</dd>}
       </dl>
     )
   return (
@@ -52,12 +66,15 @@ function ReportCard({
   token,
   onClosed,
   onTarget,
+  onPosterGone,
 }: {
   report: AdminReport
   lang: Lang
   token: Token
   onClosed(id: string): void
   onTarget(user: AdminUser): void
+  /** A poster came down: the server closed every open report about it. */
+  onPosterGone(posterId: string): void
 }) {
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false)
@@ -87,7 +104,20 @@ function ReportCard({
     setBusy(false)
     onClosed(report.id)
   }
+  const takeDown = async (posterId: string) => {
+    if (inflight.current) return
+    inflight.current = true
+    setBusy(true)
+    setFailed(false)
+    const out = await removePoster(token, posterId)
+    // `missing`: it had already come down and nothing about it was open: the queue is done with it either way.
+    if (!out.ok && out.error !== 'missing') return fail()
+    inflight.current = false
+    setBusy(false)
+    onPosterGone(posterId)
+  }
   const { target, reporter } = report
+  const poster = report.evidence?.kind === 'poster' ? report.evidence.posterId : null
   return (
     <li className="admin-card" data-report={report.id}>
       <p className="admin-head">
@@ -123,6 +153,16 @@ function ReportCard({
         />
       ) : (
         <div className="admin-actions">
+          {poster && (
+            <button
+              type="button"
+              className="admin-danger"
+              disabled={busy}
+              onClick={() => void takeDown(poster)}
+            >
+              {t('adminPosterRemove', lang)}
+            </button>
+          )}
           <button type="button" disabled={busy} onClick={() => void close('dismiss')}>
             {t('adminDismiss', lang)}
           </button>
@@ -198,6 +238,12 @@ export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Tok
     setReports((was) => was && was.filter((r) => r.id !== id))
     onChanged()
   }
+  const posterGone = (posterId: string) => {
+    setReports(
+      (was) => was && was.filter((r) => !(r.evidence?.kind === 'poster' && r.evidence.posterId === posterId)),
+    )
+    onChanged()
+  }
   const target = (user: AdminUser) => {
     setReports(
       (was) =>
@@ -234,6 +280,7 @@ export function ReportQueue({ lang, token, onChanged }: { lang: Lang; token: Tok
                       token={token}
                       onClosed={closed}
                       onTarget={target}
+                      onPosterGone={posterGone}
                     />
                   ))}
                 </ul>

@@ -391,6 +391,10 @@ export const STRINGS = {
     hi: 'Shehar full hone par chhoda gaya waitlist email, sirf jagah batane ke liye. 90 din baad mita diya jaata hai.',
     en: "A waitlist email you left while the city was full, only to tell you there's room. It is deleted after 90 days.",
   },
+  privacyStoredPosters: {
+    hi: 'Deewar pe chipkaya poster (text, time aur aapka pehla naam) sab dekh sakte hain, ghosts bhi. Woh apne time ke 6 ghante baad, ya bina time ke 7 din baad, mita diya jaata hai; aap use pehle bhi utaar sakte ho.',
+    en: 'A poster you pin (its text, its time and your first name) is public, ghosts included. It is deleted 6 hours after its time, or 7 days after pinning without one; you can take it down sooner.',
+  },
   privacyStoredTombstone: {
     hi: 'Account delete karne ke baad bhi, agar us par ban, hide, mute ya request ka 14 din ka intezaar laga ho, toh sirf account id aur woh rok ek chhote record mein rehti hai, taaki delete karke unse bacha na ja sake.',
     en: 'After an account is deleted, if a ban, hide, mute or a 14-day request wait was on it, a small record with only the account id and that state stays, so deleting is no way around them.',
@@ -412,16 +416,16 @@ export const STRINGS = {
   },
   privacyDeleteTitle: { hi: 'Account delete karna', en: 'Deleting your account' },
   privacyDelete: {
-    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile, invite codes, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye.',
-    en: 'Open your profile and press "Delete my account" at the bottom. Your profile, invite codes, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to {OWNER_CONTACT} to have it removed.',
+    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile, invite codes, deewar ke poster, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye.',
+    en: 'Open your profile and press "Delete my account" at the bottom. Your profile, invite codes, posters, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to {OWNER_CONTACT} to have it removed.',
   },
   privacyContactTitle: { hi: 'Sawaal ya shikayat', en: 'Questions or complaints' },
   privacyContact: { hi: 'Likhiye: {OWNER_CONTACT}', en: 'Write to: {OWNER_CONTACT}' },
   privacyClose: { hi: 'Theek hai', en: 'OK' },
   deleteTitle: { hi: 'Account delete karo', en: 'Delete my account' },
   deleteWhat: {
-    hi: 'Yeh wapas nahi aayega. Profile, invite codes, requests aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
-    en: "This cannot be undone. Your profile, invite codes, requests and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to {OWNER_CONTACT} to remove it. You can start again fresh, though a moderator's ban or mute stays.",
+    hi: 'Yeh wapas nahi aayega. Profile, invite codes, poster, requests aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
+    en: "This cannot be undone. Your profile, invite codes, posters, requests and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to {OWNER_CONTACT} to remove it. You can start again fresh, though a moderator's ban or mute stays.",
   },
   deleteTypeLabel: { hi: 'Confirm karne ke liye DELETE likho', en: 'Type DELETE to confirm' },
   deleteConfirm: { hi: 'Hamesha ke liye delete karo', en: 'Delete forever' },
@@ -549,6 +553,61 @@ export const STRINGS = {
   adminKindBench: { hi: 'Bench', en: 'Bench' },
   adminKindChat: { hi: 'Chat', en: 'Chat' },
   adminKindPoster: { hi: 'Poster', en: 'Poster' },
+  adminPosterAt: { hi: '{place}, deewar {n}', en: '{place}, wall {n}' },
+  adminPosterWhen: { hi: 'Kab: {when}', en: 'When: {when}' },
+  adminPosterRemove: { hi: 'Poster hatao', en: 'Take the poster down' },
+  posterPin: { hi: 'Deewar pe chipkao', en: 'Pin a plan here' },
+  posterEmpty: {
+    hi: 'Is deewar pe abhi koi plan nahi. Pehla tum chipkao?',
+    en: 'No plans on this wall yet. Want to pin the first one?',
+  },
+  posterTitle: { hi: 'Deewar pe kya chipkana hai?', en: 'What plan are you pinning up?' },
+  posterHint: {
+    hi: 'Kya, kahan, kab: ek line mein. Sab padh sakte hain, ghosts bhi, aur saath mein tumhara pehla naam dikhega.',
+    en: 'What, where, when, in a line. Anyone can read it, ghosts too, and it shows your first name.',
+  },
+  posterLabel: { hi: 'Tumhara plan', en: 'Your plan' },
+  posterPlaceholder: {
+    hi: 'Jaise: Shanivaar shaam 5 baje Jal Mahal pe sketching, koi bhi aa sakta hai',
+    en: 'e.g. Sketching at Jal Mahal, Saturday 5pm, anyone welcome',
+  },
+  posterWhen: { hi: 'Kab? (zaroori nahi, Jaipur ka time)', en: 'When? (optional, Jaipur time)' },
+  posterWhenBad: {
+    hi: 'Aane wala time chuno, agle 30 din ke andar.',
+    en: 'Pick a time that is still to come, within the next 30 days.',
+  },
+  posterLasts: {
+    hi: 'Time ke 6 ghante baad poster utar jaata hai; bina time ke 7 din baad. Ek saath 2 hi laga sakte ho.',
+    en: 'It comes down 6 hours after its time, or after 7 days without one. You can have 2 up at once.',
+  },
+  posterSend: { hi: 'Chipkao', en: 'Pin it' },
+  posterSending: { hi: 'Chipka rahe hain…', en: 'Pinning…' },
+  posterLimit: {
+    hi: 'Tumhare 2 poster pehle se lage hain. Ek utaaro, phir naya chipkao.',
+    en: 'You already have 2 posters up. Take one down to pin another.',
+  },
+  posterRate: {
+    hi: 'Aaj ke 5 poster ho gaye. Kal phir chipkana.',
+    en: "That's 5 posters today. Pin again tomorrow.",
+  },
+  posterFailed: {
+    hi: 'Poster nahi chipak paya. Thodi der baad try karo.',
+    en: "Couldn't pin it. Try again in a little while.",
+  },
+  posterVerifiedOnly: {
+    hi: 'Deewar pe sirf verified log chipka sakte hain. Kisi verified dost se invite code maango.',
+    en: 'Only verified members can pin on the walls. Ask a verified friend for an invite code.',
+  },
+  posterGetCode: { hi: 'Invite code daalo', en: 'Enter an invite code' },
+  posterCard: { hi: 'Deewar ka poster', en: 'Poster on the wall' },
+  posterWhenLine: { hi: 'Kab: {when}', en: 'When: {when}' },
+  posterBy: { hi: 'Chipkaya: {name}', en: 'Pinned by {name}' },
+  posterMine: { hi: 'Ye tumhara poster hai.', en: 'This one is yours.' },
+  posterTakeDown: { hi: 'Utaaro', en: 'Take it down' },
+  posterTakeDownFailed: {
+    hi: 'Poster nahi utra. Dobara try karo.',
+    en: "Couldn't take it down. Try again.",
+  },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

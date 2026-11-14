@@ -295,7 +295,7 @@ describe('reports', () => {
 
     // Bad input: an unknown kind or reason, a long note, yourself, someone with no profile.
     for (const body of [
-      { kind: 'poster', targetId: target },
+      { kind: 'poem', targetId: target },
       { kind: 'person', targetId: target, reason: 'boring' },
       { kind: 'person', targetId: target, note: 'x'.repeat(301) },
       { kind: 'person', targetId: devId('Evidence Reporter') },
@@ -303,6 +303,8 @@ describe('reports', () => {
     ])
       expect((await report(reporter, body)).status, JSON.stringify(body).slice(0, 60)).toBe(400)
     expect((await report(reporter, { kind: 'person', targetId: 'dev:nobody-at-all' })).status).toBe(404)
+    // A poster report names a poster: a person's id is not one.
+    expect((await report(reporter, { kind: 'poster', targetId: target })).status).toBe(404)
   })
 
   it('auto-hide counts only chat and bench reports, from distinct verified reporters', async () => {

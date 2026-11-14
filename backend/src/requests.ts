@@ -11,8 +11,11 @@ const LIST_LIMIT = 50
 
 const fail = (error: string, status: number) => Response.json({ error }, { status })
 
-/** NFC, no control or format characters, one line (any run of whitespace is one space); null if not 10-140. */
-export function cleanReason(x: unknown): string | null {
+/**
+ * NFC, no control or format characters, one line (any run of whitespace is one space); null if not `min` to
+ * `max` characters (10-140 for a reason; a poster's text is cleaned the same way).
+ */
+export function cleanReason(x: unknown, min = MIN_REASON, max = MAX_REASON): string | null {
   if (typeof x !== 'string') return null
   const text = x
     .normalize('NFC')
@@ -21,7 +24,7 @@ export function cleanReason(x: unknown): string | null {
     .replace(/\s+/gu, ' ')
     .trim()
   const points = [...text].length
-  return points >= MIN_REASON && points <= MAX_REASON ? text : null
+  return points >= min && points <= max ? text : null
 }
 
 /** The two ids in the order a match stores them (`a < b`). */

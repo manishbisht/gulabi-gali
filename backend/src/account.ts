@@ -2,6 +2,7 @@ import { endMatch } from './chat'
 import type { Env } from './env'
 import { GATE_NAME } from './gate'
 import { floating, notify, type Later } from './inbox'
+import { takeDownAllOf, tellRemoved, type Placed } from './posters'
 import { refreshUser } from './refresh'
 import { AUTO_HIDE, COUNTED_REPORTS } from './reports'
 
@@ -17,7 +18,7 @@ const MATCH_PASSES = 3
  *   person hears `unmatched`. Matches are looked for again (at most `MATCH_PASSES` times), so one made while
  *   this ran is held too.
  * - Then one D1 batch deletes the profile, every pending or accepted request in either direction, any match
- *   left, the invites they own, the blocks they made and their counters. `ignored` requests stay with their
+ *   left, the invites they own, their posters (off every wall at once), the blocks they made and their counters. `ignored` requests stay with their
  *   reason blanked: they are the 14-day cooldowns (a decline, an unmatch), which a delete must not wipe, and
  *   the cron sweeps them. Blocks other people made against them stay (their saved name blanked): they keep the
  *   blocker safe if this id comes back.
@@ -54,7 +55,8 @@ export async function deleteAccount(
   )
     .bind(userId, now - AUTO_HIDE.windowMs)
     .first<{ n: number }>()
-  await env.DB.batch([
+  const posters = takeDownAllOf(env, userId)
+  const statements = [
     // Enough reports to hide them: they are hidden now, so the tombstone below keeps it.
     env.DB.prepare('UPDATE users SET hidden = 1 WHERE id = ?1 AND ?2 = 1').bind(
       userId,
@@ -69,6 +71,7 @@ export async function deleteAccount(
     ).bind(userId),
     env.DB.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM invites WHERE owner = ?').bind(userId),
+    posters,
     env.DB.prepare('DELETE FROM blocks WHERE a = ?').bind(userId),
     env.DB.prepare("UPDATE blocks SET name = '' WHERE b = ?").bind(userId),
     env.DB.prepare('DELETE FROM counters WHERE user_id = ?').bind(userId),
@@ -78,8 +81,12 @@ export async function deleteAccount(
       `DELETE FROM users WHERE id = ?1 AND hidden = 0 AND banned = 0 AND (muted_until IS NULL OR muted_until <= ?2)
        AND NOT EXISTS (SELECT 1 FROM requests WHERE from_id = ?1 OR to_id = ?1)`,
     ).bind(userId, now),
+  ]
+  const done = await env.DB.batch(statements)
+  await Promise.all([
+    refreshUser(env, userId, 'delete'),
+    tellRemoved(env, done[statements.indexOf(posters)]!.results as Placed[]),
   ])
-  await refreshUser(env, userId, 'delete')
   try {
     await env.GATE.get(env.GATE.idFromName(GATE_NAME)).forget(userId)
   } catch (err) {

@@ -162,6 +162,14 @@ export type ServerMsg =
   /** A refused step carries the last point the server accepted: the client goes back there. */
   | { t: 'error'; code: 'too-fast'; x: number; z: number; ry: number }
   | { t: 'pong' }
+  /**
+   * A poster went up on one of this district's walls (never one whose owner is blocked either way with this
+   * socket's person), or came down (taken down, hidden, replaced, expired, or its owner banned or gone).
+   */
+  | { t: 'poster'; op: 'add'; poster: PosterView }
+  | { t: 'poster'; op: 'remove'; id: string }
+  /** This person's blocks changed: what the walls may show them did too, so fetch them again. */
+  | { t: 'posters' }
 
 /** A line said at a bench, as each sitter hears it (and as the district keeps it, in memory only). */
 export type BenchLine = Omit<Extract<ServerMsg, { t: 'bench' }>, 't' | 'bench'>
@@ -248,9 +256,11 @@ export type InboxMsg = InboxNotice | { t: 'pong' }
 
 /**
  * What a report is about. `person`: their profile; `bench`: what they said at a bench (with its id);
- * `chat`: a 1:1 chat with them. Every kind names the person (`targetId`): the server assembles the evidence.
+ * `chat`: a 1:1 chat with them; `poster`: a poster they pinned. Every kind but `poster` names the person
+ * (`targetId`); a poster report names the poster (its owner's id is never sent to anyone), and the report
+ * is filed about its owner. The server assembles the evidence.
  */
-export const REPORT_KINDS = ['person', 'bench', 'chat'] as const
+export const REPORT_KINDS = ['person', 'bench', 'chat', 'poster'] as const
 export type ReportKind = (typeof REPORT_KINDS)[number]
 export const REPORT_REASONS = ['harassment', 'hate', 'spam', 'underage', 'other'] as const
 export type ReportReason = (typeof REPORT_REASONS)[number]
@@ -273,6 +283,55 @@ export interface ReportResult {
   autoHidden: boolean
   evidence?: 'missing'
 }
+
+/*
+ * Deewar: the poster walls. Verified members pin plans; anyone, ghosts included, reads them.
+ */
+
+/** A poster's text is 10 to 140 characters (code points) once cleaned, on one line. */
+export const MIN_POSTER = 10
+export const MAX_POSTER = 140
+/** Places on each wall. A full wall gives up its oldest poster (never the pinner's own) for a new one. */
+export const POSTER_SLOTS = 6
+/** Each district's poster walls: wall n is the n-th `poster-wall` prop in its `props`. */
+export const POSTER_WALLS: Record<DistrictId, number> = {
+  'walled-city': 3,
+  'mi-road': 1,
+  university: 1,
+  'malviya-nagar': 5,
+}
+/** A `when` may be at most this far ahead (inclusive), and must be in the future. */
+export const POSTER_AHEAD_MS = 30 * 24 * 3600 * 1000
+/** A poster comes down this long after its `when`, or `POSTER_TTL_MS` after pinning when it has none. */
+export const POSTER_AFTER_MS = 6 * 3600 * 1000
+export const POSTER_TTL_MS = 7 * 24 * 3600 * 1000
+
+/**
+ * A poster as anyone sees it: the text, its time (ms) if it has one, where it hangs, and its owner's first
+ * name. Never the owner's id. `mine`: the viewer pinned it (and may take it down).
+ */
+export interface PosterView {
+  id: string
+  wall: number
+  slot: number
+  text: string
+  when: number | null
+  name: string
+  mine?: true
+}
+/** `POST /api/posters` body. */
+export interface PosterInput {
+  district: DistrictId
+  wall: number
+  text: string
+  when?: number | null
+}
+/**
+ * Why a pin was refused. `ghost`: not a resident others can see (hidden included); `not-verified`: residents
+ * cannot pin; `limit`: two posters up already; `words`: the filter (field `text`); `invalid`: field `text`,
+ * `when`, `district` or `wall`.
+ */
+export type PosterError = 'invalid' | 'words' | 'ghost' | 'not-verified' | 'muted' | 'limit' | 'rate'
 
 /*
  * The owner's moderation console (`/api/admin/*`, admins only; everyone else gets a 404). Nothing here is
@@ -311,12 +370,21 @@ export interface AdminLine {
 export type AdminEvidence =
   | { kind: 'profile'; name: string; status: string; homeArea: string; about: string }
   | { kind: 'lines'; place: 'bench' | 'chat'; lines: AdminLine[]; missing: boolean }
+  /** The poster as it was when reported (it may have come down since): its id, where it hung, and what it said. */
+  | {
+      kind: 'poster'
+      posterId: string
+      district: DistrictId
+      wall: number
+      text: string
+      when: number | null
+    }
 
 export type ReportState = 'open' | 'actioned' | 'dismissed'
 
 export interface AdminReport {
   id: string
-  kind: ReportKind | 'poster'
+  kind: ReportKind
   reason: ReportReason
   note: string
   createdAt: number

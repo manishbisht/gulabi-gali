@@ -12,6 +12,7 @@ import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
+import { listPosters, pinPoster, purgePosters, removeOwnPoster } from './posters'
 import { fileReport, purgeReportEvidence } from './reports'
 import { devVerify, listInvites, redeemInvite } from './trust'
 import { activeRow, bannedGate, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
@@ -155,6 +156,9 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   const user = await resolveUser(request, env)
   // Before the 401: signed out, signed in or not an admin, the console is a plain 404 (see `handleAdmin`).
   if (pathname.startsWith('/api/admin/')) return handleAdmin(request, env, url, user, later)
+  // Public, ghosts included; with a token it is that person's own list (see `listPosters`).
+  const posters = pathname.match(/^\/api\/districts\/([^/]+)\/posters$/)
+  if (posters && method === 'GET') return listPosters(env, posters[1]!, user?.id ?? null)
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
   if (pathname === '/api/me' && method === 'GET') {
     const slow = (await bootstrapLimit(env, request, user.id)) ?? (await bannedGate(env, user.id))
@@ -187,6 +191,18 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     }
   }
   if (pathname === '/api/ended' && method === 'GET') return listEnded(env, user.id)
+  if (pathname === '/api/posters' && method === 'POST')
+    return pinPoster(env, user.id, await readJson(request), later)
+  const poster = pathname.match(/^\/api\/posters\/([^/]+)$/)
+  if (poster && method === 'DELETE') {
+    let id: string
+    try {
+      id = decodeURIComponent(poster[1]!)
+    } catch {
+      return Response.json({ error: 'not found' }, { status: 404 })
+    }
+    return removeOwnPoster(env, user.id, id, later)
+  }
   if (pathname === '/api/reports' && method === 'POST')
     return fileReport(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')
@@ -270,5 +286,6 @@ export default {
     ctx.waitUntil(purgeReportEvidence(env).catch((err) => console.error('report sweep failed', err)))
     ctx.waitUntil(purgeCounters(env).catch((err) => console.error('counter sweep failed', err)))
     ctx.waitUntil(purgeWaitlist(env).catch((err) => console.error('waitlist sweep failed', err)))
+    ctx.waitUntil(purgePosters(env).catch((err) => console.error('poster sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>
