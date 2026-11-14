@@ -59,7 +59,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
   const { near, have, toast, collectHere, track } = useStamps(lang)
-  const { npc: talking, open: openNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
+  const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
   const bubbleHost = useRef<HTMLDivElement>(null)
   const langRef = useRef(lang)
   useEffect(() => {
@@ -120,6 +120,7 @@ export default function App() {
         // A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD
         // buttons never reach the canvas, since those capture their own pointers.
         const ray = new THREE.Raycaster()
+        let landmarkNear = false
         let down: { x: number; y: number; at: number } | null = null
         const onDown = (e: PointerEvent) => void (down = { x: e.clientX, y: e.clientY, at: e.timeStamp })
         const onUp = (e: PointerEvent) => {
@@ -136,7 +137,7 @@ export default function App() {
             stage.camera,
           )
           const hit = npcs.pick(ray)
-          if (hit) openNpc(hit)
+          if (hit) tapNpc(hit, landmarkNear)
         }
         canvas.addEventListener('pointerdown', onDown)
         canvas.addEventListener('pointerup', onUp)
@@ -149,7 +150,8 @@ export default function App() {
           const pos = player.position()
           const pressed = controls.interact()
           const landmark = track(pos, district.def.landmarks, pressed && !npcOpen())
-          stepNpc(pos, npcs, pressed, landmark !== null)
+          landmarkNear = landmark !== null
+          stepNpc(pos, npcs, pressed, landmarkNear)
           bubbles.update(stage.camera, npcs, pos, langRef.current)
         })
         setPlace(district.def.name)
@@ -209,7 +211,7 @@ export default function App() {
       controlsRef.current = null
       stage.dispose()
     }
-  }, [entered, track, openNpc, closeNpc, npcOpen, stepNpc, current, now, patch, freeze, override])
+  }, [entered, track, tapNpc, closeNpc, npcOpen, stepNpc, current, now, patch, freeze, override])
 
   if (!webgl) return <NoWebGL lang={lang} />
   if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
@@ -237,14 +239,15 @@ export default function App() {
         bottom={
           <>
             <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />
-            {talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />}
-            {near && !talking && (
+            {near ? (
               <LandmarkCard
                 landmark={near}
                 lang={lang}
                 stamped={have.includes(near.id)}
                 onCollect={collectHere}
               />
+            ) : (
+              talking && <NpcCard npc={talking} lang={lang} onClose={closeNpc} />
             )}
           </>
         }

@@ -18,6 +18,8 @@ export function useNpcCard() {
     setNpc(next)
   }, [])
   const close = useCallback(() => open(null), [open])
+  /** A tap on a character. A landmark card takes priority: with one up, the tap does nothing. */
+  const tap = useCallback((next: NpcDef, landmarkNear: boolean) => void (!landmarkNear && open(next)), [open])
 
   /**
    * Call every frame. E closes an open card, else opens the nearest character in reach, unless a
@@ -26,6 +28,7 @@ export function useNpcCard() {
   const step = useCallback(
     (pos: Vec2, npcs: Npcs, pressed: boolean, landmarkNear: boolean) => {
       const current = openRef.current
+      if (current && landmarkNear) return close() // walked into a landmark's ring: its card wins
       if (current) {
         const body = npcs.entries.find((e) => e.def.id === current.id)?.body
         if (!body || Math.hypot(body.position.x - pos.x, body.position.z - pos.z) > WALK_AWAY) return close()
@@ -37,5 +40,5 @@ export function useNpcCard() {
     [open, close],
   )
 
-  return { npc, open, close, isOpen: useCallback(() => openRef.current !== null, []), step }
+  return { npc, tap, close, isOpen: useCallback(() => openRef.current !== null, []), step }
 }
