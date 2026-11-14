@@ -184,3 +184,17 @@ export async function inviteIpLimit(env: Env, request: Request, now = Date.now()
   const { perWindow, windowMs, bucket } = INVITE_IP_LIMIT
   return (await allow(env, `ip:${key}`, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
 }
+
+/**
+ * A moderator's mute (`users.muted_until`, ms): while it lasts, everything a person writes for others to read
+ * (requests, chat messages, their profile; the district refuses bench lines and status the same way) is 403
+ * `{ error: 'muted', until }`. It runs out by itself. Reading, reporting and blocking stay open. Null while
+ * not muted.
+ */
+export async function muteGate(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
+  const row = await env.DB.prepare('SELECT muted_until FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ muted_until: number | null }>()
+  const until = row?.muted_until ?? null
+  return until !== null && until > now ? Response.json({ error: 'muted', until }, { status: 403 }) : null
+}

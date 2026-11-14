@@ -347,6 +347,34 @@ it('signed in but /api/me failing: still a ghost chip, with a way to sign out', 
   await act(async () => root.unmount())
 })
 
+it('a banned account gets a plain screen saying so, over the city, with a way to sign out', async () => {
+  vi.stubGlobal('fetch', async (url: string) =>
+    url.endsWith('/api/me')
+      ? new Response(JSON.stringify({ error: 'banned' }), { status: 403 })
+      : new Response('{}', { status: 404 }),
+  )
+  localStorage.setItem('gg-lang', 'hi')
+  const signOut = vi.fn(async () => undefined)
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () =>
+    root.render(
+      <AuthContext.Provider value={signedIn({ signOut })}>
+        <App />
+      </AuthContext.Provider>,
+    ),
+  )
+  await act(async () => void (await new Promise((r) => setTimeout(r, 0))))
+  const screen = host.querySelector('[role="alert"]')!
+  expect(screen.textContent).toContain('Ye account band hai')
+  expect(host.querySelector('.enter')?.textContent).not.toBe('Padharo!')
+  await act(async () =>
+    [...screen.querySelectorAll('button')].find((b) => b.textContent === 'Logout karo')!.click(),
+  )
+  expect(signOut).toHaveBeenCalledOnce()
+  await act(async () => root.unmount())
+})
+
 it('the live socket follows who you are, and says so when another tab takes over', async () => {
   const me = {
     id: 'u',

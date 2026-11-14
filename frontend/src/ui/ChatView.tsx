@@ -25,7 +25,7 @@ interface Props {
 
 /** A message the server has not confirmed yet. */
 type Line = ChatMessage & { pending?: boolean }
-type Note = 'rate' | 'slow' | 'failed' | 'load' | 'unmatch' | 'words' | null
+type Note = 'rate' | 'slow' | 'failed' | 'load' | 'unmatch' | 'words' | 'muted' | null
 
 const byTime = (a: Line, b: Line) =>
   a.pending !== b.pending ? (a.pending ? 1 : -1) : a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
@@ -44,6 +44,7 @@ const NOTE_TEXT: Record<Exclude<Note, null>, StringKey> = {
   load: 'chatLoadFailed',
   unmatch: 'chatUnmatchFailed',
   words: 'wordsHint',
+  muted: 'benchMuted',
 }
 
 /**
@@ -161,7 +162,9 @@ export function ChatView({
       // keep what they wrote, unless they have started something new meanwhile
       setText((now) => now || body)
       setNote(
-        out && !out.ok && (out.error === 'rate' || out.error === 'slow' || out.error === 'words')
+        out &&
+          !out.ok &&
+          (out.error === 'rate' || out.error === 'slow' || out.error === 'words' || out.error === 'muted')
           ? out.error
           : 'failed',
       )

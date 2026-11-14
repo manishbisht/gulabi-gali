@@ -155,6 +155,14 @@ export function parseProfile(raw: unknown): { ok: true; value: Parsed } | { ok: 
 export const userExists = async (env: Env, userId: string): Promise<boolean> =>
   (await env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?').bind(userId).first()) !== null
 
+/** 403 `banned` for someone a moderator has banned (see `ACTIVE`), else null. */
+export async function bannedGate(env: Env, userId: string): Promise<Response | null> {
+  const row = await env.DB.prepare('SELECT banned FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ banned: number }>()
+  return row?.banned === 1 ? Response.json({ error: 'banned' }, { status: 403 }) : null
+}
+
 export async function getMe(env: Env, userId: string): Promise<Me> {
   await env.DB.prepare('INSERT OR IGNORE INTO users (id, created_at) VALUES (?, ?)')
     .bind(userId, Date.now())

@@ -9,8 +9,14 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: './wrangler.jsonc' },
         miniflare: {
-          // Dev auth exists only in tests and .dev.vars, never in wrangler.jsonc.
-          bindings: { DEV_AUTH: '1', DEV_AUTH_SECRET: 'test-secret', TEST_MIGRATIONS: migrations },
+          // Dev auth and the admin list exist only in tests and .dev.vars (a secret in production), never in
+          // wrangler.jsonc. `dev:owner` is whoever dev-logs in as "Owner".
+          bindings: {
+            DEV_AUTH: '1',
+            DEV_AUTH_SECRET: 'test-secret',
+            ADMIN_USER_IDS: 'dev:owner',
+            TEST_MIGRATIONS: migrations,
+          },
         },
       }),
     ],

@@ -1,3 +1,4 @@
+import { handleAdmin } from './admin'
 import { resolveUser } from './auth'
 import { blockUser, listBlocks, unblockUser } from './blocks'
 import { listMatches, listMessages, postMessage, unmatch } from './chat'
@@ -7,11 +8,11 @@ import type { Env } from './env'
 import { purgeEvidence } from './evidence'
 import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
-import { inviteIpLimit, ipLimit, purgeCounters, readLimit } from './limits'
+import { inviteIpLimit, ipLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
 import { fileReport, purgeReportEvidence } from './reports'
 import { devVerify, listInvites, redeemInvite } from './trust'
-import { activeRow, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
+import { activeRow, bannedGate, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
 import { defaultSnapshot, fetchSnapshot } from './weather'
 
@@ -130,13 +131,20 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     return devVerify(env, await readJson(request))
   }
   const user = await resolveUser(request, env)
+  // Before the 401: signed out, signed in or not an admin, the console is a plain 404 (see `handleAdmin`).
+  if (pathname.startsWith('/api/admin/')) return handleAdmin(request, env, url, user, later)
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
   if (pathname === '/api/me' && method === 'GET') {
-    const slow = await bootstrapLimit(env, request, user.id)
+    const slow = (await bootstrapLimit(env, request, user.id)) ?? (await bannedGate(env, user.id))
     return slow ?? Response.json(await getMe(env, user.id))
   }
   if (pathname === '/api/me/profile' && method === 'PUT')
-    return (await bootstrapLimit(env, request, user.id)) ?? putProfile(env, user.id, await readJson(request))
+    return (
+      (await bootstrapLimit(env, request, user.id)) ??
+      (await bannedGate(env, user.id)) ??
+      (await muteGate(env, user.id)) ??
+      putProfile(env, user.id, await readJson(request))
+    )
   if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
   if (pathname === '/api/invites/redeem' && method === 'POST') {
     // Per address as well as per person (which `redeemInvite` counts): one person cannot spread guesses over accounts.
@@ -158,7 +166,9 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   if (pathname === '/api/reports' && method === 'POST')
     return fileReport(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')
-    return sendRequest(env, user.id, await readJson(request), Date.now(), later)
+    return (
+      (await muteGate(env, user.id)) ?? sendRequest(env, user.id, await readJson(request), Date.now(), later)
+    )
   if (pathname === '/api/requests' && method === 'GET')
     return (await readLimit(env, user.id, 'requests')) ?? Response.json(await listRequests(env, user.id))
   const act = pathname.match(/^\/api\/requests\/([^/]+)\/(accept|ignore)$/)
@@ -175,7 +185,10 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     const [, mid, messages] = chat
     if (messages && method === 'GET') return listMessages(env, user.id, mid, url.searchParams.get('before'))
     if (messages && method === 'POST')
-      return postMessage(env, user.id, mid, await readJson(request), Date.now(), later)
+      return (
+        (await muteGate(env, user.id)) ??
+        postMessage(env, user.id, mid, await readJson(request), Date.now(), later)
+      )
     if (!messages && method === 'DELETE') return unmatch(env, user.id, mid, later)
   }
   const match = pathname.match(/^\/api\/profiles\/([^/]+)$/)

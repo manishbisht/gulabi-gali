@@ -37,6 +37,7 @@ import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
 import { InviteSheet } from './ui/InviteSheet'
+import { AccountClosed } from './ui/AccountClosed'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -103,7 +104,7 @@ export default function App() {
     trackStation,
     bind: bindTravel,
   } = useTravel()
-  const { me, save, refresh } = useMe()
+  const { me, banned, save, refresh } = useMe()
   const [inviteOpen, setInviteOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
   const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
@@ -315,8 +316,10 @@ export default function App() {
       />
     )
 
-  if (!webgl || stageFailed) return <NoWebGL lang={lang} />
-  if (!entered) return <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
+  /** A banned account: a plain screen over everything (the city behind it stays a ghost's). */
+  const closed = banned && <AccountClosed lang={lang} onSignOut={() => void auth.signOut()} />
+  if (!webgl || stageFailed) return closed || <NoWebGL lang={lang} />
+  if (!entered) return closed || <Intro lang={lang} onLang={setLang} onEnter={() => setEntered(true)} />
   return (
     <>
       <canvas ref={canvasRef} className="stage" />
@@ -462,6 +465,7 @@ export default function App() {
         />
       )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
+      {closed}
     </>
   )
 }

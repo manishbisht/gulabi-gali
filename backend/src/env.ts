@@ -15,6 +15,11 @@ export interface Env {
   /** '1' enables /api/dev/login and dev tokens. Set only in .dev.vars and tests, never in wrangler.jsonc. */
   DEV_AUTH?: string
   DEV_AUTH_SECRET?: string
+  /**
+   * Who may use `/api/admin/*`: full user ids (`clerk:user_…`, or `dev:owner` locally), comma-separated. A
+   * secret in production, a `--var` in e2e, never in wrangler.jsonc. Unset or empty: nobody.
+   */
+  ADMIN_USER_IDS?: string
   /** The most sockets one district holds at once, ghosts and residents alike. A number; 400 when unset. */
   MAX_DISTRICT_SOCKETS?: string
   /** The most sockets one district holds from one address (an IPv6 /64). A number; 24 when unset. */

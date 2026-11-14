@@ -24,6 +24,7 @@ const ERROR_TEXT: Record<Extract<RequestOutcome, { ok: false }>['error'], String
   'no-such-person': 'requestGone',
   invalid: 'requestFailed',
   words: 'wordsHint',
+  muted: 'benchMuted',
   failed: 'requestFailed',
 }
 

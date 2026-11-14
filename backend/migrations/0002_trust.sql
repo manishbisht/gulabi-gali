@@ -7,6 +7,8 @@ ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN verified_by TEXT;
 ALTER TABLE users ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN muted_until INTEGER;
+-- The admin page's "hidden" list and count, without a scan of everyone.
+CREATE INDEX users_hidden ON users(created_at) WHERE hidden = 1;
 
 -- `a` blocked `b`. A block works both ways: neither ever sees the other.
 -- `name` is `b`'s first name as it was when `a` blocked them: the block list shows only that, never live profile data.
@@ -59,3 +61,7 @@ CREATE INDEX reports_state ON reports(state, created_at);
 -- The cron's two sweeps, each over only the reports still holding evidence.
 CREATE INDEX reports_closed_evidence ON reports(state) WHERE evidence IS NOT NULL;
 CREATE INDEX reports_evidence_age ON reports(created_at) WHERE evidence IS NOT NULL;
+
+-- People who left an email while the city was full (Task 7 fills it; the admin page exports it as CSV now).
+-- Stored only to tell them there is room; no email is sent from here.
+CREATE TABLE waitlist (email TEXT PRIMARY KEY, created_at INTEGER);

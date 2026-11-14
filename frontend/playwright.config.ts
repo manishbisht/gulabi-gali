@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test'
 // The e2e sign-in switch, named once: the Worker takes it as a wrangler var, the bundle as a Vite env.
-// Neither is ever set in a shipped config; this file is the only place that turns them on.
-const DEV_AUTH = { worker: '--var DEV_AUTH:1', bundle: 'VITE_DEV_AUTH=1' }
+// Neither is ever set in a shipped config; this file is the only place that turns them on. The admin list
+// makes whoever dev-logs in as "Owner" (`dev:owner`) the moderator, for the admin page's e2e.
+const DEV_AUTH = { worker: '--var DEV_AUTH:1 --var ADMIN_USER_IDS:dev:owner', bundle: 'VITE_DEV_AUTH=1' }
 
 export default defineConfig({
   testDir: './tests',

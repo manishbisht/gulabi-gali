@@ -1072,3 +1072,10 @@ small.words-hint {
   font-size: 0.85rem;
   opacity: 0.8;
 }
+
+/* A banned account's screen: over the city and every sheet. */
+.account-closed {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}

@@ -64,8 +64,20 @@ export interface ProfileInput {
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` })
 
+/** `getMe`'s rejection for an account a moderator has banned (403 `banned`). */
+export class BannedError extends Error {
+  constructor() {
+    super('banned')
+  }
+}
+
+/** Rejects with `BannedError` for a banned account, and with an `Error` for any other failure. */
 export async function getMe(token: string, signal?: AbortSignal): Promise<Me> {
   const res = await fetchNoting(`${API_BASE}/api/me`, { headers: bearer(token), signal })
+  if (res.status === 403) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    if (body?.error === 'banned') throw new BannedError()
+  }
   if (!res.ok) throw new Error(`me ${res.status}`)
   return (await res.json()) as Me
 }
@@ -107,7 +119,8 @@ export async function getProfile(
   return (await res.json()) as FullProfile
 }
 
-type RequestError = 'invalid' | 'ghost' | 'not-verified' | 'no-such-person' | 'already' | 'paused' | 'words'
+type RequestError =
+  'invalid' | 'ghost' | 'not-verified' | 'no-such-person' | 'already' | 'paused' | 'words' | 'muted'
 export type RequestOutcome =
   { ok: true; kind: 'sent' | 'matched' } | { ok: false; error: RequestError | 'failed' }
 
@@ -119,6 +132,7 @@ const REQUEST_ERRORS: readonly string[] = [
   'already',
   'paused',
   'words',
+  'muted',
 ]
 
 /** Asks someone to meet. Never rejects: a 201 is `sent`, a crossed request's 200 is `matched`, the rest a typed error. */
@@ -214,7 +228,10 @@ export async function sendMessage(token: string, matchId: string, body: string):
     if (err === 'rate' && reply?.scope === 'ip') return { ok: false, error: 'slow' }
     return {
       ok: false,
-      error: err === 'rate' || err === 'not-found' || err === 'invalid' || err === 'words' ? err : 'failed',
+      error:
+        err === 'rate' || err === 'not-found' || err === 'invalid' || err === 'words' || err === 'muted'
+          ? err
+          : 'failed',
     }
   } catch {
     return { ok: false, error: 'failed' }

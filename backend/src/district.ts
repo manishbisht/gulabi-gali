@@ -1017,6 +1017,16 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /**
+   * RPC, for the admin page: the sockets here now, as residents (a public face: listed, or about to be once
+   * they move) and ghosts (everyone else, the hidden included). Memory only: it reads no storage.
+   */
+  counts(): { residents: number; ghosts: number } {
+    let residents = 0
+    for (const ws of this.sockets()) if (this.seat(ws).person) residents++
+    return { residents, ghosts: this.sockets().length - residents }
+  }
+
+  /**
    * What was said at `bench` in the last `TRANSCRIPT_MS`, oldest first, at most `TRANSCRIPT_LINES`: for phase
    * 3's reports, over RPC. Empty after the object has hibernated (see the class note).
    */

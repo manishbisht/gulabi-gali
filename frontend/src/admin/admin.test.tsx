@@ -1,0 +1,370 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { AuthContext, SIGNED_OUT, type AuthState } from '../auth/useAuth'
+import type { AdminHidden, AdminReport, AdminReportPage, AdminStats, AdminUser } from '../net/protocol'
+import { storage } from '../storage'
+import AdminPage from './AdminPage'
+import { STATS_MS, when } from './adminApi'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
+const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))))
+const DAY = 86_400_000
+
+const person = (id: string, name: string | null, over: Partial<AdminUser> = {}): AdminUser => ({
+  id,
+  createdAt: Date.now() - 3 * DAY,
+  verified: true,
+  verifiedBy: 'admin',
+  banned: false,
+  hidden: false,
+  mutedUntil: null,
+  openReports: 1,
+  profile: name ? { name, status: 'chai', homeArea: 'Raja Park', about: 'hi' } : null,
+  ...over,
+})
+
+const AT = Date.UTC(2026, 10, 14, 9, 30)
+const chatReport: AdminReport = {
+  id: 'r-chat',
+  kind: 'chat',
+  reason: 'hate',
+  note: 'see <b>this</b>',
+  createdAt: AT,
+  state: 'open',
+  closedAt: null,
+  unconfirmed: true,
+  reporter: person('dev:asha', 'Asha Rani'),
+  target: person('dev:ravi', 'Ravi Kumar'),
+  evidence: {
+    kind: 'lines',
+    place: 'chat',
+    missing: false,
+    lines: [{ from: 'dev:ravi', name: 'Ravi', text: '<img src=x onerror="alert(1)">', at: AT }],
+  },
+}
+const stats: AdminStats = {
+  districts: [
+    { id: 'walled-city', residents: 3, ghosts: 5 },
+    { id: 'mi-road', residents: null, ghosts: null },
+    { id: 'university', residents: 0, ghosts: 0 },
+    { id: 'malviya-nagar', residents: 1, ghosts: 2 },
+  ],
+  queue: null,
+  openReports: 1,
+  hidden: 1,
+}
+
+interface Call {
+  method: string
+  path: string
+}
+
+/** A fake Worker: `routes` answers by "METHOD path" (path with its query); everything else is a 404. */
+function stubApi(routes: Record<string, () => Response>) {
+  const calls: Call[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const u = new URL(url)
+      const call = { method: init?.method ?? 'GET', path: u.pathname + u.search }
+      calls.push(call)
+      const route = routes[`${call.method} ${call.path}`] ?? routes[`${call.method} ${u.pathname}`]
+      return route ? route() : json({ error: 'not found' }, 404)
+    }),
+  )
+  return calls
+}
+
+const ADMIN_ROUTES = (over: Record<string, () => Response> = {}) => ({
+  'GET /api/admin/stats': () => json(stats),
+  'GET /api/admin/hidden': () => json([] satisfies AdminHidden[]),
+  'GET /api/admin/reports': () => json({ reports: [chatReport], next: null } satisfies AdminReportPage),
+  ...over,
+})
+
+const signedIn: AuthState = { ...SIGNED_OUT, mode: 'dev', signedIn: true, token: async () => 'tok' }
+let roots: Root[] = []
+
+async function render(auth: AuthState = signedIn) {
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  roots.push(root)
+  await act(async () =>
+    root.render(
+      <AuthContext.Provider value={auth}>
+        <AdminPage />
+      </AuthContext.Provider>,
+    ),
+  )
+  await settle()
+  await settle()
+  return host
+}
+
+const buttons = (host: ParentNode, label: string) =>
+  [...host.querySelectorAll('button')].filter((b) => b.textContent === label)
+const click = (host: ParentNode, label: string) =>
+  act(async () => {
+    const [b] = buttons(host, label)
+    expect(b, `a '${label}' button`).toBeDefined()
+    b!.click()
+  })
+
+let visibility: DocumentVisibilityState = 'visible'
+beforeEach(() => {
+  storage.set('gg-lang', 'en')
+  visibility = 'visible'
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
+})
+afterEach(() => {
+  for (const root of roots) act(() => root.unmount())
+  roots = []
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  storage.clear()
+  document.body.innerHTML = ''
+})
+
+it('signed out: sends the owner to the city page to sign in, and never opens the sheet itself', async () => {
+  const calls = stubApi({})
+  const openSignIn = vi.fn()
+  const host = await render({ ...SIGNED_OUT, mode: 'clerk', openSignIn })
+  expect(host.textContent).toContain('Sign in on the city page first')
+  expect([...host.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toContain('#/')
+  expect(openSignIn).not.toHaveBeenCalled()
+  expect(calls).toEqual([])
+})
+
+it('Hinglish too: signed out says so in Hinglish', async () => {
+  storage.set('gg-lang', 'hi')
+  stubApi({})
+  const host = await render({ ...SIGNED_OUT, mode: 'dev' })
+  expect(host.textContent).toContain('Pehle city page pe login karo')
+})
+
+it('someone who is not an admin finds nothing here, and nothing else is asked for', async () => {
+  const calls = stubApi({})
+  const host = await render()
+  expect(host.textContent).toContain('Nothing here.')
+  expect(calls.map((c) => c.path)).toEqual(['/api/admin/stats'])
+})
+
+it('a report card shows the evidence as text, with the sender and time, and marks it unconfirmed', async () => {
+  stubApi(ADMIN_ROUTES())
+  const host = await render()
+  const card = host.querySelector('[data-report="r-chat"]')!
+  expect(card).not.toBeNull()
+  // Typed markup stays text: nothing it names is ever made.
+  expect(host.querySelector('img')).toBeNull()
+  expect(host.querySelector('b')).toBeNull()
+  expect(card.textContent).toContain('<img src=x onerror="alert(1)">')
+  expect(card.textContent).toContain('see <b>this</b>')
+  const line = card.querySelector('.admin-transcript li')!
+  expect(line.querySelector('.admin-who')!.textContent).toBe('Ravi')
+  expect(line.querySelector('time')!.textContent).toBe(when(AT))
+  expect(card.textContent).toContain("Unconfirmed: on the reporter's word only")
+  // Who filed it: their age and who vouched for them.
+  expect(card.textContent).toContain('Asha Rani')
+  expect(card.textContent).toContain('Account 3 days old')
+  expect(card.textContent).toContain('Verified by admin')
+  // The live counts, and a district that could not be asked.
+  expect(host.textContent).toContain('3 residents · 5 ghosts')
+  expect(host.textContent).toContain('unknown')
+})
+
+it('evidence lives only in the report card', async () => {
+  stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/hidden': () =>
+        json([{ user: chatReport.target, reports: [{ ...chatReport, target: undefined }] }]),
+    }),
+  )
+  const host = await render()
+  const outside = [...host.querySelectorAll('section')].filter((s) => !s.querySelector('[data-report]'))
+  for (const section of outside) expect(section.textContent).not.toContain('onerror')
+  expect(host.querySelectorAll('.admin-transcript')).toHaveLength(1)
+})
+
+it('Close + ban asks first in the sheet, then bans and closes once, however often it is tapped', async () => {
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'POST /api/admin/users/dev%3Aravi/ban': () => json({ ...chatReport.target, banned: true }),
+      'POST /api/admin/reports/r-chat/action': () => json({ id: 'r-chat', state: 'actioned', closedAt: 1 }),
+    }),
+  )
+  const host = await render()
+  await click(host, 'Close + ban')
+  const ask = host.querySelector('[role="alertdialog"]')!
+  expect(ask.textContent).toContain('Ban Ravi Kumar?')
+  expect(calls.filter((c) => c.method === 'POST')).toEqual([])
+  // A double tap on a slow network: the second finds the button disabled.
+  await act(async () => {
+    const [yes] = buttons(ask, 'Yes, ban')
+    yes!.click()
+    yes!.click()
+  })
+  await settle()
+  expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+    '/api/admin/users/dev%3Aravi/ban',
+    '/api/admin/reports/r-chat/action',
+  ])
+  expect(host.querySelector('[data-report="r-chat"]')).toBeNull()
+  expect(host.textContent).toContain('No open reports.')
+})
+
+it('Close + mute mutes and closes; Dismiss only closes', async () => {
+  const second = { ...chatReport, id: 'r-two' }
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/reports': () => json({ reports: [chatReport, second], next: null }),
+      'POST /api/admin/users/dev%3Aravi/mute': () =>
+        json({ ...chatReport.target, mutedUntil: Date.now() + DAY }),
+      'POST /api/admin/reports/r-chat/action': () => json({ id: 'r-chat', state: 'actioned', closedAt: 1 }),
+      'POST /api/admin/reports/r-two/dismiss': () => json({ id: 'r-two', state: 'dismissed', closedAt: 1 }),
+    }),
+  )
+  const host = await render()
+  await click(host.querySelector('[data-report="r-chat"]')!, 'Close + mute')
+  await settle()
+  await click(host.querySelector('[data-report="r-two"]')!, 'Dismiss')
+  await settle()
+  expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+    '/api/admin/users/dev%3Aravi/mute',
+    '/api/admin/reports/r-chat/action',
+    '/api/admin/reports/r-two/dismiss',
+  ])
+  expect(host.querySelectorAll('[data-report]')).toHaveLength(0)
+})
+
+it('a failed ban keeps the report open and says so', async () => {
+  stubApi(ADMIN_ROUTES({ 'POST /api/admin/users/dev%3Aravi/ban': () => json({}, 500) }))
+  const host = await render()
+  await click(host, 'Close + ban')
+  await click(host, 'Yes, ban')
+  await settle()
+  expect(host.querySelector('[data-report="r-chat"]')).not.toBeNull()
+  expect(host.querySelector('[role="alert"]')!.textContent).toBe("That didn't work. Try again.")
+})
+
+it('the queue loads 20 more with the cursor it was given', async () => {
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/reports?state=open&cursor=': () => json({ reports: [chatReport], next: 'CURSOR-1' }),
+      'GET /api/admin/reports?state=open&cursor=CURSOR-1': () =>
+        json({ reports: [{ ...chatReport, id: 'r-older' }], next: null }),
+    }),
+  )
+  const host = await render()
+  await click(host, 'Load more')
+  await settle()
+  expect(calls.map((c) => c.path)).toContain('/api/admin/reports?state=open&cursor=CURSOR-1')
+  expect([...host.querySelectorAll('[data-report]')].map((c) => c.getAttribute('data-report'))).toEqual([
+    'r-chat',
+    'r-older',
+  ])
+  expect(buttons(host, 'Load more')).toHaveLength(0)
+})
+
+it('auto-hidden comes first, shows how new the reporters are and who invited them, and unhides in one tap', async () => {
+  const ring = (n: number) =>
+    person(`dev:ring-${n}`, `Ring ${n}`, { createdAt: Date.now(), verifiedBy: 'dev:boss' })
+  const hidden: AdminHidden[] = [
+    {
+      user: person('dev:meera', 'Meera', { hidden: true }),
+      reports: [1, 2, 3].map((n) => ({
+        id: `h${n}`,
+        kind: 'person',
+        reason: 'spam',
+        createdAt: AT,
+        state: 'open',
+        closedAt: null,
+        unconfirmed: false,
+        reporter: ring(n),
+      })),
+    },
+  ]
+  let unhidden = false
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/hidden': () => json(unhidden ? [] : hidden),
+      'POST /api/admin/users/dev%3Ameera/unhide': () => {
+        unhidden = true
+        return json({ ...hidden[0]!.user, hidden: false })
+      },
+    }),
+  )
+  const host = await render()
+  const sections = [...host.querySelectorAll('section.admin-section')]
+  expect(sections[0]!.querySelector('h2')!.textContent).toBe('Auto-hidden')
+  const entry = sections[0]!
+  expect(entry.textContent).toContain('Meera')
+  expect(entry.textContent?.match(/Account 0 days old/g)).toHaveLength(3)
+  expect(entry.textContent?.match(/Verified by dev:boss/g)).toHaveLength(3)
+  await click(entry, 'Unhide')
+  await settle()
+  expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+    '/api/admin/users/dev%3Ameera/unhide',
+  ])
+  expect(entry.textContent).toContain('Nobody is hidden.')
+})
+
+it('looks someone up and acts on them; a ban asks first', async () => {
+  const lalita = person('dev:lalita', 'Lalita', { verified: false, verifiedBy: null })
+  const calls = stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/users?q=Lal': () => json([lalita]),
+      'POST /api/admin/users/dev%3Alalita/verify': () =>
+        json({ ...lalita, verified: true, verifiedBy: 'admin' }),
+      'POST /api/admin/users/dev%3Alalita/ban': () => json({ ...lalita, verified: true, banned: true }),
+    }),
+  )
+  const host = await render()
+  const lookup = [...host.querySelectorAll('section')].find((s) => s.textContent?.includes('Find someone'))!
+  const input = lookup.querySelector('input')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Lal')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await click(lookup, 'Search')
+  await settle()
+  expect(lookup.textContent).toContain('Not verified')
+  await click(lookup, 'Verify')
+  await settle()
+  expect(lookup.textContent).toContain('Verified by admin')
+  expect(buttons(lookup, 'Verify')).toHaveLength(0)
+  await click(lookup, 'Ban')
+  expect(calls.some((c) => c.path.endsWith('/ban'))).toBe(false)
+  await click(lookup, 'Yes, ban')
+  await settle()
+  expect(lookup.textContent).toContain('Banned')
+  expect(buttons(lookup, 'Unban')).toHaveLength(1)
+})
+
+it(`stats are asked for every ${STATS_MS / 1000} s, and only while the page is in view`, async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  const calls = stubApi(ADMIN_ROUTES())
+  await render()
+  const asked = () => calls.filter((c) => c.path === '/api/admin/stats').length
+  expect(asked()).toBe(1)
+  await act(async () => void vi.advanceTimersByTime(STATS_MS))
+  await settle()
+  expect(asked()).toBe(2)
+  // Out of view: nothing, however long.
+  visibility = 'hidden'
+  await act(async () => void document.dispatchEvent(new Event('visibilitychange')))
+  await act(async () => void vi.advanceTimersByTime(STATS_MS * 4))
+  await settle()
+  expect(asked()).toBe(2)
+  // Back in view: asked at once, then on the beat again.
+  visibility = 'visible'
+  await act(async () => void document.dispatchEvent(new Event('visibilitychange')))
+  await settle()
+  expect(asked()).toBe(3)
+  await act(async () => void vi.advanceTimersByTime(STATS_MS))
+  await settle()
+  expect(asked()).toBe(4)
+})

@@ -203,7 +203,7 @@ export interface MatchView {
  * `not-found` covers a match that does not exist and one the asker is not (or no longer may be) in alike.
  * `ghost`: only a resident has a list of matches.
  */
-export type ChatError = 'invalid' | 'rate' | 'not-found' | 'ghost' | 'words'
+export type ChatError = 'invalid' | 'rate' | 'not-found' | 'ghost' | 'words' | 'muted'
 
 /**
  * What a person's inbox socket hears: a nudge to refetch, never the content itself (a message notice names
@@ -249,4 +249,86 @@ export interface ReportInput {
 export interface ReportResult {
   autoHidden: boolean
   evidence?: 'missing'
+}
+
+/*
+ * The owner's moderation console (`/api/admin/*`, admins only; everyone else gets a 404). Nothing here is
+ * ever sent to anyone but an admin.
+ */
+
+/** A person as the moderator sees them: their account, their trust state and their profile as it is now. */
+export interface AdminUser {
+  id: string
+  /** Null for an id with no account row (a deleted reporter). */
+  createdAt: number | null
+  verified: boolean
+  /** Who vouched for them: the inviter's id, `admin`, or null. */
+  verifiedBy: string | null
+  banned: boolean
+  hidden: boolean
+  /** Muted until then (ms), or null. */
+  mutedUntil: number | null
+  /** Open reports about them. */
+  openReports: number
+  profile: { name: string; status: string; homeArea: string; about: string } | null
+}
+
+/** A bench line or chat message in a report: the sender's first name, the time (ms) and the exact text. */
+export interface AdminLine {
+  from: string
+  name: string
+  text: string
+  at: number
+}
+
+/**
+ * What a report carried, as the server put it together: a profile snapshot, or a bench's or chat's lines
+ * (`missing`: the bench's record had gone by the time it was reported). Null once the cron has cleared it.
+ */
+export type AdminEvidence =
+  | { kind: 'profile'; name: string; status: string; homeArea: string; about: string }
+  | { kind: 'lines'; place: 'bench' | 'chat'; lines: AdminLine[]; missing: boolean }
+
+export type ReportState = 'open' | 'actioned' | 'dismissed'
+
+export interface AdminReport {
+  id: string
+  kind: ReportKind | 'poster'
+  reason: ReportReason
+  note: string
+  createdAt: number
+  state: ReportState
+  closedAt: number | null
+  /** The server could not confirm the person was there: the report rests on the reporter's word. */
+  unconfirmed: boolean
+  reporter: AdminUser
+  target: AdminUser
+  evidence: AdminEvidence | null
+}
+
+/** `GET /api/admin/reports`: 20 at a time; `next` is an opaque cursor for the page after, or null. */
+export interface AdminReportPage {
+  reports: AdminReport[]
+  next: string | null
+}
+
+/** `POST /api/admin/reports/:id/{dismiss|action}`: the report's state, as it now is. */
+export interface AdminReportClosed {
+  id: string
+  state: ReportState
+  closedAt: number | null
+}
+
+/** Someone hidden (by auto-hide or an admin), with the reports about them and who filed them. No evidence. */
+export interface AdminHidden {
+  user: AdminUser
+  reports: Omit<AdminReport, 'target' | 'evidence' | 'note'>[]
+}
+
+/** `GET /api/admin/stats`. A district that could not be asked has null counts; `queue` is null until the gate exists. */
+export interface AdminStats {
+  districts: { id: DistrictId; residents: number | null; ghosts: number | null }[]
+  queue: number | null
+  openReports: number
+  hidden: number
 }

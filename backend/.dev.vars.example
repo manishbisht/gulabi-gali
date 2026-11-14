@@ -4,3 +4,6 @@ DEV_AUTH_SECRET=change-me-locally
 # Real sign-in (leave unset in dev to use /api/dev/login):
 # CLERK_SECRET_KEY=sk_test_...
 # CLERK_JWT_KEY="-----BEGIN PUBLIC KEY-----..."
+# Who may open #/admin: full user ids, comma-separated (in production a secret, e.g. clerk:user_...).
+# Locally, dev-log in as "Owner" to be dev:owner.
+ADMIN_USER_IDS=dev:owner
