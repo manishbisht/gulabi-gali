@@ -676,8 +676,8 @@ it('the walls: fetched on each welcome as this person, kept current by the socke
 
 it('at the wheel a tap opens no card, E gets out, and nothing else handles E', async () => {
   const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
-  const track = vi.fn(() => null)
-  const trackStation = vi.fn(() => false)
+  const track = vi.fn<SessionHooks['track']>(() => null)
+  const trackStation = vi.fn<SessionHooks['trackStation']>(() => false)
   const live = openLive(async () => null, { drive, track, trackStation })
   loads[0]!.resolve({
     ...fakeDistrict(walledCity),
