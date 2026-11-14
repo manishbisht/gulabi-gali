@@ -119,6 +119,7 @@ export default function App() {
     failed: travelFailed,
     ride,
     skipRide,
+    cancelRide,
     nearStation,
     sheetOpen,
     openSheet,
@@ -621,7 +622,7 @@ export default function App() {
         />
       )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
-      {ride && <MetroRide {...ride} lang={lang} onSkip={skipRide} />}
+      {ride && <MetroRide {...ride} lang={lang} onSkip={skipRide} onBack={cancelRide} />}
       {closed}
     </>
   )

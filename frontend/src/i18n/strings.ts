@@ -53,6 +53,11 @@ export const STRINGS = {
     en: 'Doors will open on the right. Mind the gap as you step out.',
   },
   rideWaiting: { hi: 'Agle station ka intezaar…', en: 'Waiting at the next station…' },
+  rideLabel: {
+    hi: 'Metro safar — chhodne ke liye tap karo',
+    en: 'Metro ride — tap to skip',
+  },
+  rideBack: { hi: 'Wapas jao', en: 'Go back' },
   rideSkip: { hi: 'Chhodo, tap karo', en: 'Tap to skip' },
   signInButton: { hi: 'Dikhna hai? Login karo', en: 'Want to be seen? Sign in' },
   signInTitle: { hi: 'Gali mein apni jagah banao', en: 'Take your place in the lane' },

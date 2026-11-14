@@ -24,7 +24,7 @@ export function savedDistrict(): DistrictId {
  * Loads `id` and, once it is in, swaps it for the district the player is in, standing them at its
  * station. Rejects, with the old district still running, if `id` cannot be loaded.
  */
-export type Swap = (id: DistrictId) => Promise<void>
+export type Swap = (id: DistrictId, signal?: AbortSignal) => Promise<void>
 
 /**
  * Metro travel: whether the player stands by the station, the sheet of destinations, and the trip
@@ -38,9 +38,16 @@ export function useTravel() {
   const [failed, setFailed] = useState<DistrictId | null>(null)
   /** The ride on screen, if any; `waiting` once it has run out before the district has arrived. */
   const [ride, setRide] = useState<{ from: DistrictId; to: DistrictId; waiting: boolean } | null>(null)
-  const skipRef = useRef<() => void>(() => {})
   const failedTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  useEffect(() => () => clearTimeout(failedTimer.current), [])
+  const skipRef = useRef<() => void>(() => {})
+  const abort = useRef<AbortController | null>(null)
+  useEffect(
+    () => () => {
+      clearTimeout(failedTimer.current)
+      skipRef.current() // the ride's own timer goes with the hook
+    },
+    [],
+  )
   const swap = useRef<Swap | null>(null)
   const busy = useRef(false)
   const nearRef = useRef(false)
@@ -76,9 +83,10 @@ export function useTravel() {
         const coach = playRide(from, id)
         skipRef.current = coach.skip
         setRide({ from, to: id, waiting: false })
-        const loading = go(id)
+        const trip = (abort.current = new AbortController())
+        const loading = go(id, trip.signal)
         // remembered the moment the district is in, so a reload mid-ride reopens there
-        loading.then(() => bound() && storage.set(KEY, id), coach.skip)
+        loading.then(() => bound() && !trip.signal.aborted && storage.set(KEY, id), coach.skip)
         await coach.done
         if (!bound()) return
         let arrived = false
@@ -89,7 +97,13 @@ export function useTravel() {
         // out of ride before the district is in: keep the coach, with a line saying so
         await Promise.resolve()
         if (!arrived) setRide({ from, to: id, waiting: true })
-        await loading
+        // "go back" aborts: the district that arrives late is thrown away and the failure path runs
+        await Promise.race([
+          loading,
+          new Promise<never>((_, no) =>
+            trip.signal.addEventListener('abort', () => no(new Error('cancelled')), { once: true }),
+          ),
+        ])
         if (bound()) chime()
       } catch {
         if (!bound()) return
@@ -99,6 +113,7 @@ export function useTravel() {
       } finally {
         busy.current = false
         skipRef.current = () => {}
+        abort.current = null
         setRide(null)
         setFading(false)
       }
@@ -125,12 +140,17 @@ export function useTravel() {
   )
 
   const skipRide = useCallback(() => skipRef.current(), [])
+  const cancelRide = useCallback(() => {
+    abort.current?.abort()
+    skipRef.current()
+  }, [])
 
   return {
     fading,
     failed,
     ride,
     skipRide,
+    cancelRide,
     nearStation,
     sheetOpen,
     openSheet,

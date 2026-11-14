@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { storage } from '../storage'
-import { closeAudio, HONK_GAP_MS, honk, resetHorn, setSoundOn, soundOn, unlockAudio } from './horn'
+import { chime, closeAudio, HONK_GAP_MS, honk, resetHorn, setSoundOn, soundOn, unlockAudio } from './horn'
 
 let made = 0
 let oscillators = 0
@@ -93,4 +93,17 @@ it("wakes a context Safari left 'interrupted', on unlock and on a honk", () => {
   c.state = 'running'
   honk(2000)
   expect(c.resume).toHaveBeenCalledTimes(3) // running: left alone
+})
+
+it('a chime never makes an audio context, and only sounds with sound on and a running one', () => {
+  expect(chime()).toBe(false)
+  expect(made).toBe(0)
+  honk(1000) // a honk makes the context, and resumes it
+  const before = oscillators
+  expect(made).toBe(1)
+  expect(chime()).toBe(true)
+  expect(oscillators).toBeGreaterThan(before)
+  expect(made).toBe(1)
+  setSoundOn(false)
+  expect(chime()).toBe(false)
 })

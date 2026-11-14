@@ -52,7 +52,7 @@ describe('travelTo', () => {
     await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => done)
     expect(travel.ride).toBeNull()
-    expect(swap).toHaveBeenCalledWith('mi-road')
+    expect(swap).toHaveBeenCalledWith('mi-road', expect.any(AbortSignal))
     expect(localStorage.getItem('gg-district')).toBe('mi-road')
     expect(travel.fading).toBe(false)
   })
@@ -72,7 +72,7 @@ describe('travelTo', () => {
     await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => first)
     expect(swap).toHaveBeenCalledTimes(1)
-    expect(swap).toHaveBeenCalledWith('university')
+    expect(swap).toHaveBeenCalledWith('university', expect.any(AbortSignal))
     expect(localStorage.getItem('gg-district')).toBe('university')
     // once there, the next trip goes
     const next = travel.travelTo('mi-road')
@@ -80,7 +80,7 @@ describe('travelTo', () => {
     arrive()
     await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => next)
-    expect(swap).toHaveBeenLastCalledWith('mi-road')
+    expect(swap).toHaveBeenLastCalledWith('mi-road', expect.any(AbortSignal))
   })
 
   it('remembers nothing when the new district fails to load, says so, and can try again', async () => {
@@ -118,6 +118,24 @@ it('remembers nothing when the city closes mid-trip', async () => {
   await act(() => trip)
   expect(localStorage.getItem('gg-district')).toBeNull()
   expect(travel.failed).toBeNull()
+  expect(travel.ride).toBeNull()
+})
+
+it('unmounting mid-ride stops the ride clock', async () => {
+  vi.useFakeTimers()
+  const out = {} as ReturnType<typeof useTravel>
+  function Probe() {
+    Object.assign(out, useTravel())
+    return null
+  }
+  const root = createRoot(document.createElement('div'))
+  act(() => root.render(<Probe />))
+  out.bind(() => new Promise<void>(() => {}))
+  act(() => void out.travelTo('university'))
+  await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+  expect(vi.getTimerCount()).toBeGreaterThan(0) // the ride's clock
+  act(() => root.unmount())
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 describe('the ride', () => {
@@ -129,7 +147,7 @@ describe('the ride', () => {
     let trip: Promise<void>
     act(() => void (trip = travel.travelTo('mi-road', 'walled-city')))
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
-    expect(swap).toHaveBeenCalledWith('mi-road') // loading starts with the ride, not after it
+    expect(swap).toHaveBeenCalledWith('mi-road', expect.any(AbortSignal)) // loading starts with the ride, not after it
     expect(travel.ride?.waiting).toBe(false)
     act(() => travel.skipRide())
     await act(() => trip)
@@ -154,6 +172,29 @@ describe('the ride', () => {
     await act(() => trip)
     expect(travel.ride).toBeNull()
     expect(localStorage.getItem('gg-district')).toBe('university')
+  })
+
+  it('going back from a hung load keeps the old district, saves nothing and says so', async () => {
+    vi.useFakeTimers()
+    const travel = mount()
+    let signal: AbortSignal | undefined
+    let arrive = () => {}
+    travel.bind((_id, s) => {
+      signal = s
+      return new Promise<void>((r) => (arrive = r))
+    })
+    let trip: Promise<void>
+    act(() => void (trip = travel.travelTo('university', 'walled-city')))
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS + RIDE_MS))
+    expect(travel.ride?.waiting).toBe(true)
+    act(() => travel.cancelRide())
+    await act(() => trip)
+    expect(signal?.aborted).toBe(true)
+    expect(travel.ride).toBeNull()
+    expect(travel.failed).toBe('university')
+    arrive() // too late: the session throws the district away
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(localStorage.getItem('gg-district')).toBeNull()
   })
 
   it('a failed load ends the ride at once and says so', async () => {

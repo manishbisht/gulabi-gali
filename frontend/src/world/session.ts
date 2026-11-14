@@ -125,7 +125,7 @@ export interface CitySession {
    * Loads `id`, then (only once it is in) leaves the current district for it, standing the player at its
    * station. If it cannot be loaded, the current district carries on and this rejects.
    */
-  travelTo(id: DistrictId): Promise<void>
+  travelTo(id: DistrictId, signal?: AbortSignal): Promise<void>
   /** After a district's systems are up and the player stands in it. Returns an unsubscribe. */
   onEnter(cb: (d: District) => void): () => void
   /** Before a district is torn down (by travel or dispose), while it is still standing. */
@@ -202,9 +202,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     was.district.dispose()
   }
 
-  async function enter(id: DistrictId, at: 'spawn' | 'station'): Promise<void> {
+  async function enter(id: DistrictId, at: 'spawn' | 'station', signal?: AbortSignal): Promise<void> {
     const district = await loadDistrict(id).catch(() => null)
     if (disposed) return district?.dispose()
+    if (signal?.aborted && district) {
+      // the rider gave up waiting: the district they left stays
+      district.dispose()
+      throw new Error(`Trip to ${id} cancelled`)
+    }
     if (!district) {
       if (at === 'spawn') hooks.place(null)
       throw new Error(`Could not load ${id}`)
@@ -336,7 +341,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     district: () => here?.district ?? null,
     player: () => here?.player ?? null,
     setLook: (look) => here?.player.setLook(look),
-    travelTo(id) {
+    travelTo(id, signal) {
       // the metro takes a standing walker: get up from a bench, and out of an auto (a boxed-in second try
       // sets the driver down where the auto stands)
       here?.sitting?.stand()
@@ -345,7 +350,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         driving.exit()
         if (driving.driving()) driving.exit()
       }
-      return enter(id, 'station')
+      return enter(id, 'station', signal)
     },
     onEnter(cb) {
       entered = [...entered, cb]
