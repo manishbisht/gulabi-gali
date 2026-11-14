@@ -140,10 +140,19 @@ export class GateDO extends DurableObject<Env> {
    * `userId`'s last resident (or waiting) socket in `district` closed. Their slot there goes; if it was their
    * last, it is held for `HOLD_MS` and then freed. Someone waiting keeps their place, away, for
    * `QUEUE_DROP_MS`. Calling it again changes nothing.
+   *
+   * `forget`: they are no longer a resident at all (banned, hidden). No hold is kept, and they leave the line at
+   * once, so the slot is free now and everyone behind them moves up now.
    */
-  release(userId: string, district: string): void {
+  release(userId: string, district: string, forget = false): void {
     const now = this.clock()
     const gone = this.run('DELETE FROM slots WHERE user_id = ? AND district = ?', userId, district)
+    if (forget) {
+      this.sql.exec("DELETE FROM slots WHERE user_id = ? AND district = ''", userId)
+      if (this.run('DELETE FROM queue WHERE user_id = ?', userId) > 0) this.ctx.waitUntil(this.tellPlaces())
+      this.ctx.waitUntil(this.schedule())
+      return
+    }
     if (gone > 0 && !this.holds(userId))
       this.sql.exec("INSERT INTO slots (user_id, district, seen) VALUES (?, '', ?)", userId, now)
     this.sql.exec(
@@ -357,16 +366,22 @@ export function cleanEmail(raw: unknown): string | null {
 
 /**
  * `POST /api/waitlist {email}`: no sign-in (someone turned away as a ghost may have no account). Stored once;
- * listed already or not, the answer is the same 204, so it never says who is on the list. No email is sent:
- * the owner tells people from the admin page's CSV.
+ * listed already or not, a well-formed address gets the same 204 and a malformed one 400, so it never says who
+ * is on the list (the controller's Task 7 fix-round-1 ruling, amending the phase 3 plan). A D1 failure is 503
+ * `unavailable`, never an unhandled 500. No email is sent: the owner tells people from the admin page's CSV.
  */
 export async function joinWaitlist(env: Env, request: Request, raw: unknown): Promise<Response> {
   const slow = await ipWindowLimit(env, request, WAITLIST_IP_LIMIT)
   if (slow) return slow
   const email = cleanEmail((raw as { email?: unknown } | null)?.email)
   if (!email) return Response.json({ error: 'invalid' }, { status: 400 })
-  await env.DB.prepare('INSERT OR IGNORE INTO waitlist (email, created_at) VALUES (?, ?)')
-    .bind(email, Date.now())
-    .run()
+  try {
+    await env.DB.prepare('INSERT OR IGNORE INTO waitlist (email, created_at) VALUES (?, ?)')
+      .bind(email, Date.now())
+      .run()
+  } catch (err) {
+    console.error('waitlist: insert failed', err)
+    return Response.json({ error: 'unavailable' }, { status: 503 })
+  }
   return new Response(null, { status: 204 })
 }

@@ -597,17 +597,24 @@ export class DistrictDO extends DurableObject<Env> {
     }
   }
 
-  /** Tells the gate `userId` holds nothing here any more, unless another socket of theirs here still does. */
-  private releaseIfGone(userId: string, district: DistrictId): void {
+  /** Releases still on their way to the gate. A test waits for them to land before its file ends. */
+  private releasing = new Set<Promise<void>>()
+
+  /**
+   * Tells the gate `userId` holds nothing here any more, unless another socket of theirs here still does.
+   * `forget`: they are no longer a resident at all (banned, hidden), so no hold is kept and no place in line.
+   */
+  private releaseIfGone(userId: string, district: DistrictId, forget = false): void {
     for (const ws of this.sockets()) {
       const seat = this.seat(ws)
       if (seat.userId === userId && (seat.person || seat.wait)) return
     }
-    this.ctx.waitUntil(
-      this.gate()
-        .release(userId, district)
-        .catch((err: unknown) => console.error('district: gate release failed', err)),
-    )
+    const done: Promise<void> = this.gate()
+      .release(userId, district, forget)
+      .catch((err: unknown) => console.error('district: gate release failed', err))
+      .finally(() => this.releasing.delete(done))
+    this.releasing.add(done)
+    this.ctx.waitUntil(done)
   }
 
   /**
@@ -795,7 +802,7 @@ export class DistrictDO extends DurableObject<Env> {
     this.setTrust(userId, t, mine.length > 0)
     if (!mine.length) return
     if (t.banned) {
-      for (const ws of mine) this.drop(ws, LIVE_CLOSE.banned, 'banned')
+      for (const ws of mine) this.drop(ws, LIVE_CLOSE.banned, 'banned', true)
       return
     }
     this.reblock(userId, mine, before, t)
@@ -876,7 +883,7 @@ export class DistrictDO extends DurableObject<Env> {
       // In line: a new face is kept for when they get in. Hidden, they drop out of the running, and are told.
       if (person) return this.write(ws, { ...seat, wait: person })
       this.write(ws, { ...seat, wait: null, place: undefined })
-      this.releaseIfGone(userId, seat.district)
+      this.releaseIfGone(userId, seat.district, true)
       return this.send(ws, { t: 'welcome', you: { id: userId, visible: false }, people: this.people(userId) })
     }
     if (!person) {
@@ -884,7 +891,7 @@ export class DistrictDO extends DurableObject<Env> {
       // Off the map, and up from any bench: a ghost from here on.
       if (seat.shown) this.broadcast({ t: 'leave', id: userId }, userId, ws)
       this.write(ws, { ...seat, person: null, shown: false, bench: null })
-      this.releaseIfGone(userId, seat.district)
+      this.releaseIfGone(userId, seat.district, true)
       if (seat.bench) {
         this.noteSat(seat.bench.id, userId, this.clock())
         this.tellBench(seat.bench.id)
@@ -1261,8 +1268,9 @@ export class DistrictDO extends DurableObject<Env> {
     if (seat.bad >= MAX_BAD_FRAMES) this.drop(ws, LIVE_CLOSE.invalid, 'invalid')
   }
 
-  private drop(ws: WebSocket, code: number, reason: string): void {
-    this.depart(ws)
+  /** Closes `ws` with `code`; `forget` as for `depart`. */
+  private drop(ws: WebSocket, code: number, reason: string, forget = false): void {
+    this.depart(ws, forget)
     try {
       ws.close(code, reason)
     } catch {
@@ -1272,14 +1280,15 @@ export class DistrictDO extends DurableObject<Env> {
 
   /**
    * A socket is done: forget its moves, mark it closed (in its attachment too, so a wake cannot bring it back),
-   * stand it up from its bench and, if it was listed, tell everyone it left. Runs once per socket.
+   * stand it up from its bench and, if it was listed, tell everyone it left. Runs once per socket. `forget`: the
+   * person is banned, so the gate keeps neither their slot nor their place in line (see `releaseIfGone`).
    */
-  private depart(ws: WebSocket): void {
+  private depart(ws: WebSocket, forget = false): void {
     const seat = this.seat(ws)
     if (seat.closed) return
     this.retire(ws)
     if (seat.shown && seat.userId) this.broadcast({ t: 'leave', id: seat.userId }, seat.userId)
-    if (seat.userId && (seat.person || seat.wait)) this.releaseIfGone(seat.userId, seat.district)
+    if (seat.userId && (seat.person || seat.wait)) this.releaseIfGone(seat.userId, seat.district, forget)
     // Their last socket here: their trust state goes with it (the others' sets keep naming them, as they should).
     if (seat.userId && !this.sockets().some((s) => this.seat(s).userId === seat.userId))
       this.trust.delete(seat.userId)

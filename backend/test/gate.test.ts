@@ -8,10 +8,11 @@ import {
 } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
-import { GATE_NAME, HOLD_MS, QUEUE_DROP_MS, STALE_MS, type GateDO } from '../src/gate'
+import { GATE_NAME, HOLD_MS, joinWaitlist, QUEUE_DROP_MS, STALE_MS, type GateDO } from '../src/gate'
+import worker from '../src/index'
 import type { AdminStats, DistrictId } from '../src/protocol'
 import { refreshUser } from '../src/refresh'
-import { api, closeAll, devId, live, login, resident, WAIT, type LiveClient } from './helpers'
+import { api, devId, live, login, resident, settle, WAIT, type LiveClient } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const API = 'https://api.test'
@@ -23,7 +24,8 @@ beforeAll(async () => {
 })
 
 afterEach(async () => {
-  closeAll()
+  // Every release lands before the gate is emptied for the next test.
+  await settle()
   await gate().configure({ maxLive: null, clear: true })
 })
 
@@ -290,7 +292,7 @@ describe('the gate', () => {
       visible: false,
       queued: 1,
     })
-    // Hidden again while waiting: out of the running, and told so.
+    // Hidden again while waiting: out of the line at once, and told so.
     await testEnv.DB.prepare('UPDATE users SET hidden = 1 WHERE id = ?').bind(devId('Unhide Hina')).run()
     const again = h.mark()
     await refreshUser(testEnv, devId('Unhide Hina'), 'hide')
@@ -298,7 +300,7 @@ describe('the gate', () => {
       id: devId('Unhide Hina'),
       visible: false,
     })
-    await vi.waitFor(async () => expect(await inLine(devId('Unhide Hina'))).toBe(false), WAIT)
+    await vi.waitFor(async () => expect(await inLine(devId('Unhide Hina'))).toBeNull(), WAIT)
   })
 
   it('admin stats show who is live and how many wait', async () => {
@@ -310,6 +312,104 @@ describe('the gate', () => {
     expect(stats.live).toBe(1)
     expect(stats.queue).toBe(1)
   })
+})
+
+describe('a ban or a hide frees the slot and leaves the line at once', () => {
+  const sql = (q: string, id: string) => testEnv.DB.prepare(q).bind(id).run()
+
+  for (const [why, set] of [
+    ['ban', 'UPDATE users SET banned = 1 WHERE id = ?'],
+    ['hide', 'UPDATE users SET hidden = 1 WHERE id = ?'],
+  ] as const) {
+    it(`${why}: the resident's slot is free with no hold, and the first in line gets in`, async () => {
+      await cap(1)
+      const name = `Out ${why} Omkar`
+      const a = await walker(name, 'walled-city')
+      const b = await walker(`Out ${why} Bela`, 'walled-city')
+      const c = await walker(`Out ${why} Chand`, 'walled-city')
+      expect((await b.next('welcome')).you.queued).toBe(1)
+      expect((await c.next('welcome')).you.queued).toBe(2)
+      const bFrom = b.mark()
+      await sql(set, devId(name))
+      await refreshUser(testEnv, devId(name), why)
+      if (why === 'ban') await vi.waitFor(() => expect(a.closes).toEqual([4004]), WAIT)
+      else expect((await a.next('welcome', (m) => !m.you.visible)).you.visible).toBe(false)
+      // No hold: the slot is gone at once, and the gate lets the next one in without waiting it out.
+      await vi.waitFor(async () => expect(await slotsOf(devId(name))).toEqual([]), WAIT)
+      expect(await gate().count()).toBe(0)
+      await after(1)
+      expect((await b.next('welcome', undefined, bFrom)).you.visible).toBe(true)
+      expect(await c.next('queued')).toEqual({ t: 'queued', position: 1 })
+      expect(await gate().stats()).toEqual({ live: 1, queue: 1 })
+    })
+  }
+
+  it('hiding or banning someone waiting takes them out of the line, and those behind move up', async () => {
+    await cap(1)
+    await walker('Line Out Anu', 'mi-road')
+    const b = await walker('Line Out Bina', 'mi-road')
+    const c = await walker('Line Out Chetan', 'mi-road')
+    const d = await walker('Line Out Diya', 'mi-road')
+    expect((await d.next('welcome')).you.queued).toBe(3)
+    await sql('UPDATE users SET hidden = 1 WHERE id = ?', devId('Line Out Bina'))
+    await refreshUser(testEnv, devId('Line Out Bina'), 'hide')
+    expect((await b.next('welcome', (m) => m.you.queued === undefined)).you).toEqual({
+      id: devId('Line Out Bina'),
+      visible: false,
+    })
+    // At once, not ten minutes on.
+    await vi.waitFor(async () => expect(await inLine(devId('Line Out Bina'))).toBeNull(), WAIT)
+    expect(await c.next('queued')).toEqual({ t: 'queued', position: 1 })
+    expect(await d.next('queued')).toEqual({ t: 'queued', position: 2 })
+    const dFrom = d.mark()
+    await sql('UPDATE users SET banned = 1 WHERE id = ?', devId('Line Out Chetan'))
+    await refreshUser(testEnv, devId('Line Out Chetan'), 'ban')
+    await vi.waitFor(() => expect(c.closes).toEqual([4004]), WAIT)
+    await vi.waitFor(async () => expect(await inLine(devId('Line Out Chetan'))).toBeNull(), WAIT)
+    expect(await d.next('queued', undefined, dFrom)).toEqual({ t: 'queued', position: 1 })
+    expect(await gate().stats()).toEqual({ live: 1, queue: 1 })
+  })
+})
+
+describe('the dev routes outside dev', () => {
+  for (const DEV_AUTH of [undefined, '0', 'true']) {
+    it(`DEV_AUTH=${String(DEV_AUTH)}: /api/dev/* is a 404 and changes nothing`, async () => {
+      await cap(1)
+      await walker(`Dev Off ${String(DEV_AUTH)} Anu`, 'university')
+      await walker(`Dev Off ${String(DEV_AUTH)} Bina`, 'university')
+      const before = await gate().stats()
+      expect(before).toEqual({ live: 1, queue: 1 })
+      const off = { ...testEnv, DEV_AUTH } as unknown as Env
+      const post = (path: string, body: unknown) =>
+        worker.fetch(
+          new Request(`${API}${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          }),
+          off,
+        )
+      const id = `dev:off-${String(DEV_AUTH)}`
+      for (const [path, body] of [
+        ['/api/dev/gate', { maxLive: 50, clear: true }],
+        ['/api/dev/login', { name: 'Off Login' }],
+        ['/api/dev/verify', { userId: id }],
+      ] as const) {
+        const res = await post(path, body)
+        expect(res.status, path).toBe(404)
+        expect(await res.json()).toEqual({ error: 'not found' })
+      }
+      // The cap (1) and the line are as they were: a third resident still waits.
+      expect(await gate().stats()).toEqual(before)
+      const third = await live('university', { token: await resident(`Dev Off ${String(DEV_AUTH)} Chand`) })
+      expect((await third.next('welcome')).you).toMatchObject({ visible: false, queued: 2 })
+      // Nobody made or verified.
+      expect(await testEnv.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind(id).first()).toBeNull()
+      expect(
+        await testEnv.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind('dev:off-login').first(),
+      ).toBeNull()
+    })
+  }
 })
 
 describe('POST /api/waitlist', () => {
@@ -349,6 +449,26 @@ describe('POST /api/waitlist', () => {
     }>()
     expect(rows.results.map((r) => r.email)).toEqual(['meera.jain+gg@example.in'])
     expect(rows.results[0]!.created_at).toBeGreaterThan(Date.now() - 60_000)
+  })
+
+  it('a database failure is 503 unavailable, not a 500', async () => {
+    const down = {
+      ...testEnv,
+      DB: {
+        prepare: () => ({
+          bind: () => ({ run: () => Promise.reject(new Error('D1 is down')) }),
+        }),
+      },
+    } as unknown as Env
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const res = await joinWaitlist(down, new Request(`${API}/api/waitlist`), { email: 'down@example.in' })
+      expect(res.status).toBe(503)
+      expect(await res.json()).toEqual({ error: 'unavailable' })
+      expect(spy).toHaveBeenCalledWith('waitlist: insert failed', expect.any(Error))
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('no sign-in needed, and five an hour per address', async () => {

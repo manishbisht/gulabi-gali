@@ -1,5 +1,7 @@
-import { env, SELF } from 'cloudflare:test'
+import { env, runInDurableObject, SELF } from 'cloudflare:test'
 import { afterAll, expect, vi } from 'vitest'
+import { DISTRICT_IDS } from '../src/district'
+import type { Env } from '../src/env'
 import type { ClientMsg, DistrictId, InboxMsg, ServerMsg } from '../src/protocol'
 
 /** Long enough for a 100 ms move batch under a busy suite, short enough to fail fast. */
@@ -57,6 +59,7 @@ export function openLive(
   district: string,
   opts: { token?: string; headers?: Record<string, string> } = {},
 ): Promise<Response> {
+  touched = true
   const query = opts.token ? `?token=${encodeURIComponent(opts.token)}` : ''
   return SELF.fetch(`${API}/api/districts/${district}/live${query}`, {
     headers: { Upgrade: 'websocket', ...opts.headers },
@@ -136,18 +139,50 @@ export function closeAll(): void {
   for (const client of open.splice(0)) client.close()
 }
 
-/** How long a file's end waits for the districts to finish with the sockets its last test closed. */
-const SETTLE_MS = 250
+/** Whether this file has opened a district socket (see `settle`). */
+let touched = false
 
 /**
- * A socket closed by the last test reaches its district, and that district's release reaches the gate, after
- * the test has finished; an object woken while the file's runtime shuts down is reported as an unhandled
- * error. So every file that uses these helpers waits a moment at its end.
+ * Closes every socket and waits until the districts are done with them: no district still holds a resident or
+ * waiting socket, and none has a release on its way to the gate. A socket closed by a file's last test reaches
+ * its district, and that district's release reaches the gate, after the test has finished; an object woken while
+ * the file's runtime shuts down is reported as an unhandled error. So every file that opened a district socket
+ * settles at its end.
  */
-afterAll(async () => {
+export async function settle(): Promise<void> {
   closeAll()
-  await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
-})
+  if (!touched) return
+  const districts = (env as unknown as Env).DISTRICT
+  try {
+    await vi.waitFor(
+      async () => {
+        for (const id of DISTRICT_IDS) {
+          const busy = await runInDurableObject(
+            districts.get(districts.idFromName(id)),
+            (instance, state) => {
+              const releasing = (instance as unknown as { releasing: Set<unknown> }).releasing.size
+              const holding = state.getWebSockets().filter((ws) => {
+                const seat = ws.deserializeAttachment() as {
+                  closed?: boolean
+                  person?: unknown
+                  wait?: unknown
+                } | null
+                return seat !== null && !seat.closed && (seat.person || seat.wait)
+              }).length
+              return releasing + holding
+            },
+          )
+          expect(busy, id).toBe(0)
+        }
+      },
+      { timeout: 3000, interval: 20 },
+    )
+  } catch {
+    // A test that leaves a resident's socket open on purpose never settles: its file ends regardless.
+  }
+}
+
+afterAll(settle)
 
 export function openInbox(
   opts: { token?: string; headers?: Record<string, string> } = {},
