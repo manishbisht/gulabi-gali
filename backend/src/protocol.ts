@@ -73,6 +73,7 @@ export const HERE_FOR: readonly HereFor[] = ['friends', 'study', 'work', 'art']
 /** All anyone but the owner may learn about a person on the map. Never add private fields here. */
 export interface PublicPerson {
   id: string
+  /** The first name only. A signed-in viewer's `FullProfile` carries the whole name. */
   name: string
   look: AvatarLookWire
   status: string

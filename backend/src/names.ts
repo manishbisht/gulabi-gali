@@ -16,14 +16,14 @@ const JOINERS = /[‌‍]/
 const graphemes =
   typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null
 
-/** Whole characters as a reader sees them, up to `MAX_NAME_POINTS` code points between them. */
-function capLength(name: string): string {
+/** Whole characters as a reader sees them, up to `max` code points between them. */
+function capLength(name: string, max = MAX_NAME_POINTS): string {
   const parts = graphemes ? Array.from(graphemes.segment(name), (part) => part.segment) : [...name]
   let out = '',
     points = 0
   for (const part of parts) {
     const size = [...part].length
-    if (points + size > MAX_NAME_POINTS) break
+    if (points + size > max) break
     out += part
     points += size
   }
@@ -56,4 +56,18 @@ export function cleanName(value: unknown): string | null {
     .trim()
   if (!/[\p{L}\p{N}\p{S}\p{P}]/u.test(name.replace(JOINERS, ''))) return null
   return [...name].length >= MIN_NAME_POINTS ? name : null
+}
+
+/** How long a first name may run when a name has no space to end it at. */
+export const MAX_FIRST_NAME_POINTS = 12
+
+/**
+ * What a stranger sees of a cleaned name: its first word, or, for a name with no space, its first
+ * `MAX_FIRST_NAME_POINTS` code points without cutting a character in half.
+ */
+export function firstName(name: string): string {
+  const space = name.indexOf(' ')
+  return space > 0
+    ? name.slice(0, space)
+    : capLength(name, MAX_FIRST_NAME_POINTS).replace(/[\u200c\u200d]+$/, '')
 }

@@ -1,7 +1,7 @@
 import { applyD1Migrations, env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
-import { LIVE_CLOSE, type DistrictId } from '../src/protocol'
+import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'
 import { closeAll, live, login, openLive, resident, WAIT } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -75,7 +75,7 @@ describe('DistrictDO', () => {
     expect(welcome.you).toEqual({ id: null, visible: false })
     expect(welcome.people).toContainEqual({
       id: 'dev:listed-rani',
-      name: 'Listed Rani',
+      name: 'Listed',
       look: { skin: 1, outfit: 'pink', head: 'none' },
       status: 'chai pe',
       x: 2,
@@ -121,7 +121,7 @@ describe('DistrictDO', () => {
     const join = await watcher.next('join', (m) => m.p.id === 'dev:arrive-anu')
     expect(join.p).toEqual({
       id: 'dev:arrive-anu',
-      name: 'Arrive Anu',
+      name: 'Arrive',
       look: { skin: 1, outfit: 'pink', head: 'none' },
       status: 'chai pe',
       x: 10,
@@ -243,8 +243,8 @@ describe('DistrictDO', () => {
     a.raw(JSON.stringify({ t: 'status', text: 'y'.repeat(2100) }))
     a.raw('{"t":"dance"}')
     a.raw('{"t":"move","x":1e999,"z":0,"ry":0}')
-    await a.sync()
-    expect(a.all('error')).toHaveLength(4)
+    // Not a ping to sync on: a good frame would forgive the strikes.
+    await vi.waitFor(() => expect(a.all('error')).toHaveLength(4), WAIT)
     expect(a.closes).toEqual([])
     a.raw('[]')
     await vi.waitFor(() => expect(a.closes).toEqual([LIVE_CLOSE.invalid]), WAIT)
@@ -253,6 +253,178 @@ describe('DistrictDO', () => {
     await watcher.next('leave', (m) => m.id === 'dev:garbage-gopal', from)
     await watcher.sync()
     expect(watcher.messages.slice(from)).toEqual([{ t: 'leave', id: 'dev:garbage-gopal' }, { t: 'pong' }])
+  })
+
+  it('strikes are for consecutive bad frames: a good one forgives them', async () => {
+    const a = await live('mi-road', { token: await resident('Fumble Farah') })
+    const bad = () => {
+      a.raw('nope')
+      a.send({ t: 'status', text: 'z'.repeat(81) }) // an honest typo past 80 is refused, not held against them
+      a.raw('{"t":"dance"}')
+      a.raw('{"t":"move","x":1e999,"z":0,"ry":0}')
+    }
+    bad()
+    a.send({ t: 'move', x: 1, z: 1, ry: 0 })
+    bad()
+    await a.sync()
+    expect(a.all('error')).toEqual(Array(8).fill({ t: 'error', code: 'invalid' }))
+    expect(a.closes).toEqual([])
+  })
+
+  it('a status flood gets rate, and at most one status goes out per window', async () => {
+    const a = await live('university', { token: await resident('Chatty Chetan') })
+    const watcher = await live('university')
+    a.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await watcher.next('join', (m) => m.p.id === 'dev:chatty-chetan')
+    const from = watcher.mark()
+    for (let i = 0; i < 6; i++) a.send({ t: 'status', text: `line ${i}` })
+    await a.sync()
+    expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
+    await watcher.sync()
+    expect(watcher.all('status', from)).toEqual([{ t: 'status', id: 'dev:chatty-chetan', text: 'line 0' }])
+    await vi.waitFor(async () => {
+      const now = await testEnv.DB.prepare('SELECT status FROM profiles WHERE user_id = ?')
+        .bind('dev:chatty-chetan')
+        .first<{ status: string }>()
+      expect(now?.status).toBe('line 0')
+    }, WAIT)
+  })
+
+  it('a move flood gets rate', async () => {
+    const a = await live('walled-city', { token: await resident('Flood Firoz') })
+    for (let i = 0; i < 80; i++) a.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await a.sync()
+    expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
+    expect(a.closes).toEqual([])
+  })
+
+  it('an unchanged status is neither broadcast nor written', async () => {
+    const a = await live('malviya-nagar', { token: await resident('Same Sameer') })
+    const watcher = await live('malviya-nagar')
+    a.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await watcher.next('join', (m) => m.p.id === 'dev:same-sameer')
+    const read = () =>
+      testEnv.DB.prepare('SELECT status, updated_at FROM profiles WHERE user_id = ?')
+        .bind('dev:same-sameer')
+        .first<{ status: string; updated_at: number }>()
+    const before = await read()
+    const from = watcher.mark()
+    a.send({ t: 'status', text: ' chai pe ' })
+    await a.sync()
+    await watcher.sync()
+    expect(watcher.all('status', from)).toEqual([])
+    expect(a.all('status')).toEqual([])
+    expect(await read()).toEqual(before)
+  })
+
+  it('flooding for 3 s on end closes the socket', async () => {
+    const district = stub('malviya-nagar')
+    const a = await live('malviya-nagar', { token: await resident('Pushy Pinto') })
+    await a.next('welcome')
+    const start = Date.now() + 60_000
+    try {
+      for (let step = 0; step <= 6 && !a.closes.length; step++) {
+        const at = start + step * 500
+        await runInDurableObject(district, (instance) => {
+          instance.clock = () => at
+        })
+        a.send({ t: 'status', text: `push ${step}a` })
+        a.send({ t: 'status', text: `push ${step}b` })
+        if (step < 6) await a.sync()
+      }
+    } finally {
+      await runInDurableObject(district, (instance) => {
+        instance.clock = Date.now
+      })
+    }
+    await vi.waitFor(() => expect(a.closes).toEqual([LIVE_CLOSE.invalid]), WAIT)
+    // One `rate` for the whole stretch, not one per frame.
+    expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
+  })
+
+  it('a replaced socket stays gone after the object wakes', async () => {
+    const district = stub('walled-city')
+    const token = await resident('Waking Wasim')
+    const watcher = await live('walled-city')
+    const first = await live('walled-city', { token })
+    first.send({ t: 'move', x: 4, z: 4, ry: 0 })
+    await watcher.next('join', (m) => m.p.id === 'dev:waking-wasim')
+    const from = watcher.mark()
+    const who = {
+      userId: 'dev:waking-wasim',
+      person: {
+        id: 'dev:waking-wasim',
+        name: 'Waking',
+        look: { skin: 1, outfit: 'pink', head: 'none' },
+        status: '',
+      },
+    }
+    // All in one turn, while the replaced socket is still closing: a second socket takes over, the object
+    // forgets everything it held in memory (as a wake from hibernation does), and both sockets send a move.
+    const heard = await runInDurableObject(district, async (instance, state) => {
+      const res = await instance.fetch(
+        new Request('https://district.internal/walled-city', {
+          headers: { Upgrade: 'websocket', 'X-GG-Who': JSON.stringify(who) },
+        }),
+      )
+      res.webSocket!.accept()
+      const memory = instance as unknown as { seats: WeakMap<object, unknown>; gone?: WeakSet<object> }
+      memory.seats = new WeakMap()
+      if (memory.gone) memory.gone = new WeakSet()
+      const mine = state
+        .getWebSockets()
+        .filter((ws) => (ws.deserializeAttachment() as { userId?: string } | null)?.userId === who.userId)
+      for (const ws of mine)
+        await instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x: 4.5, z: 4, ry: 0 }))
+      return mine.length
+    })
+    expect(heard).toBe(2)
+    await vi.waitFor(() => expect(first.closes).toEqual([LIVE_CLOSE.replaced]), WAIT)
+    await watcher.sync()
+    expect(watcher.all('join', from).map((m) => m.p.id)).toEqual(['dev:waking-wasim'])
+    const newcomer = await live('walled-city')
+    const ids = (await newcomer.next('welcome')).people.map((p) => p.id)
+    expect(ids.filter((id) => id === 'dev:waking-wasim')).toHaveLength(1)
+  })
+
+  it('a socket the server closed stays gone after the object wakes', async () => {
+    const district = stub('university')
+    const watcher = await live('university')
+    const a = await live('university', { token: await resident('Closed Kiran') })
+    a.send({ t: 'move', x: 2, z: 2, ry: 0 })
+    await watcher.next('join', (m) => m.p.id === 'dev:closed-kiran')
+    const from = watcher.mark()
+    // In one turn, while the socket is still closing: five strikes close it, memory is lost, it moves, and a
+    // newcomer arrives.
+    const listed = await runInDurableObject(district, async (instance, state) => {
+      const [ws] = state
+        .getWebSockets()
+        .filter(
+          (s) => (s.deserializeAttachment() as { userId?: string } | null)?.userId === 'dev:closed-kiran',
+        )
+      if (!ws) return null
+      for (let i = 0; i < 5; i++) await instance.webSocketMessage(ws, 'nope')
+      ;(instance as unknown as { seats: WeakMap<object, unknown> }).seats = new WeakMap()
+      await instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x: 2.5, z: 2, ry: 0 }))
+      const res = await instance.fetch(
+        new Request('https://district.internal/university', {
+          headers: { Upgrade: 'websocket', 'X-GG-Who': JSON.stringify({ userId: null, person: null }) },
+        }),
+      )
+      const client = res.webSocket!
+      const first = new Promise<string>((resolve) => {
+        client.addEventListener('message', (e) => resolve(e.data as string), { once: true })
+      })
+      client.accept()
+      const welcome = JSON.parse(await first) as Extract<ServerMsg, { t: 'welcome' }>
+      client.close(1000)
+      return welcome.people.map((p) => p.id)
+    })
+    expect(listed).not.toBeNull()
+    expect(listed).not.toContain('dev:closed-kiran')
+    await watcher.next('leave', (m) => m.id === 'dev:closed-kiran', from)
+    await watcher.sync()
+    expect(watcher.all('join', from)).toEqual([])
   })
 
   it('a second socket for the same user replaces the first', async () => {

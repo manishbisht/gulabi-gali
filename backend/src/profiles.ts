@@ -1,6 +1,6 @@
 import { devSlug, mintDevToken } from './auth'
 import type { Env } from './env'
-import { cleanName } from './names'
+import { cleanName, firstName } from './names'
 import {
   HEADS,
   HERE_FOR,
@@ -33,10 +33,11 @@ interface ProfileRow {
 
 /**
  * The only shape a ghost-safe surface (the map, a nearby list) may carry. Fields are named one by one, so a
- * new private field on a profile can never leak by spreading.
+ * new private field on a profile can never leak by spreading, and the name is cut to a first name (see
+ * `firstName`). Applying it twice changes nothing.
  */
 export function toPublic(p: PublicPerson): PublicPerson {
-  return { id: p.id, name: p.name, look: { ...p.look }, status: p.status }
+  return { id: p.id, name: firstName(p.name), look: { ...p.look }, status: p.status }
 }
 
 function toFull(row: ProfileRow): FullProfile {

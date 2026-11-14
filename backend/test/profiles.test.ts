@@ -164,11 +164,30 @@ describe('profiles API', () => {
     const pub = toPublic(row as never)
     expect(pub).toEqual({
       id: 'dev:x',
-      name: 'X Y',
+      name: 'X',
       look: { skin: 1, outfit: 'pink', head: 'none' },
       status: 'hi',
     })
     for (const k of ['homeArea', 'hereFor', 'about', 'link', 'adult', 'pledge', 'pauseRequests'])
       expect(pub).not.toHaveProperty(k)
+  })
+
+  it('a ghost-safe PublicPerson carries the first name only, and twice is the same as once', () => {
+    const named = (name: string) =>
+      toPublic({ id: 'dev:n', name, look: { skin: 0, outfit: 'teal', head: 'cap' }, status: '' })
+    expect(named('Asha Sharma').name).toBe('Asha')
+    expect(named('Ramakrishnan Venkataraman').name).toBe('Ramakrishnan')
+    // No space: the first 12 code points, never half a character.
+    expect(named('Abcdefghijklmnopqrstu').name).toBe('Abcdefghijkl')
+    expect(named('Abcdefghijk👩‍💻').name).toBe('Abcdefghijk')
+    expect(named('Mo').name).toBe('Mo')
+    expect(toPublic(named('Asha Sharma')).name).toBe('Asha')
+  })
+
+  it('a signed-in viewer still gets the full name from GET /api/profiles/:id', async () => {
+    const token = await login('fullname')
+    await call('/api/me/profile', { method: 'PUT', body: body({ name: 'Meera Bai Rathore' }) }, token)
+    const res = await call('/api/profiles/dev:fullname', {}, token)
+    expect(((await res.json()) as FullProfile).name).toBe('Meera Bai Rathore')
   })
 })

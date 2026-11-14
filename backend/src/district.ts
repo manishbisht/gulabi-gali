@@ -32,15 +32,30 @@ export const INTEREST_M = 60
 /** The fastest anyone may go, in m/s, measured against the last accepted point. */
 export const MAX_SPEED = 8
 /**
- * How far ahead of that pace a burst may run: one second's worth. Frames bunch up after a network stall, and
- * without this a walker arriving all at once would be pulled back; with it, the average still never beats
- * `MAX_SPEED`.
+ * How far ahead of that pace a burst may run: one second's worth. This is a deliberate tolerance for network
+ * jitter: frames bunch up after a stall, and without it a walker arriving all at once would be pulled back.
+ * The average still never beats `MAX_SPEED`; the most anyone gains is one 8 m hop after standing still.
  */
 export const SPEED_BURST_M = MAX_SPEED
 /** A socket with no move or ping for this long is closed, and its person leaves. */
 export const IDLE_MS = 30_000
 export const MAX_FRAME_CHARS = 2048
+/** Bad frames in a row before the socket is closed. Any good frame clears the count. */
 export const MAX_BAD_FRAMES = 5
+/**
+ * Per-socket allowances, as token buckets: a refill rate and how many may arrive at once. A client sends at
+ * most 10 moves a second and a status now and then; `other` is pings, bench frames and bad frames.
+ */
+export const LANES = {
+  move: { perSecond: 40, burst: 20 },
+  status: { perSecond: 0.5, burst: 1 },
+  other: { perSecond: 10, burst: 20 },
+} as const
+type Lane = keyof typeof LANES
+/** Refusals further apart than this are separate floods; each new flood is told `rate` once. */
+const FLOOD_GAP_MS = 1000
+/** A flood that keeps on for this long closes the socket. */
+export const MAX_FLOOD_MS = 3000
 /** No district reaches half this far from its centre; anything past it is not a place. */
 const MAX_COORD = 1000
 const MAX_TURN = 2 * Math.PI
@@ -51,6 +66,7 @@ const PONG = '{"t":"pong"}'
 
 const GHOST = { t: 'error', code: 'ghost' } as const
 const INVALID = { t: 'error', code: 'invalid' } as const
+const RATE = { t: 'error', code: 'rate' } as const
 
 const notFound = () => Response.json({ error: 'not found' }, { status: 404 })
 
@@ -103,10 +119,14 @@ export function parseClientMsg(text: string): ClientMsg | null {
         ? { t: 'sit', bench }
         : null
     }
-    case 'say':
+    case 'say': {
+      const { text } = m
+      return typeof text === 'string' ? { t: 'say', text } : null
+    }
     case 'status': {
-      const { text: line } = m
-      return typeof line === 'string' ? { t: m.t, text: line } : null
+      // Cleaned here, so a line that is too long is a bad frame like any other.
+      const text = cleanText(m.text, MAX_STATUS)
+      return typeof m.text === 'string' && text !== null ? { t: 'status', text } : null
     }
     case 'ping':
       return { t: 'ping' }
@@ -135,17 +155,50 @@ interface Point {
   budget: number
 }
 
+interface Bucket {
+  tokens: number
+  at: number
+}
+
 /** What a socket carries through hibernation. */
 interface Seat {
   userId: string | null
   person: PublicPerson | null
   /** Listed: a resident who has moved at least once on this socket (or the one it replaced). */
   shown: boolean
+  /**
+   * Done with: closed by either side, or replaced by a newer socket. workerd can still list a socket while it
+   * closes, and across a wake from hibernation this flag is the only thing that says to ignore it.
+   */
+  closed?: boolean
   pos: Point | null
   /** Last move or ping the object itself handled. */
   seen: number
+  /** Bad frames in a row. */
   bad: number
+  lanes: Record<Lane, Bucket>
+  /** The flood under way, if any: when it began and when the last frame was refused. */
+  flood: { since: number; at: number } | null
 }
+
+const fullLanes = (now: number): Record<Lane, Bucket> => ({
+  move: { tokens: LANES.move.burst, at: now },
+  status: { tokens: LANES.status.burst, at: now },
+  other: { tokens: LANES.other.burst, at: now },
+})
+
+/** Spends one token from `bucket`, refilled for the time since it was last touched. False when it is empty. */
+function take(bucket: Bucket, lane: Lane, now: number): boolean {
+  const { perSecond, burst } = LANES[lane]
+  bucket.tokens = Math.min(burst, bucket.tokens + (perSecond * Math.max(0, now - bucket.at)) / 1000)
+  bucket.at = now
+  if (bucket.tokens < 1) return false
+  bucket.tokens -= 1
+  return true
+}
+
+const laneOf = (msg: ClientMsg | null): Lane =>
+  msg?.t === 'move' ? 'move' : msg?.t === 'status' ? 'status' : 'other'
 
 const round = (n: number, per: number) => Math.round(n * per) / per
 
@@ -168,8 +221,6 @@ export class DistrictDO extends DurableObject<Env> {
   /** Now, in ms. A test swaps it to step past `IDLE_MS` without waiting. */
   clock: () => number = Date.now
   private seats = new WeakMap<WebSocket, Seat>()
-  /** Sockets on their way out: workerd still lists a socket while its own close is handled. */
-  private gone = new WeakSet<WebSocket>()
   private dirty = new Set<WebSocket>()
   private batch: ReturnType<typeof setTimeout> | null = null
 
@@ -189,11 +240,9 @@ export class DistrictDO extends DurableObject<Env> {
       for (const ws of this.sockets()) {
         const seat = this.seat(ws)
         if (seat.userId !== who.userId) continue
-        // An earlier replaced socket can still be listed while it closes: the listed one is the one to follow.
-        if (!before?.shown) before = seat
-        this.gone.add(ws)
+        before = seat
         this.dirty.delete(ws)
-        this.write(ws, { ...seat, shown: false })
+        this.write(ws, { ...seat, shown: false, closed: true })
         try {
           ws.close(LIVE_CLOSE.replaced, 'replaced')
         } catch {
@@ -211,6 +260,8 @@ export class DistrictDO extends DurableObject<Env> {
       pos: before?.pos ?? null,
       seen: now,
       bad: 0,
+      lanes: fullLanes(now),
+      flood: null,
     }
     this.write(server, seat)
     this.send(server, {
@@ -225,14 +276,19 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
-    if (this.gone.has(ws)) return
     const seat = this.seat(ws)
+    if (seat.closed) return
     // Measured before parsing, so an oversized frame costs nothing but this.
     const size = typeof raw === 'string' ? raw.length : raw.byteLength
     const text = size > MAX_FRAME_CHARS ? null : typeof raw === 'string' ? raw : new TextDecoder().decode(raw)
     const msg = text === null ? null : parseClientMsg(text)
-    if (!msg) return this.refuse(ws, seat)
     const now = this.clock()
+    if (!this.allow(ws, seat, laneOf(msg), now)) return
+    if (!msg) return this.refuse(ws, seat)
+    if (seat.bad) {
+      seat.bad = 0
+      this.write(ws, seat)
+    }
     switch (msg.t) {
       case 'ping':
         seat.seen = now
@@ -258,6 +314,24 @@ export class DistrictDO extends DurableObject<Env> {
     this.depart(ws)
   }
 
+  /**
+   * Whether this frame fits the socket's allowance. A refused frame is dropped; the first refusal of a flood
+   * says `rate`, and a flood that keeps on for `MAX_FLOOD_MS` closes the socket. Refusals touch memory only:
+   * an object cannot hibernate mid-flood, and one that wakes simply starts the socket on full buckets.
+   */
+  private allow(ws: WebSocket, seat: Seat, lane: Lane, now: number): boolean {
+    if (take(seat.lanes[lane], lane, now)) return true
+    const flood = seat.flood
+    if (!flood || now - flood.at > FLOOD_GAP_MS) {
+      seat.flood = { since: now, at: now }
+      this.send(ws, RATE)
+    } else {
+      flood.at = now
+      if (now - flood.since >= MAX_FLOOD_MS) this.drop(ws, LIVE_CLOSE.invalid, 'flood')
+    }
+    return false
+  }
+
   async webSocketError(ws: WebSocket): Promise<void> {
     this.depart(ws)
   }
@@ -274,12 +348,7 @@ export class DistrictDO extends DurableObject<Env> {
   sweep(now: number): void {
     for (const ws of this.sockets()) {
       if (now - this.lastHeard(ws) < IDLE_MS) continue
-      this.depart(ws)
-      try {
-        ws.close(LIVE_CLOSE.idle, 'idle')
-      } catch {
-        // Already closing.
-      }
+      this.drop(ws, LIVE_CLOSE.idle, 'idle')
     }
   }
 
@@ -313,9 +382,9 @@ export class DistrictDO extends DurableObject<Env> {
     }
   }
 
-  private status(ws: WebSocket, seat: Seat, raw: string): void {
-    const text = cleanText(raw, MAX_STATUS)
-    if (text === null) return this.refuse(ws, seat)
+  /** `text` is already clean (see `parseClientMsg`). The same line again is a no-op, not a broadcast. */
+  private status(ws: WebSocket, seat: Seat, text: string): void {
+    if (text === seat.person!.status) return
     const userId = seat.userId!
     seat.person = { ...seat.person!, status: text }
     this.write(ws, seat)
@@ -326,7 +395,7 @@ export class DistrictDO extends DurableObject<Env> {
       this.env.DB.prepare('UPDATE profiles SET status = ?, updated_at = ? WHERE user_id = ?')
         .bind(text, Date.now(), userId)
         .run()
-        .catch(() => undefined),
+        .catch((err: unknown) => console.error('district: status write failed', err)),
     )
   }
 
@@ -335,8 +404,8 @@ export class DistrictDO extends DurableObject<Env> {
     this.batch = null
     const movers: { id: string; x: number; z: number; json: string }[] = []
     for (const ws of this.dirty) {
-      const { userId, shown, pos } = this.seat(ws)
-      if (this.gone.has(ws) || !shown || !pos || !userId) continue
+      const { userId, shown, pos, closed } = this.seat(ws)
+      if (closed || !shown || !pos || !userId) continue
       movers.push({ id: userId, x: pos.x, z: pos.z, json: JSON.stringify([userId, pos.x, pos.z, pos.ry]) })
     }
     this.dirty.clear()
@@ -361,22 +430,28 @@ export class DistrictDO extends DurableObject<Env> {
     seat.bad++
     this.write(ws, seat)
     this.send(ws, INVALID)
-    if (seat.bad < MAX_BAD_FRAMES) return
+    if (seat.bad >= MAX_BAD_FRAMES) this.drop(ws, LIVE_CLOSE.invalid, 'invalid')
+  }
+
+  private drop(ws: WebSocket, code: number, reason: string): void {
     this.depart(ws)
     try {
-      ws.close(LIVE_CLOSE.invalid, 'invalid')
+      ws.close(code, reason)
     } catch {
       // Already closing.
     }
   }
 
-  /** A socket is done: forget its moves and, if it was listed, tell everyone it left. Runs once per socket. */
+  /**
+   * A socket is done: forget its moves, mark it closed (in its attachment too, so a wake cannot bring it back)
+   * and, if it was listed, tell everyone it left. Runs once per socket.
+   */
   private depart(ws: WebSocket): void {
-    if (this.gone.has(ws)) return
-    this.gone.add(ws)
+    const seat = this.seat(ws)
+    if (seat.closed) return
     this.dirty.delete(ws)
-    const { shown, userId } = this.seat(ws)
-    if (shown && userId) this.broadcast({ t: 'leave', id: userId })
+    this.write(ws, { ...seat, shown: false, closed: true })
+    if (seat.shown && seat.userId) this.broadcast({ t: 'leave', id: seat.userId })
   }
 
   /** Everyone listed, but `except` (the asker themself). */
@@ -390,7 +465,7 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   private sockets(): WebSocket[] {
-    return this.ctx.getWebSockets().filter((ws) => !this.gone.has(ws))
+    return this.ctx.getWebSockets().filter((ws) => !this.seat(ws).closed)
   }
 
   private seat(ws: WebSocket): Seat {
@@ -403,6 +478,8 @@ export class DistrictDO extends DurableObject<Env> {
         pos: null,
         seen: 0,
         bad: 0,
+        lanes: fullLanes(0),
+        flood: null,
       }
       this.seats.set(ws, seat)
     }
@@ -411,7 +488,11 @@ export class DistrictDO extends DurableObject<Env> {
 
   private write(ws: WebSocket, seat: Seat): void {
     this.seats.set(ws, seat)
-    ws.serializeAttachment(seat)
+    try {
+      ws.serializeAttachment(seat)
+    } catch {
+      // A socket that has finished closing keeps no attachment; it is no longer listed either.
+    }
   }
 
   private send(ws: WebSocket, msg: ServerMsg): void {
