@@ -5,7 +5,8 @@ import type { Env } from './env'
 import benches from './benches.json'
 import { wordsOk } from './filter/server'
 import { GATE_NAME, type Admit, type GateDO } from './gate'
-import { cleanText, loadResident, MAX_STATUS, toPublic } from './profiles'
+import { firstName } from './names'
+import { ACTIVE, cleanText, loadResident, MAX_STATUS, toPublic } from './profiles'
 import type { RefreshWhy } from './refresh'
 import { recentInvite } from './trust'
 import {
@@ -775,6 +776,8 @@ export class DistrictDO extends DurableObject<Env> {
    * their state loads when they connect. Throws when D1 cannot be reached, so the caller can retry.
    */
   async refresh(userId: string, why: RefreshWhy): Promise<void> {
+    // Their posters on this district's walls follow a hide or an unhide for everyone here, connected or not.
+    if (why === 'hide') await this.refaceWalls(userId)
     if (!this.sockets().some((ws) => this.seat(ws).userId === userId)) return
     if (why === 'delete') {
       // Gone from D1: nothing to reload. Close everything they have here and let the gate forget them.
@@ -1218,6 +1221,47 @@ export class DistrictDO extends DurableObject<Env> {
       const { userId } = this.seat(ws)
       if (userId === owner) this.sendRaw(ws, own)
       else if (!this.apart(owner, userId)) this.sendRaw(ws, text)
+    }
+  }
+
+  /**
+   * After `userId` was hidden or unhidden: their posters up on this district's walls come down for everyone
+   * here (hidden: their name and plans are no longer shown to anyone), or go back up (visible again, as
+   * `posterAdded` sends them). Nothing is asked of D1 when nobody is here. Throws when D1 cannot be reached,
+   * so `refreshUser` tries again.
+   */
+  private async refaceWalls(userId: string): Promise<void> {
+    const here = this.sockets()[0]
+    if (!here) return
+    const { district } = this.seat(here)
+    const { results } = await this.env.DB.prepare(
+      `SELECT po.id, po.wall, po.slot, po.text, po.at_when, p.name,
+         (u.hidden = 0 AND ${ACTIVE}) AS visible
+       FROM posters po JOIN users u ON u.id = po.owner LEFT JOIN profiles p ON p.user_id = po.owner
+       WHERE po.owner = ? AND po.district = ? AND po.hidden = 0 AND po.expires_at > ?`,
+    )
+      .bind(userId, district, Date.now())
+      .all<{
+        id: string
+        wall: number
+        slot: number
+        text: string
+        at_when: number | null
+        name: string | null
+        visible: number | null
+      }>()
+    for (const r of results) {
+      if (r.visible === 1 && r.name !== null) {
+        const poster = {
+          id: r.id,
+          wall: r.wall,
+          slot: r.slot,
+          text: r.text,
+          when: r.at_when,
+          name: firstName(r.name),
+        }
+        await this.posterAdded(poster, userId, [])
+      } else this.posterRemoved([r.id])
     }
   }
 

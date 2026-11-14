@@ -345,7 +345,8 @@ export default function App() {
     )) ||
     (posters.open && (
       <PosterCard
-        poster={posters.open}
+        poster={posters.open.poster}
+        gone={posters.open.gone}
         viewer={viewer}
         lang={lang}
         token={auth.token}

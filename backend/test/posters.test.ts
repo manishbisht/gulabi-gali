@@ -2,7 +2,9 @@ import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { DAY_MS } from '../src/limits'
-import { listPosters, pinPoster, POSTERS_PER_DAY, purgePosters } from '../src/posters'
+import { listPosters, pinPoster, POSTER_BUCKET, POSTERS_PER_DAY, purgePosters } from '../src/posters'
+import { refreshUser } from '../src/refresh'
+import { windowStart } from '../src/limits'
 import { POSTER_SLOTS, type PosterView } from '../src/protocol'
 import { api, devId, live, login, resident, settle, type LiveClient } from './helpers'
 
@@ -433,6 +435,50 @@ describe('posters', () => {
     expect(
       await count("SELECT COUNT(*) AS n FROM reports WHERE target_id = ? AND state = 'open'", ownerId),
     ).toBe(0)
+  })
+
+  it("a hidden owner's posters come down live everywhere, and go back up when unhidden", async () => {
+    const owner = await resident('Hidden Owner Hari')
+    const ownerId = devId('Hidden Owner Hari')
+    const poster = (await (await pin(owner, { text: 'Kite flying on the roof' })).json()) as PosterView
+    // Someone neutral in the district, and nobody of the owner's: the walls still hear it.
+    const watcher = await live('university', { token: await resident('Hidden Owner Watcher') })
+    watcher.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await watcher.sync()
+
+    let from = watcher.mark()
+    await sql('UPDATE users SET hidden = 1 WHERE id = ?', ownerId)
+    await refreshUser(testEnv, ownerId, 'hide')
+    await watcher.next('poster', (m) => m.op === 'remove' && m.id === poster.id, from)
+    expect((await listed('university')).map((p) => p.id)).not.toContain(poster.id)
+
+    from = watcher.mark()
+    expect(
+      (await asOwner(`/api/admin/users/${encodeURIComponent(ownerId)}/unhide`, { method: 'POST' })).status,
+    ).toBe(200)
+    const back = await watcher.next('poster', (m) => m.op === 'add' && m.poster.id === poster.id, from)
+    expect(back).toEqual({ t: 'poster', op: 'add', poster: { ...poster, mine: undefined } })
+    expect((await listed('university')).map((p) => p.id)).toContain(poster.id)
+  })
+
+  it('only a pin that goes up is charged against the day', async () => {
+    await resident('Charge Chitra')
+    const id = devId('Charge Chitra')
+    const now = Date.now()
+    const used = async () =>
+      (
+        await db
+          .prepare('SELECT n FROM counters WHERE user_id = ? AND bucket = ? AND window_start = ?')
+          .bind(id, POSTER_BUCKET, windowStart(now, DAY_MS))
+          .first<{ n: number }>()
+      )?.n ?? 0
+    // Three at once with room for two: two go up, the third is refused, and only two are counted.
+    const answers = await Promise.all([0, 1, 2].map((i) => pinAt(id, now, { text: `${PLAN} ${i}` })))
+    expect(answers.map((r) => r.status).sort()).toEqual([201, 201, 409])
+    expect(await used()).toBe(2)
+    // And a plain refusal (two up already) is never counted either.
+    expect((await pinAt(id, now)).status).toBe(409)
+    expect(await used()).toBe(2)
   })
 
   it('deleting your account takes your posters down', async () => {

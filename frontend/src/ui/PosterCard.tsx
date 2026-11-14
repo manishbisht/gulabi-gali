@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import { takeDownPoster } from '../net/api'
 import type { PosterView } from '../net/protocol'
@@ -9,6 +9,11 @@ import { ReportSheet } from './ReportSheet'
 
 interface Props {
   poster: PosterView
+  /**
+   * It came off the wall while the card was up (taken down, hidden, its owner blocked): the card closes, though
+   * not under a block question or a report form still being filled in (it closes once they are done).
+   */
+  gone?: boolean
   viewer: Viewer
   lang: Lang
   token(): Promise<string | null>
@@ -27,13 +32,16 @@ interface Props {
  * name. A resident can report it or block its owner (the block asked first, then the report if they want);
  * your own you can take down.
  */
-export function PosterCard({ poster, viewer, lang, token, onBlock, onTakenDown, onClose }: Props) {
+export function PosterCard({ poster, gone, viewer, lang, token, onBlock, onTakenDown, onClose }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [reporting, setReporting] = useState(false)
   /** Blocked from this card with "Also report?": the form offers no block, and closing it closes the card. */
   const [blocked, setBlocked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    if (gone && !confirming && !reporting) onClose()
+  }, [gone, confirming, reporting, onClose])
   const resident = viewer === 'resident' || viewer === 'verified'
   const mine = poster.mine === true
 

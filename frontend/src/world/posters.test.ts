@@ -5,7 +5,16 @@ import walledCity from './districts/walledCity'
 import miRoad from './districts/miRoad'
 import university from './districts/university'
 import malviyaNagar from './districts/malviyaNagar'
-import { createPosters, nearestWall, slotAt, wallDistance, wallsOf, wrap, type Sheet } from './posters'
+import {
+  createPosters,
+  nearestWall,
+  NUDGE_RETRY_MS,
+  slotAt,
+  wallDistance,
+  wallsOf,
+  wrap,
+  type Sheet,
+} from './posters'
 import type { DistrictDef } from './types'
 
 const DEFS: Record<DistrictId, DistrictDef> = {
@@ -51,12 +60,14 @@ const DEF = {
 function setup(first: PosterView[] = []) {
   const scene = new THREE.Scene()
   const sheets: ReturnType<typeof fakeSheet>[] = []
-  const hooks = { near: vi.fn(), tap: vi.fn() }
+  const hooks = { near: vi.fn(), tap: vi.fn(), gone: vi.fn() }
   let answer: (list: PosterView[]) => void = () => {}
+  let refuse: (e: Error) => void = () => {}
   const load = vi.fn(
     () =>
-      new Promise<PosterView[]>((resolve) => {
+      new Promise<PosterView[]>((resolve, reject) => {
         answer = resolve
+        refuse = reject
       }),
   )
   const posters = createPosters({
@@ -76,7 +87,12 @@ function setup(first: PosterView[] = []) {
     await Promise.resolve()
     await Promise.resolve()
   }
-  return { scene, sheets, hooks, load, posters, meshes, land }
+  const fail = async () => {
+    refuse(new Error('offline'))
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+  return { scene, sheets, hooks, load, posters, meshes, land, fail }
 }
 
 describe('poster walls', () => {
@@ -155,6 +171,47 @@ describe('poster walls', () => {
         .map((a) => a.poster.id)
         .sort(),
     ).toEqual(['p3', 'p9'])
+  })
+
+  it('a nudge whose fetch fails leaves the walls bare and tries once more; any other failure keeps them', async () => {
+    vi.useFakeTimers()
+    try {
+      const { posters, load, land, fail, meshes, hooks } = setup()
+      posters.refresh()
+      await land([poster()])
+      // A welcome's fetch failing: the walls keep what they show.
+      posters.refresh()
+      await fail()
+      expect(meshes()[0]!.visible).toBe(true)
+      // A block's nudge failing: whoever was blocked may be on them, so they go bare, and it is asked again once.
+      posters.apply({ t: 'posters' })
+      await fail()
+      expect(meshes()[0]!.visible).toBe(false)
+      expect(hooks.gone).toHaveBeenLastCalledWith(['p1'])
+      expect(load).toHaveBeenCalledTimes(3)
+      await vi.advanceTimersByTimeAsync(NUDGE_RETRY_MS)
+      expect(load).toHaveBeenCalledTimes(4)
+      await fail()
+      await vi.advanceTimersByTimeAsync(NUDGE_RETRY_MS * 3)
+      expect(load).toHaveBeenCalledTimes(4)
+      posters.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says which posters left: taken down, dropped by a fetch, or pushed out of their slot', async () => {
+    const { posters, land, hooks } = setup()
+    posters.refresh()
+    await land([poster(), poster({ id: 'p2', slot: 1 }), poster({ id: 'p3', slot: 2 })])
+    posters.apply({ t: 'poster', op: 'remove', id: 'p1' })
+    expect(hooks.gone).toHaveBeenLastCalledWith(['p1'])
+    posters.upsert(poster({ id: 'p4', slot: 1 }))
+    expect(hooks.gone).toHaveBeenLastCalledWith(['p2'])
+    posters.refresh()
+    await land([poster({ id: 'p4', slot: 1 })])
+    expect(hooks.gone).toHaveBeenLastCalledWith(['p3'])
+    expect(hooks.gone).toHaveBeenCalledTimes(3)
   })
 
   it('a poster that moves (a replaced slot) is drawn once, where it now is', async () => {

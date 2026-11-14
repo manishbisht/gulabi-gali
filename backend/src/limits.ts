@@ -40,6 +40,24 @@ export async function allow(
   return (row?.n ?? Infinity) <= limit
 }
 
+/**
+ * Gives back one use of `bucket` in the window holding `now`: for a call `allow` let through that then did
+ * nothing (it lost a race). Never below zero.
+ */
+export async function refund(
+  env: Env,
+  userId: string,
+  bucket: string,
+  windowMs: number,
+  now = Date.now(),
+): Promise<void> {
+  await env.DB.prepare(
+    'UPDATE counters SET n = n - 1 WHERE user_id = ? AND bucket = ? AND window_start = ? AND n > 0',
+  )
+    .bind(userId, bucket, windowStart(now, windowMs))
+    .run()
+}
+
 /** 429 `rate`, with `Retry-After` in whole seconds until the window turns. */
 export function rateLimited(windowMs: number, now = Date.now()): Response {
   const wait = Math.max(1, Math.ceil((windowStart(now, windowMs) + windowMs - now) / 1000))

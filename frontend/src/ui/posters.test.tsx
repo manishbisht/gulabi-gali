@@ -229,6 +229,33 @@ describe('PosterCard', () => {
     expect(props.onTakenDown).toHaveBeenCalledWith('poster-1')
   })
 
+  it('closes when its poster comes off the wall, but not under a report still being written', async () => {
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    const onClose = vi.fn()
+    const draw = (gone: boolean) =>
+      act(() =>
+        root.render(
+          <PosterCard
+            poster={poster}
+            gone={gone}
+            viewer="resident"
+            lang="en"
+            token={async () => 'tok'}
+            onBlock={async () => true}
+            onTakenDown={() => {}}
+            onClose={onClose}
+          />,
+        ),
+      )
+    draw(false)
+    await act(async () => button(host, 'Report')!.click())
+    draw(true)
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => button(host, 'Never mind')!.click())
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('a ghost reads it, with no report or block', () => {
     const { host } = mount({ viewer: 'ghost', poster: { ...poster, when: null } })
     expect(host.textContent).not.toContain('When:')

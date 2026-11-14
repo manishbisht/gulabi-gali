@@ -168,7 +168,12 @@ export interface PosterHooks {
   near(wall: Wall | null, empty: boolean): void
   /** A poster was tapped. */
   tap(poster: PosterView): void
+  /** These posters are no longer on any wall here (taken down, hidden, blocked, replaced). */
+  gone(ids: string[]): void
 }
+
+/** After a nudge's fetch fails, it is tried once more after this long (meanwhile the walls stay bare). */
+export const NUDGE_RETRY_MS = 2000
 
 export interface Posters {
   /** Every frame: which wall is in reach. Allocates nothing. */
@@ -239,6 +244,7 @@ export function createPosters(opts: {
   let loading: AbortController | null = null
   /** Socket news that came while a load was out: replayed once it lands. */
   let pending: ServerMsg[] = []
+  let retry: ReturnType<typeof setTimeout> | null = null
   let disposed = false
 
   const repaint = (w: WallView) => {
@@ -266,25 +272,46 @@ export function createPosters(opts: {
     if (!at) return
     at.w.posters.delete(at.slot)
     repaint(at.w)
+    hooks.gone([id])
   }
   const upsert = (p: PosterView) => {
     const w = walls[p.wall]
     if (!w || p.slot < 0 || p.slot >= POSTER_SLOTS) return
     const was = find(p.id)
     if (was) was.w.posters.delete(was.slot)
+    const displaced = w.posters.get(p.slot)
+    if (displaced && displaced.id !== p.id) hooks.gone([displaced.id])
     if (was && was.w !== w) repaint(was.w)
     w.posters.set(p.slot, p)
     repaint(w)
   }
   const handle = (m: ServerMsg) => {
-    if (m.t === 'posters') return refresh()
+    if (m.t === 'posters') return refresh(true)
     if (m.t !== 'poster') return
     if (m.op === 'add') upsert(m.poster)
     else remove(m.id)
   }
 
-  function refresh() {
+  /** Every wall shows `list` (and nothing else), and whatever left is said to be gone. */
+  const show = (list: PosterView[]) => {
+    const before = new Set<string>()
+    for (const w of walls) for (const p of w.posters.values()) before.add(p.id)
+    for (const w of walls) w.posters.clear()
+    for (const p of list) walls[p.wall]?.posters.set(p.slot, p)
+    for (const w of walls) repaint(w)
+    for (const p of list) before.delete(p.id)
+    if (before.size) hooks.gone([...before])
+  }
+
+  /**
+   * Fetches the walls again. `closed`: the server said what this person may see changed (a block), so on a
+   * failed fetch the walls go bare rather than keep showing what may now be someone they must not see, and
+   * the fetch is tried once more (`retried`). Any other failed fetch leaves them as they are.
+   */
+  function refresh(closed = false, retried = false) {
     loading?.abort()
+    if (retry) clearTimeout(retry)
+    retry = null
     const ctl = new AbortController()
     loading = ctl
     pending = []
@@ -293,16 +320,18 @@ export function createPosters(opts: {
       .then((list) => {
         if (disposed || ctl.signal.aborted) return
         loading = null
-        for (const w of walls) w.posters.clear()
-        for (const p of list) walls[p.wall]?.posters.set(p.slot, p)
-        for (const w of walls) repaint(w)
+        show(list)
         const replay = pending
         pending = []
         for (const m of replay) handle(m)
       })
       .catch(() => {
-        // Offline or refused: the walls keep what they show, and the next welcome or nudge tries again.
-        if (loading === ctl) loading = null
+        if (disposed || ctl.signal.aborted) return
+        loading = null
+        pending = []
+        if (!closed) return
+        show([])
+        if (!retried) retry = setTimeout(() => refresh(true, true), NUDGE_RETRY_MS)
       })
   }
 
@@ -320,7 +349,7 @@ export function createPosters(opts: {
       if (loading && m.t === 'poster') pending.push(m)
       else handle(m)
     },
-    refresh,
+    refresh: () => refresh(),
     upsert,
     remove,
     pick(ray) {
@@ -347,6 +376,7 @@ export function createPosters(opts: {
     dispose() {
       disposed = true
       loading?.abort()
+      if (retry) clearTimeout(retry)
       for (const w of walls) {
         w.mesh.removeFromParent()
         w.texture.dispose()

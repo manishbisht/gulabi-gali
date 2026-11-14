@@ -2,7 +2,7 @@ import { DISTRICT_IDS } from './district'
 import type { Env } from './env'
 import { wordsOk } from './filter/server'
 import { floating, type Later } from './inbox'
-import { allow, DAY_MS, muteGate, rateLimited } from './limits'
+import { allow, DAY_MS, muteGate, rateLimited, refund } from './limits'
 import { firstName } from './names'
 import { VISIBLE, visibleRow } from './profiles'
 import {
@@ -21,6 +21,8 @@ import { isVerified } from './trust'
 
 /** Pins one account may make in a day (taking one down gives none back). */
 export const POSTERS_PER_DAY = 5
+/** The counter `POSTERS_PER_DAY` is kept in (see `allow`). */
+export const POSTER_BUCKET = 'poster'
 /** Posters one person may have up at once (hidden ones included, until they expire or an admin acts). */
 export const MAX_LIVE_POSTERS = 2
 /**
@@ -208,16 +210,23 @@ export async function pinPoster(
   if (!wordsOk(p.text)) return fail('words', 400, { field: 'text' })
   const live = await env.DB.prepare(LIVE_OF).bind(userId, now).first<{ n: number }>()
   if ((live?.n ?? 0) >= MAX_LIVE_POSTERS) return fail('limit', 409)
-  if (!(await allow(env, userId, 'poster', POSTERS_PER_DAY, DAY_MS, now))) return rateLimited(DAY_MS, now)
+  // Taken before the poster goes up, so two pins at once cannot both slip past the fifth; given back when it
+  // does not go up after all (a lost race), so only a pin that went up is ever charged.
+  if (!(await allow(env, userId, POSTER_BUCKET, POSTERS_PER_DAY, DAY_MS, now)))
+    return rateLimited(DAY_MS, now)
   const view = { id: crypto.randomUUID(), wall: p.wall, text: p.text, when: p.when, name: firstName(me.name) }
   for (let tries = 0; tries < PLACE_TRIES; tries++) {
     const placed = await place(env, userId, p, view, now)
     if (placed === null) continue
-    if (placed === 'limit') return fail('limit', 409)
+    if (placed === 'limit') {
+      await refund(env, userId, POSTER_BUCKET, DAY_MS, now)
+      return fail('limit', 409)
+    }
     const poster: PosterView = { ...view, slot: placed.slot }
     later(tellAdded(env, p.district, poster, userId, placed.gone))
     return Response.json({ ...poster, mine: true } satisfies PosterView, { status: 201 })
   }
+  await refund(env, userId, POSTER_BUCKET, DAY_MS, now)
   return fail('busy', 503)
 }
 

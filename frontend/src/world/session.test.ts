@@ -618,6 +618,7 @@ it('the walls: fetched on each welcome as this person, kept current by the socke
     compose: vi.fn(),
     isOpen: vi.fn(() => false),
     left: vi.fn(),
+    gone: vi.fn(),
   }
   const { session, stage, tick, hooks: h } = openLive(async () => 'dev.asha.1', { posters })
   loads[0]!.resolve(fakeDistrict(walledCity))

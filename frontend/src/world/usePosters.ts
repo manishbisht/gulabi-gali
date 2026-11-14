@@ -28,7 +28,8 @@ export interface SessionPosterHooks extends PosterHooks {
  */
 export function usePosters() {
   const [near, setNear] = useState<{ wall: Wall; empty: boolean } | null>(null)
-  const [open, setOpen] = useState<PosterView | null>(null)
+  /** The tapped poster, and whether it has since come off the wall (the card then closes once idle). */
+  const [open, setOpen] = useState<{ poster: PosterView; gone: boolean } | null>(null)
   const [composing, setComposing] = useState(false)
   const shown = useRef(false)
   useEffect(() => {
@@ -45,7 +46,10 @@ export function usePosters() {
       },
       tap(p) {
         setComposing(false)
-        setOpen(p)
+        setOpen({ poster: p, gone: false })
+      },
+      gone(ids) {
+        setOpen((was) => (was && !was.gone && ids.includes(was.poster.id) ? { ...was, gone: true } : was))
       },
       compose() {
         setOpen(null)
