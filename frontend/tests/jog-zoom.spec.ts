@@ -87,23 +87,28 @@ test.describe('on a phone', () => {
       cdp.send('Input.dispatchTouchEvent', { type, touchPoints })
   }
 
-  test('the joystick pushed to its rim jogs; pushed part way it walks', async ({ page }) => {
+  test('the joystick pushed to its rim jogs, its knob tinted; pushed part way it walks', async ({ page }) => {
     await enterCity(page)
     const touch = await touchscreen(page)
     const box = (await page.getByRole('group', { name: 'Chalne ka joystick' }).boundingBox())!
     const stick = { x: box.x + box.width / 2, y: box.y + box.height / 2, id: 1 }
     const start = await position(page)
-    const push = async (dy: number) => {
+    const joystick = page.locator('.joystick')
+    const push = async (dy: number, tinted: boolean) => {
       await touch('touchStart', [stick])
       await touch('touchMove', [{ ...stick, y: stick.y - dy }])
       await underWay(page)
       const v = await pace(page)
+      // the knob is tinted while (and only while) the stick jogs
+      if (tinted) await expect(joystick).toHaveAttribute('data-jog', '')
+      else await expect(joystick).not.toHaveAttribute('data-jog')
       await touch('touchEnd', [])
+      await expect(joystick).not.toHaveAttribute('data-jog')
       await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), start)
       return v
     }
-    const part = await push(29) // 60% of the 48 px reach: a walk at 60%
-    const rim = await push(80) // past the rim, held at it: a jog
+    const part = await push(29, false) // 60% of the 48 px reach: a walk at 60%
+    const rim = await push(80, true) // past the rim, held at it: a jog
     expect(rim / part).toBeGreaterThan(2.4) // 1.8 / 0.6 = 3
     expect(rim / part).toBeLessThan(3.6)
   })

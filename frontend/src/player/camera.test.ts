@@ -200,6 +200,18 @@ describe('zoom', () => {
     }
   })
 
+  it('never comes down under 2 m above the player, at any zoom and pitch: never in the avatar or the props', () => {
+    for (const z of [0.6, 0.8, 1, 1.6])
+      for (const p of [-10, -0.2, 0, 0.15, 10]) {
+        const cam = new THREE.PerspectiveCamera()
+        const follow = createFollowCamera(cam, [], { reducedMotion: true })
+        follow.zoomBy(z)
+        follow.turn(0, p)
+        follow.update({ x: 0, y: 0.35, z: 0 }, 1 / 30) // seated at the wheel, a little up
+        expect(cam.position.y, `zoom ${z}, pitch ${p}`).toBeGreaterThanOrEqual(0.35 + 2 - 1e-9)
+      }
+  })
+
   it('zoomed out, a wall behind still pulls the camera in front of it', () => {
     const { cam } = zoomed(1.6, [{ minX: -10, maxX: 10, minZ: 3, maxZ: 15 }])
     expect(cam.position.z).toBeLessThan(3)

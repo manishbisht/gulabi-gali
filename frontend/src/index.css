@@ -563,6 +563,12 @@ button {
   pointer-events: none;
 }
 
+/* At the rim the walk is a jog: the knob says so in marigold. */
+.joystick[data-jog] .joystick-knob {
+  background: #f2a81d;
+  opacity: 1;
+}
+
 /* the festival greeting, its procession and the city line: one card, a line each */
 .hud-news {
   max-width: 100%;

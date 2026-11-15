@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createControls, type Controls } from './controls'
+import { createControls, rimJog, type Controls } from './controls'
 
 /** A minimal Window stand-in: just enough EventTarget to carry key events. */
 function fakeWindow() {
@@ -254,6 +254,31 @@ describe('createControls', () => {
     expect(c.jog()).toBe(false)
     press(w, 'ShiftLeft')
     expect(c.jog()).toBe(false)
+  })
+
+  it('the stick jogs from past 90% and keeps jogging until it eases back under 80%, so the rim does not flicker', () => {
+    const c = (controls = createControls(fakeWindow()))
+    const at = (z: number) => (c.setJoystick({ x: 0, z }), c.jog())
+    expect(at(0.85)).toBe(false) // not jogging yet: 85% is a walk
+    expect(at(0.95)).toBe(true)
+    expect(at(0.85)).toBe(true) // jogging: 85% stays a jog
+    expect(at(0.81)).toBe(true)
+    expect(at(0.75)).toBe(false)
+    expect(at(0.85)).toBe(false) // and walking again, 85% is a walk again
+    expect(at(0.95)).toBe(true)
+    expect(at(0)).toBe(false) // let go
+    expect(at(0.85)).toBe(false)
+    expect(at(0.95)).toBe(true)
+    c.freeze(true) // a minigame takes the stick: the jog goes with it
+    c.freeze(false)
+    expect(at(0.85)).toBe(false)
+  })
+
+  it('rimJog is the one rule for the stick and its tint: in above 0.9, out below 0.8', () => {
+    expect(rimJog(false, 0.9)).toBe(false)
+    expect(rimJog(false, 0.91)).toBe(true)
+    expect(rimJog(true, 0.8)).toBe(true)
+    expect(rimJog(true, 0.79)).toBe(false)
   })
 
   it('a wheel or pinch zooms: factors multiply until read, then are consumed; frozen, they are dropped', () => {

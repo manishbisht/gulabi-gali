@@ -36,6 +36,11 @@ const TURN_STIFFNESS = 20
 /** Zoom limits, as multiples of today's distance: in to about 5 m from the player, out to about 13 m. */
 const ZOOM_IN = 0.6
 const ZOOM_OUT = 1.6
+/**
+ * The camera never comes lower than this over the player's feet: above the head, the stalls and the autos, so
+ * zoomed in and looking up it never stands inside the avatar or a prop (it would sit at about 1.3 m).
+ */
+const MIN_HEIGHT = 2
 /** At the wheel, the view comes back round behind the auto after this many seconds without a turn. */
 const RECENTRE_AFTER = 1.5
 /** ...closing about 1 - e^-2.5 of the way each second. */
@@ -157,7 +162,11 @@ export function createFollowCamera(
       const sy = Math.sin(yaw)
       const cy = Math.cos(yaw)
       const pos = camera.position
-      pos.set(anchor.x + sy * flat, anchor.y + dist * Math.sin(elevation), anchor.z + cy * flat)
+      pos.set(
+        anchor.x + sy * flat,
+        anchor.y + Math.max(MIN_HEIGHT, dist * Math.sin(elevation)),
+        anchor.z + cy * flat,
+      )
       head.set(target.x, target.y + LOOK_AT_HEIGHT, target.z)
       // Pulled in at once when a wall is hit, eased back out when the way clears.
       const hit = firstHit(head.x, head.z, pos.x, pos.z, occluders)

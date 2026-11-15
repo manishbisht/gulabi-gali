@@ -762,8 +762,8 @@ export const STRINGS = {
     en: 'Walk: drag the joystick at the bottom. Look around: drag anywhere on the street.',
   },
   hintWalkKeys: {
-    hi: 'Chalna: W A S D ya arrow keys. Aas-paas dekhna: gali ko mouse se kheencho, ya Q aur R.',
-    en: 'Walk: W A S D or the arrow keys. Look around: drag the street with the mouse, or Q and R.',
+    hi: 'Chalna: W A S D ya arrow keys, tez chalna ho to Shift dabaye rakho. Aas-paas dekhna: gali ko mouse se kheencho, ya Q aur R.',
+    en: 'Walk: W A S D or the arrow keys. Hold Shift to jog. Look around: drag the street with the mouse, or Q and R.',
   },
   hintSitTouch: {
     hi: 'Chai ki bench ke paas jao aur "Baitho" dabao: wahan baithe logon se baat hoti hai.',

@@ -293,6 +293,37 @@ it('keeps one live socket per tab: travel closes the old district before opening
   expect(openSockets()).toEqual([])
 })
 
+it('a move made at a jog claims the jog pace (`pace: jog`), and a walk does not', async () => {
+  const { session, tick } = openLive()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [] })
+  const move = vi.spyOn(controls, 'move').mockReturnValue({ x: 0, z: 1 })
+  const jog = vi.spyOn(controls, 'jog').mockReturnValue(true)
+  let t = Date.now()
+  const now = vi.spyOn(Date, 'now').mockImplementation(() => t)
+  const sent = () =>
+    ws.sent.map((s) => JSON.parse(s) as { t: string; pace?: string }).filter((m) => m.t === 'move')
+  try {
+    t += 1000 // past even a ghost's throttle
+    tick(1 / 30)
+    expect(sent().at(-1)).toMatchObject({ t: 'move', pace: 'jog' })
+    jog.mockReturnValue(false)
+    t += 1000
+    tick(1 / 30)
+    expect(sent().at(-1)!.t).toBe('move')
+    expect(sent().at(-1)).not.toHaveProperty('pace')
+    expect(sent()).toHaveLength(3) // the welcome's, the jog's and the walk's
+  } finally {
+    move.mockRestore()
+    jog.mockRestore()
+    now.mockRestore()
+    session.dispose()
+  }
+})
+
 it('says where it stands right after welcome, and snaps back when a step was too fast', async () => {
   const { session, hooks: h } = openLive()
   loads[0]!.resolve(fakeDistrict(walledCity))

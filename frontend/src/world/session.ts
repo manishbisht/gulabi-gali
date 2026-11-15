@@ -814,6 +814,8 @@ function createPresence(
     move.ry = player.heading()
     // at the wheel the others draw an auto under us, and the server allows the faster pace
     move.v = player.driving() ? 'auto' : undefined
+    // a jog asks for the jog's allowance, so a stall while jogging is not pulled back (never relayed)
+    move.pace = player.jogging() ? 'jog' : undefined
     conn.send(move)
   }
   const onMsg = (m: ServerMsg) => {

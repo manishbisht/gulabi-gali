@@ -23,7 +23,7 @@ export interface Controls {
   addLook(yaw: number, pitch: number): void
   /** A drag on the stage began (true) or let go (false): held still, it keeps the view where it is put. */
   holdLook(on: boolean): void
-  /** Jogging, not walking: Shift held, or the joystick pushed past JOG_PUSH of its reach. */
+  /** Jogging, not walking: Shift held, or the joystick at its rim (see `rimJog`). */
   jog(): boolean
   /**
    * How much to scale the camera's distance by this frame (above 1 farther, below 1 nearer): the wheel's and
@@ -60,8 +60,18 @@ const TURN_RIGHT = ['KeyR']
 const TURN_RATE = 2
 /** Either Shift held jogs. */
 const SHIFT = ['ShiftLeft', 'ShiftRight'] as const
-/** A joystick pushed past this fraction of its reach jogs. */
-const JOG_PUSH = 0.9
+/** A joystick pushed past this fraction of its reach starts to jog, and jogs on until it is back under JOG_LEAVE. */
+const JOG_ENTER = 0.9
+const JOG_LEAVE = 0.8
+
+/**
+ * Whether a stick pushed `push` of its reach (0 to 1) jogs, given whether it was jogging: the one rule for the
+ * walk (controls) and the knob's tint (the joystick). The gap between in and out keeps a thumb resting at the
+ * rim from flickering between the two.
+ */
+export function rimJog(was: boolean, push: number): boolean {
+  return was ? push >= JOG_LEAVE : push > JOG_ENTER
+}
 
 /** A text field, which keeps its keys to itself. */
 function typing(t: EventTarget | null): boolean {
@@ -72,6 +82,8 @@ function typing(t: EventTarget | null): boolean {
 export function createControls(target: Window): Controls {
   const down = new Set<string>()
   let joystick: Vec2 = { x: 0, z: 0 }
+  /** The stick is at its rim (see `rimJog`), as of its last report. */
+  let stickJog = false
   let interactQueued = false
   let hornQueued = false
   let frozen = false
@@ -161,7 +173,7 @@ export function createControls(target: Window): Controls {
     },
     jog() {
       if (frozen) return false
-      return down.has(SHIFT[0]) || down.has(SHIFT[1]) || Math.hypot(joystick.x, joystick.z) > JOG_PUSH
+      return stickJog || down.has(SHIFT[0]) || down.has(SHIFT[1])
     },
     zoom() {
       const k = zoomBy
@@ -185,7 +197,10 @@ export function createControls(target: Window): Controls {
     freeze(on) {
       frozen = on
       // a stick still held when its widget goes away would never say it let go
-      if (on) joystick = { x: 0, z: 0 }
+      if (on) {
+        joystick = { x: 0, z: 0 }
+        stickJog = false
+      }
       dragYaw = 0
       dragPitch = 0
       zoomBy = 1
@@ -197,6 +212,7 @@ export function createControls(target: Window): Controls {
     },
     setJoystick(v) {
       joystick = { x: v.x, z: v.z }
+      stickJog = rimJog(stickJog, Math.hypot(v.x, v.z))
     },
     dispose() {
       target.removeEventListener('keydown', onKeyDown)
@@ -204,6 +220,7 @@ export function createControls(target: Window): Controls {
       target.removeEventListener('blur', onBlur)
       down.clear()
       joystick = { x: 0, z: 0 }
+      stickJog = false
       dragYaw = 0
       dragPitch = 0
       zoomBy = 1

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { moveWithCollision } from '../world/collision'
 import type { AABB, AvatarLook, Vec2 } from '../world/types'
+import { JOG_SPEED } from '../net/protocol'
 import { buildAutoGeometry } from '../world/props'
 import { buildAvatar } from './avatar'
 import type { Controls } from './controls'
@@ -8,8 +9,8 @@ import { createFollowCamera } from './camera'
 import { AUTO_RADIUS, createVehicle } from './vehicle'
 
 export const WALK_SPEED = 4
-/** Shift held, or the stick pushed to its rim: 7.2 m/s, under the server's 8 m/s (`MAX_SPEED`) on foot. */
-export const JOG_SPEED = 1.8 * WALK_SPEED
+/** Shift held, or the stick at its rim: 1.8x the walk, a figure the server shares (net/protocol). */
+export { JOG_SPEED }
 export const PLAYER_RADIUS = 0.4
 /** The driver sits this far up in the auto's seat. */
 const SEAT_Y = 0.35
@@ -35,6 +36,8 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
   // driving: the vehicle holds the speed and the heading; this file holds the body, and the collisions
   const vehicle = createVehicle('auto')
   let driving = false
+  /** The last frame moved the player on foot at a jog: its moves claim the jog's allowance from the server. */
+  let jogged = false
   /** The auto under the driver, made on the first mount and kept for the player's life. */
   let ride: THREE.Mesh | null = null
 
@@ -71,6 +74,8 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       sync(1) // dt of 1 s: the camera is effectively there too
     },
     driving: (): boolean => driving,
+    /** The last frame moved the player at a jog (on foot, never at the wheel). */
+    jogging: (): boolean => jogged,
     /** Gets into an auto standing at (x, z) and facing `ry`. */
     mount(x: number, z: number, ry: number) {
       if (driving) return
@@ -110,6 +115,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       const turn = controls.look(dt)
       follow.turn(turn.yaw, turn.pitch, turn.held)
       follow.zoomBy(controls.zoom())
+      jogged = false
       if (driving) {
         // the stick is the wheel and the pedal here, not a direction on the street
         const want = vehicle.update(controls.drive(), dt)
@@ -127,7 +133,8 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         const dx = fx * input.z - fz * input.x
         const dz = fz * input.z + fx * input.x
         // jogging is on foot only: at the wheel the auto keeps its own pace
-        const speed = controls.jog() ? JOG_SPEED : WALK_SPEED
+        jogged = controls.jog()
+        const speed = jogged ? JOG_SPEED : WALK_SPEED
         const step = { x: dx * speed * dt, z: dz * speed * dt }
         pos = moveWithCollision(pos, step, colliders, PLAYER_RADIUS)
         avatar.rotation.y = Math.atan2(dx, dz)

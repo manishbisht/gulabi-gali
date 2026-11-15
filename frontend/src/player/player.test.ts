@@ -182,6 +182,7 @@ describe('jogging', () => {
     expect(second()).toBeCloseTo(JOG_SPEED)
     controls.setJoystick({ x: 0.66, z: 0.66 }) // a diagonal at 93%
     expect(second()).toBeCloseTo(0.66 * Math.SQRT2 * JOG_SPEED)
+    controls.setJoystick({ x: 0, z: 0 }) // let go, then most of the way: a walk
     controls.setJoystick({ x: 0, z: 0.85 })
     expect(second()).toBeCloseTo(0.85 * WALK_SPEED)
     player.dispose()
@@ -196,11 +197,28 @@ describe('jogging', () => {
       if (shift) press('ShiftLeft')
       for (let i = 0; i < 60; i++) player.update(1 / 30)
       const z = player.position().z
+      expect(player.jogging()).toBe(false)
       player.dispose()
       controls.dispose()
       return z
     }
     expect(drove(true)).toBeCloseTo(drove(false))
+  })
+
+  it('says it is jogging (for the server) only while a frame moved it at a jog', () => {
+    const { controls, player, press } = open()
+    expect(player.jogging()).toBe(false)
+    press('ShiftLeft') // Shift alone, standing: not a jog
+    player.update(1 / 30)
+    expect(player.jogging()).toBe(false)
+    press('KeyW')
+    player.update(1 / 30)
+    expect(player.jogging()).toBe(true)
+    press('ShiftLeft', 'keyup')
+    player.update(1 / 30)
+    expect(player.jogging()).toBe(false)
+    player.dispose()
+    controls.dispose()
   })
 })
 

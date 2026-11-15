@@ -12,6 +12,8 @@ import type { RefreshWhy } from './refresh'
 import { recentInvite } from './trust'
 import {
   BENCH_SEATS,
+  JOG_BURST_M,
+  JOG_MAX_SPEED,
   LIVE_CLOSE,
   MAX_BENCH_LINE,
   type BenchLine,
@@ -83,21 +85,15 @@ export const MOVE_BATCH_MS = 100
 /** A socket hears the moves of people within this many metres of its own last point. */
 export const INTEREST_M = 60
 /**
- * The fastest the client goes on foot, in m/s: its jog (Shift, or the stick pushed to its rim), 1.8x its 4 m/s
- * walk. Not enforced itself: `MAX_SPEED` must stay above it, or every jogger is pulled back.
- */
-export const JOG_SPEED = 7.2
-/**
- * The fastest anyone may go on foot, in m/s, measured against the last accepted point: a jog (`JOG_SPEED`)
- * with about 10% to spare, so a steady jog never drains the burst below.
+ * The fastest anyone may go on foot without claiming a jog, in m/s, measured against the last accepted point.
+ * A jog (`JOG_SPEED`, 7.2 m/s) fits under it too, but with a burst too small for a jogger's stalls: a jogging
+ * client says so (`pace: 'jog'`) and gets `JOG_BURST_M`.
  */
 export const MAX_SPEED = 8
 /**
  * How far ahead of that pace a burst may run: one second's worth. This is a deliberate tolerance for network
  * jitter: frames bunch up after a stall, and without it a walker arriving all at once would be pulled back.
- * It covers a stall of 2 s at a walk and of 1.1 s at a jog (8 m / 7.2 m/s); a jogger stalled longer is pulled
- * back to the last point heard, an accepted cost (a burst big enough for 2 s of jogging would let anyone hop
- * 14 m at once).
+ * It covers a stall of 2 s at a walk.
  * The average still never beats `MAX_SPEED`; the most anyone gains is one 8 m hop after standing still.
  */
 export const SPEED_BURST_M = MAX_SPEED
@@ -210,11 +206,13 @@ export function parseClientMsg(text: string): ClientMsg | null {
   const m = parsed as Record<string, unknown>
   switch (m.t) {
     case 'move': {
-      const { x, z, ry, v } = m
+      const { x, z, ry, v, pace } = m
       // absent, or exactly 'auto': null, a number or any other word is a bad frame
       if ('v' in m && v !== 'auto') return null
       if (!isNum(x, MAX_COORD) || !isNum(z, MAX_COORD) || !isNum(ry, MAX_TURN)) return null
-      return v === 'auto' ? { t: 'move', x, z, ry, v } : { t: 'move', x, z, ry }
+      const move: ClientMsg = v === 'auto' ? { t: 'move', x, z, ry, v } : { t: 'move', x, z, ry }
+      // a pace other than 'jog' is ignored, as any unknown field is: never a bad frame, just a walk
+      return pace === 'jog' ? { ...move, pace } : move
     }
     case 'sit': {
       const { bench } = m
@@ -1038,7 +1036,13 @@ export class DistrictDO extends DurableObject<Env> {
     const ry = round(m.ry, 1000)
     const last = seat.pos
     const { v } = m
-    const [pace, burst] = v === 'auto' ? [AUTO_MAX_SPEED, AUTO_BURST_M] : [MAX_SPEED, SPEED_BURST_M]
+    // at the wheel the auto's allowance; on foot a claimed jog's, else a walk's
+    const [pace, burst] =
+      v === 'auto'
+        ? [AUTO_MAX_SPEED, AUTO_BURST_M]
+        : m.pace === 'jog'
+          ? [JOG_MAX_SPEED, JOG_BURST_M]
+          : [MAX_SPEED, SPEED_BURST_M]
     if (last) {
       const budget = Math.min(burst, last.budget + (pace * Math.max(0, now - last.at)) / 1000)
       const step = Math.hypot(x - last.x, z - last.z)

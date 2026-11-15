@@ -79,12 +79,31 @@ it('one finger or a mouse never zooms, and a lost pointer or a blur ends the pin
   expect(controls.addZoom).not.toHaveBeenCalled()
 })
 
-it('dispose takes every listener off the canvas', () => {
+it('dispose takes all eight listeners off: six on the canvas, the blur on the window, the hiding on the page', () => {
   const { canvas, gestures, fire, wheel, controls } = setup()
-  const removed = vi.spyOn(canvas, 'removeEventListener')
+  const listeners = (target: EventTarget) => {
+    const added = vi.mocked(target.addEventListener).mock.calls.map(([type, fn]) => [type, fn])
+    const removed = vi.mocked(target.removeEventListener).mock.calls.map(([type, fn]) => [type, fn])
+    return { added, removed }
+  }
+  for (const t of [canvas, window, document]) {
+    vi.spyOn(t, 'addEventListener')
+    vi.spyOn(t, 'removeEventListener')
+  }
+  // a fresh set, so the spies saw every add
+  const again = createZoomGestures(canvas, controls)
+  again.dispose()
+  const onCanvas = listeners(canvas)
+  expect(onCanvas.added.map(([type]) => type).sort()).toEqual(
+    ['lostpointercapture', 'pointercancel', 'pointerdown', 'pointermove', 'pointerup', 'wheel'].sort(),
+  )
+  expect(onCanvas.removed).toEqual(expect.arrayContaining(onCanvas.added))
+  expect(listeners(window).added.map(([type]) => type)).toEqual(['blur'])
+  expect(listeners(window).removed).toEqual(expect.arrayContaining(listeners(window).added))
+  expect(listeners(document).added.map(([type]) => type)).toEqual(['visibilitychange'])
+  expect(listeners(document).removed).toEqual(expect.arrayContaining(listeners(document).added))
+  vi.restoreAllMocks()
   gestures.dispose()
-  for (const type of ['wheel', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel'])
-    expect(removed).toHaveBeenCalledWith(type, expect.any(Function))
   wheel(100)
   fire('pointerdown', 1, 40)
   fire('pointerdown', 2, 60)
