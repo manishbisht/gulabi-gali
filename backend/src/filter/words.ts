@@ -522,8 +522,13 @@ export const UNGLUED: readonly (readonly [word: string, split: string])[] = [
   ['twink', 't wink'],
   ['wetback', 'wet back'],
   ['whore', 'who re'],
+  ['dildo', 'dil do'],
+  ['humping', 'hum ping'],
+  ['tushy', 'tu shy'],
   ['kamina', 'ka mina'],
   ['kamine', 'ka mine'],
+  ['कमीना', 'कमी ना'],
+  ['कमीने', 'कमी ने'],
   ['paki', 'pa ki'],
   ['tharki', 'thar ki'],
 ]

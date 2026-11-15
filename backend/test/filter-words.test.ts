@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildList, check } from '../src/filter'
 import { wordsOk } from '../src/filter/server'
 import { normalise } from '../src/filter/normalise'
+import { ENGLISH_EVERYDAY, HINDI_EVERYDAY, HINGLISH_EVERYDAY } from './everyday-words'
 import {
   DEVANAGARI,
   ENGLISH,
@@ -116,8 +117,86 @@ describe('the shipped word list', () => {
       'Raj ka Mina se milna hai',
       'mere pa ki gaadi',
       'Thar ki ret',
+      // everyday Hindi and Hinglish, in bench lines and chat
+      'कोई कमी ना हो',
+      'पूजा में कोई कमी ना रहे',
+      'इस कमी ने सब बिगाड़ दिया',
+      'tu shy hai kya',
+      'tu shy kyun hai',
+      'hum ping karenge',
+      'mujhe apna dil do',
+      'dil do na',
     ])
       expect(wordsOk(ok), ok).toBe(true)
+  })
+
+  /**
+   * Listed words that two everyday words split into but that stay glued on purpose: the abuse is the point of
+   * the word, and the everyday pair is rare enough to give up. Each with its reason. (The controller's ruling,
+   * 2026-11-15, for the English ones; the -chod and other family compounds are never freed.)
+   */
+  const KEPT_GLUED: Record<string, string> = {
+    asshole: 'per-token "ass" is refused anyway; "ass hole" is the insult, not a phrase',
+    bangbus: 'the split is the sexual phrase itself, never an everyday one',
+    birdlock: 'the split is the sexual phrase itself, never an everyday one',
+    blowjob: 'the split is the sexual phrase itself, never an everyday one',
+    bondage: 'ruling: kept glued ("bond age" is rare)',
+    butthole: 'the split is the sexual phrase itself, never an everyday one',
+    camgirl: 'the split is the sexual phrase itself, never an everyday one',
+    circlejerk: 'the split is the sexual phrase itself, never an everyday one',
+    cornhole: 'the split is the sexual phrase itself, never an everyday one',
+    doggystyle: 'the split is the sexual phrase itself, never an everyday one',
+    fingerbang: 'the split is the sexual phrase itself, never an everyday one',
+    footjob: 'the split is the sexual phrase itself, never an everyday one',
+    gangbang: 'the split is the sexual phrase itself, never an everyday one',
+    handjob: 'the split is the sexual phrase itself, never an everyday one',
+    jailbait: 'the split is the sexual phrase itself, never an everyday one',
+    livesex: 'ruling: kept glued',
+    muffdiving: 'the split is the sexual phrase itself, never an everyday one',
+    ponyplay: 'the split is the sexual phrase itself, never an everyday one',
+    rimjob: 'the split is the sexual phrase itself, never an everyday one',
+    sexcam: 'the split is the sexual phrase itself, never an everyday one',
+    shemale: 'ruling: kept glued (a slur; "she male" is rare)',
+    threesome: 'ruling: kept glued',
+    tubgirl: 'the split is the sexual phrase itself, never an everyday one',
+    upskirt: 'the split is the sexual phrase itself, never an everyday one',
+    worldsex: 'the split is the sexual phrase itself, never an everyday one',
+    raghead: 'a racial slur; the split is the slur',
+    towelhead: 'a racial slur; the split is the slur',
+    slanteye: 'a racial slur; the split is the slur',
+    hentai: '"hen tai" is no phrase',
+    honkey: '"hon key" is no phrase',
+    nutten: '"nut ten" is no phrase',
+    pikey: '"pi key" is no phrase',
+    behenchod: 'a -chod compound: never freed',
+    'beti-chod': 'a -chod compound: never freed',
+    betichod: 'a -chod compound: never freed',
+    maachod: 'a -chod compound: never freed',
+    gaand: 'a family stem: never freed ("ga and" is no phrase)',
+    lode: 'a family stem (lod): never freed',
+    harami: 'kept strong on review ("ha rami" is rare)',
+    chinki: 'ruling: kept glued (a slur)',
+    chinal: 'gendered abuse; "chin al" is no phrase',
+    chinaal: 'gendered abuse; "china al" is no phrase',
+    nude: 'refused in profile fields only; "nu de" is not Jaipur Hinglish',
+  }
+
+  it('every glued word that two everyday Hinglish, Hindi or English words split into is freed or kept on purpose', () => {
+    const everyday = new Set(
+      [...HINGLISH_EVERYDAY, ...HINDI_EVERYDAY, ...ENGLISH_EVERYDAY].flatMap((w) => normalise(w)),
+    )
+    const found: string[] = []
+    for (const w of STRONG) {
+      const glued = [...normalise(w).join('')]
+      if (glued.length < 4) continue
+      for (let at = 1; at < glued.length; at++) {
+        const [a, b] = [glued.slice(0, at).join(''), glued.slice(at).join('')]
+        if (everyday.has(a) && everyday.has(b) && !(w in KEPT_GLUED)) found.push(`${w}: ${a} ${b}`)
+      }
+    }
+    expect(found).toEqual([])
+    // and everything kept on purpose really is still glued
+    for (const w of Object.keys(KEPT_GLUED)) expect(STRONG, w).toContain(w)
   })
 
   it('glues every listed word but the few left out on purpose, each for a real everyday split', () => {
@@ -128,7 +207,9 @@ describe('the shipped word list', () => {
       expect(normalise(phrase).join(''), phrase).toBe(normalise(w).join(''))
       expect(wordsOk(phrase, 'about'), phrase).toBe(true)
     }
-    expect(UNGLUED.length).toBeLessThan(25)
+    // 25 today: the English splits ("pen is"), the Hinglish and Hindi ones ("dil do", "कमी ना") and the
+    // possessive or contracted ones ("let's hit"). A cap, so the list stays a short, reviewed exception.
+    expect(UNGLUED.length).toBeLessThanOrEqual(30)
     // every other listed word is glued, and no family stem is ever left out
     for (const w of [...WORDS, ...PUBLIC_ONLY]) expect(left.has(w) || STRONG.includes(w), w).toBe(true)
     const FAMILIES =
