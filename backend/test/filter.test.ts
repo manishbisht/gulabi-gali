@@ -9,12 +9,14 @@ import { closeAll, devId, live, resident, WAIT } from './helpers'
 
 // Placeholder tokens only: no real slur appears in any test. Every write path below runs against this list.
 vi.mock('../src/filter/words', () => ({
-  WORDS: ['badword', 'ganda', 'गंदा', 'zzzstatus', 'namesafe'],
+  WORDS: ['badword', 'ganda', 'गंदा', 'zzzstatus', 'namesafe', 'penword'],
   NAME_SAFE: ['namesafe'],
+  // the strong-abuse subset: the only words two neighbouring tokens are glued into
+  STRONG: ['badword', 'गंदा'],
 }))
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
-const LIST = buildList(['badword', 'ganda', 'गंदा'])
+const LIST = buildList(['badword', 'ganda', 'गंदा'], ['badword', 'गंदा'])
 const flagged = (s: string) => !check(s, LIST).ok
 
 beforeAll(async () => {
@@ -33,7 +35,7 @@ describe('normalise', () => {
   })
 })
 
-const ALL = buildList(['badword', 'ganda', 'गंदा', 'ass', 'tit'])
+const ALL = buildList(['badword', 'ganda', 'गंदा', 'ass', 'tit'], ['badword', 'गंदा'])
 const caught = (s: string, list = LIST) => !check(s, list).ok
 
 describe('numbers are not leetspeak', () => {
@@ -72,10 +74,26 @@ describe('dressed-up spellings', () => {
     expect(caught('wow!! great *** day')).toBe(false)
   })
 
-  it('neighbouring tokens glue (fu ck)', () => {
+  it('neighbouring tokens glue (fu ck), into the strong-abuse words only', () => {
     for (const s of ['bad word', 'ba dword', 'badw ord', 'BAD   WORD', 'गं दा'])
       expect(caught(s), s).toBe(true)
     expect(caught('a b')).toBe(false)
+    // a listed word outside the strong subset is matched whole, never glued from two (pen is, an al, who re)
+    const mixed = buildList(['badword', 'penword'], ['badword'])
+    for (const s of ['pen word', 'pe nword', 'penw ord', 'PEN   WORD'])
+      expect(caught(s, mixed), s).toBe(false)
+    for (const s of ['penword', 'p e n w o r d', 'p3nw0rd', 'peeenword', 'pen-word', 'p*nword'])
+      expect(caught(s, mixed), s).toBe(true)
+    // the strong ones still glue dressed up: leet, look-alike letters, accents
+    for (const s of ['b4d w0rd', 'bаd wоrd', 'BA DWORD', 'bá dword', 'b@d w0rd'])
+      expect(caught(s, mixed), s).toBe(true)
+  })
+
+  it('a known phrase is one token: "cum laude" never meets a listed word', () => {
+    const list = buildList(['laude'])
+    for (const s of ['magna cum laude', 'Cum Laude', 'graduated summa cum laude, 2019', 'cum-laude'])
+      expect(caught(s, list), s).toBe(false)
+    for (const s of ['laude', 'abe laude', 'laude cum', 'cum  x laude']) expect(caught(s, list), s).toBe(true)
   })
 
   it('combining marks, blanks, variation selectors and look-alike letters', () => {
@@ -167,6 +185,12 @@ describe('the word filter', () => {
     expect(candidates('b a d w o r d')).toContain('badword')
     expect(candidates('baaad')).toContain('~bad')
     expect(candidates('bad')).not.toContain('~bad')
+    // a glued pair is looked up behind `+`, which only the strong words are listed with
+    expect(candidates('bad word')).toContain('+badword')
+    expect(candidates('bad word')).not.toContain('badword')
+    expect(buildList(['badword', 'penword'], ['badword'])).toEqual(
+      new Set([...buildList(['badword', 'penword']), '+badword']),
+    )
   })
 })
 
@@ -293,6 +317,9 @@ describe('GET /api/filter/words.json', () => {
         .join('')
     expect(body.hashes).toContain(await sha1('badword'))
     expect(body.hashes).toContain(await sha1('~badword'))
+    // the strong subset's glued form, so the page's hint glues just as the server does
+    expect(body.hashes).toContain(await sha1('+badword'))
+    expect(body.hashes).not.toContain(await sha1('+penword'))
     expect(JSON.stringify(body)).not.toContain('badword')
   })
 })

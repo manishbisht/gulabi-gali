@@ -1,12 +1,16 @@
 import { buildList, check } from './index'
-import { NAME_SAFE, WORDS } from './words'
+import { NAME_SAFE, STRONG, WORDS } from './words'
 
 /** The list as a `Set`, built on first use and kept for the life of the isolate: every bench line checks it. */
 let list: Set<string> | undefined
-const serverList = () => (list ??= buildList(WORDS))
+const serverList = () => (list ??= buildList(WORDS, STRONG))
 /** The same without `NAME_SAFE`, for the one field where those words are somebody's name. */
 let nameList: Set<string> | undefined
-const serverNameList = () => (nameList ??= buildList(WORDS.filter((w) => !NAME_SAFE.includes(w))))
+const serverNameList = () =>
+  (nameList ??= buildList(
+    WORDS.filter((w) => !NAME_SAFE.includes(w)),
+    STRONG,
+  ))
 
 /** Whether `text` (already cleaned) is fit to show other people. The server's one answer. */
 export const wordsOk = (text: string, field?: string): boolean =>

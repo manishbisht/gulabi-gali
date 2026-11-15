@@ -296,7 +296,11 @@ banned; visible is active and not hidden. Every residency check goes through the
 
 Names, statuses, about, request reasons, chat, bench lines and posters are checked. Text is normalised
 (lowercase, NFKC, leetspeak, repeated letters collapsed, separators stripped) and matched on whole tokens and
-known compounds from `filter/words.ts`. A hit is a 400 `{ error: 'words', field }` (the field it was found in).
+known compounds from `filter/words.ts`. A run of single letters (`b a d`) is glued and checked against the whole
+list; two neighbouring tokens are glued (`fu ck`) only into the strong-abuse subset (`STRONG`: the f-word family,
+the gendered and racial slurs, every "-chod" compound and the like), so "pen is", "an Al" or "who re" never
+become a listed word. A few everyday phrases with a listed word in them are read as one token
+(`magna cum laude`). A hit is a 400 `{ error: 'words', field }` (the field it was found in).
 The client has the same check for a hint while typing (`filter/WordsHint`); the server has the last word.
 
 ### Blocks (`blocks.ts`)

@@ -30,6 +30,16 @@ it('flags what the hashed list holds, spaced, leet or stretched, and nothing els
     expect(await hintFlagged(s), s).toBe(false)
 })
 
+it('glues two tokens only into a word the list marks strong (+), as the server does', async () => {
+  const hashes = [await sha1('badword'), await sha1('+badword'), await sha1('penword')]
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ hashes }))),
+  )
+  for (const s of ['bad word', 'b4d w0rd', 'penword']) expect(await hintFlagged(s), s).toBe(true)
+  for (const s of ['pen word', 'pe nword']) expect(await hintFlagged(s), s).toBe(false)
+})
+
 it('fails open: no list, a bad answer or a thrown fetch means no hint', async () => {
   vi.stubGlobal(
     'fetch',

@@ -1,7 +1,8 @@
 /**
  * The words the filter rejects, as people write them: whole tokens only (see `./index.ts`), so a word that
- * merely contains one of these is never flagged. Spaced-out, leetspeak and elongated spellings are caught by
- * normalisation, so this list holds plain spellings, plus the common variant spellings of Hindi words.
+ * merely contains one of these is never flagged. Spelled-out, leetspeak and elongated spellings are caught by
+ * normalisation, and a word split in two by a space only when it is in `STRONG` (below), so this list holds
+ * plain spellings, plus the common variant spellings of Hindi words.
  *
  * Sources:
  * - ENGLISH is drawn from "List of Dirty, Naughty, Obscene, and Otherwise Bad Words" (LDNOOBW),
@@ -491,3 +492,99 @@ export const DEVANAGARI: readonly string[] = [
 export const NAME_SAFE: readonly string[] = ['kamina', 'kamine', 'kaminey', 'कमीना', 'कमीने']
 
 export const WORDS: readonly string[] = [...ENGLISH, ...HINGLISH, ...DEVANAGARI]
+
+/**
+ * The strong-abuse subset: the only words two neighbouring tokens are glued into (`fu ck`, a compound typed in
+ * two halves). Every other listed word is matched as a whole token only, because glued pairs made ordinary
+ * phrases into listed words ("pen is", "an Al", "who re", "let's hit"). So a word belongs here only when it is
+ * unmistakable abuse and no everyday pair of words glues into it: the f-word family, the gendered and racial
+ * slurs, and the Hinglish compounds people split on purpose (every "-chod", the chutiya, bhosdike and haramzada
+ * families), in both scripts. Each one is also in `WORDS`.
+ */
+export const STRONG: readonly string[] = [
+  'clusterfuck',
+  'cunt',
+  'bitch',
+  'bitches',
+  'faggot',
+  'fuck',
+  'fuckin',
+  'fucking',
+  'fucktards',
+  'motherfucker',
+  'nigga',
+  'nigger',
+  'slut',
+  'bahanchod',
+  'bahenchod',
+  'behenchod',
+  'behnchod',
+  'benchod',
+  'beti-chod',
+  'betichod',
+  'bhainchod',
+  'bhanchod',
+  'bhenchod',
+  'bhenchodd',
+  'maachod',
+  'madarchod',
+  'maderchod',
+  'madharchod',
+  'madhavchod',
+  'bhonsdi',
+  'bhosadi',
+  'bhosadike',
+  'bhosdi',
+  'bhosdika',
+  'bhosdike',
+  'bhosdiwala',
+  'chinaal',
+  'chinal',
+  'chhinal',
+  'chootia',
+  'chootiya',
+  'chutia',
+  'chutiya',
+  'chutiyaa',
+  'chutiye',
+  'gaandu',
+  'gandu',
+  'haramjada',
+  'haramjade',
+  'haramkhor',
+  'haramzaade',
+  'haramzada',
+  'haramzade',
+  'haramzadi',
+  'kutiya',
+  'kuttiya',
+  'lauda',
+  'lavda',
+  'lawda',
+  'raandi',
+  'randi',
+  'भेनचोद',
+  'भैनचोद',
+  'बहनचोद',
+  'बहनचोदों',
+  'बेटीचोद',
+  'मदरचोद',
+  'मादरचोद',
+  'मादरचोदो',
+  'चुतिया',
+  'चूतिया',
+  'चूतीया',
+  'चुतिये',
+  'चूतिये',
+  'भोसड़ीके',
+  'भोसडीके',
+  'हरामज़ादा',
+  'हरामज़ादी',
+  'हरामजादा',
+  'हरामजादी',
+  'हरामखोर',
+  'कुतिया',
+  'कुत्तिया',
+  'रंडी',
+  'रण्डी',
+]

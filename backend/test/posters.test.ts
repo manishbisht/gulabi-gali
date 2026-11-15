@@ -18,7 +18,7 @@ import { POSTER_SLOTS, type PosterView } from '../src/protocol'
 import { api, devId, live, login, resident, settle, type LiveClient } from './helpers'
 
 // Placeholder tokens only: no real slur appears in any test.
-vi.mock('../src/filter/words', () => ({ WORDS: ['badword', 'ganda'], NAME_SAFE: [] }))
+vi.mock('../src/filter/words', () => ({ WORDS: ['badword', 'ganda'], NAME_SAFE: [], STRONG: ['badword'] }))
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const db = testEnv.DB
