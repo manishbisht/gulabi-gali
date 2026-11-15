@@ -21,8 +21,8 @@ import type { AABB, AvatarLook, DistrictDef, LandmarkDef, Vec2 } from './types'
  */
 
 const KEY = 'gg-no-bandar'
-/** Whether the visitor switched the monkey off ("Bandar band karo"): any value but empty, which is switched on again. */
-export const bandarOff = (): boolean => !!storage.get(KEY)
+/** Whether the visitor switched the monkey off ("Bandar band karo"): `'1'` only; anything else is on. */
+export const bandarOff = (): boolean => storage.get(KEY) === '1'
 /** Flips the switch; the storage has no remove, so "on" is an empty value. */
 export const setBandarOff = (off: boolean): void => storage.set(KEY, off ? '1' : '')
 /** The cooldown between raids, in ms. */
@@ -213,7 +213,8 @@ export function createBandar(
         checkIn -= dt
         if (checkIn > 0) return null
         checkIn = CHECK_S
-        if (!eligible(player) || rand() >= CHANCE) return null
+        // the dice first: most looks end here, before the storage read and the look
+        if (rand() >= CHANCE || !eligible(player)) return null
         // drops from the rooftops a few metres off, at a point of its own choosing
         const a = rand() * Math.PI * 2
         const p = player.position()
@@ -229,7 +230,7 @@ export function createBandar(
         pose(0)
         return null
       }
-      // a raid in progress: the switch is read once a second, not every frame
+      // a raid in progress: the switch is read once a second, not every frame (and once more as it lands)
       checkIn -= dt
       if (checkIn <= 0) {
         checkIn = CHECK_S
@@ -244,6 +245,11 @@ export function createBandar(
         m.y = reduced ? 0 : DROP_FROM * Math.max(0, 1 - t / DROP_S)
         pose(0)
         if (t < DROP_S) return null
+        // switched off on its way down: it goes without taking anything
+        if (bandarOff()) {
+          restore()
+          return { kind: 'ended' }
+        }
         // it lands, grabs the headgear off the player's head and is away
         player.setLook({ ...opts.look(), head: 'none' })
         route = roofRoute(def, p)

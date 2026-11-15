@@ -27,6 +27,12 @@ import type { CDPSession, Page } from '@playwright/test'
  *   the CDN's `/npm/...` URLs, held back as long as Fast 4G would take
  *   (latency plus gzipped size over the throughput), and Clerk's API calls
  *   fail. So clerk-js downloads, parses and runs, and then finds no Clerk.
+ *
+ * Every phase-4 extra at once (DEVICE_PERF_EXTRAS=1): the page opens on Sankranti, so its kites are in the
+ * sky, a Gangaur procession is forced onto the street beside them, the street dog by the spawn is called to
+ * follow, and after the walk the player drives the auto parked by the spawn for another 8 s, recorded on its
+ * own. The 60 residents come from `node scripts/fake-residents.mjs 60 walled-city <seconds>`, run alongside;
+ * the posters and the animals are always there. Results go to test-results/device-perf-extras.json.
  */
 
 test.skip(!process.env.DEVICE_PERF, 'Measurement, not a test: set DEVICE_PERF=1 to run it.')
@@ -43,8 +49,14 @@ const FAST_4G = {
   uploadThroughput: (1500 * 1000 * 0.9) / 8,
 }
 const CPU_SLOWDOWN = 6
-/** How long the walk along the bazaar is watched. */
+/** How long the walk along the bazaar is watched (and, with every extra on, the drive after it). */
 const WALK_MS = 8000
+const EXTRAS = !!process.env.DEVICE_PERF_EXTRAS
+/** The street dog that lives a few steps from the spawn, and the auto parked just past it. */
+const DOG = 'walled-city-dog-0'
+const AUTO_SIDE = { x: 0.8, z: 54 }
+
+type Frames = Result['frames']
 
 interface Result {
   fcp: number | null
@@ -53,7 +65,17 @@ interface Result {
   walkable: number | null
   /** ms the Padharo! button was pressed at, so the load can be split into before and after it. */
   entered: number | null
-  frames: { count: number; p50: number; p95: number; p99: number; max: number; over33: number }
+  frames: {
+    count: number
+    p50: number
+    p95: number
+    p99: number
+    max: number
+    over33: number
+    /** Main-thread ms per frame: all tasks, and script within them, under the CPU throttle. */
+    taskPerFrame: number
+    scriptPerFrame: number
+  }
   qualityAfter: number | null
   /** Other people drawn at the end of the walk (the stress check runs scripts/fake-residents.mjs alongside). */
   people: number
@@ -61,6 +83,17 @@ interface Result {
   renderer: string
   /** Clerk mode only: what of Clerk the page fetched. */
   clerk?: { mode: string; chunk: boolean; cdn: string[] }
+  /** What the renderer drew in the walk's last frame. */
+  render: { calls: number; triangles: number; geometries: number; textures: number; programs: number }
+  /** Every-extra mode only: what was up during the walk, and the drive recorded after it. */
+  extras?: {
+    festival: string | null
+    procession: number
+    following: boolean
+    animals: number
+    drive: Frames & { qualityAfter: number; people: number; moved: number }
+    driveRender: Result['render']
+  }
 }
 
 /** Clerk's CDN, stood in for (see the header). Answers the CDN URLs it was asked for. */
@@ -138,6 +171,49 @@ async function instrument(page: Page) {
 const percentile = (sorted: number[], p: number) =>
   sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] : 0
 
+/** Main-thread busy time so far, in ms: all tasks, and the JavaScript within them (CPU-throttled time). */
+async function busy(cdp: CDPSession) {
+  const { metrics } = await cdp.send('Performance.getMetrics')
+  const get = (name: string) => (metrics.find((m) => m.name === name)?.value ?? 0) * 1000
+  return { task: get('TaskDuration'), script: get('ScriptDuration') }
+}
+
+/**
+ * Holds W and S in turn for `WALK_MS` (walking or driving), recording every frame interval, and how much of
+ * each frame the main thread was busy (tasks, and script within them), averaged over the window.
+ */
+async function record(page: Page, cdp: CDPSession): Promise<Frames> {
+  await page.evaluate(() => {
+    ;(window as unknown as { __perf: Perf }).__perf.frames = []
+  })
+  const before = await busy(cdp)
+  const start = Date.now()
+  let key = 'w'
+  await page.keyboard.down(key)
+  while (Date.now() - start < WALK_MS) {
+    await page.waitForTimeout(1500)
+    await page.keyboard.up(key)
+    key = key === 'w' ? 's' : 'w'
+    await page.keyboard.down(key)
+  }
+  await page.keyboard.up(key)
+  const after = await busy(cdp)
+  const frames = (await page.evaluate(() => (window as unknown as { __perf: Perf }).__perf.frames)).sort(
+    (a, b) => a - b,
+  )
+  expect(frames.length).toBeGreaterThan(0)
+  return {
+    taskPerFrame: (after.task - before.task) / frames.length,
+    scriptPerFrame: (after.script - before.script) / frames.length,
+    count: frames.length,
+    p50: percentile(frames, 50),
+    p95: percentile(frames, 95),
+    p99: percentile(frames, 99),
+    max: frames.at(-1) ?? 0,
+    over33: frames.filter((f) => f > 33.4).length,
+  }
+}
+
 test('the walled city on a throttled Pixel 7', async ({ page }) => {
   test.setTimeout(240000)
   await instrument(page)
@@ -146,7 +222,10 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
   const cdp = await throttle(page)
 
   // Load: a cold visit, past the intro, to the first walkable frame.
-  await page.goto('/?gg-test=1', { waitUntil: 'load', timeout: 120000 })
+  await page.goto(EXTRAS ? '/?gg-test=1&gg-festival=sankranti' : '/?gg-test=1', {
+    waitUntil: 'load',
+    timeout: 120000,
+  })
   await page.getByRole('button', { name: 'Padharo!' }).click()
   const entered = await page.evaluate(() => performance.now())
   await page.waitForFunction(() => (window as unknown as { __perf: Perf }).__perf.walkable !== null, null, {
@@ -162,43 +241,68 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     return gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : 'no webgl'
   })
 
-  // Frames: walk the bazaar, turning at the end of the lane so the whole 8 s is moving.
-  await page.evaluate(() => {
-    ;(window as unknown as { __perf: Perf }).__perf.frames = []
-  })
-  const start = Date.now()
-  let key = 'w'
-  await page.keyboard.down(key)
-  while (Date.now() - start < WALK_MS) {
-    await page.waitForTimeout(1500)
-    await page.keyboard.up(key)
-    key = key === 'w' ? 's' : 'w'
-    await page.keyboard.down(key)
+  let extras: Result['extras']
+  if (EXTRAS) {
+    // a procession under the kites, and the dog by the spawn at the player's heels
+    await page.evaluate(() => window.__gg.forceProcession('gangaur'))
+    const dog = await page.evaluate((id) => window.__gg.animals().find((a) => a.id === id)!, DOG)
+    await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 1.6), dog)
+    await page.getByRole('button', { name: 'Saath chalo' }).click()
+    await expect
+      .poll(() => page.evaluate((id) => window.__gg.animals().find((a) => a.id === id)!.following, DOG))
+      .toBe(true)
   }
-  await page.keyboard.up(key)
-  const frames = (await page.evaluate(() => (window as unknown as { __perf: Perf }).__perf.frames)).sort(
-    (a, b) => a - b,
-  )
+  const during = EXTRAS
+    ? await page.evaluate(() => ({
+        festival: window.__gg.festival(),
+        procession: window.__gg.procession().count,
+        animals: window.__gg.animals().length,
+      }))
+    : null
+
+  // Frames: walk the bazaar, turning at the end of the lane so the whole 8 s is moving.
+  const walk = await record(page, cdp)
   const qualityAfter = await page.evaluate(() => window.__gg.quality())
   const people = await page.evaluate(() => window.__gg.people().length)
+  const render = await page.evaluate(() => window.__gg.renderInfo())
+  const following = await page.evaluate(
+    (id) => window.__gg.animals().find((a) => a.id === id)?.following ?? false,
+    DOG,
+  )
+
+  if (EXTRAS && during) {
+    // then into the auto parked by the spawn, and 8 s at the wheel
+    await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), AUTO_SIDE)
+    await page.getByRole('button', { name: 'Auto chalao' }).click()
+    await expect(page.getByRole('button', { name: 'Utro' })).toBeVisible()
+    const from = await page.evaluate(() => window.__gg.position())
+    const drive = await record(page, cdp)
+    const to = await page.evaluate(() => window.__gg.position())
+    extras = {
+      ...during,
+      following,
+      drive: {
+        ...drive,
+        qualityAfter: await page.evaluate(() => window.__gg.quality()),
+        people: await page.evaluate(() => window.__gg.people().length),
+        moved: Math.hypot(to.x - from.x, to.z - from.z),
+      },
+      driveRender: await page.evaluate(() => window.__gg.renderInfo()),
+    }
+  }
   const { metrics } = await cdp.send('Performance.getMetrics')
   const heap = metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? 0
 
   const result: Result = {
     ...load,
     entered,
-    frames: {
-      count: frames.length,
-      p50: percentile(frames, 50),
-      p95: percentile(frames, 95),
-      p99: percentile(frames, 99),
-      max: frames.at(-1) ?? 0,
-      over33: frames.filter((f) => f > 33.4).length,
-    },
+    frames: walk,
     qualityAfter,
     people,
     heapMB: heap / 2 ** 20,
     renderer,
+    render,
+    extras,
   }
   if (clerkMode) {
     const chunk = await page.evaluate(() =>
@@ -207,7 +311,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     result.clerk = { mode: clerkMode === 'abort' ? 'abort' : 'stub', chunk, cdn }
   }
   mkdirSync('test-results', { recursive: true })
-  writeFileSync('test-results/device-perf.json', JSON.stringify(result, null, 2))
+  writeFileSync(`test-results/device-perf${EXTRAS ? '-extras' : ''}.json`, JSON.stringify(result, null, 2))
   const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
   console.log(
     '\n| FCP ms | LCP ms | Walkable ms | Frames | p50 | p95 | p99 | max | >33ms | Tier | People | Heap MB |',
@@ -215,7 +319,22 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
   console.log(
     `| ${ms(result.fcp)} | ${ms(result.lcp)} | ${ms(result.walkable)} | ${result.frames.count} | ${result.frames.p50.toFixed(1)} | ${result.frames.p95.toFixed(1)} | ${result.frames.p99.toFixed(1)} | ${result.frames.max.toFixed(0)} | ${result.frames.over33} | ${result.qualityAfter} | ${result.people} | ${result.heapMB.toFixed(1)} |`,
   )
-  console.log(`\nRenderer: ${result.renderer}`)
+  const x = result.extras
+  if (x) {
+    const d = x.drive
+    console.log(
+      `| drive | | | ${d.count} | ${d.p50.toFixed(1)} | ${d.p95.toFixed(1)} | ${d.p99.toFixed(1)} | ${d.max.toFixed(0)} | ${d.over33} | ${d.qualityAfter} | ${d.people} | |`,
+    )
+    console.log(
+      `\nExtras: festival ${x.festival}, procession ${x.procession}, animals ${x.animals}, following ${x.following}, drove ${d.moved.toFixed(1)} m`,
+    )
+    console.log(`Draw (walk): ${JSON.stringify(result.render)}; (drive): ${JSON.stringify(x.driveRender)}`)
+  } else console.log(`\nDraw: ${JSON.stringify(result.render)}`)
+  const busyLine = (f: Frames) =>
+    `${f.taskPerFrame.toFixed(1)} ms task, ${f.scriptPerFrame.toFixed(1)} ms script`
+  console.log(
+    `Main thread per frame (walk): ${busyLine(result.frames)}${x ? `; (drive): ${busyLine(x.drive)}` : ''}`,
+  )
+  console.log(`Renderer: ${result.renderer}`)
   if (result.clerk) console.log(`Clerk: ${JSON.stringify(result.clerk)}`)
-  expect(frames.length).toBeGreaterThan(0)
 })

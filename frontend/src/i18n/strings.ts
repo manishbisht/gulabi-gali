@@ -24,6 +24,8 @@ export const STRINGS = {
   weatherUnknown: { hi: '—', en: '—' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
   langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },
+  /** The HUD's group of small switches: language, sound, and the monkey in the Walled City. */
+  hudSwitches: { hi: 'Settings', en: 'Settings' },
   festivalSankranti: {
     hi: 'Makar Sankranti mubarak! Aasmaan dekho 🪁',
     en: 'Happy Makar Sankranti! Look up 🪁',
@@ -318,7 +320,6 @@ export const STRINGS = {
   bandarGearCap: { hi: 'topi', en: 'cap' },
   bandarGearDupatta: { hi: 'dupatta', en: 'dupatta' },
   bandarStop: { hi: 'Bandar band karo', en: 'Stop the monkey' },
-  bandarStart: { hi: 'Bandar wapas bulao', en: 'Bring the monkey back' },
   soundOn: { hi: 'Awaaz: chalu', en: 'Sound: on' },
   soundOff: { hi: 'Awaaz: band', en: 'Sound: off' },
   soundToggleLabel: { hi: 'Awaaz chalu ya band karo', en: 'Turn sound on or off' },

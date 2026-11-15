@@ -17,7 +17,7 @@ database and two Durable Objects; the Durable Object classes are created by the 
 ## Owner checklist, in order
 
 1. Cloudflare account, token and KV namespace (section 1, steps 1 and 2).
-2. **D1** (section 1a): create the database, paste its id, apply the migration.
+2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0003`).
 3. **Clerk** (section 1b): create the app, then set the Worker secrets.
 4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); the first push to `main` deploys.
 5. GitHub Pages and the `github-pages` secrets, including `VITE_CLERK_PUBLISHABLE_KEY` (section 2).
@@ -60,7 +60,8 @@ npx wrangler d1 create gulabi-gali
 ```
 
 Paste the `database_id` it prints over `REPLACE_WITH_D1_ID` in `backend/wrangler.jsonc`, commit it, then create
-the tables (`migrations/0001_people.sql`: users, profiles, requests, matches, messages) in the real database:
+the tables in the real database (`migrations/0001_people.sql`: users, profiles, requests, matches, messages;
+`0002_trust.sql`: trust and reports; `0003_posters.sql`: posters):
 
 ```sh
 npx wrangler d1 migrations apply gulabi-gali --remote
@@ -205,6 +206,39 @@ OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the te
       its alarm, instead of keeping it only in memory.
 - [ ] Budget alerts are on (section 3).
 
+## 2b. Phase 4 (posters and the extras): what changes at deploy
+
+**Nothing new to set.** Phase 4 adds no secret, var, binding or Durable Object class: `wrangler.jsonc` is
+unchanged. The poster pin limit (5 a day per account) is a D1 counter, like the phase 3 per-account limits, and
+pins also pass through the existing `WRITES_LIMITER`. Posters are text only: no images, so no storage bucket.
+
+**Migration `0003_posters.sql`.** It adds the `posters` table and `reports.poster_id`, additive like `0002`. The
+deploy job applies it before the Worker that needs it ships (see section 3); by hand it is the same
+`npx wrangler d1 migrations apply gulabi-gali --remote` from `backend/`. Once deployed it is frozen: new schema
+goes in `0004` and later.
+
+**Moderating posters.** Poster reports come into the admin page's queue with the other reports about the
+poster's owner, showing the poster's text, district, wall and time. **Take the poster down** removes it from
+every wall at once and closes every open report on it; banning the owner takes all their posters down too.
+Three reports on one poster from verified members whose accounts are at least a week old hide it on their own
+until you act; reports from anyone else are queued but do not hide it. Expired posters are deleted by the same
+15-minute cron as everything else.
+
+**The extras need nothing at deploy.** Autos, the metro ride, street animals, processions, the kite fight and
+the bandar run in the page only and are not sent to the Worker (an auto driver's moves carry a flag, so the
+district allows auto speed). They cost no Worker requests, D1 or Durable Object time beyond the moves people
+already send.
+
+**Pre-launch checks for phase 4**
+
+- [ ] From a verified test account, pin a poster with a time on a Walled City wall; a second browser in the
+      same district sees it appear without a reload.
+- [ ] Report it from another account, see it on the admin page with its text and wall, take it down, and check
+      it leaves the wall in the second browser and the report is closed.
+- [ ] Look at the Galta bandar on a phone, near Jantar Mantar with a safa or cap on (its rooftop run has only
+      been checked in tests), and switch it off with the 🐒 chip.
+- [ ] Drive an auto with two accounts in the district: the other sees the driver sitting in an auto.
+
 ## 3. Budget alerts
 
 Cloudflare dashboard, Notifications, Add:
@@ -233,7 +267,8 @@ running between the two steps works against the migrated database.
 - `npm ci` at the repo root.
 - `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend`: creates the local tables (once, and after
   each new migration).
-- After pulling phase 3, run `rm -rf backend/.wrangler/state` once, then the migrations command above.
+- After pulling phase 3, run `rm -rf backend/.wrangler/state` once, then the migrations command above. After
+  pulling phase 4 only the migrations command is needed (`0003` is additive).
 - `npm run dev -w backend -- --var DEV_AUTH:1`: the Worker on `http://127.0.0.1:8787`, with name-only dev
   sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health` and the live sockets,
   which then treat you as a ghost.

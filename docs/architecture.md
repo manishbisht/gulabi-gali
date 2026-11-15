@@ -1,10 +1,12 @@
 # Architecture
 
-How phases 1 to 3 fit together: a static React + Three.js site on GitHub Pages and a Cloudflare Worker that
+How phases 1 to 4 fit together: a static React + Three.js site on GitHub Pages and a Cloudflare Worker that
 serves the city's live snapshot (weather, air quality, sunrise and sunset, today's festival), signs people in,
 keeps their profiles, shows residents to one another live, and carries "milna hai" requests and one-to-one
-chat, and, since phase 3, keeps the city safe: trust tiers, a word filter, blocks, reports, rate limits, an
-owner's admin page, a cap with a waitlist, and account deletion.
+chat. Since phase 3 it keeps the city safe: trust tiers, a word filter, blocks, reports, rate limits, an
+owner's admin page, a cap with a waitlist, and account deletion. Phase 4 adds poster walls (the deewar) and
+the extras: drivable autos, a metro ride, street animals, Gangaur and Teej processions, a Sankranti kite
+fight and the Galta bandar.
 
 For setup and secrets see [deployment.md](./deployment.md); for phone measurements see
 [device-performance.md](./device-performance.md). The design and plan live in
@@ -76,14 +78,22 @@ The remembered district and the collected stamps (9 landmarks) live in `localSto
 
 `useLiveCity` fetches `/api/city` and refreshes it; `live/sky.ts` turns the snapshot and the clock into sky,
 fog and light colours (recomputed every 30 s), `live/weatherFx.ts` adds rain, and `live/festivalFx.ts`
-draws the festival of the day (Sankranti kites, Diwali diyas, Holi colour) and its banner. The festival table
-is `backend/src/festivals.data.ts`.
+draws the festival of the day (Sankranti kites, Diwali diyas, Holi colour, and since phase 4 the Gangaur and
+Teej processions) and its banner. The festival table is `backend/src/festivals.data.ts`.
+
+The HUD (`ui/Hud.tsx`) keeps to one block at the top of the screen: place, weather and stamps; who can see you;
+one card holding the festival greeting, the procession line and the city line; and a group of small switches
+(language, sound, and the monkey in the Walled City) down the right edge on a phone, in a row on a wider
+screen. Toasts sit under it, and the joystick and cards hold the bottom.
 
 ## Test hooks
 
 Opening the site with `?gg-test=1` installs `window.__gg` (`src/testHooks.ts`), once the district is in:
-`quality`, `framesSinceRestore`, `position`, `teleport`, `district`, `sky`, `festival`, `npcs`, `people`,
-`setSnapshot`, `setNow`. `?gg-festival=<id>` stands in for the live festival, in test mode only. Both are needed: the hooks exist only in a build made with `VITE_TEST_HOOKS=1` (the e2e build; the shipped one
+`quality`, `framesSinceRestore`, `position`, `teleport`, `district`, `sky`, `festival`, `npcs`, `freezeNpcs`,
+`people`, `liveState`, `setSnapshot`, `setNow`, and from phase 4 `posters`, `animals`, `freezeAnimals`,
+`procession`, `forceProcession` (a procession whatever the festival, so the perf run can have one under the
+kites), `patang` and `renderInfo` (the renderer's draw calls and memory). `?gg-festival=<id>` stands in for the
+live festival, in test mode only. Both are needed: the hooks exist only in a build made with `VITE_TEST_HOOKS=1` (the e2e build; the shipped one
 drops them) and only on a page opened with `gg-test=1`. The Playwright specs in `frontend/tests` and `tests/device-perf.spec.ts` use these.
 
 ## The protocol-copy rule
@@ -344,3 +354,73 @@ a deleted id later (see Admin). Sockets close with 4006 and the gate forgets the
 signing in again gives a blank profile, unless the id is banned. The Clerk sign-in account and its email are not
 touched: the privacy note says to write to the owner to have them removed (see deployment.md). The privacy note
 (`ui/PrivacySheet.tsx`, linked from the intro and the profile sheet) says all of this in plain words.
+
+## Phase 4: the deewar and the extras
+
+The plan is `docs/superpowers/plans/2026-11-14-phase-4-extras.md`; the schema is
+`backend/migrations/0003_posters.sql`. Two pieces touch the server: the posters, and one flag on the `move`
+message for autos. Everything else is local to the page.
+
+| What           | Frontend                                                                                             | Server                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved`, D1 `posters` |
+| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                         |
+| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                               |
+| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                               |
+| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                         |
+| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                               |
+| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                               |
+
+`world/session.ts` builds each district's systems on enter (animals, the bandar, autos, the poster walls, the
+sky with its festival effects) and disposes them on leave, as for phase 2.
+
+### Poster walls (`posters.ts`)
+
+```mermaid
+flowchart LR
+  B["Browser"] -->|"GET /api/districts/:id/posters"| W["Worker: posters.ts"]
+  B -->|"POST /api/posters, DELETE /api/posters/:id"| W
+  W --> D1[("D1: posters, reports.poster_id")]
+  W -->|"RPC posterAdded / posterRemoved"| DD["DistrictDO"]
+  DD -->|"WS: poster add / remove"| B
+  A["Admin page"] -->|"DELETE /api/admin/posters/:id"| W
+  C["Cron"] -->|"purgePosters"| D1
+```
+
+Each district has a few `poster-wall` props with 6 slots each (`POSTER_WALLS`, `POSTER_SLOTS` in the protocol).
+A poster is 10 to 140 characters, word-filtered, with an optional `when` up to 30 days ahead; it comes down 6 h
+after its `when`, or 7 days after pinning. Only a verified resident others can see may pin, not while muted,
+at most 2 up at once and 5 pins a day (`allow`, refunded for a pin that lost a race for its slot). On a full
+wall the oldest poster that is not the pinner's goes, a hidden one first. The list is public (cached 30 s for
+a signed-out caller); a signed-in caller's list leaves out anyone blocked either way and marks their own
+`mine`. A pin, a take-down, a ban, a deletion, a hide and the cron's sweep of expired posters each tell the
+district, which pushes `poster` add or remove to everyone connected (never to anyone blocked either way with
+the owner). The page draws each wall as one canvas texture.
+
+Moderation: a poster report (kind `poster`) is filed about the poster's owner, with `poster_id` naming the
+poster, so the admin queue shows it with every other report about that person, the poster's text, wall and
+`when` as its evidence. Three distinct reporters who are verified, not banned, at least 7 days old and not
+blocked by the owner hide the poster off every wall until an admin acts (`posterAutoHide`); anyone else's
+report is queued and does not count, and a poster report never counts toward hiding a person. An admin takes a
+poster down from the report (`DELETE /api/admin/posters/:id`), which also closes every open report on it. A
+ban, an account deletion and a hide take the person's posters down too.
+
+### The client-only extras: nothing is broadcast
+
+The animals, the procession, the kite fight, the bandar and the metro ride are drawn and decided on this page
+alone. They are never sent to the Worker or to anyone else, so they cost nothing on the server and need no
+sync: two people standing together see different dogs wandering, the same procession route at a different
+point, and a monkey only on their own screen. The bandar's snatch changes only the player's own avatar on
+their own page (`setLook`), never the saved look or what others see. What these keep is in `localStorage`
+through `storage.ts`: `gg-no-bandar` (`'1'` switches the monkey off) and `gg-patang-best`; `gg-sound` is the
+horn's switch.
+
+Autos are the one exception, and only partly. The parked autos are props every page has; driving one is a
+vehicle mode of the player, and its moves carry `v: 'auto'`, which lets the district accept auto speed
+(12 m/s, a 24 m burst) and makes everyone else draw that person sitting in an auto (`world/people.ts`, one
+instanced mesh). The parked auto someone drove away is still parked on everyone else's screen. The horn is
+heard only on the page that honked.
+
+All extras follow the quality tiers: animals, procession members and the kite fight's kites are instanced
+(a few draw calls each) and fewer at tier 0, and nothing in their frame updates allocates. The numbers with
+everything on at once are in [device-performance.md](./device-performance.md).

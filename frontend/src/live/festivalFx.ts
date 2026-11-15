@@ -5,7 +5,7 @@ import { FLOOR_H } from '../world/kit/parts'
 import type { District } from '../world/district'
 import type { BuildingSpec, BuildingStyle } from '../world/types'
 import { PALETTE } from '../world/palette'
-import { createProcession, processionCount, type Procession } from './procession'
+import { createProcession, processionCount, type Procession, type ProcessionKind } from './procession'
 import type { SkyParams } from './sky'
 
 type Tier = 0 | 1 | 2
@@ -34,6 +34,11 @@ export interface FestivalFx {
   update(dt: number): void
   /** Women and drummers in the procession now walking (Gangaur and Teej), 0 when there is none. */
   processionCount(): number
+  /**
+   * Walks a procession whatever the festival (null hands it back to the festival). Only the test hooks call it,
+   * so the performance run can have Sankranti's kites and a procession up at once.
+   */
+  forceProcession(kind: ProcessionKind | null, quality: Tier): void
   dispose(): void
 }
 
@@ -201,14 +206,16 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
   // ---- Gangaur and Teej: the procession, rebuilt only when the festival or the tier changes
   let procession: Procession | null = null
   let processionKey = ''
-  const setProcession = (next: FestivalId | null, quality: Tier) => {
-    const key = next === 'gangaur' || next === 'teej' ? `${next}:${quality}` : ''
+  let forced: ProcessionKind | null = null
+  const setProcession = (festival: FestivalId | null, quality: Tier) => {
+    const next = forced ?? (festival === 'gangaur' || festival === 'teej' ? festival : null)
+    const key = next ? `${next}:${quality}` : ''
     if (key === processionKey) return
     processionKey = key
     procession?.dispose()
     procession = null
-    if (key) {
-      procession = createProcession(district, next as 'gangaur' | 'teej', quality)
+    if (next) {
+      procession = createProcession(district, next, quality)
       group.add(procession.group)
     }
   }
@@ -233,9 +240,9 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
       if (next === 'diwali') diyas.count = Math.min(n, diyaSpots.length)
     },
     update(dt) {
+      procession?.update(dt)
       if (!id) return
       time += dt
-      procession?.update(dt)
       if (id === 'sankranti') {
         const n = kites.count
         for (let i = 0; i < n; i++) {
@@ -278,6 +285,10 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
       }
     },
     processionCount: () => procession?.count ?? 0,
+    forceProcession(kind, quality) {
+      forced = kind
+      setProcession(id, quality)
+    },
     dispose() {
       procession?.dispose()
       procession = null

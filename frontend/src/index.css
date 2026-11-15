@@ -94,7 +94,6 @@ button {
   pointer-events: none;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   box-sizing: border-box;
   padding: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
     calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
@@ -104,14 +103,60 @@ button {
   pointer-events: auto;
 }
 
+/*
+ * The top of the HUD is one block: on the left the place, weather and stamps, then who can see you, then one
+ * card for the festival, its procession and the city's small talk; on the right the small switches. Everything
+ * else is street, down to the joystick.
+ */
+.hud-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hud-stack {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .hud-top {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   align-items: center;
 }
 
-.hud-top .lang-toggle {
-  margin-left: auto;
+.hud-top .hud-chip {
+  white-space: nowrap;
+}
+
+/* language, sound and the monkey: a column down the right edge on a phone, a row on a wider screen */
+.hud-toggles {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.hud-toggles .hud-chip {
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  line-height: 1;
+}
+
+@media (min-width: 600px) {
+  .hud-toggles {
+    flex-direction: row;
+  }
 }
 
 .hud-chip {
@@ -125,6 +170,7 @@ button {
 }
 
 .hud-bottom {
+  margin-top: auto;
   display: flex;
   align-items: flex-end;
   gap: 12px;
@@ -253,48 +299,47 @@ button {
   pointer-events: none;
 }
 
-.city-line {
-  align-self: flex-start;
-  margin: 8px 0 0;
-  padding: 4px 12px;
-  border-radius: 999px;
+/* the festival greeting, its procession and the city line: one card, a line each */
+.hud-news {
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 12px;
+  border-radius: 14px;
   background: rgb(42 29 36 / 0.55);
   color: var(--cream);
-  font-size: 0.85rem;
+}
+
+.hud-news[data-festival] {
+  background: rgb(42 29 36 / 0.78);
+  border: 2px solid var(--gold, #f2a81d);
+}
+
+.hud-news p {
+  margin: 0;
 }
 
 .festival-banner {
-  position: absolute;
-  top: 118px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 32px);
-  margin: 0;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgb(42 29 36 / 0.78);
-  border: 2px solid var(--gold, #f2a81d);
-  color: var(--cream);
   font-weight: 600;
   font-size: 0.9rem;
-  text-align: center;
 }
 
-.procession-line {
-  position: absolute;
-  top: 156px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 32px);
-  margin: 0;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgb(42 29 36 / 0.65);
-  color: var(--cream);
+.procession-line,
+.city-line {
   font-size: 0.8rem;
-  text-align: center;
+}
+
+.hud-news[data-festival] .city-line {
+  opacity: 0.85;
+}
+
+@media (max-width: 480px) {
+  .hud-chip {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
 }
 
 .npc-bubbles {
@@ -1486,7 +1531,7 @@ small.words-hint {
 }
 
 /* the monkey's switch: one small emoji chip, only in the Walled City */
-.hud-top .bandar-toggle {
-  padding: 6px 8px;
-  line-height: 1;
+.hud-toggles .bandar-toggle,
+.hud-toggles .sound-toggle {
+  font-size: 1.1rem;
 }

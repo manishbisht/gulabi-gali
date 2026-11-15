@@ -6,7 +6,7 @@ interface Props {
   /** The district's name, already in the current language. */
   place: string
   snapshot: CitySnapshot | null
-  /** One line of city small talk, shown under the chips. */
+  /** One line of city small talk, shown under the chips (in one card with the festival's lines). */
   line?: string
   /** A festival greeting, already in the current language. */
   banner?: string
@@ -56,86 +56,99 @@ export function Hud({
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
-      <div className="hud-top">
-        <span className="hud-chip">{place}</span>
-        <span className="hud-chip">{weather}</span>
-        <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
-          {stamps}
-        </span>
-        <button
-          type="button"
-          className="hud-chip lang-toggle"
-          aria-label={t('langToggleLabel', lang)}
-          onClick={() => onLang(lang === 'hi' ? 'en' : 'hi')}
-        >
-          {t('langToggle', lang)}
-        </button>
-        {sound && (
+      <div className="hud-head">
+        <div className="hud-stack">
+          <div className="hud-top">
+            <span className="hud-chip">{place}</span>
+            <span className="hud-chip">{weather}</span>
+            <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
+              {stamps}
+            </span>
+          </div>
+          {(visibility || onProfile || onInvite || onConnections) && (
+            <div className="hud-identity">
+              {visibility}
+              {onProfile && (
+                <button type="button" className="hud-chip profile-button" onClick={onProfile}>
+                  {t('profileOpen', lang)}
+                </button>
+              )}
+              {onInvite && (
+                <button type="button" className="hud-chip profile-button invite-button" onClick={onInvite}>
+                  {t('inviteOpen', lang)}
+                </button>
+              )}
+              {onConnections && (
+                <button
+                  type="button"
+                  className="hud-chip profile-button conn-button"
+                  aria-keyshortcuts="C"
+                  onClick={onConnections}
+                >
+                  {t('connOpen', lang)}
+                  {connectionsBadge > 0 && (
+                    <span className="conn-badge" aria-label={t('connBadge', lang, { n: connectionsBadge })}>
+                      {connectionsBadge}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+          {(banner || procession || line) && (
+            // the festival, its procession and the city's small talk share one card
+            <div className="hud-news" data-festival={banner ? '' : undefined}>
+              {banner && (
+                <p className="festival-banner" role="status">
+                  {banner}
+                </p>
+              )}
+              {procession && (
+                <p className="procession-line" role="status">
+                  {procession}
+                </p>
+              )}
+              {line && <p className="city-line">{line}</p>}
+            </div>
+          )}
+        </div>
+        <div className="hud-toggles" role="group" aria-label={t('hudSwitches', lang)}>
           <button
             type="button"
-            className="hud-chip sound-toggle"
-            aria-label={t('soundToggleLabel', lang)}
-            aria-pressed={sound.on}
-            title={t(sound.on ? 'soundOn' : 'soundOff', lang)}
-            onClick={sound.onToggle}
+            className="hud-chip lang-toggle"
+            aria-label={t('langToggleLabel', lang)}
+            onClick={() => onLang(lang === 'hi' ? 'en' : 'hi')}
           >
-            {sound.on ? '🔊' : '🔇'}
+            {t('langToggle', lang)}
           </button>
-        )}
-        {bandar && (
-          <button
-            type="button"
-            className="hud-chip bandar-toggle"
-            aria-label={t(bandar.off ? 'bandarStart' : 'bandarStop', lang)}
-            aria-pressed={bandar.off}
-            title={t(bandar.off ? 'bandarStart' : 'bandarStop', lang)}
-            onClick={bandar.onToggle}
-          >
-            {bandar.off ? '🙈' : '🐒'}
-          </button>
-        )}
-      </div>
-      {(visibility || onProfile || onInvite || onConnections) && (
-        <div className="hud-identity">
-          {visibility}
-          {onProfile && (
-            <button type="button" className="hud-chip profile-button" onClick={onProfile}>
-              {t('profileOpen', lang)}
-            </button>
-          )}
-          {onInvite && (
-            <button type="button" className="hud-chip profile-button invite-button" onClick={onInvite}>
-              {t('inviteOpen', lang)}
-            </button>
-          )}
-          {onConnections && (
+          {sound && (
+            // one fixed name; whether it is on is aria-pressed's to say
             <button
               type="button"
-              className="hud-chip profile-button conn-button"
-              aria-keyshortcuts="C"
-              onClick={onConnections}
+              className="hud-chip sound-toggle"
+              aria-label={t('soundToggleLabel', lang)}
+              aria-pressed={sound.on}
+              title={t(sound.on ? 'soundOn' : 'soundOff', lang)}
+              onClick={sound.onToggle}
             >
-              {t('connOpen', lang)}
-              {connectionsBadge > 0 && (
-                <span className="conn-badge" aria-label={t('connBadge', lang, { n: connectionsBadge })}>
-                  {connectionsBadge}
-                </span>
-              )}
+              <span aria-hidden="true">{sound.on ? '🔊' : '🔇'}</span>
+            </button>
+          )}
+          {bandar && (
+            // "Stop the monkey", pressed while it is stopped
+            <button
+              type="button"
+              className="hud-chip bandar-toggle"
+              aria-label={t('bandarStop', lang)}
+              aria-pressed={bandar.off}
+              title={t('bandarStop', lang)}
+              onClick={bandar.onToggle}
+            >
+              <span aria-hidden="true">{bandar.off ? '🙈' : '🐒'}</span>
             </button>
           )}
         </div>
-      )}
-      {line && <p className="city-line">{line}</p>}
-      {banner && (
-        <p className="festival-banner" role="status">
-          {banner}
-        </p>
-      )}
-      {procession && (
-        <p className="procession-line" role="status">
-          {procession}
-        </p>
-      )}
+      </div>
       {top}
       <div className="hud-bottom">{bottom}</div>
     </div>

@@ -19,6 +19,10 @@ export interface GgTestApi {
   sky(): SkyParams
   /** The Gangaur or Teej procession on the street: how many women and drummers walk in it (0 for none). */
   procession(): { count: number }
+  /** Forces a procession whatever the festival (null: the festival's own again); for the perf run. */
+  forceProcession(kind: 'gangaur' | 'teej' | null): void
+  /** What the renderer drew in the last frame, and what it holds: for the perf run. */
+  renderInfo(): { calls: number; triangles: number; geometries: number; textures: number; programs: number }
   /** The festival in effect (the `gg-festival` override, else the snapshot's). */
   festival(): FestivalId | null
   /** Each character on screen: where it stands (metres) and where its chest is on the page (CSS px). */

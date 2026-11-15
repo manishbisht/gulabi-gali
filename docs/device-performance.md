@@ -55,7 +55,9 @@ mobile UA), CPU slowed 6x (`Emulation.setCPUThrottlingRate`), DevTools' _Fast 4G
 the first walkable frame: `window.__gg.position` exists (the hooks install once the district is in) and one
 frame has drawn after that. Then it walks the bazaar for 8 s (holding W and S in turn so the player never
 stands at a wall) recording main-thread `requestAnimationFrame` intervals, and reads the tier and
-`JSHeapUsedSize`. Results go to `frontend/test-results/device-perf.json`.
+`JSHeapUsedSize`. Results go to `frontend/test-results/device-perf.json`. With `DEVICE_PERF_EXTRAS=1` it
+runs with every phase-4 extra on and drives an auto after the walk (see Phase 4 below), writing
+`device-perf-extras.json`.
 
 Run 2026-11-14 on an Apple M3 Pro, headless Chrome through ANGLE/Metal, production build against a local
 `wrangler dev` Worker. Two runs:
@@ -109,6 +111,84 @@ build is warning-free.
 **What this cannot show:** the phone's GPU. WebGL here runs on the M3's GPU, so fill rate and shader cost
 (pixel ratio 2.6, shadows) are far cheaper than on a Mali or Adreno mid-ranger, and the frame numbers are an
 optimistic CPU story. That is what the real-device checklist is for; expect the tier to drop sooner there.
+
+### Phase 4: every extra at once
+
+Run 2026-11-15, same machine and spec, test-hooks build, local `wrangler dev` Worker with `DEV_AUTH=1`, and
+`node scripts/fake-residents.mjs 60 walled-city 600` running beside it (60 open sockets, no errors or closes in
+any run). `DEVICE_PERF_EXTRAS=1 npm run test:device` opens the page on Sankranti (`gg-festival=sankranti`: 120
+kites and their strings over the rooftops at tier 2), forces a Gangaur procession onto the street under them
+(`__gg.forceProcession`: 40 women and drummers and the palanquin), calls the street dog by the spawn to follow,
+and walks the bazaar for 8 s as before; then it gets into the auto parked by the spawn and drives it for 8 s
+(W and S in turn), recorded on its own. The district's 8 animals wander throughout, the poster walls are up, and
+the 60 residents are drawn the whole time. The spec now also reads the renderer's counters
+(`__gg.renderInfo`) at the end of each window, and the main thread's busy time per frame from DevTools'
+`TaskDuration` and `ScriptDuration` over the window (CPU-throttled milliseconds).
+
+Before any change in this pass (the extras as they landed in phase 4), two runs each:
+
+| Run           | Walkable ms | Window | Frames | p50 ms | p95 ms | p99 ms | Max ms | Over 33 ms | Tier after | People | Heap MB | Draw calls | Triangles |
+| ------------- | ----------: | ------ | -----: | -----: | -----: | -----: | -----: | ---------: | ---------- | -----: | ------: | ---------: | --------: |
+| Crowd only, 1 |        1730 | walk   |    537 |   16.7 |   16.8 |   16.8 |    117 |          1 | 2          |     60 |     9.3 |        121 |    73,986 |
+| Crowd only, 2 |        1716 | walk   |    537 |   16.7 |   16.8 |   16.8 |    117 |          1 | 2          |     60 |    11.6 |        118 |    73,466 |
+| All extras, 1 |        1925 | walk   |    542 |   16.7 |   16.8 |   16.8 |     17 |          0 | 2          |     60 |    12.9 |        123 |    85,960 |
+|               |             | drive  |    542 |   16.7 |   16.7 |   16.8 |     17 |          0 | 2          |     60 |         |        157 |    90,864 |
+| All extras, 2 |        1795 | walk   |    542 |   16.7 |   16.7 |   16.8 |     17 |          0 | 2          |     60 |    10.3 |        120 |    85,596 |
+|               |             | drive  |    542 |   16.7 |   16.8 |   16.8 |     17 |          0 | 2          |     60 |         |        146 |    88,852 |
+
+After this pass (the HUD regrouped, the bandar's switch fixes), two runs each:
+
+| Run           | Walkable ms | Window | Frames | p50 ms | p95 ms | p99 ms | Max ms | Over 33 ms | Tier after | People | Heap MB | Draw calls | Main thread ms/frame (task, script) |
+| ------------- | ----------: | ------ | -----: | -----: | -----: | -----: | -----: | ---------: | ---------- | -----: | ------: | ---------: | ----------------------------------- |
+| Crowd only, 1 |        1716 | walk   |    536 |   16.7 |   16.8 |   16.8 |    117 |          1 | 2          |     60 |    11.4 |        118 | 2.8, 1.8                            |
+| Crowd only, 2 |        1711 | walk   |    536 |   16.7 |   16.7 |   16.8 |    117 |          1 | 2          |     60 |    11.4 |        117 | 2.8, 1.8                            |
+| All extras, 1 |        1811 | walk   |    543 |   16.7 |   16.7 |   16.8 |     17 |          0 | 2          |     60 |     9.9 |        117 | 2.9, 2.0                            |
+|               |             | drive  |    542 |   16.7 |   16.7 |   16.8 |     17 |          0 | 2          |     60 |         |        148 | 2.9, 2.1                            |
+| All extras, 2 |        1819 | walk   |    544 |   16.7 |   16.7 |   16.8 |     17 |          0 | 2          |     60 |    11.1 |        126 | 2.9, 2.0                            |
+|               |             | drive  |    542 |   16.7 |   16.8 |   16.8 |     17 |          0 | 2          |     60 |         |        163 | 3.2, 2.2                            |
+
+Against the targets: first walkable frame 1.8 s (limit 5 s), p50 16.7 ms (limit 33), no frame over 33 ms in
+either window with everything on (limit 10%), tier still 2, heap 10 to 13 MB (limit 150). FCP was 1.0 s in
+every run. Every extra together costs about 0.1 to 0.4 ms of throttled main-thread time per frame over the
+crowd alone, 12,000 to 13,000 more triangles, 5 more geometries and 4 more shader programs (the kites, their
+strings and the procession); the draw calls barely move while walking because each extra is one to three
+instanced meshes. The drive sees more of the city at once (it covers about 15 m), hence about 30 more draw
+calls. The first walkable frame is about 0.1 s later on Sankranti, for the kite and string shaders. The
+crowd-only run's one slow frame (117 ms) is the first step of the walk compiling what walking draws; the
+extras run takes that hit while it calls the dog, before its window opens.
+
+**No target was missed, so no render-path fix was made.** The per-frame paths of the extras (animals,
+procession, kites, driving, posters, the bandar) were read for allocations and found clean; each extra is a
+few instanced meshes sharing one geometry and material per kind (the poster walls share one plane and
+draw a canvas texture per wall). What changed in this pass is the phone HUD (see
+below) and three small bandar fixes, none of which touch the frame loop.
+
+**Initial JS.** From the shipped build (`GG_ALLOW_LOCAL_API=1 vite build`, no test hooks), gzipped: the entry
+chunk `index` is 156.0 kB (130.9 kB at the end of phase 3, 88.9 kB in phase 1), plus 4.5 kB for the walled city
+on entering and 0.8 kB for the shared `cast` chunk; `three` is 143.8 kB on its own and Clerk's chunk (34.1 kB)
+loads only in Clerk mode. Excluding `three`, about 161 kB against the 250 kB limit. Phase 4 put about 25 kB
+into the entry chunk (posters, autos and the horn, animals, the procession, the kite fight, the bandar). That is
+still under the limit; if it gets close, the kite fight (Sankranti only) and the poster composer are the first
+candidates for lazy chunks.
+
+**The phone HUD.** At 360 x 740 the HUD used to spread down the screen: the top row squeezed the place and
+weather chips into two- and three-line columns, the festival banner and procession line floated at fixed
+offsets, and the visibility chip and city line were pushed by `justify-content: space-between` to the middle of
+the street (the city line ended at y = 471, two thirds of the way down). It is now one block at the top: place,
+weather and stamps on one line; who can see you; one card for the festival greeting, procession line and city
+line; and the language, sound and monkey switches as a column of 44 px buttons down the right edge (a row on
+screens 600 px and wider). With a Gangaur procession, a guest's sign-in nudge and the city line all showing, it
+ends at y = 228 (31% of the height). `frontend/tests/hud.spec.ts` checks that at phone width: every item whole
+on screen, above 35% of the height, none overlapping, the info chips one line each, and the switches at least
+44 px.
+
+**Read this with care**, as for phase 2: the frame numbers are vsync-bound on an M3 GPU and say little about a
+Mali or Adreno's fill rate. With every extra on, the extra cost on a phone is mostly the 120 kites (alpha
+strings, double-sided quads high in the sky, so overdraw is low) and the procession's 40 figures; the tier
+system drops the kites to 60 and 25, the procession to 20 and 8, and the shadows, as it steps down. Not
+measured here: the kite fight itself (a separate mode that freezes walking), the bandar's rooftop run (a
+chance event), and a real phone. The real-device checklist above, run with the extras on
+(`?gg-festival=sankranti` needs a test build; on a real festival day it is the live festival), is still owed.
 
 ### Phase 3: Clerk mode
 

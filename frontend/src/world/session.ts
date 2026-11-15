@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { QualityTier, Stage } from '../engine/stage'
 import type { Lang } from '../i18n/strings'
 import { createFestivalFx, festivalSky } from '../live/festivalFx'
+import type { ProcessionKind } from '../live/procession'
 import { applySky, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
@@ -382,6 +383,17 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       festival: hooks.festival,
       sky: sky.params,
       procession: () => ({ count: sky.procession() }),
+      forceProcession: sky.forceProcession,
+      renderInfo: () => {
+        const { render, memory, programs } = stage.renderer.info
+        return {
+          calls: render.calls,
+          triangles: render.triangles,
+          geometries: memory.geometries,
+          textures: memory.textures,
+          programs: programs?.length ?? 0,
+        }
+      },
       posters: () =>
         (posters?.all() ?? []).map(({ poster, at }) => {
           const p = at.clone().project(stage.camera)
@@ -480,7 +492,12 @@ function createSky(
   stage: Stage,
   district: District,
   hooks: SessionHooks,
-): DistrictSystem & { paint(): void; params(): SkyParams; procession(): number } {
+): DistrictSystem & {
+  paint(): void
+  params(): SkyParams
+  procession(): number
+  forceProcession(kind: ProcessionKind | null): void
+} {
   const { current, now } = hooks.live
   const fx = createWeatherFx(stage)
   const festivalFx = createFestivalFx(stage, district)
@@ -498,6 +515,7 @@ function createSky(
     paint,
     params: () => sky!,
     procession: festivalFx.processionCount,
+    forceProcession: (kind) => festivalFx.forceProcession(kind, stage.quality),
     update(dt: number) {
       fx.update(dt)
       festivalFx.update(dt)

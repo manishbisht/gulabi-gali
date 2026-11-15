@@ -122,4 +122,22 @@ describe('createFestivalFx', () => {
     expect(scene.getObjectByName('procession')).toBeUndefined()
     district.dispose()
   })
+
+  it('can walk a procession under the Sankranti kites, for the all-at-once performance run', async () => {
+    const scene = new THREE.Scene()
+    const district = await loadDistrict('walled-city')
+    const fx = createFestivalFx({ scene } as Stage, district)
+    fx.set('sankranti', 2)
+    fx.forceProcession('gangaur', 2)
+    expect(fx.processionCount()).toBe(40)
+    expect(scene.getObjectByName('kites')!.visible).toBe(true)
+    fx.set('sankranti', 1) // a tier change keeps the forced procession, at the new tier's size
+    expect(fx.processionCount()).toBe(20)
+    fx.update(1 / 30)
+    fx.forceProcession(null, 1)
+    expect(fx.processionCount()).toBe(0)
+    expect(scene.getObjectByName('procession')).toBeUndefined()
+    fx.dispose()
+    district.dispose()
+  })
 })

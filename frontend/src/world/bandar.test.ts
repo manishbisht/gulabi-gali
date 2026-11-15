@@ -109,6 +109,43 @@ describe('the Galta bandar', () => {
     expect(bandarOff()).toBe(false)
   })
 
+  it('only "1" in gg-no-bandar switches it off', () => {
+    for (const junk of ['0', 'true', 'off', ' ']) {
+      storage.set('gg-no-bandar', junk)
+      expect(bandarOff()).toBe(false)
+    }
+    storage.set('gg-no-bandar', '1')
+    expect(bandarOff()).toBe(true)
+  })
+
+  it('switched off while it drops, it never snatches', () => {
+    const s = setup()
+    s.run(FRAME) // the first look strikes: it is on its way down
+    expect(s.b.peek().phase).toBe('drop')
+    storage.set('gg-no-bandar', '1')
+    s.run(2)
+    expect(s.kinds()).not.toContain('snatched')
+    expect(s.player.setLook).not.toHaveBeenCalledWith({ ...LOOK, head: 'none' })
+    expect(s.b.peek().phase).toBe('idle')
+    expect(s.scene.children.every((c) => !c.visible)).toBe(true)
+  })
+
+  it('rolls its chance before reading the switch or the look', () => {
+    const look = vi.fn(() => LOOK)
+    const get = vi.spyOn(storage, 'get')
+    const s = setup({ look })
+    const b = createBandar(def(), s.scene, () => 0.99, {
+      look,
+      colliders: [],
+      reducedMotion: false,
+      memory: createBandarMemory(),
+    })
+    for (let i = 0; i < 30; i++) b.update(1, s.player)
+    expect(get).not.toHaveBeenCalledWith('gg-no-bandar')
+    expect(look).not.toHaveBeenCalled()
+    get.mockRestore()
+  })
+
   it('toggling off mid-snatch gives the look back', () => {
     const s = setup()
     s.untilSnatched()
