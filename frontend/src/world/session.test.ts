@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import * as THREE from 'three'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Stage } from '../engine/stage'
 import { fallbackSnapshot } from '../net/api'
 import type { DistrictId, PosterView, ServerMsg } from '../net/protocol'
@@ -69,6 +69,9 @@ const controls: Controls = {
   setJoystick() {},
   freeze() {},
   holdSpace: vi.fn(),
+  look: () => ({ yaw: 0, pitch: 0, held: false }),
+  addLook: vi.fn(),
+  holdLook: vi.fn(),
   dispose() {},
 }
 
@@ -1021,4 +1024,132 @@ it('a touch id that got stuck (no up or cancel ever came) stops blocking taps af
   expect(offWindow).toHaveBeenCalledWith('blur', expect.any(Function))
   expect(offDocument).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
   expect(offCanvas).toHaveBeenCalledWith('lostpointercapture', expect.any(Function))
+})
+
+describe('drag to look', () => {
+  /** A person dead ahead, and a way to fire pointer events on the canvas (100 px square). */
+  async function lookable() {
+    const live = await withPersonAhead()
+    const canvas = document.querySelector('canvas')!
+    live.stage.camera.position.set(0, 1, 0)
+    live.stage.camera.lookAt(0, 1, -5)
+    live.stage.camera.updateMatrixWorld(true)
+    const tap = vi.spyOn(live.hooks.personCard, 'tap')
+    vi.mocked(controls.addLook).mockClear()
+    vi.mocked(controls.holdLook).mockClear()
+    const fire = (type: string, x: number, y = 50, extra: object = {}) =>
+      canvas.dispatchEvent(
+        Object.assign(new Event(type), { clientX: x, clientY: y, pointerId: 1, button: 0 }, extra),
+      )
+    return { ...live, canvas, tap, fire }
+  }
+  const turned = () =>
+    vi
+      .mocked(controls.addLook)
+      .mock.calls.reduce((sum, [yaw, pitch]) => [sum[0]! + yaw, sum[1]! + pitch], [0, 0])
+
+  it('a drag across the canvas turns the view (right turns it right) and is not a tap', async () => {
+    const { fire, tap, canvas } = await lookable()
+    fire('pointerdown', 50)
+    fire('pointermove', 54) // inside the tap slop: nothing yet
+    expect(controls.addLook).not.toHaveBeenCalled()
+    fire('pointermove', 70)
+    expect(canvas.hasAttribute('data-looking')).toBe(true) // the grabbing cursor
+    fire('pointermove', 100, 40)
+    fire('pointerup', 50) // even back where it began, a drag is never a tap
+    expect(tap).not.toHaveBeenCalled()
+    expect(canvas.hasAttribute('data-looking')).toBe(false)
+    const [yaw, pitch] = turned()
+    // half the canvas's width past the slop: right is a negative yaw, between 180° and 270° a full width
+    expect(-yaw / 0.5).toBeGreaterThan(Math.PI * 0.9)
+    expect(-yaw / 0.5).toBeLessThan(Math.PI * 1.5)
+    expect(pitch).toBeGreaterThan(0) // the finger went up: the view tilts up
+    fire('pointermove', 10) // let go: moving again (a hovering mouse) turns nothing
+    expect(turned()[0]).toBe(yaw)
+  })
+
+  it('a small wobble is still a tap, and turns nothing', async () => {
+    const { fire, tap } = await lookable()
+    fire('pointerdown', 50)
+    fire('pointermove', 55, 53)
+    fire('pointerup', 55, 53)
+    expect(tap).toHaveBeenCalledTimes(1)
+    expect(controls.addLook).not.toHaveBeenCalled()
+  })
+
+  it('looks with one thumb on the canvas while the other holds the joystick (a pointer the canvas never hears)', async () => {
+    const { fire, tap } = await lookable()
+    // the joystick's touch (id 1) is on its own element; the look thumb is id 2, not primary
+    const second = { pointerId: 2, isPrimary: false }
+    fire('pointerdown', 50, 50, second)
+    fire('pointermove', 80, 50, second)
+    expect(turned()[0]).toBeLessThan(0)
+    fire('pointerup', 80, 50, second)
+    expect(tap).not.toHaveBeenCalled()
+    // and the next tap with that thumb is a tap
+    fire('pointerdown', 50, 50, second)
+    fire('pointerup', 50, 50, second)
+    expect(tap).toHaveBeenCalledTimes(1)
+  })
+
+  it('a second finger on the canvas does not take over the look, and a right-button drag does not look', async () => {
+    const { fire } = await lookable()
+    fire('pointerdown', 50)
+    fire('pointerdown', 50, 50, { pointerId: 2 })
+    fire('pointermove', 90, 50, { pointerId: 2 })
+    expect(controls.addLook).not.toHaveBeenCalled()
+    fire('pointerup', 90, 50, { pointerId: 2 })
+    fire('pointerup', 50)
+    fire('pointerdown', 50, 50, { button: 2 })
+    fire('pointermove', 90)
+    fire('pointerup', 90)
+    expect(controls.addLook).not.toHaveBeenCalled()
+  })
+
+  it('a lost pointer or a blur ends the drag; dispose takes the move listener off the canvas', async () => {
+    const { fire, canvas, session } = await lookable()
+    fire('pointerdown', 50)
+    fire('pointermove', 80)
+    window.dispatchEvent(new Event('blur'))
+    expect(canvas.hasAttribute('data-looking')).toBe(false)
+    vi.mocked(controls.addLook).mockClear()
+    fire('pointermove', 20)
+    expect(controls.addLook).not.toHaveBeenCalled()
+    const off = vi.spyOn(canvas, 'removeEventListener')
+    session.dispose()
+    expect(off).toHaveBeenCalledWith('pointermove', expect.any(Function))
+  })
+  it('a mouse let go of off the canvas (over a chip or a card) stops looking at its next hover, and the next click is a tap', async () => {
+    const { fire, tap, canvas } = await lookable()
+    const mouse = { pointerType: 'mouse' }
+    fire('pointerdown', 50, 50, { ...mouse, buttons: 1 })
+    // released over the HUD: the canvas never hears the up; the next it hears is a hover with no button held
+    fire('pointermove', 90, 50, { ...mouse, buttons: 0 })
+    fire('pointermove', 20, 30, { ...mouse, buttons: 0 })
+    expect(controls.addLook).not.toHaveBeenCalled()
+    expect(canvas.hasAttribute('data-looking')).toBe(false)
+    fire('pointerdown', 50, 50, { ...mouse, buttons: 1 })
+    fire('pointerup', 50, 50, { ...mouse, buttons: 0 })
+    expect(tap).toHaveBeenCalledTimes(1)
+    // and a real mouse drag (main button held) still looks
+    fire('pointerdown', 50, 50, { ...mouse, buttons: 1 })
+    fire('pointermove', 80, 50, { ...mouse, buttons: 1 })
+    expect(turned()[0]).toBeLessThan(0)
+    fire('pointerup', 80, 50, mouse)
+  })
+
+  it('says a look is held from the moment a drag begins until it lets go, however still the finger is', async () => {
+    const { fire } = await lookable()
+    fire('pointerdown', 50)
+    fire('pointermove', 54)
+    expect(controls.holdLook).not.toHaveBeenCalled() // inside the slop it may still be a tap
+    fire('pointermove', 70)
+    expect(controls.holdLook).toHaveBeenLastCalledWith(true)
+    fire('pointerup', 70)
+    expect(controls.holdLook).toHaveBeenLastCalledWith(false)
+    fire('pointerdown', 50)
+    fire('pointermove', 70)
+    window.dispatchEvent(new Event('blur')) // a lost drag lets go too
+    expect(controls.holdLook).toHaveBeenLastCalledWith(false)
+  })
 })

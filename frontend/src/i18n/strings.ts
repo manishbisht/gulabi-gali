@@ -9,6 +9,12 @@ export const STRINGS = {
   stampCount: { hi: 'Jaipur Darshan stamps', en: 'Jaipur Darshan stamps' },
   stampsLine: { hi: 'Jaipur Darshan · {n}/{total}', en: 'Jaipur Darshan · {n}/{total}' },
   stampsList: { hi: 'Jaipur Darshan ke stamps', en: 'Jaipur Darshan stamps' },
+  darshanTitle: { hi: 'Jaipur Darshan', en: 'Jaipur Darshan' },
+  darshanOpen: { hi: 'Jaipur Darshan ki list kholo', en: 'Open the Jaipur Darshan list' },
+  darshanClose: { hi: 'Band karo', en: 'Close' },
+  darshanListLabel: { hi: 'Jaipur Darshan ke landmark', en: 'Jaipur Darshan landmarks' },
+  darshanBadge: { hi: 'Jaipur Darshan poora', en: 'Jaipur Darshan complete' },
+  darshanLocked: { hi: 'Abhi baaki hai', en: 'Still to find' },
   stampsNone: {
     hi: 'Abhi koi nahi. Kisi landmark ke paas jaao aur stamp lo.',
     en: 'None yet. Walk up to a landmark and collect its stamp.',
@@ -748,10 +754,13 @@ export const STRINGS = {
     en: 'First time in the gali? Just three things',
   },
   hintWalkTouch: {
-    hi: 'Chalna: neeche wala joystick ungli se khiskao.',
-    en: 'Walk: drag the joystick at the bottom with a finger.',
+    hi: 'Chalna: neeche wala joystick khiskao. Aas-paas dekhna: gali pe kahin bhi ungli ghumao.',
+    en: 'Walk: drag the joystick at the bottom. Look around: drag anywhere on the street.',
   },
-  hintWalkKeys: { hi: 'Chalna: W A S D ya arrow keys dabao.', en: 'Walk: W A S D or the arrow keys.' },
+  hintWalkKeys: {
+    hi: 'Chalna: W A S D ya arrow keys. Aas-paas dekhna: gali ko mouse se kheencho, ya Q aur R.',
+    en: 'Walk: W A S D or the arrow keys. Look around: drag the street with the mouse, or Q and R.',
+  },
   hintSitTouch: {
     hi: 'Chai ki bench ke paas jao aur "Baitho" dabao: wahan baithe logon se baat hoti hai.',
     en: 'Go up to a chai bench and tap "Sit here" to chat with whoever is sitting there.',
@@ -784,6 +793,13 @@ export const STRINGS = {
     hi: 'Dor ek doosre se katrao, phir kheencho. Ghumane ke liye ungli ghumao ya A/D dabao. Space se kheencho.',
     en: 'Cross strings with a rival, then pull. Drag or press A/D to steer, and hold Space to pull.',
   },
+  photoOpen: { hi: 'Photo', en: 'Photo' },
+  photoOpenLabel: { hi: 'Photo mode kholo', en: 'Open photo mode' },
+  photoShutter: { hi: 'Photo kheencho', en: 'Take photo' },
+  photoExit: { hi: 'Photo mode se wapas', en: 'Leave photo mode' },
+  photoFrame: { hi: 'Photo ka frame', en: 'Photo frame' },
+  photoDownloaded: { hi: 'Photo aapke phone mein save ho gayi.', en: 'Photo saved to your phone.' },
+  photoFailed: { hi: 'Photo nahi ban payi. Phir se try karo.', en: "Couldn't take the photo. Try again." },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

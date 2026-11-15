@@ -49,6 +49,13 @@ button {
   touch-action: none;
 }
 
+/* Drag the street to look around: the usual arrow over it, a closed hand only while a drag turns it. */
+@media (pointer: fine) {
+  .stage[data-looking] {
+    cursor: grabbing;
+  }
+}
+
 .intro {
   height: 100%;
   box-sizing: border-box;
@@ -1849,4 +1856,179 @@ small.words-hint {
 
 .hud-actions:empty {
   display: none;
+}
+
+/*
+ * Photo mode: nothing over the street but a thin frame, the wordmark, a shutter and a way back. The overlay
+ * itself lets touches through; only the two buttons take them.
+ */
+.photo-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.photo-frame {
+  position: absolute;
+  inset: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+    calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+  border: 2px solid rgb(245 230 216 / 0.85);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgb(42 29 36 / 0.35);
+}
+
+.photo-wordmark {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgb(42 29 36 / 0.7);
+}
+
+.photo-exit,
+.photo-shutter {
+  position: absolute;
+  pointer-events: auto;
+  border: 1px solid var(--sandstone);
+  background: rgb(42 29 36 / 0.72);
+  cursor: pointer;
+}
+
+.photo-exit {
+  top: calc(22px + env(safe-area-inset-top));
+  right: calc(22px + env(safe-area-inset-right));
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.photo-shutter {
+  left: 50%;
+  bottom: calc(44px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: 68px;
+  height: 68px;
+  border: 4px solid var(--cream);
+  border-radius: 50%;
+  background: var(--pink);
+}
+
+.photo-shutter:disabled {
+  opacity: 0.5;
+}
+
+.photo-note {
+  position: absolute;
+  left: 50%;
+  bottom: calc(126px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgb(42 29 36 / 0.92);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.photo-note:empty {
+  display: none;
+}
+
+.photo-exit:focus-visible,
+.photo-shutter:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 3px;
+}
+
+/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
+button.stamp-count {
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  font-size: 0.95rem;
+  pointer-events: auto;
+}
+
+.darshan-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.darshan-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+}
+
+.darshan-list li[data-got='false'] {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.darshan-district {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.darshan-list em {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.darshan-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--sandstone);
+  color: #2a1d24;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* The close control stays in view at the top while the nine rows scroll (a phone has no Escape). */
+.darshan-head {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -18px -18px 8px;
+  padding: 10px 10px 8px 18px;
+  background: #2a1d24;
+}
+
+.darshan-head h2 {
+  margin: 0;
+}
+
+.darshan-x {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+/* the chip stays as slim as its neighbours; its tap area is still thumb-sized */
+button.stamp-count::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
 }

@@ -35,6 +35,7 @@ it('on a first visit: a non-modal dialog with three steps, the keys for a keyboa
   const steps = [...d.querySelectorAll('li')].map((li) => li.textContent)
   expect(steps).toHaveLength(3)
   expect(steps[0]).toMatch(/W A S D/)
+  expect(steps[0]).toMatch(/Look around: drag the street with the mouse, or Q and R/) // the turn keys
   expect(steps[1]).toMatch(/\bE\b/)
   expect(steps[2]).toMatch(/Say hello/)
   expect(document.activeElement).toBe(d.querySelector('button'))
@@ -46,6 +47,7 @@ it('on a touch screen it says joystick and tap instead', () => {
   const steps = [...dialog()!.querySelectorAll('li')].map((li) => li.textContent)
   expect(steps[0]).toMatch(/joystick/)
   expect(steps[0]).not.toMatch(/W A S D/)
+  expect(steps[0]).toMatch(/Aas-paas dekhna: gali pe kahin bhi ungli ghumao/) // drag the street to look
   expect(steps[1]).toMatch(/Baitho/)
 })
 

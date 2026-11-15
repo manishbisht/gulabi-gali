@@ -11,6 +11,7 @@ import { connectLive, type LiveConn, type LiveState } from '../net/live'
 import type { ClientMsg, DistrictId, FestivalId, LivePerson, PosterView, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
 import { closeAudio } from '../audio/horn'
+import { DRAG_TURN } from '../player/camera'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
@@ -33,6 +34,8 @@ const SKY_REFRESH_MS = 30_000
 /** A tap moves less than this many px and lasts less than this many ms. */
 const TAP_SLOP = 10
 const TAP_MS = 500
+/** A vertical drag tilts the view this fraction of what the same drag across would turn it: a sideways swipe's drift barely tips it. */
+const DRAG_TILT = 0.5
 /**
  * Without a live socket for this long, the other people are taken off the street: they would only stand there
  * frozen. The next welcome brings back whoever is still about.
@@ -362,6 +365,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       quality: () => stage.quality,
       framesSinceRestore: stage.framesSinceRestore,
       position: player.position,
+      view: player.view,
       teleport: player.teleport,
       district: () => district.def.id,
       npcs: () =>
@@ -549,6 +553,12 @@ function createLights(stage: Stage, district: District): DistrictSystem {
  * card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
  * the landmark and metro wait until they do. A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
+ *
+ * A drag is the look: the first pointer down on the canvas (a mouse's main button, or one finger) that moves past
+ * TAP_SLOP turns the view (`controls.addLook`) until it lifts, and is never a tap. Right turns right, up tilts up,
+ * and the stage's full width is DRAG_TURN. The joystick's thumb is on its own element, so the other thumb can look
+ * while it walks. While dragging the canvas has `data-looking` (the grabbing cursor) and `controls.holdLook` is on.
+ * A mouse let go of off the canvas is noticed at its next hover there (no main button held).
  */
 function createInteraction(
   canvas: HTMLCanvasElement,
@@ -571,21 +581,64 @@ function createInteraction(
   let down: { x: number; y: number; at: number } | null = null
   /** The pointers down on the canvas itself: the joystick's thumb, on its own element, is not one of them. */
   const touching = new Set<number>()
+  /**
+   * The pointer that may look: where it last was, radians per px (from the canvas's width when it went down),
+   * and whether it has moved past the slop yet (a drag, then, not a tap).
+   */
+  const look = { id: -1, x: 0, y: 0, perPx: 0, dragging: false }
+  const stopLook = () => {
+    if (look.dragging) controls.holdLook(false)
+    look.id = -1
+    look.dragging = false
+    canvas.removeAttribute('data-looking')
+  }
   const onDown = (e: PointerEvent) => {
     touching.add(e.pointerId)
     // A second finger on the canvas (a pinch) or a right or middle click is not a tap, and spoils the one in progress.
     down = touching.size > 1 || (e.button ?? 0) > 0 ? null : { x: e.clientX, y: e.clientY, at: e.timeStamp }
+    // the first of them may look; a second finger never takes over
+    if (down && look.id === -1) {
+      look.id = e.pointerId
+      look.x = e.clientX
+      look.y = e.clientY
+      look.perPx = DRAG_TURN / (canvas.getBoundingClientRect().width || innerWidth)
+      look.dragging = false
+    }
+  }
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerId !== look.id) return
+    // a mouse let go of over a chip or a card: the canvas never heard the up, and this is a hover
+    if (e.pointerType === 'mouse' && (e.buttons & 1) === 0) return stopLook()
+    if (!look.dragging) {
+      if (Math.hypot(e.clientX - look.x, e.clientY - look.y) <= TAP_SLOP) return
+      look.dragging = true
+      controls.holdLook(true) // held still at the wheel, it keeps the view where it is put
+      canvas.setAttribute('data-looking', '')
+      // a mouse dragged out over the HUD keeps turning, and its release is heard here
+      try {
+        canvas.setPointerCapture(e.pointerId)
+      } catch {
+        // not an active pointer (a synthetic event): nothing to hold on to
+      }
+    }
+    // from where it went down, so the slop is part of the turn, not a dead zone
+    controls.addLook(-(e.clientX - look.x) * look.perPx, -(e.clientY - look.y) * look.perPx * DRAG_TILT)
+    look.x = e.clientX
+    look.y = e.clientY
   }
   const onCancel = (e: PointerEvent) => {
     touching.delete(e.pointerId)
     down = null
+    if (e.pointerId === look.id) stopLook()
   }
   const onUp = (e: PointerEvent) => {
     touching.delete(e.pointerId)
+    const dragged = e.pointerId === look.id && look.dragging
+    if (e.pointerId === look.id) stopLook()
     const d = down
     down = null
     // at the wheel nothing opens: not a character, a person or a poster
-    if (drive.driving()) return
+    if (drive.driving() || dragged) return
     if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP || e.timeStamp - d.at > TAP_MS) return
     const r = canvas.getBoundingClientRect()
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
@@ -617,11 +670,13 @@ function createInteraction(
   const forgetAll = () => {
     touching.clear()
     down = null
+    stopLook()
   }
   const onHidden = () => {
     if (document.visibilityState === 'hidden') forgetAll()
   }
   canvas.addEventListener('pointerdown', onDown)
+  canvas.addEventListener('pointermove', onMove)
   canvas.addEventListener('pointerup', onUp)
   canvas.addEventListener('pointercancel', onCancel)
   canvas.addEventListener('lostpointercapture', onCancel)
@@ -696,11 +751,13 @@ function createInteraction(
     },
     dispose() {
       canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('lostpointercapture', onCancel)
       window.removeEventListener('blur', forgetAll)
       document.removeEventListener('visibilitychange', onHidden)
+      stopLook()
       hooks.npcCard.close()
       hooks.personCard.close()
     },

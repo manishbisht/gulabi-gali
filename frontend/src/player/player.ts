@@ -23,7 +23,7 @@ interface Options {
   occluders?: AABB[]
 }
 
-/** Owns the avatar and the chase camera: input, then collision, then avatar and camera. */
+/** Owns the avatar and the chase camera: input (the view's turn first), then collision, then avatar and camera. */
 export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
   let avatar = buildAvatar(look)
   scene.add(avatar)
@@ -36,13 +36,18 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
   /** The auto under the driver, made on the first mount and kept for the player's life. */
   let ride: THREE.Mesh | null = null
 
-  function sync(dt: number) {
+  /**
+   * `frame`: a real frame, not a snap (teleport, mount, dismount pass dt 1 s to put the camera there at once).
+   * Only frames bring the view round behind the auto, so getting in never whips it round in one step.
+   */
+  function sync(dt: number, frame = false) {
     avatar.position.set(pos.x, driving ? SEAT_Y : 0, pos.z)
     if (driving && ride) {
       ride.position.set(pos.x, 0, pos.z)
       ride.rotation.y = vehicle.heading
     }
-    follow.update(avatar.position, dt)
+    // at the wheel the view comes back round behind the auto (it faces `heading`) when left alone
+    follow.update(avatar.position, dt, driving && frame ? vehicle.heading + Math.PI : undefined)
   }
   sync(0)
 
@@ -50,6 +55,8 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     position: (): Vec2 => ({ ...pos }),
     /** Which way the avatar faces, in radians about y (0 faces +z). */
     heading: (): number => avatar.rotation.y,
+    /** Where the camera looks: yaw (0 along -z, positive turned left) and pitch (positive up), in radians. */
+    view: () => ({ yaw: follow.yaw(), pitch: follow.pitch() }),
     /** Stands the player at (x, z), facing `ry` if given. */
     teleport(x: number, z: number, ry?: number) {
       pos = { x, z }
@@ -95,6 +102,8 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       scene.add(avatar)
     },
     update(dt: number) {
+      const turn = controls.look(dt)
+      follow.turn(turn.yaw, turn.pitch, turn.held)
       if (driving) {
         // the stick is the wheel and the pedal here, not a direction on the street
         const want = vehicle.update(controls.drive(), dt)
@@ -103,7 +112,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         avatar.rotation.y = vehicle.heading
       } else {
         const input = controls.move()
-        if (input.x === 0 && input.z === 0) return sync(dt)
+        if (input.x === 0 && input.z === 0) return sync(dt, true)
         // Input is relative to the screen: rotate it by where the camera is looking on the ground.
         camera.getWorldDirection(fwd)
         const flen = Math.hypot(fwd.x, fwd.z) || 1
@@ -115,7 +124,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         pos = moveWithCollision(pos, step, colliders, PLAYER_RADIUS)
         avatar.rotation.y = Math.atan2(dx, dz)
       }
-      sync(dt)
+      sync(dt, true)
     },
     dispose() {
       if (ride) {

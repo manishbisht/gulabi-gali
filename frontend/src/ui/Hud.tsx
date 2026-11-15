@@ -14,6 +14,8 @@ interface Props {
   procession?: string
   /** Stamp progress as `N/9`. */
   stamps: string
+  /** Opens the Jaipur Darshan list; the stamps chip is a button when present. */
+  onStamps?: () => void
   lang: Lang
   onLang: (l: Lang) => void
   /** The sound switch (the horn, the metro's arrival chime and the "Wo kaata" chirp): whether it is on, and how to flip it. */
@@ -31,6 +33,9 @@ interface Props {
   connectionsBadge?: number
   /** Opens (or closes) the city map; present once a district is in. */
   onMap?: () => void
+  /** Opens photo mode; while it is on (`photo`) the HUD draws nothing. */
+  onPhoto?: () => void
+  photo?: boolean
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
@@ -43,6 +48,7 @@ export function Hud({
   banner,
   procession,
   stamps,
+  onStamps,
   lang,
   onLang,
   sound,
@@ -53,9 +59,12 @@ export function Hud({
   onConnections,
   connectionsBadge = 0,
   onMap,
+  onPhoto,
+  photo = false,
   top,
   bottom,
 }: Props) {
+  if (photo) return null
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
@@ -64,9 +73,21 @@ export function Hud({
           <div className="hud-top">
             <span className="hud-chip">{place}</span>
             <span className="hud-chip">{weather}</span>
-            <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
-              {stamps}
-            </span>
+            {onStamps ? (
+              <button
+                type="button"
+                className="hud-chip stamp-count"
+                title={t('stampCount', lang)}
+                aria-label={`${t('darshanOpen', lang)} (${stamps})`}
+                onClick={onStamps}
+              >
+                {stamps}
+              </button>
+            ) : (
+              <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
+                {stamps}
+              </span>
+            )}
           </div>
           {(visibility || onProfile || onInvite || onConnections) && (
             <div className="hud-identity">
@@ -135,6 +156,17 @@ export function Hud({
               onClick={sound.onToggle}
             >
               <span aria-hidden="true">{sound.on ? '🔊' : '🔇'}</span>
+            </button>
+          )}
+          {onPhoto && (
+            <button
+              type="button"
+              className="hud-chip photo-button"
+              aria-label={t('photoOpenLabel', lang)}
+              title={t('photoOpen', lang)}
+              onClick={onPhoto}
+            >
+              <span aria-hidden="true">📷</span>
             </button>
           )}
           {bandar && (
