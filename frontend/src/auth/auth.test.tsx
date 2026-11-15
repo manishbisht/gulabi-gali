@@ -79,8 +79,8 @@ async function mount() {
   )
 }
 
-async function devSignIn(name: string) {
-  const fetchMock = vi.fn(async () => Response.json({ token: 'tok-123' }))
+async function devSignIn(name: string, answer: () => Response = () => Response.json({ token: 'tok-123' })) {
+  const fetchMock = vi.fn(async () => answer())
   vi.stubGlobal('fetch', fetchMock)
   await act(async () => auth.openSignIn())
   const input = host.querySelector('input') as HTMLInputElement
@@ -109,6 +109,16 @@ it('dev sign-in stores the token and token() returns it', async () => {
   expect(auth.signedIn).toBe(true)
   expect(await auth.token()).toBe('tok-123')
   expect(host.querySelector('form')).toBeNull() // the sheet closed
+})
+
+it('a login answer without a usable token signs nobody in', async () => {
+  await mount()
+  for (const bad of [{}, { token: 7 }, { token: '' }, { token: null }]) {
+    await devSignIn('Asha', () => Response.json(bad))
+    expect(auth.signedIn, JSON.stringify(bad)).toBe(false)
+    expect(sessionStorage.getItem('gg-dev-token')).toBeNull()
+    expect(host.querySelector('[role="alert"]')).not.toBeNull() // and says so
+  }
 })
 
 it('signOut clears it', async () => {

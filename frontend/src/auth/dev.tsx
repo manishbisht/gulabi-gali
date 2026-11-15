@@ -44,7 +44,8 @@ function DevForm({ onToken }: { onToken: (token: string) => void }) {
         body: JSON.stringify({ name: trimmed }),
       })
       if (!res.ok) throw new Error(String(res.status))
-      const { token } = (await res.json()) as { token: string }
+      const { token } = (await res.json()) as { token?: unknown }
+      if (typeof token !== 'string' || !token) throw new Error('no token in the answer')
       onToken(token)
     } catch {
       setFailed(true)

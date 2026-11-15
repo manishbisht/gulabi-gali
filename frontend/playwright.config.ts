@@ -20,6 +20,8 @@ export default defineConfig({
       command: `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend && npm run dev -w backend -- ${DEV_AUTH.worker}`,
       cwd: '..',
       url: 'http://127.0.0.1:8787/health',
+      // Locally a Worker already on :8787 is reused (faster); it must have been started with the DEV_AUTH
+      // vars above, or sign-in specs fail. CI always starts its own.
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
     },

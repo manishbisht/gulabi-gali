@@ -541,3 +541,20 @@ describe('bench memory', () => {
     }
   })
 })
+
+describe('the district alarm', () => {
+  it('comes round again while anyone is here, and stops once the street is empty', async () => {
+    const district: DistrictId = 'university'
+    const sock = await walker('Alarm Asha', district, 60)
+    const armed = () => runInDurableObject(stub(district), (_i, state) => state.storage.getAlarm())
+    await runInDurableObject(stub(district), (_i, state) => state.storage.deleteAlarm())
+    expect(await armed()).toBeNull()
+    await runInDurableObject(stub(district), (i) => i.alarm())
+    expect(await armed()).not.toBeNull() // someone is still here: the sweep is booked again
+    sock.close()
+    await expect.poll(() => runInDurableObject(stub(district), (i) => i.sockets().length), WAIT).toBe(0)
+    await runInDurableObject(stub(district), (_i, state) => state.storage.deleteAlarm())
+    await runInDurableObject(stub(district), (i) => i.alarm())
+    expect(await armed()).toBeNull() // nobody left: no timer, so the object can hibernate
+  })
+})

@@ -7,10 +7,13 @@ import { AuthContext, authMode, SIGNED_OUT, type AuthState } from './useAuth'
 const ClerkAuth = lazy(() => import('./clerk'))
 
 /** A failed Clerk chunk or a throwing SDK must not take the city down: render nothing, stay signed out. */
-class ClerkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class ClerkBoundary extends Component<{ children: ReactNode; onFail: () => void }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() {
     return { failed: true }
+  }
+  componentDidCatch() {
+    this.props.onFail() // whoever Clerk last reported as signed in is no longer vouched for
   }
   render() {
     return this.state.failed ? null : this.props.children
@@ -29,10 +32,11 @@ function ClerkMode({ children }: { children: ReactNode }) {
     [session],
   )
   const close = useCallback(() => setOpen(false), [])
+  const forget = useCallback(() => setSession(null), [])
   return (
     <>
       <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-      <ClerkBoundary>
+      <ClerkBoundary onFail={forget}>
         <Suspense fallback={null}>
           <ClerkAuth
             publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY!}
