@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { AABB, BuildingSpec } from './types'
 import { crenellatedWall, haveli, modern, shop, temple } from './kit/styles'
+import { merge } from './kit/parts'
 
 const BUILDERS = { haveli, shop, modern, temple, wall: crenellatedWall }
 
@@ -28,8 +28,7 @@ export function buildBlock(specs: BuildingSpec[]): { mesh: THREE.Mesh; colliders
     g.translate(s.x, 0, s.z)
     parts.push(g)
   }
-  const geometry = parts.length ? mergeGeometries(parts, false) : emptyGeometry()
-  parts.forEach((g) => g.dispose())
+  const geometry = parts.length ? merge(parts) : emptyGeometry()
   const material = new THREE.MeshLambertMaterial({ vertexColors: true })
   return { mesh: new THREE.Mesh(geometry, material), colliders: specs.map(footprint) }
 }

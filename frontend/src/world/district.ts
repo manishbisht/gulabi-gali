@@ -62,7 +62,15 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
     colliders.push(...block.colliders)
   }
 
-  for (const model of await Promise.all(def.landmarks.map((l) => l.build()))) root.add(model)
+  // A landmark that fails to build must not strand the ground, blocks and the other landmarks: free them first.
+  const built = await Promise.allSettled(def.landmarks.map((l) => l.build()))
+  const failed = built.find((r) => r.status === 'rejected')
+  if (failed) {
+    for (const r of built) if (r.status === 'fulfilled') root.add(r.value)
+    disposeTree(root)
+    throw failed.reason
+  }
+  for (const r of built) if (r.status === 'fulfilled') root.add(r.value)
   colliders.push(...def.landmarks.map((l) => l.footprint))
   const occluders = [...colliders]
 
@@ -101,17 +109,22 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
     },
     dispose() {
       root.removeFromParent()
-      root.traverse((o) => {
-        if (!(o instanceof THREE.Mesh)) return
-        if (o instanceof THREE.InstancedMesh) o.dispose() // its per-instance buffers
-        ;(o.geometry as THREE.BufferGeometry).dispose()
-        const m = o.material as THREE.Material | THREE.Material[]
-        for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
-      })
+      disposeTree(root)
       sun.dispose()
       hemi.dispose()
     },
   }
+}
+
+/** Frees the geometry and materials of everything under `root`. */
+function disposeTree(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return
+    if (o instanceof THREE.InstancedMesh) o.dispose() // its per-instance buffers
+    ;(o.geometry as THREE.BufferGeometry).dispose()
+    const m = o.material as THREE.Material | THREE.Material[]
+    for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
+  })
 }
 
 /** Four slabs just outside the district's edges, so nothing walks off the map. */
