@@ -67,6 +67,26 @@ describe('the service worker', () => {
     })
   }
 
+  for (const lang of ['hi', 'en'] as const) {
+    it(`the meet-up reminder says "${t('pushMeetup', lang)}" in ${lang}, and its tap opens the city, not the inbox`, async () => {
+      const page: FakeClient = { url: SCOPE, postMessage: vi.fn(), focus: vi.fn(async () => page) }
+      const sw = boot([page])
+      await sw.fire('push', push({ t: 'meetup', lang }))
+      const [title, options] = sw.showNotification.mock.calls[0] as unknown as [
+        string,
+        { body: string; tag: string; data: unknown },
+      ]
+      expect(title).toBe(t('pushTitle', lang))
+      expect(options).toMatchObject({ body: t('pushMeetup', lang), tag: 'gg-meetup' })
+      await sw.fire('notificationclick', { notification: { close: vi.fn(), data: options.data } })
+      expect(page.postMessage).not.toHaveBeenCalled()
+      expect(page.focus).toHaveBeenCalled()
+      const shut = boot()
+      await shut.fire('notificationclick', { notification: { close: vi.fn(), data: options.data } })
+      expect(shut.openWindow).toHaveBeenCalledWith(SCOPE)
+    })
+  }
+
   it('shows only its own words: anything else a payload carries never reaches the screen', async () => {
     const sw = boot()
     await sw.fire(

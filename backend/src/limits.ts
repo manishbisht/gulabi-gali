@@ -11,7 +11,7 @@ export const windowStart = (now: number, windowMs: number): number => now - (now
 export const READ_LIMIT = {
   perWindow: 120,
   windowMs: 60_000,
-  buckets: { profile: 'read-profile', requests: 'read-requests' },
+  buckets: { profile: 'read-profile', requests: 'read-requests', going: 'read-going' },
 } as const
 
 /** Counter rows older than this are only history: the cron deletes them. Longer than any window in use. */

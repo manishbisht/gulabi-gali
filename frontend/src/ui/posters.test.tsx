@@ -228,7 +228,11 @@ describe('PosterCard', () => {
     expect(button(host, 'Block')).toBeUndefined()
     await act(async () => button(host, 'Take it down')!.click())
     await settle()
-    expect(calls(fetchMock)).toEqual([{ method: 'DELETE', path: '/api/posters/poster-1', body: undefined }])
+    // The card first asked who is coming (see below), then took it down.
+    expect(calls(fetchMock)).toEqual([
+      { method: 'GET', path: '/api/posters/poster-1/going', body: undefined },
+      { method: 'DELETE', path: '/api/posters/poster-1', body: undefined },
+    ])
     expect(props.onTakenDown).toHaveBeenCalledWith('poster-1')
   })
 
@@ -286,5 +290,111 @@ describe('PosterCard', () => {
     expect(button(host, 'Report')).toBeUndefined()
     expect(button(host, 'Block')).toBeUndefined()
     expect(button(host, 'Close')).toBeDefined()
+  })
+})
+
+describe('PosterCard: Main aaunga', () => {
+  const poster: PosterView = {
+    id: 'poster-1',
+    wall: 0,
+    slot: 3,
+    text: 'Chai at Tapri, then the lake',
+    when: Date.parse('2026-11-16T18:00:00+05:30'),
+    name: 'Ravi',
+  }
+  function mount(over: Partial<Parameters<typeof PosterCard>[0]> = {}) {
+    const host = document.body.appendChild(document.createElement('div'))
+    const props = {
+      poster,
+      viewer: 'verified' as const,
+      lang: 'en' as const,
+      token: async () => 'tok',
+      onBlock: vi.fn(async () => true),
+      onTakenDown: vi.fn(),
+      onChanged: vi.fn(),
+      onClose: vi.fn(),
+      ...over,
+    }
+    act(() => createRoot(host).render(<PosterCard {...props} />))
+    return { host, props }
+  }
+
+  it('a verified member says they are coming, sees the count go up, and can take it back', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'PUT' ? json({ going: 2, coming: true }) : json({ going: 1, coming: false }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { host, props } = mount({ poster: { ...poster, going: 1 } })
+    expect(host.textContent).toContain('Coming: 1')
+    await act(async () => button(host, "I'll come")!.click())
+    await settle()
+    expect(host.textContent).toContain('Coming: 2')
+    expect(host.textContent).toContain("You're coming.")
+    expect(props.onChanged).toHaveBeenLastCalledWith({ ...poster, going: 2, coming: true })
+    await act(async () => button(host, "Can't make it")!.click())
+    await settle()
+    expect(host.textContent).toContain('Coming: 1')
+    expect(button(host, "I'll come")).toBeDefined()
+    expect(props.onChanged).toHaveBeenLastCalledWith({ ...poster, going: 1 })
+    expect(calls(fetchMock)).toEqual([
+      { method: 'PUT', path: '/api/posters/poster-1/going', body: undefined },
+      { method: 'DELETE', path: '/api/posters/poster-1/going', body: undefined },
+    ])
+  })
+
+  it('says so when it did not go through, and when it was too many taps', async () => {
+    let status = 429
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: status === 429 ? 'rate' : 'not found' }, status)),
+    )
+    const { host, props } = mount()
+    await act(async () => button(host, "I'll come")!.click())
+    await settle()
+    expect(host.textContent).toContain('Hold on a bit, then try again.')
+    status = 404
+    await act(async () => button(host, "I'll come")!.click())
+    await settle()
+    expect(host.textContent).toContain("That didn't go through. Try again.")
+    expect(props.onChanged).not.toHaveBeenCalled()
+  })
+
+  it('a member not yet verified, and a ghost, see only the count', () => {
+    const { host } = mount({ viewer: 'resident', poster: { ...poster, going: 3 } })
+    expect(host.textContent).toContain('Coming: 3')
+    expect(button(host, "I'll come")).toBeUndefined()
+    expect(host.textContent).toContain("Only verified members can say they're coming.")
+    document.body.innerHTML = ''
+    const ghost = mount({ viewer: 'ghost', poster: { ...poster, going: 3 } })
+    expect(ghost.host.textContent).toContain('Coming: 3')
+    expect(button(ghost.host, "I'll come")).toBeUndefined()
+  })
+
+  it('nobody yet: no count line', () => {
+    const { host } = mount({ viewer: 'ghost' })
+    expect(host.textContent).not.toContain('Coming:')
+  })
+
+  it('the owner sees who is coming, by first name, and cannot say it on their own', async () => {
+    const fetchMock = vi.fn(async () => json({ going: 2, coming: false, names: ['Asha', 'Kavya'] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { host } = mount({ poster: { ...poster, mine: true, going: 1 } })
+    await settle()
+    expect(host.textContent).toContain('Coming: 2')
+    expect(host.textContent).toContain("Who's coming: Asha, Kavya")
+    expect(button(host, "I'll come")).toBeUndefined()
+    expect(calls(fetchMock)).toEqual([
+      { method: 'GET', path: '/api/posters/poster-1/going', body: undefined },
+    ])
+  })
+
+  it('the owner with nobody coming yet is told so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ going: 0, coming: false, names: [] })),
+    )
+    const { host } = mount({ poster: { ...poster, mine: true } })
+    await settle()
+    expect(host.textContent).toContain("Nobody has said they're coming yet.")
   })
 })

@@ -163,7 +163,9 @@ function draw(ctx: Ctx2D, posters: ReadonlyMap<number, PosterView>): void {
     lines.forEach((l, i) => ctx.fillText(l, x + pad, y + pad + i * 18, width))
     ctx.font = '13px system-ui, sans-serif'
     ctx.fillStyle = p.hidden ? HIDDEN_INK : PALETTE.terracotta
-    const foot = p.when === null ? `— ${p.name}` : `${posterWhen(p.when)} · ${p.name}`
+    const by = p.when === null ? `— ${p.name}` : `${posterWhen(p.when)} · ${p.name}`
+    // How many said "Main aaunga": a number only, the same for everyone (see GoingView).
+    const foot = p.going ? `${by} · 🙋 ${p.going}` : by
     ctx.fillText(foot, x + pad, y + sh - pad - 18, width)
   }
 }

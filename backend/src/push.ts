@@ -18,6 +18,11 @@ import { b64url, sendPush, vapidFrom, type Vapid } from './webpush'
 export const PUSH_KINDS = ['request', 'message'] as const
 export type PushKind = (typeof PUSH_KINDS)[number]
 export const isPushKind = (t: string): t is PushKind => (PUSH_KINDS as readonly string[]).includes(t)
+/**
+ * Everything a push may be about: the inbox's kinds, and `meetup`, the reminder an hour before a plan someone
+ * said they would come to (see `remindMeetups`), which names neither the plan nor anyone in it.
+ */
+export type PushTopic = PushKind | 'meetup'
 
 export const PUSH_LANGS = ['hi', 'en'] as const
 export type PushLang = (typeof PUSH_LANGS)[number]
@@ -199,14 +204,14 @@ export const forgetPushOf = (env: Env, userId: string): D1PreparedStatement =>
 
 /**
  * Tells `userId`'s subscribed devices that something of `kind` arrived, when they have no inbox open (the
- * inbox decides; see `InboxDO.notify`). Nothing when push is off, they are no resident now (a ban), they have
+ * inbox decides; see `InboxDO.notify`), or that a plan they are going to is an hour away (`meetup`). Nothing when push is off, they are no resident now (a ban), they have
  * no device, or they are past `PUSH_LIMIT`. A device whose push service answers 404 or 410 has gone and is
  * forgotten. Never throws; answers how many devices took it.
  */
 export async function pushTo(
   env: Env,
   userId: string,
-  kind: PushKind,
+  kind: PushTopic,
   fetcher: typeof fetch = fetch,
   now = Date.now(),
 ): Promise<number> {
