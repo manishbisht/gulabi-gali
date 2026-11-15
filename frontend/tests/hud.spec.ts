@@ -57,23 +57,22 @@ async function laidOut(items: Record<string, Locator>, inside: [string, string][
   for (const k of ['place', 'weather', 'stamps'])
     expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
   // thumb-sized switches
-  for (const k of ['lang', 'sound', 'bandar', 'map']) {
+  for (const k of ['lang', 'sound', 'bandar'].filter((k) => k in boxes)) {
     expect.soft(boxes[k]!.width, `${k} width`).toBeGreaterThanOrEqual(44)
     expect.soft(boxes[k]!.height, `${k} height`).toBeGreaterThanOrEqual(44)
   }
 }
 
-/** The chips and switches every visitor has. */
-function common(page: Page): Record<string, Locator> {
+/** The chips and switches every visitor has; the place chip is the map's button. */
+function common(page: Page, place = 'Gulabi Shahar'): Record<string, Locator> {
   const toggles = page.getByRole('group', { name: 'Settings' })
   return {
-    place: page.locator('.hud-top .hud-chip').nth(0),
+    place: page.getByRole('button', { name: `Naksha · ${place}`, exact: true }),
     weather: page.locator('.hud-top .hud-chip').nth(1),
     stamps: page.getByTitle('Jaipur Darshan stamps'),
     lang: toggles.getByRole('button', { name: 'English: bhasha badlo' }),
     sound: toggles.getByRole('button', { name: 'Awaaz chalu ya band karo' }),
     bandar: toggles.getByRole('button', { name: 'Bandar band karo' }),
-    map: page.getByRole('button', { name: 'Naksha', exact: true }),
     banner: page.getByText('Gangaur ki shubhkamnayein!'),
     procession: page.getByText('Gangaur ki sawari Tripolia se nikal rahi hai'),
     line: page.locator('.city-line'),
@@ -91,6 +90,43 @@ test('on a small phone the HUD keeps to the top, with every chip whole and in re
   await laidOut(items)
   await expect(items.weather!).toContainText('AQI 162')
 })
+
+for (const [id, place] of [
+  ['malviya-nagar', 'Malviya Nagar–WTP'],
+  ['mi-road', 'MI Road–Raja Park'],
+] as const)
+  test(`the place chip (the map's button) fits with the longest district names: ${place}`, async ({
+    page,
+  }) => {
+    // No festival: with Gangaur's two lines on top, a long name already pushed the news past the top share before
+    // the chip became a button (287 px of 259 with the plain chip; see the T1 report).
+    await page.addInitScript((d) => localStorage.setItem('gg-district', d), id)
+    await page.goto('/?gg-test=1')
+    await page.getByRole('button', { name: 'Padharo!' }).click()
+    await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+    await page.evaluate(() =>
+      window.__gg.setSnapshot({
+        stale: false,
+        tempC: 31,
+        aqi: 162,
+        aqiBand: 'unhealthy',
+        condition: 'clear',
+      }),
+    )
+    const { place: chip, weather, stamps, lang, sound, line } = common(page, place)
+    await laidOut({
+      place: chip!,
+      weather: weather!,
+      stamps: stamps!,
+      lang: lang!,
+      sound: sound!,
+      line: line!,
+      ghost: page.getByText('Abhi koi tumhe dekh nahi sakta', { exact: true }),
+      signIn: page.getByRole('button', { name: 'Dikhna hai? Login karo' }),
+    })
+    if (process.env.GG_HUD_LONG_SHOT && id === 'malviya-nagar')
+      await page.screenshot({ path: process.env.GG_HUD_LONG_SHOT })
+  })
 
 test('signed in on a small phone, the identity row fits too: visibility, profile, invite, connections and its badge', async ({
   browser,

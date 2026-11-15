@@ -248,9 +248,11 @@ export default function App() {
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
   const processionKey = processionLine(festival, here)
-  /** The city map (M, "Naksha") and the compass to the place picked on it; not over a metro ride or a kite fight. */
-  const map = useCityMap(entered && !ride && !kiteFrom)
-  const { bind: bindMap } = map
+  /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
+  const map = useCityMap(entered && !ride && !kiteFrom && !photo)
+  const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
+  // in photo mode the pillar keeps out of the view (and out of every capture, see `Stage.capture`)
+  useEffect(() => hideMapPillar(!!photo), [photo, hideMapPillar])
   // the kite fight is Sankranti's: if the festival goes (the snapshot changes mid-round), so does it
   if (kiteFrom && festival !== 'sankranti') setKiteFrom(null)
 
@@ -431,21 +433,21 @@ export default function App() {
         onClose={posters.close}
       />
     ))
-  // the monkey keeps off the street while anything is over it
-  const bandarBlocked =
+  /** A card, sheet or dialog is up: M does not open the map over it. */
+  const sheetUp =
     !!card ||
-    !!near ||
     sheetOpen ||
-    !!ride ||
-    !!kiteFrom ||
-    !!bench.seat ||
     profileShown ||
     connShown ||
     inviteOpen ||
     privacyOpen ||
-    map.open ||
     darshanOpen ||
     !!queue.card
+  useEffect(() => {
+    mapBlockedRef.current = sheetUp
+  }, [sheetUp, mapBlockedRef])
+  // the monkey keeps off the street while anything is over it
+  const bandarBlocked = sheetUp || !!near || !!ride || !!kiteFrom || !!bench.seat || map.open
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked

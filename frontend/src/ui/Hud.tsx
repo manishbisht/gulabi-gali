@@ -31,7 +31,7 @@ interface Props {
   /** Present only for a resident: opens Connections, with the count of unread things on its badge. */
   onConnections?: () => void
   connectionsBadge?: number
-  /** Opens (or closes) the city map; present once a district is in. */
+  /** Opens (or closes) the city map from the place chip; present once a district is in. */
   onMap?: () => void
   /** Opens photo mode; while it is on (`photo`) the HUD draws nothing. */
   onPhoto?: () => void
@@ -71,7 +71,21 @@ export function Hud({
       <div className="hud-head">
         <div className="hud-stack">
           <div className="hud-top">
-            <span className="hud-chip">{place}</span>
+            {onMap ? (
+              // the place opens its map
+              <button
+                type="button"
+                className="hud-chip place-button"
+                aria-keyshortcuts="M"
+                aria-haspopup="dialog"
+                aria-label={t('mapOpenPlace', lang, { place })}
+                onClick={onMap}
+              >
+                {place}
+              </button>
+            ) : (
+              <span className="hud-chip">{place}</span>
+            )}
             <span className="hud-chip">{weather}</span>
             {onStamps ? (
               <button
@@ -183,13 +197,6 @@ export function Hud({
             </button>
           )}
         </div>
-        {onMap && (
-          // under the switches, in the right-hand column (see .hud-head)
-          <button type="button" className="hud-chip map-button" aria-keyshortcuts="M" onClick={onMap}>
-            <span aria-hidden="true">🧭</span>
-            {t('mapOpen', lang)}
-          </button>
-        )}
       </div>
       {top}
       <div className="hud-bottom">{bottom}</div>

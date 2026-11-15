@@ -32,14 +32,17 @@ interface Props {
 const REFRESH_MS = 500
 
 const GLYPH: Record<MapItemKind, string> = { landmark: '★', metro: 'M', bench: '▬', tapri: '☕', poster: '▤' }
-/** Drawn first to last, so the landmarks sit on top of anything near them. */
-const ORDER: MapItemKind[] = ['poster', 'bench', 'tapri', 'metro', 'landmark']
+/** In the page, landmarks first (a screen reader meets them before the benches); CSS stacks them on top. */
+const ORDER: MapItemKind[] = ['landmark', 'metro', 'tapri', 'bench', 'poster']
+/** Seats (benches and tapris) listed with the landmarks; the rest fold away under "more". */
+const NEAR_SEATS = 3
 
 /**
  * The district from above (north up), drawn from its definition: paving, buildings, landmarks, the metro,
  * benches and tapris, poster walls, you with your heading, and the people the street shows as plain dots.
- * Every place is a button: picking one makes it the compass's target. A list under the map names the landmarks
- * and the metro with their distance, for anyone who would rather read than tap a dot.
+ * Every place is a button: picking one makes it the compass's target. Every place also has a thumb-sized row in
+ * the list under the map, nearest first: the landmarks, the metro and the nearest seats, then the other seats
+ * and the poster walls folded away. A 22 px dot among its neighbours is no target for a thumb.
  */
 export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: Props) {
   const ref = useDialog<HTMLElement>(onClose)
@@ -56,7 +59,30 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
     top: `${((p.z + half) / def.size) * 100}%`,
   })
   const label = (i: MapItem) => (i.stamped ? t('mapStamped', lang, { name: i.name[lang] }) : i.name[lang])
-  const listed = items.filter((i) => i.kind === 'landmark' || i.kind === 'metro')
+  const away = (i: MapItem) => (view ? targetDistance(view.you, i) : 0)
+  const byDistance = items
+    .map((i) => ({ i, d: away(i) }))
+    .sort((a, b) => a.d - b.d)
+    .map(({ i }) => i)
+  const seat = (i: MapItem) => i.kind === 'bench' || i.kind === 'tapri'
+  const nearSeats = byDistance.filter(seat).slice(0, NEAR_SEATS)
+  const listed = byDistance.filter(
+    (i) => i.kind === 'landmark' || i.kind === 'metro' || nearSeats.includes(i),
+  )
+  const more = byDistance.filter((i) => !listed.includes(i))
+  const row = (i: MapItem) => (
+    <li key={i.id}>
+      <button
+        type="button"
+        data-id={i.id}
+        data-kind={i.kind}
+        data-target={i.id === target || undefined}
+        onClick={() => onPick(i)}
+      >
+        {view ? t('mapAway', lang, { name: label(i), m: Math.round(away(i)) }) : label(i)}
+      </button>
+    </li>
+  )
   const title = t('mapTitle', lang, { place: def.name[lang] })
   return (
     <div className="auth-scrim">
@@ -110,6 +136,7 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
                   key={i.id}
                   type="button"
                   className="map-item"
+                  data-id={i.id}
                   data-kind={i.kind}
                   data-stamped={i.stamped || undefined}
                   data-target={i.id === target || undefined}
@@ -156,17 +183,13 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
           {t('mapPeople', lang, { n: view?.people.length ?? 0 })}
         </p>
         <h3 className="map-places">{t('mapPlaces', lang)}</h3>
-        <ul className="map-list">
-          {listed.map((i) => (
-            <li key={i.id}>
-              <button type="button" data-target={i.id === target || undefined} onClick={() => onPick(i)}>
-                {view
-                  ? t('mapAway', lang, { name: label(i), m: Math.round(targetDistance(view.you, i)) })
-                  : label(i)}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <ul className="map-list">{listed.map(row)}</ul>
+        {more.length > 0 && (
+          <details className="map-more">
+            <summary>{t('mapMore', lang, { n: more.length })}</summary>
+            <ul className="map-list map-more-list">{more.map(row)}</ul>
+          </details>
+        )}
         <button type="button" className="auth-close" onClick={onClose}>
           {t('mapClose', lang)}
         </button>

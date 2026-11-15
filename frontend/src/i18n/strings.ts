@@ -75,7 +75,7 @@ export const STRINGS = {
     en: "Couldn't get to {place}. Try again.",
   },
   /** The city map (M) and the compass it sets. */
-  mapOpen: { hi: 'Naksha', en: 'Map' },
+  mapOpenPlace: { hi: 'Naksha · {place}', en: 'Map · {place}' },
   mapTitle: { hi: 'Naksha · {place}', en: 'Map · {place}' },
   mapHelp: {
     hi: 'Kisi jagah pe tap karo, compass tumhe wahan tak le chalega.',
@@ -90,6 +90,10 @@ export const STRINGS = {
   mapYou: { hi: 'Tum', en: 'You' },
   mapPeople: { hi: 'Gali pe dikhte log: {n}', en: 'People on the street: {n}' },
   mapPlaces: { hi: 'Jagahein', en: 'Places' },
+  mapMore: {
+    hi: 'Aur jagahein: bench, tapri, deewarein ({n})',
+    en: 'More places: benches, stalls, walls ({n})',
+  },
   mapAway: { hi: '{name} · {m} m', en: '{name} · {m} m' },
   compassClear: { hi: 'Tap karo to compass hat jaayega', en: 'Tap to clear the compass' },
   rideNext: { hi: 'Agla station: {station}', en: 'Next station: {station}' },

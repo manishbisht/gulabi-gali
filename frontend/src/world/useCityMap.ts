@@ -20,6 +20,10 @@ export function useCityMap(keys: boolean) {
   const session = useRef<MapSession | null>(null)
   const way = useRef<Wayfinder | null>(null)
   const offs = useRef<(() => void)[]>([])
+  /** Another dialog or card is up: M leaves the map shut (App sets it, as it does the monkey's). */
+  const blockedRef = useRef(false)
+  /** Photo mode: the pillar keeps out of the view. */
+  const hiddenRef = useRef(false)
 
   const bind = useCallback((b: { session: MapSession; stage: Pick<Stage, 'scene' | 'camera'> } | null) => {
     for (const off of offs.current) off()
@@ -38,6 +42,7 @@ export function useCityMap(keys: boolean) {
       session: b.session,
       onCleared: () => setTarget(null),
     })
+    way.current.setHidden(hiddenRef.current)
     offs.current = [
       b.session.onEnter((d) => setDef(d.def)),
       // the map shows the district the player is in; a new one starts closed, with no target
@@ -64,21 +69,38 @@ export function useCityMap(keys: boolean) {
     return s && p ? { you: p.position(), heading: p.heading(), people: mapPeople(s.people()) } : null
   }, [])
   const toggle = useCallback(() => setOpen((was) => !was), [])
+  const hide = useCallback((on: boolean) => {
+    hiddenRef.current = on
+    way.current?.setHidden(on)
+  }, [])
   const close = useCallback(() => setOpen(false), [])
 
-  // M opens and closes the map, unless a text field has the keys
+  // M opens and closes the map, unless a text field has the keys; it never opens over another dialog
   const can = keys && def !== null
   useEffect(() => {
     if (!can) return
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'KeyM' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return
-      const el = e.target as HTMLElement | null
-      if (el?.closest('input, textarea, select, [contenteditable]')) return
-      setOpen((was) => !was)
+      const el = e.target
+      if (el instanceof Element && el.closest('input, textarea, select, [contenteditable]')) return
+      setOpen((was) => (was ? false : !blockedRef.current))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [can])
 
-  return { open: open && can, def: can ? def : null, target, bind, pick, clear, watch, read, toggle, close }
+  return {
+    open: open && can,
+    def: can ? def : null,
+    target,
+    blockedRef,
+    bind,
+    pick,
+    clear,
+    watch,
+    read,
+    toggle,
+    close,
+    hide,
+  }
 }

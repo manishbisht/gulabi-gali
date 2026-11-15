@@ -90,7 +90,8 @@ export function bearing(from: Vec2, to: Vec2): number {
 /** The way the camera looks, as a bearing. `scratch` is reused, so a frame allocates nothing. */
 export function viewHeading(camera: THREE.Camera, scratch: THREE.Vector3): number {
   camera.getWorldDirection(scratch)
-  return bearing({ x: 0, z: 0 }, { x: scratch.x, z: scratch.z })
+  const deg = (Math.atan2(scratch.x, -scratch.z) * 180) / Math.PI
+  return deg < 0 ? deg + 360 : deg
 }
 
 /** How far to turn an arrow drawn pointing ahead (up the screen) so it points at `target`: degrees, -180 to 180. */

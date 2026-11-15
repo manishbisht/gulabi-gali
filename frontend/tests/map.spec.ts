@@ -27,7 +27,9 @@ test('the map: open it, pick Hawa Mahal, follow the compass there, and it clears
   page,
 }) => {
   await enterOffline(page)
-  const naksha = page.getByRole('button', { name: 'Naksha', exact: true })
+  // the place chip is the map's button
+  const naksha = page.getByRole('button', { name: 'Naksha · Gulabi Shahar', exact: true })
+  await expect(naksha).toHaveAttribute('aria-haspopup', 'dialog')
   await naksha.tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Gulabi Shahar' })
   await expect(map).toBeVisible()
@@ -67,7 +69,7 @@ test('the map: open it, pick Hawa Mahal, follow the compass there, and it clears
 
 test('M opens the map and Escape closes it; a tap on the compass clears it', async ({ page }) => {
   await enterOffline(page)
-  await expect(page.getByRole('button', { name: 'Naksha', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Naksha · Gulabi Shahar', exact: true })).toBeVisible()
   await page.keyboard.press('m')
   const map = page.getByRole('dialog', { name: 'Naksha · Gulabi Shahar' })
   await expect(map).toBeVisible()
@@ -81,4 +83,31 @@ test('M opens the map and Escape closes it; a tap on the compass clears it', asy
   await expect(compass).toBeVisible()
   await compass.tap()
   await expect(compass).toBeHidden()
+})
+
+test('every bench is a thumb-sized row in the list; in photo mode M leaves the map shut', async ({
+  page,
+}) => {
+  await enterOffline(page)
+  await page.getByRole('button', { name: 'Naksha · Gulabi Shahar', exact: true }).tap()
+  const map = page.getByRole('dialog', { name: 'Naksha · Gulabi Shahar' })
+  // the benches past the nearest few fold away; open the fold and pick one by its row
+  await map.locator('details.map-more summary').tap()
+  const row = map.locator('.map-more-list button[data-kind="bench"]').first()
+  const box = (await row.boundingBox())!
+  expect(box.height).toBeGreaterThanOrEqual(44)
+  const name = /^(Bench \d+) · /.exec((await row.textContent())!)![1]!
+  await row.tap()
+  await expect(map).toBeHidden()
+  await expect(page.getByRole('button', { name: new RegExp(`^${name} · \\d+ m`) })).toBeVisible()
+
+  // photo mode has the screen: no map over it
+  await page.locator('.photo-button').tap()
+  await expect(page.locator('.hud')).toHaveCount(0)
+  await page.keyboard.press('m')
+  await expect(map).toHaveCount(0)
+  await page.locator('.photo-exit').tap()
+  await expect(page.locator('.hud')).toBeVisible()
+  // the target outlives photo mode
+  await expect(page.getByRole('button', { name: new RegExp(`^${name} · \\d+ m`) })).toBeVisible()
 })

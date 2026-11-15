@@ -23,6 +23,8 @@ export interface Wayfinder {
   /** No target: the pillar comes down, the compass goes. */
   clear(): void
   target(): MapTarget | null
+  /** Photo mode: the pillar hides (a capture leaves it out regardless, see `Stage.capture`). */
+  setHidden(on: boolean): void
   /** Called with each new reading (only when the metres or the degrees change), and null once cleared. */
   watch(cb: (r: WayReading | null) => void): () => void
   dispose(): void
@@ -46,12 +48,17 @@ export function createWayfinder(opts: {
   reducedMotion?: () => boolean
 }): Wayfinder {
   const { scene, camera, session, onCleared } = opts
-  const still =
-    opts.reducedMotion ??
-    (() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+  // asked once; `.matches` follows the setting as it changes, so a frame only reads a field
+  const query =
+    typeof matchMedia === 'function' && !opts.reducedMotion
+      ? matchMedia('(prefers-reduced-motion: reduce)')
+      : null
+  const still = opts.reducedMotion ?? (() => query?.matches ?? false)
   const scratch = new THREE.Vector3()
   let target: MapTarget | null = null
+  /** One pillar, made on the first target in a district and moved from target to target; freed on leaving. */
   let pillar: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial> | null = null
+  let hidden = false
   let watchers: ((r: WayReading | null) => void)[] = []
   let last: WayReading | null = null
   let clock = 0
@@ -62,7 +69,30 @@ export function createWayfinder(opts: {
     for (let i = 0; i < list.length; i++) list[i]!(r)
   }
 
-  function takeDown() {
+  function raise(at: Vec2) {
+    if (!pillar) {
+      const geometry = new THREE.CylinderGeometry(PILLAR_R, PILLAR_R, PILLAR_H, 12, 1, true)
+      const material = new THREE.MeshBasicMaterial({
+        color: PALETTE.marigold,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+      pillar = new THREE.Mesh(geometry, material)
+      pillar.name = 'map-target'
+      pillar.renderOrder = 1 // drawn after the street, as the transparent thing it is
+      pillar.userData.noPhoto = true // a wayfinding aid, not part of the street
+    }
+    pillar.material.opacity = GLOW[1]
+    pillar.position.set(at.x, PILLAR_H / 2, at.z)
+    pillar.visible = !hidden
+    scene.add(pillar)
+  }
+
+  /** Off the street, kept for the next target. */
+  const lower = () => pillar?.removeFromParent()
+
+  function free() {
     if (!pillar) return
     pillar.removeFromParent()
     pillar.geometry.dispose()
@@ -73,7 +103,7 @@ export function createWayfinder(opts: {
   function clear() {
     if (!target) return
     target = null
-    takeDown()
+    lower()
     tell(null)
   }
 
@@ -94,33 +124,25 @@ export function createWayfinder(opts: {
     }
   })
   const offLeave = session.onLeave(() => {
-    if (!target) return
+    const had = target !== null
     clear()
-    onCleared()
+    free()
+    if (had) onCleared()
   })
 
   return {
     set(t) {
-      takeDown()
       target = t
       last = null
       clock = 0
-      const geometry = new THREE.CylinderGeometry(PILLAR_R, PILLAR_R, PILLAR_H, 12, 1, true)
-      const material = new THREE.MeshBasicMaterial({
-        color: PALETTE.marigold,
-        transparent: true,
-        opacity: GLOW[1],
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      })
-      pillar = new THREE.Mesh(geometry, material)
-      pillar.name = 'map-target'
-      pillar.position.set(t.at.x, PILLAR_H / 2, t.at.z)
-      pillar.renderOrder = 1 // drawn after the street, as the transparent thing it is
-      scene.add(pillar)
+      raise(t.at)
     },
     clear,
     target: () => target,
+    setHidden(on) {
+      hidden = on
+      if (pillar) pillar.visible = !on
+    },
     watch(cb) {
       watchers = [...watchers, cb]
       if (last) cb(last)
@@ -130,7 +152,7 @@ export function createWayfinder(opts: {
       offFrame()
       offLeave()
       target = null
-      takeDown()
+      free()
       watchers = []
     },
   }

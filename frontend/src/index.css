@@ -132,16 +132,13 @@ button {
  * else is street, down to the joystick.
  */
 .hud-head {
-  /* two columns: the stack on the left; the switches and, under them, the map on the right */
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto 1fr;
-  align-items: start;
-  gap: 6px 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .hud-stack {
-  grid-row: 1 / span 2;
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -183,27 +180,6 @@ button {
   .hud-toggles {
     flex-direction: row;
   }
-}
-
-/* the map: its icon over a small label, so the right-hand column grows no wider than the switches */
-.hud-head .map-button {
-  grid-column: 2;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 4px 6px;
-  border: 1px solid var(--sandstone);
-  border-radius: 16px;
-  font: inherit;
-  font-size: 0.72rem;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.hud-head .map-button > span {
-  font-size: 1.1rem;
 }
 
 .hud-chip {
@@ -308,6 +284,7 @@ button {
 .map-over {
   position: absolute;
   inset: 0;
+  z-index: 4; /* over every place: you and the people are never hidden under a dot */
   pointer-events: none;
 }
 
@@ -354,6 +331,19 @@ button {
   color: var(--cream);
   font-size: 0.7rem;
   line-height: 1;
+}
+
+.map-item[data-kind='bench'],
+.map-item[data-kind='tapri'] {
+  z-index: 1;
+}
+
+.map-item[data-kind='metro'] {
+  z-index: 2;
+}
+
+.map-item[data-kind='landmark'] {
+  z-index: 3;
 }
 
 .map-item[data-kind='landmark'],
@@ -404,6 +394,24 @@ button {
   background: rgb(245 230 216 / 0.08);
   color: var(--cream);
   text-align: left;
+}
+
+.map-more {
+  margin-top: 6px;
+}
+
+.map-more summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  cursor: pointer;
+}
+
+.map-more[open] summary {
+  margin-bottom: 6px;
 }
 
 .map-list button[data-target] {
@@ -1946,6 +1954,22 @@ small.words-hint {
 }
 
 /* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
+/* The place chip opens the city map (M): as slim as the chip it was, with a thumb-sized tap area. */
+button.place-button {
+  position: relative;
+  gap: 4px;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  font-size: 0.95rem;
+  pointer-events: auto;
+}
+
+button.place-button::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+
 button.stamp-count {
   position: relative;
   min-height: 0;

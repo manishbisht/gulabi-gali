@@ -48,6 +48,10 @@ it("the view's heading is read from the camera's own direction, so it holds what
   camera.lookAt(0, 0, 0) // looking east
   camera.updateMatrixWorld()
   expect(viewHeading(camera, dir)).toBeCloseTo(90)
+  camera.position.set(10, 5, 0)
+  camera.lookAt(0, 0, 0) // looking west: 270, never -90
+  camera.updateMatrixWorld()
+  expect(viewHeading(camera, dir)).toBeCloseTo(270)
 })
 
 it('distance to a landmark is to the edge of its footprint (0 inside); to a bench, to its point', () => {

@@ -66,18 +66,59 @@ it('a target puts a pillar up at it and reads its distance and arrow, only when 
   expect(readings.at(-1)!.angle).toBeLessThan(-20)
 })
 
-it('arriving within 6 m clears the target and takes the pillar down (disposed)', () => {
+it('arriving within 6 m clears the target and takes the pillar down', () => {
   const { way, session, onCleared, marker } = setup()
   way.set(HAWA)
-  const pillar = marker() as THREE.Mesh
-  const geometry = vi.spyOn(pillar.geometry, 'dispose')
-  const material = vi.spyOn(pillar.material as THREE.Material, 'dispose')
   session.step({ x: 36, z: -8.6 }) // 5.9 m from its face
   expect(onCleared).toHaveBeenCalledOnce()
   expect(marker()).toBeUndefined()
+  expect(way.target()).toBeNull()
+})
+
+it('one pillar, made once and moved: a new target reuses it; leaving the district disposes it', () => {
+  const { way, session, marker } = setup()
+  way.set(HAWA)
+  const pillar = marker() as THREE.Mesh
+  way.clear()
+  way.set({ id: 'b', kind: 'bench', name: { hi: 'Bench', en: 'Bench' }, at: { x: 30, z: 20 } })
+  expect(marker()).toBe(pillar)
+  const geometry = vi.spyOn(pillar.geometry, 'dispose')
+  const material = vi.spyOn(pillar.material as THREE.Material, 'dispose')
+  session.leave()
+  expect(marker()).toBeUndefined()
   expect(geometry).toHaveBeenCalled()
   expect(material).toHaveBeenCalled()
-  expect(way.target()).toBeNull()
+  // the next district makes a fresh one
+  way.set(HAWA)
+  expect(marker()).not.toBe(pillar)
+})
+
+it('photo mode: the pillar hides (and stays hidden for a new target), and a capture always leaves it out', () => {
+  const { way, marker } = setup()
+  way.set(HAWA)
+  expect(marker()!.userData.noPhoto).toBe(true)
+  way.setHidden(true)
+  expect(marker()!.visible).toBe(false)
+  way.set({ id: 'b', kind: 'bench', name: { hi: 'Bench', en: 'Bench' }, at: { x: 30, z: 20 } })
+  expect(marker()!.visible).toBe(false)
+  way.setHidden(false)
+  expect(marker()!.visible).toBe(true)
+})
+
+it('reads prefers-reduced-motion once, not every frame', () => {
+  const matchMedia = vi.fn(() => ({ matches: false }) as MediaQueryList)
+  vi.stubGlobal('matchMedia', matchMedia)
+  try {
+    const scene = new THREE.Scene()
+    const session = fakeSession()
+    const way = createWayfinder({ scene, camera: new THREE.PerspectiveCamera(), session, onCleared() {} })
+    way.set(HAWA)
+    for (let i = 0; i < 30; i++) session.step({ x: 36, z: 45.5 })
+    expect(matchMedia.mock.calls.length).toBeLessThanOrEqual(1)
+    way.dispose()
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })
 
 it('leaving the district clears the target; clear() does too; dispose lets go of the session', () => {

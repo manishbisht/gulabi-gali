@@ -95,6 +95,39 @@ it('the list under the map names the landmarks and the metro with how far each i
   expect(list.some((s) => s?.startsWith('Metro station · '))).toBe(true)
 })
 
+/** The metres at the end of a list row. */
+const metresOf = (b: Element) => Number(/· (\d+) m$/.exec(b.textContent ?? '')![1])
+
+it('every place on the map has a row in the list too, nearest first: benches and walls past the first few fold away', async () => {
+  const { host, props } = await mount()
+  const main = [...host.querySelectorAll('.map-list:not(.map-more-list) button')]
+  const more = [...host.querySelectorAll('.map-more .map-list button')]
+  // every target is reachable from a row (a 22 px dot is too small to tap among its neighbours)
+  const ids = [...main, ...more].map((b) => b.getAttribute('data-id'))
+  expect(new Set(ids)).toEqual(
+    new Set([...host.querySelectorAll('.map-item')].map((b) => b.getAttribute('data-id'))),
+  )
+  // the landmarks, the metro and the three nearest seats, nearest first
+  expect(
+    main.map((b) => b.getAttribute('data-kind')).filter((k) => k === 'bench' || k === 'tapri'),
+  ).toHaveLength(3)
+  for (const k of ['landmark', 'metro'])
+    expect(more.some((b) => b.getAttribute('data-kind') === k)).toBe(false)
+  const sorted = (rows: Element[]) => rows.map(metresOf).every((m, i, all) => i === 0 || all[i - 1]! <= m)
+  expect(sorted(main)).toBe(true)
+  expect(sorted(more)).toBe(true)
+  // the fold is a native disclosure, closed until opened
+  expect(host.querySelector('details.map-more')!.hasAttribute('open')).toBe(false)
+  await act(async () => (more[0] as HTMLButtonElement).click())
+  expect(props.onPick).toHaveBeenCalledWith(expect.objectContaining({ id: more[0]!.getAttribute('data-id') }))
+})
+
+it('landmarks come first in the map, so a screen reader meets them before forty benches', async () => {
+  const { host } = await mount()
+  const kinds = [...host.querySelectorAll('.map-item')].map((b) => b.getAttribute('data-kind'))
+  expect(kinds.slice(0, walledCity.landmarks.length).every((k) => k === 'landmark')).toBe(true)
+})
+
 it('the compass names the target with its distance, turns its arrow, and a tap clears it', async () => {
   const host = document.body.appendChild(document.createElement('div'))
   const onClear = vi.fn()
