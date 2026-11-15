@@ -9,7 +9,7 @@ test.beforeEach(({ page }) => page.routeWebSocket(/\/api\/districts\/[^/]+\/live
 test('shows the no-3D screen without WebGL', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = function (type: string, ...rest: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
       return type.startsWith('webgl') ? null : orig.call(this, type, ...rest)
     } as typeof orig
   })
@@ -20,7 +20,7 @@ test('shows the no-3D screen without WebGL', async ({ page }) => {
 test('shows the no-3D screen when only WebGL2 is missing', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = function (type: string, ...rest: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
       return type === 'webgl2' ? null : orig.call(this, type, ...rest)
     } as typeof orig
   })
