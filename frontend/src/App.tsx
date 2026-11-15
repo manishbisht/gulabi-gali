@@ -303,9 +303,12 @@ export default function App() {
   const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
   // in photo mode the pillar keeps out of the view (and out of every capture, see `Stage.capture`)
   useEffect(() => hideMapPillar(!!photo), [photo, hideMapPillar])
-  // photo mode and the taxi ride duck the city sounds to half (see setAmbienceDuck)
+  // photo mode and the taxi ride duck the city sounds to half (see setAmbienceDuck); a city that goes undoes it
   const ducked = !!photo || taxi.riding
-  useEffect(() => setAmbienceDuck(ducked), [ducked])
+  useEffect(() => {
+    setAmbienceDuck(ducked)
+    return () => setAmbienceDuck(false)
+  }, [ducked])
   // the kite fight is Sankranti's: if the festival goes (the snapshot changes mid-round), so does it
   if (kiteFrom && festival !== 'sankranti') setKiteFrom(null)
 

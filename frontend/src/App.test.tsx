@@ -56,6 +56,18 @@ vi.mock('./ui/photo', () => ({
     return photo.outcome
   },
 }))
+/** Every duck the city sounds were told, in order (the real ambience runs; this only listens). */
+const ducks = vi.hoisted(() => [] as boolean[])
+vi.mock('./audio/ambience', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./audio/ambience')>()
+  return {
+    ...real,
+    setAmbienceDuck: (on: boolean) => {
+      ducks.push(on)
+      real.setAmbienceDuck(on)
+    },
+  }
+})
 /** District ids whose chunk "fails to arrive". */
 const unreachable = vi.hoisted(() => new Set<string>())
 /** While set, no district chunk arrives until it resolves: the loading state held still for a test. */
@@ -158,6 +170,22 @@ it('photo mode hides the HUD, the joystick, the name labels and the toasts, take
   expect(document.activeElement).toBe(q('.photo-button')) // focus goes back to where it came from
   expect(q('.npc-bubbles')!.hidden).toBe(false)
   await act(async () => root.unmount())
+})
+
+it('photo mode ducks the city sounds, and a city that goes mid-photo leaves them unducked', async () => {
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Padharo!')!.click(),
+  )
+  await vi.waitFor(() => expect(host.textContent).toContain('Gulabi Shahar'), { timeout: 10_000 })
+  await act(async () => host.querySelector<HTMLElement>('.photo-button')!.click())
+  expect(ducks.at(-1)).toBe(true)
+  ducks.length = 0
+  await act(async () => root.unmount())
+  expect(ducks).toEqual([false])
 })
 
 it('Escape leaves photo mode too', async () => {
