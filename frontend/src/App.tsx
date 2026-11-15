@@ -36,6 +36,7 @@ import { useStamps } from './world/useStamps'
 import { useCityMap } from './world/useCityMap'
 import { processionLine } from './live/procession'
 import { DISTRICT_NAMES, DISTRICT_SHORT_NAMES } from './world/districtNames'
+import { byBus } from './world/metroRide'
 import { rememberDistrict, savedDistrict, useTravel } from './world/useTravel'
 import { dropPlaceLink, readPlaceLink } from './world/placeLink'
 import { mapItems } from './world/cityMap'
@@ -732,8 +733,13 @@ export default function App() {
                       </button>
                     )}
                   {nearStation && !near && !sheetOpen && !bench.seat && (
-                    <button type="button" className="metro-button" onClick={openSheet}>
-                      {t('metro', lang)}
+                    // Amer has a bus stand, not a metro: the same sheet, by bus
+                    <button
+                      type="button"
+                      className={byBus(here) ? 'metro-button bus-button' : 'metro-button'}
+                      onClick={openSheet}
+                    >
+                      {t(byBus(here) ? 'bus' : 'metro', lang)}
                     </button>
                   )}
                   {bench.near && !bench.seat && !near && !sheetOpen && (

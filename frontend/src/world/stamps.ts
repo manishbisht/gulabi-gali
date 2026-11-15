@@ -8,7 +8,7 @@ const KEY = 'gg-stamps'
 const OWNER = 'gg-stamps-owner'
 
 /**
- * Every Jaipur Darshan stamp, one per landmark across all four districts, with the landmark's name. A copy of
+ * Every Jaipur Darshan stamp, one per landmark across all five districts, with the landmark's name. A copy of
  * the server's `stamps.json`, which it checks every pushed id against.
  */
 export const STAMPS: readonly { id: string; hi: string; en: string }[] = LIST

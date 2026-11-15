@@ -5,6 +5,8 @@ import { DISTRICTS, loadDistrict, type District } from './district'
 import { footprint } from './kit'
 import { CAST } from './cast'
 import { DISTRICT_NAMES } from './districtNames'
+import { byBus } from './metroRide'
+import { roofHeight } from './rooftop'
 import { STAMPS, TOTAL_STAMPS } from './stamps'
 import BENCHES from './benches.json'
 import type { AABB, LandmarkDef, Vec2 } from './types'
@@ -139,14 +141,14 @@ const materials = (o: THREE.Object3D) => {
 }
 
 describe('the city', () => {
-  it('has all four districts', () => {
-    expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar'])
+  it('has all five districts', () => {
+    expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer'])
   })
 
-  it('landmark count across districts is 9', async () => {
+  it('landmark count across districts is 10', async () => {
     const all = await Promise.all(DISTRICTS.map(load))
     expect(all.reduce((n, d) => n + d.def.landmarks.length, 0)).toBe(TOTAL_STAMPS)
-    expect(TOTAL_STAMPS).toBe(9)
+    expect(TOTAL_STAMPS).toBe(10)
   })
 
   it('the stamp list (stamps.json, which the server checks ids against) is every landmark, by its own name', async () => {
@@ -164,13 +166,18 @@ describe('the city', () => {
       expect(triangles(await l.build()), l.id).toBeLessThan(8000)
   })
 
-  it.each(DISTRICTS)('%s: has a metro entrance by its station', async (id) => {
-    const d = await load(id)
-    const entrances = d.def.props.filter((p) => p.kind === 'station')
-    expect(entrances).toHaveLength(1)
-    const at = entrances[0]!.at
-    expect(Math.hypot(at.x - d.def.station.x, at.z - d.def.station.z)).toBeLessThan(4)
-  })
+  it.each(DISTRICTS)(
+    '%s: has a metro entrance (Amer: a bus stand, it has no metro) by its station',
+    async (id) => {
+      const d = await load(id)
+      const kind = byBus(id) ? 'bus-stop' : 'station'
+      expect(d.def.props.filter((p) => p.kind === (byBus(id) ? 'station' : 'bus-stop'))).toHaveLength(0)
+      const entrances = d.def.props.filter((p) => p.kind === kind)
+      expect(entrances).toHaveLength(1)
+      const at = entrances[0]!.at
+      expect(Math.hypot(at.x - d.def.station.x, at.z - d.def.station.z)).toBeLessThan(4)
+    },
+  )
 
   it.each(DISTRICTS)('%s: its signature landmark is floodlit after dark', async (id) => {
     const d = await load(id)
@@ -354,6 +361,69 @@ describe('Malviya Nagar', () => {
 
   it('is where Farhan and Neha live', async () => {
     expect(ids((await load('malviya-nagar')).def.npcs)).toEqual(['farhan', 'neha'])
+  })
+})
+
+describe('Amer', () => {
+  it('is Amer, with the fort on its hill', async () => {
+    const d = await load('amer')
+    expect(d.def.name).toEqual({ hi: 'Amer', en: 'Amer' })
+    expect(d.def.size).toBe(200)
+    expect(ids(d.def.landmarks)).toEqual(['amer-fort'])
+    // the hill rises north of the road, and the fort stands up on it, well above the street
+    const fort = d.def.landmarks[0]!
+    const model = await fort.build()
+    const box = new THREE.Box3().setFromObject(model)
+    expect(box.max.y).toBeGreaterThan(18)
+    expect(fort.footprint.maxZ).toBeLessThan(d.def.spawn.z - 40)
+  })
+
+  it('has the lake below the fort: water nobody walks into, between the road and the hill', async () => {
+    const d = await load('amer')
+    const lake = d.def.water!
+    expect(lake).toHaveLength(1)
+    const [w] = lake
+    expect(d.colliders).toContainEqual(w)
+    const fort = d.def.landmarks[0]!.footprint
+    expect(w!.maxZ).toBeLessThan(d.def.spawn.z) // south of it, the road
+    expect(w!.minZ).toBeGreaterThanOrEqual(fort.maxZ) // north of it, the hill
+    expect(d.def.paving.some((p) => p.color === 'glass' && intersects(p, w!))).toBe(true)
+    // nothing built in the water
+    for (const b of d.def.buildings) expect(intersects(footprint(b), w!)).toBe(false)
+  })
+
+  it('has no metro: a bus stand by the road, stalls along the way up, and benches', async () => {
+    const d = await load('amer')
+    const count = (k: string) => d.def.props.filter((p) => p.kind === k).length
+    expect(count('station')).toBe(0)
+    expect(count('bus-stop')).toBe(1)
+    expect(count('tapri')).toBeGreaterThanOrEqual(3)
+    expect(count('bench')).toBeGreaterThanOrEqual(2)
+    expect(count('poster-wall')).toBeGreaterThanOrEqual(1)
+    expect(count('auto')).toBeGreaterThanOrEqual(2)
+  })
+
+  it('has a rampart viewpoint that looks across the lake at the fort', async () => {
+    const d = await load('amer')
+    const roof = d.def.roof!
+    const [lake] = d.def.water!
+    const fort = d.def.landmarks[0]!
+    expect(roof.y).toBeGreaterThan(8)
+    expect(roofHeight(roof, roof.landing.x, roof.landing.z)).toBe(roof.y)
+    // turned to the fort up on its hill, with the lake in between: the line of sight crosses the water
+    const f = fort.footprint
+    expect(roof.view.x > f.minX && roof.view.x < f.maxX && roof.view.z > f.minZ && roof.view.z < f.maxZ).toBe(
+      true,
+    )
+    const mid = { x: (roof.landing.x + roof.view.x) / 2, z: (roof.landing.z + roof.view.z) / 2 }
+    expect(
+      mid.x > lake!.minX && mid.x < lake!.maxX && mid.z > lake!.minZ && mid.z < lake!.maxZ,
+      `${mid.x},${mid.z}`,
+    ).toBe(true)
+  })
+
+  it('is where Gopal ji and Shabnam spend their days', async () => {
+    expect(ids((await load('amer')).def.npcs)).toEqual(['gopal', 'shabnam'])
   })
 })
 

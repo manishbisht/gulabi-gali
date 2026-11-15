@@ -90,17 +90,23 @@ pitch in e2e.
 
 ## How districts stream
 
-There are four districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`). Each one's definition is a
+There are five districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`, `amer`). Each one's definition is a
 dynamic `import()` in `src/world/district.ts`, so each is its own small chunk, fetched only when the player
 first goes there. `loadDistrict(id)` builds the geometry from the definition: building blocks are merged per
 60 m cell (few draw calls, still culled off-screen), props are baked, and the district gets one hemisphere
 light and one sun whose shadow box follows the player (`district.focus`).
 
-Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`). The new district is loaded first, and only
+Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`), except to and from Amer, which has no metro:
+a bus runs there from every station and back (`rideBy` in `world/metroRide.ts`). It takes the same trip, with
+its own look: a marigold "Bus" row in the sheet, a "Bus" button at Amer's bus stand (its `station`, a `bus-stop`
+prop), a bus cab instead of the coach, and "Bus stand" on its map and signposts (the place id stays `metro`).
+Amer's lake is `DistrictDef.water`: colliders with no building, drawn by the paving. Its rooftop viewpoint is
+the roof of a bastion on the rampart by the lake, turned to look across the water at the fort on its hill.
+The new district is loaded first, and only
 once it is in does the old one leave; if loading fails the player stays where they were. Three.js is its own
 `three` chunk (`vite.config.ts`), so its hash survives deploys that only touch the app.
 
-The remembered district and the collected stamps (9 landmarks) live in `localStorage` (`src/storage.ts`). A
+The remembered district and the collected stamps (10 landmarks) live in `localStorage` (`src/storage.ts`). A
 resident's stamps are also kept on the server (see "Jaipur Darshan stamps" under phase 4), so a second device
 shows them; a ghost's stay on the device.
 
@@ -222,7 +228,7 @@ change or a close at once.
 - **Trust** (phase 3): each connected person's blocks and mute live in the object's memory, never in an
   attachment (whose size is capped), loaded from D1 on connect and, after a wake, before the first frame is
   handled. Two people blocked either way never hear of each other. Any change to a person (ban, hide, mute,
-  block, profile) goes through `refreshUser` (`backend/src/refresh.ts`), which tells all four districts and
+  block, profile) goes through `refreshUser` (`backend/src/refresh.ts`), which tells every district and
   the person's inbox to reload them: a ban closes their sockets with 4004, a hide makes them a ghost on the
   spot, a mute refuses `say` and `status` with `muted`. A target that fails is retried once; past that, each
   district's alarm reloads everyone connected at least once a minute. After D1 fails to answer, a district
@@ -287,7 +293,7 @@ plus incoming requests not looked at yet this session.
 
 ### The cap and the waitlist: GateDO
 
-One `GateDO` (named `global`, `backend/src/gate.ts`) counts the residents seen across all four districts,
+One `GateDO` (named `global`, `backend/src/gate.ts`) counts the residents seen across every district,
 one slot per person however many tabs or districts they have open; `MAX_LIVE` (default 300) is the most it
 admits. A district asks it (`admit`) before anyone hears of a resident, and `release`s the slot when that
 person's last resident socket there closes. Slots are kept per (person, district), so a metro ride never
@@ -415,15 +421,15 @@ The plan is `docs/superpowers/plans/2026-11-14-phase-4-extras.md`; the schema is
 `backend/migrations/0003_posters.sql`. Two pieces touch the server: the posters, and one flag on the `move`
 message for autos. Everything else is local to the page.
 
-| What           | Frontend                                                                                             | Server                                                             |
-| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| What           | Frontend                                                                                             | Server                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved/posterHidden`, D1 `posters`, `poster_owners` |
-| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                         |
-| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                               |
-| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                               |
-| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                         |
-| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                               |
-| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                               |
+| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                                                       |
+| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                                                             |
+| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                                                             |
+| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                                                       |
+| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                                                             |
+| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                                                             |
 
 `world/session.ts` builds each district's systems on enter (animals, the bandar, autos, the poster walls, the
 sky with its festival effects) and disposes them on leave, as for phase 2.
@@ -487,7 +493,7 @@ deletes the rows.
 The page keeps `gg-stamps` as before. For a resident, `useStamps` merges the profile's `stamps` into it, and
 pushes the local set whenever it holds one the server has not confirmed (after sign-in, after each new stamp);
 the answer is merged in too. A failed push is silent and is tried again on the next stamp or the next load. The
-person card and your own profile sheet show "Jaipur Darshan · n/9" and the landmarks by name (`ui/StampsLine.tsx`).
+person card and your own profile sheet show "Jaipur Darshan · n/10" and the landmarks by name (`ui/StampsLine.tsx`).
 
 ### The client-only extras: nothing is broadcast
 
@@ -562,7 +568,7 @@ two people are never told apart from none; 3 to 9 as they are; from 10 a multipl
 "n+". It is one number for the whole city: no names, ids or per-district split. One read per Cloudflare location
 per 30 s (`caches.default`, `COUNT_CACHE_S`) serves every page meanwhile, and the answer to a browser is
 `no-store`, so what a page shows is never more than 30 s old; per address it goes through `COUNT_LIMITER`. It
-never fans out to the four districts, and misses that land together in one isolate share one gate read, kept for
+never fans out to the districts, and misses that land together in one isolate share one gate read, kept for
 `COUNT_MEMO_MS` (2 s) after (a failed read is not kept; a miss waiting on another's read gives up after 5 s). The page (`useCityCount`) asks when the welcome screen mounts and every
 30 s while the tab shows (and at once when it shows again), keeps the last number through a failed read, and
 shows nothing until one arrives.

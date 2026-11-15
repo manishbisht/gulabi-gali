@@ -9,11 +9,11 @@ test('the stamps chip opens the Jaipur Darshan list: names for the collected, ri
   await page.addInitScript(() => localStorage.setItem('gg-stamps', '["hawa-mahal","jkk"]'))
   await page.goto('/?gg-test=1')
   await page.getByRole('button', { name: 'Padharo!' }).click()
-  await expect(page.locator('.stamp-count')).toHaveText('2/9')
+  await expect(page.locator('.stamp-count')).toHaveText('2/10')
 
   await page.locator('.stamp-count').click()
   const list = page.getByRole('dialog', { name: 'Jaipur Darshan' })
-  await expect(list.locator('li')).toHaveCount(9)
+  await expect(list.locator('li')).toHaveCount(10)
   await expect(list.locator('li[data-id="hawa-mahal"]')).toContainText('Hawa Mahal')
   await expect(list.locator('li[data-id="wtp"]')).not.toContainText('World Trade Park')
   await expect(list.locator('.darshan-badge')).toHaveCount(0)

@@ -26,7 +26,8 @@ export type AvatarLook = {
   head: 'none' | 'safa' | 'cap' | 'dupatta' | 'bun'
 }
 export interface PropSpec {
-  kind: 'tapri' | 'tree' | 'lamp' | 'auto' | 'bench' | 'poster-wall' | 'station'
+  /** `station`: a metro entrance; `bus-stop`: the bus stand of a district the metro does not reach (Amer). */
+  kind: 'tapri' | 'tree' | 'lamp' | 'auto' | 'bench' | 'poster-wall' | 'station' | 'bus-stop'
   at: Vec2
   /** Degrees, the same turn as `BuildingSpec.rot`: 90 sends the front (+z) to -x. */
   rot?: number
@@ -101,4 +102,6 @@ export interface DistrictDef {
   signposts?: Vec2[]
   /** The rooftop viewpoint (see rooftop.ts). */
   roof?: RoofDef
+  /** Open water nobody walks into (Amer's lake): colliders with no building, drawn by the district's paving. */
+  water?: AABB[]
 }

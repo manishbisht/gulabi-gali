@@ -31,7 +31,7 @@ export interface Heartbeat {
 export const skipCeiling = (cap: number) => Math.floor(cap * 1.1)
 
 /**
- * The city's cap on residents (`MAX_LIVE`), across all four districts. A district asks `admit` before anyone
+ * The city's cap on residents (`MAX_LIVE`), across every district. A district asks `admit` before anyone
  * sees a resident, and calls `release` when that person's last resident socket there closes. One person is one
  * slot however many tabs or districts they have open: slots are kept per (person, district), so a person
  * moving between districts is counted once, and the slot outlives the last of them by `HOLD_MS`.

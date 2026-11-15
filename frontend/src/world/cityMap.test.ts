@@ -14,6 +14,7 @@ import {
   type MapTarget,
 } from './cityMap'
 import walledCity from './districts/walledCity'
+import amer from './districts/amer'
 import { createPeople } from './people'
 import { wallsOf } from './posters'
 
@@ -87,6 +88,14 @@ it("a district's map items: every landmark (stamped or not), the metro, every be
   // every item has a name in both languages, and its own id
   for (const i of items) expect(i.name.hi && i.name.en).toBeTruthy()
   expect(new Set(items.map((i) => i.id)).size).toBe(items.length)
+  expect(of('metro')[0]!.name).toEqual({ hi: 'Metro station', en: 'Metro station' })
+})
+
+it('Amer has no metro: its map names the bus stand there instead, under the same id', () => {
+  const stop = mapItems(amer, []).find((i) => i.id === 'metro')!
+  expect(stop.kind).toBe('metro')
+  expect(stop.at).toEqual(amer.station)
+  expect(stop.name).toEqual({ hi: 'Bus stand', en: 'Bus stop' })
 })
 
 const person = (id: string, x: number, z: number): LivePerson => ({

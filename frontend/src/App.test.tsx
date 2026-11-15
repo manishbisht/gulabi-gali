@@ -11,6 +11,7 @@ import type { LiveOptions } from './net/live'
 import type { ClientMsg, DistrictId, ServerMsg } from './net/protocol'
 import { benchesOf } from './world/benches'
 import malviyaNagar from './world/districts/malviyaNagar'
+import amer from './world/districts/amer'
 import miRoad from './world/districts/miRoad'
 import university from './world/districts/university'
 import walledCity from './world/districts/walledCity'
@@ -218,6 +219,7 @@ const DEFS: Record<DistrictId, DistrictDef> = {
   'mi-road': miRoad,
   university,
   'malviya-nagar': malviyaNagar,
+  amer,
 }
 
 /** Opens the city with the test hooks on, in Hinglish, starting in the Walled City. */
@@ -244,9 +246,7 @@ async function ride(host: HTMLElement, to: DistrictId) {
   act(() => window.__gg.teleport(here.x, here.z))
   await tick()
   await act(async () => host.querySelector<HTMLButtonElement>('.metro-button')!.click())
-  const stop = [...host.querySelectorAll<HTMLButtonElement>('.travel-stop')].find(
-    (b) => b.textContent === DEFS[to].name.hi,
-  )!
+  const stop = [...host.querySelectorAll<HTMLButtonElement>('.travel-stop')].find((b) => b.dataset.id === to)!
   await act(async () => stop.click())
   await vi.waitFor(() => expect(host.querySelector('.fade[data-on]')).toBeNull(), { timeout: 5000 })
 }
@@ -272,7 +272,7 @@ it('travels round the city and leaves nothing behind', async () => {
     timers: live.size,
     bubbles: host.querySelectorAll('.npc-bubble').length,
   }
-  for (const to of ['mi-road', 'university', 'malviya-nagar', 'walled-city'] as DistrictId[]) {
+  for (const to of ['mi-road', 'university', 'malviya-nagar', 'amer', 'walled-city'] as DistrictId[]) {
     await ride(host, to)
     expect(window.__gg.district()).toBe(to)
     expect(localStorage.getItem('gg-district')).toBe(to)
@@ -300,7 +300,7 @@ it('travels round the city and leaves nothing behind', async () => {
   }
   expect(stage.scene.children.length).toBe(before.children) // back in the Walled City, as we started
   await act(async () => root.unmount())
-}, 20000)
+}, 30000) // five rides of `RIDE_MS` each, on real timers
 
 it('keeps the old district running when the new one fails to load, and says so', async () => {
   const { host, root } = await openCity()
@@ -421,7 +421,7 @@ it('a profile with no `stamps` field (an older Worker, a rollback) still opens t
   )
   await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
   await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
-  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/9')
+  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/10')
   await act(async () => root.unmount())
 })
 

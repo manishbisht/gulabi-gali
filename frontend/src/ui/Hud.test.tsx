@@ -14,7 +14,7 @@ async function mount(onMap?: () => void) {
   const host = document.body.appendChild(document.createElement('div'))
   await act(async () =>
     createRoot(host).render(
-      <Hud place="Gulabi Shahar" snapshot={null} stamps="0/9" lang="hi" onLang={() => {}} onMap={onMap} />,
+      <Hud place="Gulabi Shahar" snapshot={null} stamps="0/10" lang="hi" onLang={() => {}} onMap={onMap} />,
     ),
   )
   return host
@@ -44,7 +44,7 @@ it('a short place name shows on the chip while the full name stays its accessibl
         place="MI Road–Raja Park"
         placeShort="MI Road"
         snapshot={null}
-        stamps="0/9"
+        stamps="0/10"
         lang="hi"
         onLang={() => {}}
         onMap={() => {}}

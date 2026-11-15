@@ -1,6 +1,7 @@
 import type * as THREE from 'three'
 import { t, type Lang, type StringKey } from '../i18n/strings'
 import { benchesOf } from './benches'
+import { stopName } from './metroRide'
 import type { Remote } from './people'
 import { wallsOf } from './posters'
 import type { AABB, DistrictDef, Vec2 } from './types'
@@ -31,15 +32,14 @@ export interface MapItem extends MapTarget {
   stamped?: boolean
 }
 
-const NAMES: Record<Exclude<MapItemKind, 'landmark'>, StringKey> = {
-  metro: 'mapMetro',
+const NAMES: Record<Exclude<MapItemKind, 'landmark' | 'metro'>, StringKey> = {
   bench: 'mapBench',
   tapri: 'mapTapri',
   poster: 'mapPoster',
 }
 
 /** A place's name in both languages; `n` numbers one of many (`Chai tapri 2`), so a screen reader tells them apart. */
-const named = (kind: Exclude<MapItemKind, 'landmark'>, n?: number): Record<Lang, string> => ({
+const named = (kind: Exclude<MapItemKind, 'landmark' | 'metro'>, n?: number): Record<Lang, string> => ({
   hi: t(NAMES[kind], 'hi', { n: n ?? '' }),
   en: t(NAMES[kind], 'en', { n: n ?? '' }),
 })
@@ -56,7 +56,8 @@ export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[
       area: l.footprint,
       stamped: stamped.includes(l.id),
     })),
-    { id: 'metro', kind: 'metro', name: named('metro'), at: def.station },
+    // under the same id and kind everywhere; Amer's is a bus stand, and says so
+    { id: 'metro', kind: 'metro', name: stopName(def.id), at: def.station },
     ...benchesOf(def).map((b): MapItem => ({
       id: b.id,
       kind: b.kind,

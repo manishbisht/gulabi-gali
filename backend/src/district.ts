@@ -27,7 +27,13 @@ import {
   type Vehicle,
 } from './protocol'
 
-export const DISTRICT_IDS: readonly DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar']
+export const DISTRICT_IDS: readonly DistrictId[] = [
+  'walled-city',
+  'mi-road',
+  'university',
+  'malviya-nagar',
+  'amer',
+]
 
 /**
  * Every tapri and bench prop, by district: bench `${district}:${n}` is the n-th of them in the district's

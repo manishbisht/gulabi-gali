@@ -131,7 +131,7 @@ describe('the HUD line', () => {
     expect(t(processionLine('gangaur', 'walled-city')!, 'en')).toBe(
       'The Gangaur procession is leaving Tripolia',
     )
-    for (const d of ['mi-road', 'university', 'malviya-nagar'] as const) {
+    for (const d of ['mi-road', 'university', 'malviya-nagar', 'amer'] as const) {
       const key = processionLine('gangaur', d)!
       expect(t(key, 'en')).toBe('The Gangaur procession is on the road')
       expect(t(key, 'hi')).toBe('Gangaur ki sawari sadak par nikli hai')

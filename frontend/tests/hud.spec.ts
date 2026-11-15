@@ -148,6 +148,7 @@ const DISTRICTS = [
   ['mi-road', 'MI Road–Raja Park', 'MI Road & Raja Park'],
   ['university', 'University–JKK', 'University & JKK'],
   ['malviya-nagar', 'Malviya Nagar–WTP', 'Malviya Nagar & WTP'],
+  ['amer', 'Amer', 'Amer'],
 ] as const
 const LANGS: L[] = ['hi', 'en']
 

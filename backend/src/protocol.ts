@@ -1,4 +1,4 @@
-export type DistrictId = 'walled-city' | 'mi-road' | 'university' | 'malviya-nagar'
+export type DistrictId = 'walled-city' | 'mi-road' | 'university' | 'malviya-nagar' | 'amer'
 
 export type FestivalId = 'sankranti' | 'holi' | 'gangaur' | 'teej' | 'diwali' | 'jlf'
 export type Condition = 'clear' | 'cloudy' | 'fog' | 'rain' | 'storm' | 'dust'
@@ -369,6 +369,7 @@ export const POSTER_WALLS: Record<DistrictId, number> = {
   'mi-road': 1,
   university: 1,
   'malviya-nagar': 5,
+  amer: 1,
 }
 /** A `when` may be at most this far ahead (inclusive), and must be in the future. */
 export const POSTER_AHEAD_MS = 30 * 24 * 3600 * 1000

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import type { DistrictId } from '../net/protocol'
-import { METRO_STATIONS } from '../world/metroRide'
+import { METRO_STATIONS, rideBy } from '../world/metroRide'
 import { inertRest } from './inertRest'
 
 /** Waiting at the next station this long offers a way back to the district left. */
@@ -26,7 +26,8 @@ function stage(): HTMLElement | null {
 }
 
 /**
- * The inside of a Pink Line coach, in CSS only, over the black screen. Tapping anywhere skips. Focus moves
+ * The inside of a Pink Line coach, in CSS only, over the black screen; to or from Amer (no metro), the inside of
+ * a bus instead, its windscreen on a winding road through the hills, in its own colours and words. Tapping anywhere skips. Focus moves
  * onto the skip button while it shows (and onto "Go back" once the wait has dragged on), the game beneath is
  * inert and ignores keys, and focus comes back to where it was (or the stage) afterwards. The spoken status sits
  * beside the button, not in it.
@@ -70,6 +71,9 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
   }, [stuck])
 
   const station = METRO_STATIONS[to][lang]
+  const bus = rideBy(from, to) === 'bus'
+  const next = t(bus ? 'busNext' : 'rideNext', lang, { station })
+  const line = t(waiting ? (bus ? 'busWaiting' : 'rideWaiting') : bus ? 'busGhat' : 'rideDoors', lang)
   return (
     <>
       <button
@@ -78,19 +82,20 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
         data-metro-ride=""
         className="metro-ride"
         data-waiting={waiting || undefined}
-        aria-label={t('rideLabel', lang)}
+        data-by={bus ? 'bus' : 'metro'}
+        aria-label={t(bus ? 'busLabel' : 'rideLabel', lang)}
         onClick={onSkip}
       >
         <span className="metro-from" aria-hidden="true">
           {METRO_STATIONS[from][lang]}
         </span>
         <span className="metro-window" aria-hidden="true">
-          <span className="metro-tunnel" />
+          <span className={bus ? 'bus-road' : 'metro-tunnel'} />
         </span>
         <span className="metro-handrail" aria-hidden="true" />
         <span className="metro-board" aria-hidden="true">
-          <span className="metro-next">{t('rideNext', lang, { station })}</span>
-          <span className="metro-line">{t(waiting ? 'rideWaiting' : 'rideDoors', lang)}</span>
+          <span className="metro-next">{next}</span>
+          <span className="metro-line">{line}</span>
         </span>
         {!waiting && (
           <span className="metro-skip" aria-hidden="true">
@@ -99,7 +104,7 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
         )}
       </button>
       <p role="status" data-metro-ride="" className="visually-hidden">
-        {t('rideNext', lang, { station })} {t(waiting ? 'rideWaiting' : 'rideDoors', lang)}
+        {next} {line}
       </p>
       {stuck && (
         <button ref={backButton} type="button" data-metro-ride="" className="metro-back" onClick={onBack}>

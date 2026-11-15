@@ -27,9 +27,9 @@ async function mount(node: React.ReactElement) {
   return host
 }
 
-it('the list has all 9 landmarks: the collected with name and district, the rest with a riddle and district', async () => {
+it('the list has all 10 landmarks: the collected with name and district, the rest with a riddle and district', async () => {
   const host = await mount(<DarshanList ids={['hawa-mahal', 'wtp']} lang="en" onClose={() => {}} />)
-  expect(host.querySelectorAll('li')).toHaveLength(9)
+  expect(host.querySelectorAll('li')).toHaveLength(10)
   const hawa = host.querySelector('li[data-id="hawa-mahal"]')!
   expect(hawa.getAttribute('data-got')).toBe('true')
   expect(hawa.textContent).toContain('Hawa Mahal')
@@ -39,7 +39,7 @@ it('the list has all 9 landmarks: the collected with name and district, the rest
   expect(jkk.textContent).not.toContain('Jawahar')
   expect(jkk.textContent).toContain(STAMP_RIDDLE.jkk.en)
   expect(jkk.textContent).toContain('University & JKK')
-  expect(host.textContent).toContain('2/9')
+  expect(host.textContent).toContain('2/10')
   expect(host.querySelector('.darshan-badge')).toBeNull()
 })
 
@@ -93,15 +93,17 @@ it('the list speaks Hinglish and closes', async () => {
   const host = await mount(<DarshanList ids={[]} lang="hi" onClose={onClose} />)
   expect(host.querySelector('li[data-id="wtp"]')!.textContent).toContain('Malviya Nagar')
   expect(host.querySelector('li[data-id="wtp"]')!.textContent).toContain(STAMP_RIDDLE.wtp.hi)
+  expect(host.querySelector('li[data-id="amer-fort"]')!.textContent).toContain('Amer')
+  expect(host.querySelector('li[data-id="amer-fort"]')!.textContent).toContain(STAMP_RIDDLE['amer-fort'].hi)
   await act(async () => host.querySelector<HTMLButtonElement>('.auth-close')!.click())
   expect(onClose).toHaveBeenCalled()
 })
 
-it('the badge shows at 9/9 and not at 8/9', async () => {
+it('the badge shows at 10/10 and not at 9/10', async () => {
   const eight = await mount(<StampsLine ids={ALL.slice(1)} lang="en" />)
   expect(eight.querySelector('.darshan-badge')).toBeNull()
-  const nine = await mount(<StampsLine ids={ALL} lang="en" />)
-  expect(nine.querySelector('.darshan-badge')!.textContent).toBe('Jaipur Darshan complete')
+  const ten = await mount(<StampsLine ids={ALL} lang="en" />)
+  expect(ten.querySelector('.darshan-badge')!.textContent).toBe('Jaipur Darshan complete')
   const hi = await mount(<StampsLine ids={ALL} lang="hi" />)
   expect(hi.querySelector('.darshan-badge')!.textContent).toBe('Jaipur Darshan poora')
   const list = await mount(<DarshanList ids={ALL} lang="en" onClose={() => {}} />)
@@ -138,10 +140,10 @@ it("the person card shows a complete collector's badge", async () => {
 it('the stamps chip in the HUD opens the list', async () => {
   const onStamps = vi.fn()
   const host = await mount(
-    <Hud place="x" snapshot={null} stamps="1/9" lang="en" onLang={() => {}} onStamps={onStamps} />,
+    <Hud place="x" snapshot={null} stamps="1/10" lang="en" onLang={() => {}} onStamps={onStamps} />,
   )
   const chip = host.querySelector<HTMLButtonElement>('button.stamp-count')!
-  expect(chip.textContent).toBe('1/9')
+  expect(chip.textContent).toBe('1/10')
   await act(async () => chip.click())
   expect(onStamps).toHaveBeenCalled()
 })

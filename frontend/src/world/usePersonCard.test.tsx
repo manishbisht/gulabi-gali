@@ -166,7 +166,7 @@ it('a resident sees the Jaipur Darshan stamps the person has collected, by name'
   const { host, render } = show('resident', { lang: 'hi' })
   await render()
   const line = host.querySelector('.person-stamps')!
-  expect(line.textContent).toContain('Jaipur Darshan · 2/9')
+  expect(line.textContent).toContain('Jaipur Darshan · 2/10')
   const names = [...line.querySelectorAll('li')].map((li) => li.textContent)
   expect(names).toEqual(['Hawa Mahal', 'Rajasthan University'])
   expect(line.querySelector('ul')!.getAttribute('aria-label')).toBe('Jaipur Darshan ke stamps')

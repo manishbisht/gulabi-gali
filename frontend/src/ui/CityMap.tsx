@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import { footprint } from '../world/kit'
 import { mapItems, targetDistance, type MapItem, type MapItemKind, type MapTarget } from '../world/cityMap'
+import { byBus } from '../world/metroRide'
 import { PALETTE } from '../world/palette'
 import type { DistrictDef, Vec2 } from '../world/types'
 import { PlaceInvite } from './PlaceInvite'
@@ -147,7 +148,9 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
                   aria-label={label(i)}
                   onClick={() => onPick(i)}
                 >
-                  <span aria-hidden="true">{i.stamped ? '✓' : GLYPH[i.kind]}</span>
+                  <span aria-hidden="true">
+                    {i.stamped ? '✓' : i.kind === 'metro' && byBus(def.id) ? 'B' : GLYPH[i.kind]}
+                  </span>
                 </button>
               )),
           )}

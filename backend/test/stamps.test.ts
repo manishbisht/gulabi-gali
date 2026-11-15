@@ -20,7 +20,7 @@ const stampsOf = async (res: Response) => ((await res.json()) as { stamps: strin
 const profileOf = async (viewer: string, id: string) => api(`/api/profiles/${encodeURIComponent(id)}`, viewer)
 
 describe('Jaipur Darshan stamps on the server', () => {
-  it('the mirrored list holds the nine landmarks, each with a Hinglish and an English name', () => {
+  it('the mirrored list holds the ten landmarks, each with a Hinglish and an English name', () => {
     expect(STAMPS.map((s) => s.id)).toEqual([
       'hawa-mahal',
       'jantar-mantar',
@@ -31,6 +31,7 @@ describe('Jaipur Darshan stamps on the server', () => {
       'university-gate',
       'jkk',
       'wtp',
+      'amer-fort',
     ])
     for (const s of STAMPS) expect(s.hi && s.en).toBeTruthy()
   })

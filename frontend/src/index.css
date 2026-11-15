@@ -3,6 +3,7 @@
   --sandstone: #d9b382;
   --plum: #2a1d24;
   --cream: #f5e6d8;
+  --marigold: #f2a81d;
 }
 
 html,
@@ -756,6 +757,11 @@ button {
   font-style: italic;
 }
 
+/* At Amer's bus stand the same button says "Bus", in the bus's marigold. */
+.metro-button.bus-button {
+  background: var(--marigold);
+}
+
 .metro-button {
   flex: none;
   align-self: flex-end;
@@ -893,6 +899,26 @@ button {
   text-align: left;
   font-size: 1rem;
   font-weight: 600;
+}
+
+/* A stop the bus goes to (Amer has no metro): marigold, with a "Bus" tag, not the metro's plain row. */
+.travel-stop[data-by='bus'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-color: var(--marigold);
+  background: rgb(242 168 29 / 0.16);
+}
+
+.travel-by {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--marigold);
+  color: var(--plum);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .travel-close {
@@ -1676,6 +1702,45 @@ small.words-hint {
   animation: metro-sway 1.6s ease-in-out infinite;
 }
 
+/* The bus to Amer: a warm cab, and through the windscreen hills going by over a road with its centre line. */
+.metro-ride[data-by='bus'] {
+  background: linear-gradient(#5b3a14, #24160a);
+}
+
+.metro-ride[data-by='bus'] .metro-window {
+  height: 26vh;
+  border-color: var(--marigold);
+  border-radius: 28px 28px 10px 10px;
+  background: linear-gradient(#f3c98b 0 45%, #8c7a4f 45% 70%, #4a4543 70%);
+}
+
+.bus-road {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 34px, #f6efe4 34px 60px, transparent 60px 96px) 0 86% /
+      100% 6px no-repeat,
+    repeating-linear-gradient(115deg, transparent 0 40px, #6f6a3e 40px 70px, transparent 70px 120px) 0 52% /
+      100% 22% no-repeat;
+  animation: bus-roll 0.9s linear infinite;
+}
+
+.metro-ride[data-waiting] .bus-road {
+  animation: none;
+}
+
+.metro-ride[data-by='bus'] .metro-handrail {
+  background: var(--marigold);
+}
+
+@keyframes bus-roll {
+  to {
+    background-position-x:
+      -96px,
+      -120px;
+  }
+}
+
 @keyframes metro-rush {
   to {
     background-position-x: -72px;
@@ -1690,6 +1755,7 @@ small.words-hint {
 
 @media (prefers-reduced-motion: reduce) {
   .metro-tunnel,
+  .bus-road,
   .metro-ride:not([data-waiting]) .metro-board {
     animation: none;
   }

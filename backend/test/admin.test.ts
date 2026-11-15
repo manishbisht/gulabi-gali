@@ -708,6 +708,7 @@ describe('admin', () => {
       'mi-road',
       'university',
       'malviya-nagar',
+      'amer',
     ])
     expect(at(after).residents).toBe(at(before).residents! + 1)
     expect(at(after).ghosts).toBe(at(before).ghosts! + 1)

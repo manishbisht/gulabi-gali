@@ -126,6 +126,20 @@ export const STRINGS = {
   },
   rideBack: { hi: 'Wapas jao', en: 'Go back' },
   rideSkip: { hi: 'Chhodo, tap karo', en: 'Tap to skip' },
+  /** Amer has no metro: a bus runs there from every station (see `rideBy`). */
+  bus: { hi: 'Bus', en: 'Bus' },
+  travelByBus: { hi: '{place} — bus se', en: '{place} — by bus' },
+  mapBus: { hi: 'Bus stand', en: 'Bus stop' },
+  busNext: { hi: 'Agla stop: {station}', en: 'Next stop: {station}' },
+  busGhat: {
+    hi: 'Aage ghaati ke mod hain. Handle pakad ke baitho.',
+    en: 'Bends up the ghat road ahead. Keep hold of the rail.',
+  },
+  busWaiting: { hi: 'Stand pe ruke hain…', en: 'Waiting at the stand…' },
+  busLabel: {
+    hi: 'Bus safar — chhodne ke liye tap karo',
+    en: 'Bus ride — tap to skip',
+  },
   signInButton: { hi: 'Dikhna hai? Login karo', en: 'Want to be seen? Sign in' },
   signInTitle: { hi: 'Gali mein apni jagah banao', en: 'Take your place in the lane' },
   signInName: { hi: 'Aapka naam', en: 'Your name' },

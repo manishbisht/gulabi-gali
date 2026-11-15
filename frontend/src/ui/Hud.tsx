@@ -14,7 +14,7 @@ interface Props {
   banner?: string
   /** A line under the banner while a procession is on the street, already in the current language. */
   procession?: string
-  /** Stamp progress as `N/9`. */
+  /** Stamp progress as `N/10`. */
   stamps: string
   /** Opens the Jaipur Darshan list; the stamps chip is a button when present. */
   onStamps?: () => void

@@ -74,15 +74,15 @@ test('walks with the keyboard', async ({ page }) => {
 
 test('collects a stamp at Hawa Mahal', async ({ page }) => {
   await enterCity(page)
-  await expect(page.locator('.stamp-count')).toHaveText('0/9')
+  await expect(page.locator('.stamp-count')).toHaveText('0/10')
   await page.evaluate(() => window.__gg.teleport(36, -8))
   await page.getByRole('button', { name: 'Stamp lo' }).click()
   // the card's own status line ("Bulao") is there too, empty: the toast is the one that says it
   await expect(page.getByRole('status').filter({ hasText: 'stamp mila: Hawa Mahal' })).toBeVisible()
-  await expect(page.locator('.stamp-count')).toHaveText('1/9')
+  await expect(page.locator('.stamp-count')).toHaveText('1/10')
   await page.reload()
   await page.getByRole('button', { name: 'Padharo!' }).click()
-  await expect(page.locator('.stamp-count')).toHaveText('1/9')
+  await expect(page.locator('.stamp-count')).toHaveText('1/10')
 })
 
 /** Stands the player two metres south of a character, so the fixed camera has it dead ahead. */
@@ -204,6 +204,7 @@ test.describe('by metro', () => {
       'MI Road–Raja Park',
       'University–JKK',
       'Malviya Nagar–WTP',
+      'Amer Bus', // no metro to Amer: the bus goes there
       'Band karo',
     ])
     await sheet.getByRole('button', { name: 'MI Road–Raja Park' }).tap()

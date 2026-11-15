@@ -1,11 +1,12 @@
 import type { DistrictId } from '../net/protocol'
 
-/** Each district's name, kept out of the district chunks so the metro can list them all before loading any. */
+/** Each district's name, kept out of the district chunks so the travel sheet can list them all before loading any. */
 export const DISTRICT_NAMES: Record<DistrictId, { hi: string; en: string }> = {
   'walled-city': { hi: 'Gulabi Shahar', en: 'Pink City' },
   'mi-road': { hi: 'MI Road–Raja Park', en: 'MI Road & Raja Park' },
   university: { hi: 'University–JKK', en: 'University & JKK' },
   'malviya-nagar': { hi: 'Malviya Nagar–WTP', en: 'Malviya Nagar & WTP' },
+  amer: { hi: 'Amer', en: 'Amer' },
 }
 
 /**
@@ -17,4 +18,5 @@ export const DISTRICT_SHORT_NAMES: Record<DistrictId, { hi: string; en: string }
   'mi-road': { hi: 'MI Road', en: 'MI Road' },
   university: { hi: 'University', en: 'University' },
   'malviya-nagar': { hi: 'Malviya Nagar', en: 'Malviya Nagar' },
+  amer: DISTRICT_NAMES.amer,
 }

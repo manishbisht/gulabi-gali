@@ -121,3 +121,26 @@ it('once the wait drags on, focus moves to the way back, so a keyboard or screen
   expect(back).toBeDefined()
   expect(document.activeElement).toBe(back)
 })
+
+it('to or from Amer it is a bus, not the metro: its own look and its own words', () => {
+  const props = show({ from: 'malviya-nagar', to: 'amer' })
+  const button = host.querySelector<HTMLButtonElement>('button.metro-ride')!
+  expect(button.getAttribute('data-by')).toBe('bus')
+  expect(button.getAttribute('aria-label')).toBe('Bus ride — tap to skip')
+  expect(button.querySelector('.bus-road')).not.toBeNull()
+  expect(button.querySelector('.metro-tunnel')).toBeNull()
+  expect(host.querySelector('[role="status"]')!.textContent).toContain('Next stop: Amer')
+  act(() => button.click())
+  expect(props.onSkip).toHaveBeenCalledOnce()
+  show({ from: 'amer', to: 'walled-city', lang: 'hi' })
+  expect(host.querySelector('button.metro-ride')!.getAttribute('aria-label')).toBe(
+    'Bus safar — chhodne ke liye tap karo',
+  )
+  expect(host.querySelector('button.metro-ride')!.getAttribute('data-by')).toBe('bus')
+})
+
+it('between two metro stations the coach stays the metro', () => {
+  show()
+  expect(host.querySelector('button.metro-ride')!.getAttribute('data-by')).toBe('metro')
+  expect(host.querySelector('.metro-tunnel')).not.toBeNull()
+})

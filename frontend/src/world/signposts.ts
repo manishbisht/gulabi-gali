@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { t, type Lang } from '../i18n/strings'
+import type { Lang } from '../i18n/strings'
+import { stopName } from './metroRide'
 import { bake, box, merge } from './kit/parts'
 import { PALETTE } from './palette'
 import type { AABB, DistrictDef, Vec2 } from './types'
@@ -55,7 +56,7 @@ const METRES_PX = { w: 128, h: 64 }
 export function signpostsOf(def: DistrictDef): Signpost[] {
   const places = [
     ...def.landmarks.map((l) => ({ id: l.id, name: l.name, to: l.at })),
-    { id: 'metro', name: { hi: t('mapMetro', 'hi'), en: t('mapMetro', 'en') }, to: def.station },
+    { id: 'metro', name: stopName(def.id), to: def.station },
   ]
   return (def.signposts ?? []).map((at) => ({
     at,

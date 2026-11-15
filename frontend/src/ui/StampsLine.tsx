@@ -8,7 +8,7 @@ export function DarshanBadge({ lang }: { lang: Lang }) {
 }
 
 /**
- * "Jaipur Darshan · 2/9" and the landmarks stamped, by name: on a person's card and in your own profile. With
+ * "Jaipur Darshan · 2/10" and the landmarks stamped, by name: on a person's card and in your own profile. With
  * `hint`, none yet says where stamps come from (your own sheet); without it, it is the count alone.
  */
 export function StampsLine({ ids, lang, hint }: { ids: readonly string[]; lang: Lang; hint?: boolean }) {

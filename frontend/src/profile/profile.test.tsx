@@ -136,7 +136,7 @@ it('shows your own Jaipur Darshan stamps: the count, and the landmarks by name',
     )
   await sheet(['jkk', 'hawa-mahal'])
   const line = host.querySelector('.person-stamps')!
-  expect(line.textContent).toContain('Jaipur Darshan · 2/9')
+  expect(line.textContent).toContain('Jaipur Darshan · 2/10')
   expect([...line.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
     'Jawahar Kala Kendra',
     'Hawa Mahal',
@@ -144,7 +144,7 @@ it('shows your own Jaipur Darshan stamps: the count, and the landmarks by name',
   expect(line.querySelector('ul')!.getAttribute('aria-label')).toBe('Jaipur Darshan stamps')
   // none yet: the count, and where to find them
   await sheet([])
-  expect(host.querySelector('.person-stamps')!.textContent).toContain('Jaipur Darshan · 0/9')
+  expect(host.querySelector('.person-stamps')!.textContent).toContain('Jaipur Darshan · 0/10')
   expect(host.querySelector('.person-stamps li')).toBeNull()
 })
 

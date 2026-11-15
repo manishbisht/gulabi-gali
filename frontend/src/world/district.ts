@@ -8,8 +8,8 @@ import { buildRoof } from './rooftop'
 import { buildSignposts } from './signposts'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
-/** The four districts, in the order the metro lists them. */
-export const DISTRICTS: DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar']
+/** The five districts, in the order the travel sheet lists them: the metro's four, then Amer (by bus). */
+export const DISTRICTS: DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer']
 
 /** Each district is its own chunk, fetched only when the player goes there. */
 const SOURCES: Record<DistrictId, () => Promise<{ default: DistrictDef }>> = {
@@ -17,6 +17,7 @@ const SOURCES: Record<DistrictId, () => Promise<{ default: DistrictDef }>> = {
   'mi-road': () => import('./districts/miRoad'),
   university: () => import('./districts/university'),
   'malviya-nagar': () => import('./districts/malviyaNagar'),
+  amer: () => import('./districts/amer'),
 }
 
 export interface District {
@@ -86,6 +87,7 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
     root.add(buildRoof(def.roof))
     colliders.push(def.roof.flight)
   }
+  colliders.push(...(def.water ?? []))
   colliders.push(...boundary(def.size / 2))
 
   const hemi = new THREE.HemisphereLight('#E4EEF4', PALETTE.sandstone, 1.6)

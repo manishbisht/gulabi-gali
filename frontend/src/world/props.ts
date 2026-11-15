@@ -14,6 +14,7 @@ const SIZE: Record<Kind, { w: number; d: number }> = {
   bench: { w: 2, d: 0.7 },
   'poster-wall': { w: 4.2, d: 0.5 },
   station: { w: 3.6, d: 5.4 },
+  'bus-stop': { w: 4.4, d: 1.8 },
 }
 
 const blob = (r: number, x: number, y: number, z: number) => {
@@ -96,6 +97,20 @@ const MODELS: Record<Kind, () => THREE.BufferGeometry> = {
       box(3.9, 0.55, 0.12, 0, 2.9, 2.86, 'pink'),
       box(1.6, 0.3, 0.13, 0, 3.0, 2.88, 'white'),
       ...archOpening(2.8, 2.0, 0.6, 0, 0, 2.7, 'road'),
+    ]),
+  // Bus stand (no metro here): a marigold shelter on teal posts, a bench under it, and the stop's sign, to +z.
+  'bus-stop': () =>
+    merge([
+      box(4.4, 0.04, 1.8, 0, 0, 0, 'white'),
+      box(4.2, 2.3, 0.12, 0, 0, -0.84, 'teal'),
+      box(0.12, 2.5, 0.12, -2.05, 0, 0.8, 'teal'),
+      box(0.12, 2.5, 0.12, 2.05, 0, 0.8, 'teal'),
+      box(4.6, 0.14, 2.1, 0, 2.5, 0, 'marigold'),
+      box(4.6, 0.3, 0.08, 0, 2.3, 1.05, 'terracotta'),
+      box(3.2, 0.1, 0.5, 0, 0.45, -0.5, 'sandstone'),
+      box(3.2, 0.45, 0.4, 0, 0, -0.5, 'white'),
+      box(0.08, 2.9, 0.08, 2.5, 0, 0.9, 'road'),
+      box(0.7, 0.7, 0.06, 2.5, 2.4, 0.9, 'marigold'),
     ]),
 }
 
