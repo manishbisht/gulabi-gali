@@ -565,13 +565,19 @@ function createInteraction(
   const ndc = new THREE.Vector2()
   let landmarkNear = false
   let down: { x: number; y: number; at: number } | null = null
+  /** The pointers down on the canvas itself: the joystick's thumb, on its own element, is not one of them. */
+  const touching = new Set<number>()
   const onDown = (e: PointerEvent) => {
-    // A second finger (a pinch) or a right or middle click is not a tap, and spoils the one in progress.
-    down =
-      e.isPrimary === false || (e.button ?? 0) > 0 ? null : { x: e.clientX, y: e.clientY, at: e.timeStamp }
+    touching.add(e.pointerId)
+    // A second finger on the canvas (a pinch) or a right or middle click is not a tap, and spoils the one in progress.
+    down = touching.size > 1 || (e.button ?? 0) > 0 ? null : { x: e.clientX, y: e.clientY, at: e.timeStamp }
   }
-  const onCancel = () => void (down = null)
+  const onCancel = (e: PointerEvent) => {
+    touching.delete(e.pointerId)
+    down = null
+  }
   const onUp = (e: PointerEvent) => {
+    touching.delete(e.pointerId)
     const d = down
     down = null
     // at the wheel nothing opens: not a character, a person or a poster

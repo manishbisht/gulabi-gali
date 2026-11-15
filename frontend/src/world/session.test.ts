@@ -915,7 +915,7 @@ it('a failed trip leaves the follower where it is', async () => {
   session.dispose()
 })
 
-it('only a plain primary tap counts: a right click, a second finger or a cancelled touch is not one', async () => {
+it('only a plain tap counts: a right click, a second finger on the canvas or a cancelled touch is not one', async () => {
   const { hooks: h, stage } = await withPersonAhead()
   const canvas = document.querySelector('canvas')!
   stage.camera.position.set(0, 1, 0)
@@ -923,20 +923,42 @@ it('only a plain primary tap counts: a right click, a second finger or a cancell
   stage.camera.updateMatrixWorld(true)
   const tap = vi.spyOn(h.personCard, 'tap')
   const fire = (type: string, extra: object = {}) =>
-    canvas.dispatchEvent(Object.assign(new Event(type), { clientX: 50, clientY: 50 }, extra))
-  const press = (down: object, up: object = {}) => {
+    canvas.dispatchEvent(Object.assign(new Event(type), { clientX: 50, clientY: 50, pointerId: 1 }, extra))
+  const press = (down: object = {}, up: object = {}) => {
     fire('pointerdown', down)
     fire('pointerup', up)
   }
   press({ button: 2 })
-  press({ isPrimary: false })
-  fire('pointerdown', { isPrimary: true, button: 0 })
-  fire('pointerdown', { isPrimary: false }) // the second finger lands: no tap when the first lifts
-  fire('pointerup', { isPrimary: true })
-  fire('pointerdown', { isPrimary: true, button: 0 })
+  // a pinch: the second finger lands on the canvas, so neither lift is a tap
+  fire('pointerdown', { pointerId: 1, button: 0 })
+  fire('pointerdown', { pointerId: 2, button: 0 })
+  fire('pointerup', { pointerId: 1 })
+  fire('pointerup', { pointerId: 2 })
+  fire('pointerdown', { button: 0 })
   fire('pointercancel')
   fire('pointerup')
   expect(tap).not.toHaveBeenCalled()
-  press({ isPrimary: true, button: 0 }) // and a plain tap still works
+  press({ button: 0 }) // and a plain tap still works, the pinch's pointers having gone
+  expect(tap).toHaveBeenCalledTimes(1)
+})
+
+it('a tap on the canvas counts while another thumb holds the joystick (a pointer that never touched the canvas)', async () => {
+  const { hooks: h, stage } = await withPersonAhead()
+  const canvas = document.querySelector('canvas')!
+  stage.camera.position.set(0, 1, 0)
+  stage.camera.lookAt(0, 1, -5)
+  stage.camera.updateMatrixWorld(true)
+  const tap = vi.spyOn(h.personCard, 'tap')
+  // the joystick's primary touch (id 1) is down on its own element: the canvas never hears it
+  const fire = (type: string, extra: object = {}) =>
+    canvas.dispatchEvent(
+      Object.assign(
+        new Event(type),
+        { clientX: 50, clientY: 50, isPrimary: false, pointerId: 2, button: 0 },
+        extra,
+      ),
+    )
+  fire('pointerdown')
+  fire('pointerup')
   expect(tap).toHaveBeenCalledTimes(1)
 })

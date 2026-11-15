@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { resolveUser } from './auth'
 import { allowedOrigin } from './cors'
 import type { Env } from './env'
+import { ipKey } from './limits'
 import benches from './benches.json'
 import { wordsOk } from './filter/server'
 import { GATE_NAME, type Admit, type GateDO } from './gate'
@@ -241,34 +242,7 @@ export function readWho(raw: string | null): Who {
   }
 }
 
-const isLoopback = (ip: string) => ip === '::1' || ip.startsWith('127.') || ip === '::ffff:127.0.0.1'
-
-/**
- * What an address counts as for the per-address cap: an IPv4 address as itself, an IPv6 one as its /64 (written
- * out, so every spelling of it is the same key).
- */
-export function ipKey(ip: string): string {
-  const a = ip.toLowerCase().split('%')[0]!
-  if (!a.includes(':')) return a
-  const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-  if (mapped) return mapped[1]!
-  // The same address written in hex (::ffff:7f00:1) is the IPv4 one too.
-  const hex = a.match(/^(?:0:0:0:0:0|::):?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
-  if (hex) {
-    const hi = parseInt(hex[1]!, 16)
-    const lo = parseInt(hex[2]!, 16)
-    return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`
-  }
-  const [head, tail] = a.split('::') as [string, string | undefined]
-  const h = head ? head.split(':') : []
-  const t = tail ? tail.split(':') : []
-  const groups =
-    tail === undefined ? h : [...h, ...Array<string>(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t]
-  return `${groups
-    .slice(0, 4)
-    .map((g) => (parseInt(g, 16) || 0).toString(16))
-    .join(':')}::/64`
-}
+const isLoopback = (ip: string) => ip === '::1' || ipKey(ip).startsWith('127.')
 
 /**
  * What a district keeps in memory about a connected person, loaded from D1 (see `loadTrust`): whether they are

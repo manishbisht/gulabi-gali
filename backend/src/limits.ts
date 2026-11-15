@@ -153,12 +153,23 @@ export const IP_RETRY_AFTER_S = 60
 
 const LOOPBACK = /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/i
 
-/** The first four groups of an IPv6 address (its /64), so one subscriber is one key; IPv4 is as it is. */
-function normalise(ip: string): string {
+/**
+ * What an address counts as, for the rate limits and the per-address socket cap alike: an IPv4 address as itself
+ * (also when mapped into IPv6, in any spelling), an IPv6 one as its /64 (written out, so every spelling of it is
+ * the same key).
+ */
+export function ipKey(ip: string): string {
   const a = ip.toLowerCase().split('%')[0]!
   if (!a.includes(':')) return a
-  const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  const mapped = a.match(/^(?:::|0::|(?:0:){5})ffff:(\d+\.\d+\.\d+\.\d+)$/)
   if (mapped) return mapped[1]!
+  // The same address written in hex (::ffff:7f00:1) is the IPv4 one too.
+  const hex = a.match(/^(?:::|0::|(?:0:){5})ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+  if (hex) {
+    const hi = parseInt(hex[1]!, 16)
+    const lo = parseInt(hex[2]!, 16)
+    return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`
+  }
   const [head, tail] = a.split('::') as [string, string | undefined]
   const h = head ? head.split(':') : []
   const t = tail ? tail.split(':') : []
@@ -176,8 +187,9 @@ export const NO_IP_KEY = 'noip'
 /** The key a request counts against, or null when it never counts (loopback or no address, in dev only). */
 export function clientKey(request: Request, env: Pick<Env, 'DEV_AUTH'>): string | null {
   const ip = request.headers.get('CF-Connecting-IP')?.trim()
-  if (!ip || LOOPBACK.test(ip)) return env.DEV_AUTH === '1' ? null : NO_IP_KEY
-  return normalise(ip)
+  const key = ip ? ipKey(ip) : null
+  if (!ip || LOOPBACK.test(ip) || LOOPBACK.test(key!)) return env.DEV_AUTH === '1' ? null : NO_IP_KEY
+  return key
 }
 
 /** The 429 for a per-address limit. */

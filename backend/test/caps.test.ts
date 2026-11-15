@@ -1,6 +1,7 @@
 import { applyD1Migrations, env, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_MAX_IP_SOCKETS, ipKey } from '../src/district'
+import { DEFAULT_MAX_IP_SOCKETS } from '../src/district'
+import { ipKey } from '../src/limits'
 import type { Env } from '../src/env'
 import { allow, READ_LIMIT, windowStart } from '../src/limits'
 import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'

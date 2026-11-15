@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { postMessage } from '../src/chat'
 import type { Env } from '../src/env'
 import worker from '../src/index'
-import { ACCOUNT_LIMIT, clientKey, COUNTER_PURGE, windowStart } from '../src/limits'
+import { ACCOUNT_LIMIT, clientKey, COUNTER_PURGE, ipKey, windowStart } from '../src/limits'
 import { REQUEST_EXPIRY } from '../src/requests'
 import { api, devId, login, resident } from './helpers'
 
@@ -217,6 +217,27 @@ describe('per-address limits', () => {
       (await call('/api/invites/redeem', { method: 'POST', body: '{"code":"NOPE"}', ip: null, ...authed(y) }))
         .status,
     ).toBe(404)
+  })
+})
+
+describe('one address, one key', () => {
+  const key = (ip: string) =>
+    clientKey(new Request('https://api.test/', { headers: { 'CF-Connecting-IP': ip } }), {})
+  it('counts every spelling of an IPv4-mapped address as the IPv4 one, as the socket cap does', () => {
+    for (const same of [
+      '203.0.113.7',
+      '::ffff:203.0.113.7',
+      '::ffff:cb00:7107',
+      '0:0:0:0:0:ffff:cb00:7107',
+      '0::ffff:cb00:7107',
+    ])
+      expect(key(same)).toBe('203.0.113.7')
+    expect(key('::ffff:cb00:7107')).toBe(ipKey('::ffff:cb00:7107'))
+  })
+  it('counts the hex spelling of a mapped loopback as loopback', () => {
+    const req = new Request('https://api.test/', { headers: { 'CF-Connecting-IP': '::ffff:7f00:1' } })
+    expect(clientKey(req, { DEV_AUTH: '1' })).toBeNull()
+    expect(clientKey(req, {})).toBe('noip')
   })
 })
 
