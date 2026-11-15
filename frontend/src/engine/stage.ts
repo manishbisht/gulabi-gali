@@ -186,6 +186,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       window.removeEventListener('resize', resize)
       window.removeEventListener('orientationchange', onOrientation)
       clearTimeout(settle)
+      // The sky paints its backdrop as a canvas texture on the scene; free it with the stage.
+      if (scene.background instanceof THREE.Texture) scene.background.dispose()
       renderer.dispose()
       // dispose() frees GL objects but keeps the context; a long session of remounts would run out.
       renderer.forceContextLoss()

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as THREE from 'three'
 
 const renderer = vi.hoisted(() => ({ calls: [] as string[] }))
 vi.mock('three', async (orig) => {
@@ -55,4 +56,58 @@ it('a lost WebGL context goes to the error beacon, and our own dispose does not'
   stage.dispose()
   canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
   expect(beaconError).toHaveBeenCalledTimes(1)
+})
+
+describe('adaptive quality', () => {
+  function run(frameMs: number, frames: number, startQuality?: string) {
+    sessionStorage.clear()
+    if (startQuality) sessionStorage.setItem('gg-quality', startQuality)
+    const queue: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => queue.push(cb))
+    vi.stubGlobal('cancelAnimationFrame', () => undefined)
+    vi.spyOn(performance, 'now').mockReturnValue(0)
+    const stage = createStage(document.createElement('canvas'))
+    const tiers: number[] = []
+    stage.onQuality((q) => tiers.push(q))
+    let now = 0
+    for (let i = 0; i < frames; i++) {
+      now += frameMs
+      queue.shift()!(now)
+    }
+    return { stage, tiers }
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('steps one tier down after ~2.5 s of slow frames, and remembers it for the tab session', () => {
+    const { stage, tiers } = run(40, 70) // 70 x 40 ms = 2.8 s at 25 fps
+    expect(tiers).toEqual([1])
+    expect(stage.quality).toBe(1)
+    expect(sessionStorage.getItem('gg-quality')).toBe('1')
+    stage.dispose()
+  })
+
+  it('keeps its tier when frames are fast, or the slowness is only a stall', () => {
+    expect(run(16, 400).tiers).toEqual([])
+    expect(run(300, 40).tiers).toEqual([]) // 250 ms+ frames are a tab coming back, not a slow device
+  })
+
+  it('never steps below the lowest tier, and starts where the session left off', () => {
+    const low = run(40, 200, '0')
+    expect(low.stage.quality).toBe(0)
+    expect(low.tiers).toEqual([])
+    expect(run(16, 5, '1').stage.quality).toBe(1)
+  })
+
+  it('dispose frees the sky backdrop texture', () => {
+    const { stage } = run(16, 1)
+    const texture = new THREE.CanvasTexture(document.createElement('canvas'))
+    const disposed = vi.fn()
+    texture.addEventListener('dispose', disposed)
+    stage.scene.background = texture
+    stage.dispose()
+    expect(disposed).toHaveBeenCalled()
+  })
 })

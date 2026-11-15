@@ -1,5 +1,5 @@
 import { applyD1Migrations, createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test'
-import { beforeAll, expect, it } from 'vitest'
+import { beforeAll, expect, it, vi } from 'vitest'
 import worker, { handleCity, refreshCity } from '../src/index'
 import type { CitySnapshot } from '../src/protocol'
 
@@ -101,9 +101,12 @@ it('still serves the live snapshot when the KV write fails', async () => {
       put: () => Promise.reject(new Error('kv down')),
     },
   } as unknown as typeof env
+  const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
   const res = await handleCity(brokenEnv, fake, new Date('2026-11-14T06:30:00Z'))
   expect(res.status).toBe(200)
   expect(await res.json()).toMatchObject({ stale: false, tempC: 25 })
+  expect(log).toHaveBeenCalledWith('city: KV put failed', expect.any(Error))
+  log.mockRestore()
 })
 
 const live = (async (input: RequestInfo | URL) =>

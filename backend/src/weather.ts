@@ -60,6 +60,20 @@ async function getJson<T>(fetcher: typeof fetch, url: string, timeoutMs: number)
   return (await res.json()) as T
 }
 
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const orNull = (v: unknown): number | null => (isNum(v) ? v : null)
+
+/** The upstream JSON is only trusted once the fields we read have the types we read them as. */
+function checkForecast(f: Forecast | undefined): Forecast {
+  const c = f?.current
+  const sunrise = f?.daily?.sunrise?.[0]
+  const sunset = f?.daily?.sunset?.[0]
+  if (!c || !isNum(c.weather_code) || typeof sunrise !== 'string' || typeof sunset !== 'string') {
+    throw new Error('upstream forecast has an unexpected shape')
+  }
+  return f as Forecast
+}
+
 export async function fetchSnapshot(
   fetcher: typeof fetch,
   now: Date,
@@ -76,14 +90,15 @@ export async function fetchSnapshot(
     getJson<Forecast>(fetcher, forecastUrl, timeoutMs),
     getJson<Air>(fetcher, airUrl, timeoutMs),
   ])
-  const aqi = air.current.us_aqi ?? null
+  checkForecast(forecast)
+  const aqi = orNull(air?.current?.us_aqi)
   return {
     fetchedAt: now.toISOString(),
-    tempC: forecast.current.temperature_2m ?? null,
+    tempC: orNull(forecast.current.temperature_2m),
     condition: toCondition(
       forecast.current.weather_code,
-      air.current.dust ?? null,
-      forecast.current.precipitation,
+      orNull(air?.current?.dust),
+      orNull(forecast.current.precipitation),
     ),
     aqi,
     aqiBand: toAqiBand(aqi),

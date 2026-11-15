@@ -40,8 +40,12 @@ function json(
 
 export async function refreshCity(env: Env, fetcher: typeof fetch, now: Date): Promise<CitySnapshot> {
   const snapshot = await fetchSnapshot(fetcher, now)
-  await env.CITY.put(CITY_KEY, JSON.stringify(snapshot), { expirationTtl: KV_TTL_S })
+  await storeCity(env, snapshot)
   return snapshot
+}
+
+function storeCity(env: Env, snapshot: CitySnapshot): Promise<void> {
+  return env.CITY.put(CITY_KEY, JSON.stringify(snapshot), { expirationTtl: KV_TTL_S })
 }
 
 export async function handleCity(
@@ -59,7 +63,7 @@ export async function handleCity(
   try {
     const live = await fetchSnapshot(fetcher, now, timeoutMs)
     // Serve the live snapshot even if storing it fails.
-    await env.CITY.put(CITY_KEY, JSON.stringify(live), { expirationTtl: KV_TTL_S }).catch(() => undefined)
+    await storeCity(env, live).catch((err) => console.error('city: KV put failed', err))
     return json(live, 200, origin, headers)
   } catch {
     return json(defaultSnapshot(now), 200, origin, headers)

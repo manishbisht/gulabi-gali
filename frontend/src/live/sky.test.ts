@@ -20,6 +20,14 @@ describe('skyParams', () => {
     expect(skyParams(base, new Date('2026-11-14T18:30:00Z')).sunElevationDeg).toBe(-10)
   })
 
+  it('unusable sun times read as night, never NaN', () => {
+    for (const bad of [{ sunrise: 'nope' }, { sunset: 'nope' }, { sunrise: base.sunset, sunset: base.sunrise }]) {
+      const p = skyParams({ ...base, ...bad }, noon)
+      expect(p.sunElevationDeg).toBe(-10)
+      expect(Number.isFinite(p.sunAzimuthDeg)).toBe(true)
+    }
+  })
+
   it('swings from east to west', () => {
     expect(skyParams(base, new Date(base.sunrise)).sunAzimuthDeg).toBeCloseTo(90)
     expect(skyParams(base, noon).sunAzimuthDeg).toBeCloseTo(180)

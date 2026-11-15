@@ -49,7 +49,8 @@ export function skyParams(s: CitySnapshot, now: Date): SkyParams {
   const rise = Date.parse(s.sunrise)
   const set = Date.parse(s.sunset)
   const t = now.getTime()
-  const p = (t - rise) / (set - rise)
+  // A snapshot with unusable sun times reads as night rather than poisoning the sky with NaN.
+  const p = set > rise ? (t - rise) / (set - rise) : -1
   const up = p >= 0 && p <= 1
   const elevation = up ? Math.sin(Math.PI * p) * MAX_ELEVATION : BELOW_HORIZON
   const azimuth = 90 + 180 * Math.min(Math.max(p, 0), 1)
