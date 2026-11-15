@@ -2,6 +2,7 @@ import { endMatch } from './chat'
 import type { Env } from './env'
 import { GATE_NAME } from './gate'
 import { floating, notify, type Later } from './inbox'
+import { forgetPushOf } from './push'
 import { forgetOwner, takeDownAllOf, tellRemoved, type Placed } from './posters'
 import { refreshUser } from './refresh'
 import { AUTO_HIDE, COUNTED_REPORTS } from './reports'
@@ -17,7 +18,7 @@ const MATCH_PASSES = 3
  *   `held_evidence` rows the cron deletes after 30 days) before the match and its messages go. The other
  *   person hears `unmatched`. Matches are looked for again (at most `MATCH_PASSES` times), so one made while
  *   this ran is held too.
- * - Then one D1 batch deletes the profile and its Jaipur Darshan stamps, every pending or accepted request in either direction, any match
+ * - Then one D1 batch deletes the profile and its Jaipur Darshan stamps, its push subscriptions, every pending or accepted request in either direction, any match
  *   left, the invites they own, their posters (off every wall at once) and what was remembered of them for
  *   blocking from a poster that came down (`poster_owners`), the blocks they made and their counters. `ignored` requests stay with their
  *   reason blanked: they are the 14-day cooldowns (a decline, an unmatch), which a delete must not wipe, and
@@ -72,6 +73,7 @@ export async function deleteAccount(
     ).bind(userId),
     env.DB.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM user_stamps WHERE user_id = ?').bind(userId),
+    forgetPushOf(env, userId),
     env.DB.prepare('DELETE FROM invites WHERE owner = ?').bind(userId),
     posters,
     // After `posters`: its trigger has just remembered them, and they must not be.

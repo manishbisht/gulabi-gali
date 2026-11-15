@@ -130,6 +130,42 @@ it('signOut clears it', async () => {
   expect(await auth.token()).toBeNull()
 })
 
+it('signing out first takes this device off the push list, while the token still works', async () => {
+  await mount()
+  await devSignIn('Asha')
+  // a device subscribed to pushes
+  const unsubscribe = vi.fn(async () => true)
+  const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/this-phone', unsubscribe }
+  const reg = { pushManager: { getSubscription: async () => sub } }
+  vi.stubGlobal('navigator', { ...navigator, serviceWorker: { getRegistration: async () => reg } })
+  const calls: { url: string; method?: string; auth: string | null; body: unknown; signedIn: boolean }[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({
+        url,
+        method: init.method,
+        auth: new Headers(init.headers).get('Authorization'),
+        body: JSON.parse(init.body as string),
+        signedIn: sessionStorage.getItem('gg-dev-token') !== null,
+      })
+      return new Response(null, { status: 204 })
+    }),
+  )
+  await act(async () => auth.signOut())
+  expect(calls).toEqual([
+    {
+      url: expect.stringMatching(/\/api\/me\/push$/),
+      method: 'DELETE',
+      auth: 'Bearer tok-123',
+      body: { endpoint: sub.endpoint },
+      signedIn: true,
+    },
+  ])
+  expect(unsubscribe).toHaveBeenCalled()
+  expect(auth.signedIn).toBe(false)
+})
+
 it('a stored dev token signs the visitor in on load', async () => {
   sessionStorage.setItem('gg-dev-token', 'old')
   await mount()

@@ -22,7 +22,8 @@ database and two Durable Objects; the Durable Object classes are created by the 
 4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); the first push to `main` deploys.
 5. GitHub Pages and the `github-pages` secrets, including `VITE_CLERK_PUBLISHABLE_KEY` (section 2).
 6. Optional: Cloudflare Web Analytics, the `VITE_CF_BEACON_TOKEN` secret (section 2c).
-7. Budget alerts (section 3).
+7. Optional: push notifications, `node scripts/vapid-setup.mjs` (section 2e).
+8. Budget alerts (section 3).
 
 ## 1. Cloudflare Worker (`backend/`)
 
@@ -343,6 +344,48 @@ at the usual spawn. Nothing to set.
       the city (visible, not ghosts), it says "3 log abhi gali mein" within 30 s.
 - [ ] On a phone, open a landmark card, press Bulao and send the link to yourself on WhatsApp; open it, press
       Padharo! and land by that landmark with its card up.
+
+## 2e. Push notifications (requests and messages)
+
+A resident can tick "Naye messages pe batao" in their profile sheet. Then, while Gulabi Gali is shut on that
+device (no inbox socket open), a new request or message makes the phone show **"Gulabi Gali"** over **"Ek nayi
+request"** or **"Ek naya message"** (in English if they use English). Never a name, never what was said: the
+push carries only `{t, lang}`, encrypted to that browser. Tapping it opens the inbox. At most one push a minute
+and ten an hour per person; anything past that waits for the inbox. It is not offered inside Instagram's
+in-app browser, nor on an iPhone outside an installed home-screen app (the sheet says how to add it).
+
+**Owner step: the VAPID keys.** Without them push is off everywhere (no switch on the site, and the Worker
+sends nothing). From the repo root, signed in to both `wrangler` and `gh`:
+
+```sh
+node scripts/vapid-setup.mjs
+```
+
+It makes a new P-256 key pair in memory and pipes the private key (a JWK) into the Worker secret
+`VAPID_PRIVATE_JWK` (`wrangler secret put`, run from `backend/`) and the public key into the GitHub secret
+`VITE_VAPID_PUBLIC_KEY` of the `github-pages` environment (`gh secret set`). It prints neither, and writes
+nothing to disk. If the Worker step fails, GitHub is left alone; if the GitHub step fails, run it again (a fresh
+pair replaces both). Never paste either key anywhere else, and never put them in `wrangler.jsonc`.
+
+Then, in this order: apply migration `0006_push.sql` and deploy the Worker (CI does both on a push to `main`),
+and let the site build again (the same run), which bakes the public key in. `VAPID_SUBJECT` (a var in
+`backend/wrangler.jsonc`, the site's URL) names the sender to the push services; nothing to change.
+
+Running the script again replaces the keys: every existing subscription stops working at once, and each device
+subscribes again by itself the next time the new site opens there (no prompt, the permission stays).
+
+Subscriptions are removed when the person switches it off, signs out or deletes their account, and when the
+push service answers 404 or 410 (the browser dropped it). The Worker only posts to the browsers' own push
+services (FCM, Mozilla, Apple, Windows); any other endpoint is refused.
+
+**Pre-launch checks**
+
+- [ ] After the script, the deploy and the site build: on Android Chrome, sign in, open Profile and tick "Naye
+      messages pe batao"; allow notifications.
+- [ ] Close the tab. From a second account, send that resident a request: the phone shows "Gulabi Gali · Ek
+      nayi request", with no name. Tapping it opens the site; after Padharo! the Mulaqaatein sheet is open.
+- [ ] Open the site in Instagram's browser: the profile sheet explains why there are no notifications there.
+- [ ] Sign out on the phone, then send another request: nothing arrives.
 
 ## 3. Budget alerts
 

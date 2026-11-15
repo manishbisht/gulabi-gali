@@ -8,3 +8,7 @@ DEV_AUTH_SECRET=change-me-locally
 # Locally, dev-log in as "Owner" to be dev:owner. NEVER put a dev: id in the production secret: it is a name
 # anyone could type locally (the Worker ignores dev: ids there unless DEV_AUTH=1, but do not rely on that).
 ADMIN_USER_IDS=dev:owner
+# Push notifications are off locally unless you give the Worker a VAPID key of your own making (a P-256 private
+# JWK, one line of JSON) and the site the matching public key as VITE_VAPID_PUBLIC_KEY. Never the production
+# pair: that is a secret only scripts/vapid-setup.mjs handles. e2e makes its own (frontend/playwright.config.ts).
+# VAPID_PRIVATE_JWK={"kty":"EC","crv":"P-256","d":"...","x":"...","y":"..."}

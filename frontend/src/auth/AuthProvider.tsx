@@ -1,4 +1,5 @@
 import { Component, lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from 'react'
+import { signOutStoppingPush } from '../push/push'
 import DevAuth from './dev'
 import type { ClerkSession } from './clerk'
 import { AuthContext, authMode, SIGNED_OUT, type AuthState } from './useAuth'
@@ -28,7 +29,15 @@ function ClerkMode({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [session, setSession] = useState<ClerkSession | null>(null)
   const value = useMemo<AuthState>(
-    () => ({ ...SIGNED_OUT, ready: false, ...session, mode: 'clerk', openSignIn: () => setOpen(true) }),
+    () => ({
+      ...SIGNED_OUT,
+      ready: false,
+      ...session,
+      // whichever way Clerk signs out, this device's pushes stop first (see `signOutStoppingPush`)
+      ...(session && { signOut: signOutStoppingPush(session.token, session.signOut) }),
+      mode: 'clerk',
+      openSignIn: () => setOpen(true),
+    }),
     [session],
   )
   const close = useCallback(() => setOpen(false), [])
