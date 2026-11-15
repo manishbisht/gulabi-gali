@@ -24,6 +24,7 @@ import { disposeAvatarCache } from './player/avatar'
 import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
+import { useReactions } from './world/useReactions'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
 import { bandarText, useBandar } from './world/useBandar'
@@ -72,6 +73,7 @@ import { FirstHint } from './ui/FirstHint'
 import { CityMap } from './ui/CityMap'
 import { Compass } from './ui/Compass'
 import { RoofButton, RoofNotice } from './ui/RoofButton'
+import { ReactionToast } from './ui/ReactionToast'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -153,6 +155,9 @@ export default function App() {
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
+  /** Reactions: a namaste or a wave from the person card, and the toast when one reaches the player. */
+  const reactions = useReactions()
+  const { hooks: reactionHooks, bind: bindReactions } = reactions
   const [sound, setSound] = useState(soundOn)
   /** The line for room when the city is full (`MAX_LIVE`): this resident waits in it as a ghost. */
   const queue = useQueue()
@@ -337,6 +342,7 @@ export default function App() {
         animals: animalHooks,
         bandar: bandarHooks,
         roof: roofHooks,
+        reactions: reactionHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -352,10 +358,12 @@ export default function App() {
     bindTaxi(city)
     bindAnimals(city)
     bindRoof(city)
+    bindReactions(city)
     bindMap({ session: city, stage })
 
     return () => {
       bindMap(null)
+      bindReactions(null)
       bindRoof(null)
       bindAnimals(null)
       bindTaxi(null)
@@ -398,6 +406,8 @@ export default function App() {
     bindMap,
     roofHooks,
     bindRoof,
+    reactionHooks,
+    bindReactions,
     bandarHooks,
     current,
     now,
@@ -450,6 +460,8 @@ export default function App() {
           if (done && !stay) closePerson()
           return done
         }}
+        reacted={reactions.sent[meeting.person.id]}
+        onReact={(person, kind) => reactions.react(person.id, kind)}
         onClose={closePerson}
       />
     )) ||
@@ -667,6 +679,18 @@ export default function App() {
                   <div className="toast" role="status">
                     {t(benchToast, lang)}
                   </div>
+                )}
+                {reactions.notice && (
+                  <ReactionToast
+                    notice={reactions.notice}
+                    lang={lang}
+                    onBlock={(id, name) => {
+                      reactions.dismiss()
+                      void block(id, name).then((done) => {
+                        if (done && meetingId === id) closePerson()
+                      })
+                    }}
+                  />
                 )}
                 {travelFailed && (
                   <div className="toast" role="status">

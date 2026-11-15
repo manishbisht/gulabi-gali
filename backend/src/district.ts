@@ -17,12 +17,18 @@ import {
   JOG_MAX_SPEED,
   LIVE_CLOSE,
   MAX_BENCH_LINE,
+  REACT_PAIR_MS,
+  REACT_PER_MINUTE,
+  REACT_RANGE_M,
+  REACTIONS,
   type BenchLine,
   type ClientMsg,
   type DistrictId,
   type LivePerson,
   type PosterView,
   type PublicPerson,
+  type Reaction,
+  type ReactRefusal,
   type ServerMsg,
   type Vehicle,
 } from './protocol'
@@ -145,6 +151,10 @@ const MAX_COORD = 1000
 const MAX_TURN = 2 * Math.PI
 const MAX_BENCH_ID = 64
 const MAX_LANDMARK_ID = 64
+/** A user id in a `react` frame: longer than any we hand out. */
+const MAX_PERSON_ID = 64
+/** The window `REACT_PER_MINUTE` counts over. */
+const REACT_WINDOW_MS = 60_000
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
 const PING = '{"t":"ping"}'
 const PONG = '{"t":"pong"}'
@@ -253,6 +263,14 @@ export function parseClientMsg(text: string): ClientMsg | null {
       // Cleaned here, so a line that is too long is a bad frame like any other.
       const text = cleanText(m.text, MAX_STATUS)
       return typeof m.text === 'string' && text !== null ? { t: 'status', text } : null
+    }
+    case 'react': {
+      const { to, kind } = m
+      return typeof to === 'string' &&
+        to.length <= MAX_PERSON_ID &&
+        (REACTIONS as readonly unknown[]).includes(kind)
+        ? { t: 'react', to, kind: kind as Reaction }
+        : null
     }
     case 'ping':
       return { t: 'ping' }
@@ -457,6 +475,9 @@ function livePerson(seat: Seat): LivePerson {
  * deploy, or the runtime evicting the object anyway, still loses both: that is accepted, and a report then
  * rests on the seats, which survive (see `benchWitness`).
  *
+ * Reactions (a namaste, a wave): passed on and forgotten. Only what each sender spent of their allowance is
+ * remembered, in memory, for a minute (`reacts`), and that too keeps the object awake (`stayAwake`).
+ *
  * Trust (blocks, mutes): each connected person's, in `trust`, loaded from D1 when they connect and again when
  * `refresh` says it changed. Memory only, never in an attachment (a long block list would break its size
  * cap): after a wake the first frame, or the alarm, loads it for everyone still connected before anything is
@@ -502,6 +523,12 @@ export class DistrictDO extends DurableObject<Env> {
   private trustFailedAt = -Infinity
   /** When the alarm last reloaded everyone's trust state (see `alarm`). */
   private trustSweptAt = -Infinity
+  /**
+   * Per sender, the reactions they sent in the last `REACT_WINDOW_MS`, oldest first: when, and to whom. Memory
+   * only (a reaction itself is never kept), by user id so a reconnect does not reset it, and kept awake for the
+   * window like a bench's lines (see `stayAwake`).
+   */
+  private reacts = new Map<string, { at: number; to: string }[]>()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -992,6 +1019,8 @@ export class DistrictDO extends DurableObject<Env> {
         if (!seat.person) return this.send(ws, GHOST)
         if (this.muted(seat.userId, now)) return this.send(ws, MUTED)
         return wordsOk(msg.text) ? this.say(ws, seat, msg.text, now) : this.send(ws, WORDS)
+      case 'react':
+        return this.react(ws, seat, msg, now)
     }
   }
 
@@ -1226,16 +1255,72 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /**
-   * Keeps the object in memory while any bench remembers a line: drops lines past `TRANSCRIPT_MS`, and while
-   * any are left arms a timer that runs this again in `AWAKE_MS` (a pending timer keeps a hibernatable object
-   * awake). Once every transcript is empty it arms nothing, and the object may hibernate.
+   * A greeting from `seat`'s person to `m.to` (see `REACTIONS`). Refused, with a `react-no` to the sender only,
+   * for a ghost or hidden sender, a muted one, anyone the sender may not greet here (gone, a ghost, hidden or
+   * blocked either way: all `gone` alike, so a block is never told), a sender not on the street or more than
+   * `REACT_RANGE_M` from them, and past the per-pair and per-minute allowances. Otherwise it goes to both and to
+   * every other socket within `INTEREST_M` of the sender that is blocked either way with neither (ghosts
+   * watching included: they see the street), and nowhere else. Nothing of it is stored.
+   */
+  private react(ws: WebSocket, seat: Seat, m: Extract<ClientMsg, { t: 'react' }>, now: number): void {
+    const no = (why: ReactRefusal) => this.send(ws, { t: 'react-no', to: m.to, why })
+    const from = seat.userId
+    if (!seat.person || !from || this.trust.get(from)?.hidden) return no('ghost')
+    if (this.muted(from, now)) return no('muted')
+    const target = this.sockets().find((s) => this.seat(s).userId === m.to)
+    const theirs = target && this.seat(target)
+    if (
+      !target ||
+      !theirs ||
+      m.to === from ||
+      !theirs.person ||
+      !theirs.shown ||
+      !theirs.pos ||
+      this.trust.get(m.to)?.hidden ||
+      this.apart(from, m.to)
+    )
+      return no('gone')
+    if (!seat.shown || !seat.pos || far(seat.pos, theirs.pos, REACT_RANGE_M)) return no('far')
+    const sent = (this.reacts.get(from) ?? []).filter((r) => now - r.at < REACT_WINDOW_MS)
+    if (sent.length >= REACT_PER_MINUTE || sent.some((r) => r.to === m.to && now - r.at < REACT_PAIR_MS)) {
+      this.reacts.set(from, sent)
+      return no('wait')
+    }
+    sent.push({ at: now, to: m.to })
+    this.reacts.set(from, sent)
+    if (!this.awake) this.stayAwake()
+    const text = JSON.stringify({ t: 'react', from, to: m.to, kind: m.kind } satisfies ServerMsg)
+    const reach = INTEREST_M * INTEREST_M
+    for (const other of this.sockets()) {
+      if (other === ws || other === target) {
+        this.sendRaw(other, text)
+        continue
+      }
+      const { userId, pos } = this.seat(other)
+      if (!pos || this.apart(from, userId) || this.apart(m.to, userId)) continue
+      const dx = pos.x - seat.pos.x
+      const dz = pos.z - seat.pos.z
+      if (dx * dx + dz * dz <= reach) this.sendRaw(other, text)
+    }
+  }
+
+  /**
+   * Keeps the object in memory while any bench remembers a line, or anyone's reactions still count against
+   * them: drops lines past `TRANSCRIPT_MS` and reactions past `REACT_WINDOW_MS`, and while any are left arms a
+   * timer that runs this again in `AWAKE_MS` (a pending timer keeps a hibernatable object awake). Once both
+   * are empty it arms nothing, and the object may hibernate.
    */
   private stayAwake(): void {
     if (this.awake) clearTimeout(this.awake)
     this.awake = null
     const now = this.clock()
     for (const bench of [...this.transcripts.keys()]) this.transcript(bench, now)
-    if (this.transcripts.size) this.awake = setTimeout(() => this.stayAwake(), AWAKE_MS)
+    for (const [id, sent] of this.reacts) {
+      const keep = sent.filter((r) => now - r.at < REACT_WINDOW_MS)
+      if (keep.length) this.reacts.set(id, keep)
+      else this.reacts.delete(id)
+    }
+    if (this.transcripts.size || this.reacts.size) this.awake = setTimeout(() => this.stayAwake(), AWAKE_MS)
   }
 
   /** Notes that `userId` sat at, or got up from, `bench` at `now`, and forgets anyone gone for 10 minutes. */

@@ -42,6 +42,8 @@ export interface People {
   list(): LivePerson[]
   /** Everyone listed, without copying: replaced when someone joins or leaves, never mutated. */
   entries(): readonly Remote[]
+  /** Someone listed, by id, without copying. */
+  get(id: string): Remote | undefined
   /** Takes everyone off the street (the socket that listed them is gone); the next welcome lists them again. */
   clear(): void
   setShadows(on: boolean): void
@@ -224,6 +226,7 @@ export function createPeople(scene: THREE.Object3D, heightAt?: (x: number, z: nu
     },
     list: () => all.map(drawn),
     entries: () => all,
+    get: (id) => byId.get(id),
     clear() {
       if (!all.length) return
       for (const e of all) e.body.removeFromParent()
