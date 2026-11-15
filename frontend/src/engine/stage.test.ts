@@ -20,7 +20,9 @@ vi.mock('three', async (orig) => {
       renderer.ratios.push(r)
     }
     setSize() {}
-    render() {}
+    render() {
+      renderer.calls.push('render')
+    }
     dispose() {
       renderer.calls.push('dispose')
     }
@@ -91,6 +93,45 @@ describe('a test page', () => {
     const stage = createStage(document.createElement('canvas'))
     expect(renderer.antialias).toEqual([true])
     expect(renderer.ratios.at(-1)).toBe(2)
+    stage.dispose()
+  })
+})
+
+describe('capture', () => {
+  beforeEach(() => {
+    renderer.ratios.length = 0
+    renderer.calls.length = 0
+    vi.stubGlobal('devicePixelRatio', 3)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('draws one frame at the device ratio, hands the canvas over, then goes back to the tier ratio', () => {
+    sessionStorage.setItem('gg-quality', '0')
+    const canvas = document.createElement('canvas')
+    const stage = createStage(canvas)
+    renderer.calls.length = 0
+    renderer.ratios.length = 0
+    const seen: unknown[] = []
+    const out = stage.capture((c) => {
+      seen.push(c, renderer.calls.slice())
+      return 'png'
+    })
+    expect(out).toBe('png')
+    expect(seen).toEqual([canvas, ['render']]) // read right after the one render, in the same task
+    expect(renderer.ratios).toEqual([3, 1]) // the lowest tier draws at 1; the photo does not
+    stage.dispose()
+  })
+
+  it('puts the ratio back when reading throws', () => {
+    sessionStorage.setItem('gg-quality', '2')
+    const stage = createStage(document.createElement('canvas'))
+    renderer.ratios.length = 0
+    expect(() =>
+      stage.capture(() => {
+        throw new Error('boom')
+      }),
+    ).toThrow('boom')
+    expect(renderer.ratios).toEqual([3, 2])
     stage.dispose()
   })
 })

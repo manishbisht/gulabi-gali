@@ -13,6 +13,12 @@ export interface Stage {
   onFrame(cb: (dt: number) => void): () => void
   /** Runs when the quality tier steps down. */
   onQuality(cb: (q: QualityTier) => void): () => void
+  /**
+   * Draws one frame at the device's pixel ratio and runs `read` on the canvas straight away (it must copy or
+   * encode synchronously: the drawing buffer is only good until this task ends), then goes back to the tier's
+   * ratio. No `preserveDrawingBuffer`: that would cost every frame on a phone.
+   */
+  capture<T>(read: (canvas: HTMLCanvasElement) => T): T
   /** Frames drawn since the WebGL context was last restored (or since start). */
   framesSinceRestore(): number
   dispose(): void
@@ -32,6 +38,8 @@ const PORTRAIT_FOV = 70
 const RATIO_CAP: Record<QualityTier, number> = { 2: 2, 1: 1.25, 0: 1 }
 /** A test page's pixel ratio (see `testRenderLite`): a quarter of the CSS size each way, whatever the tier. */
 const LITE_RATIO = 0.25
+/** A photo's pixel ratio ceiling: enough for a phone's screen, and a canvas a phone can still hold. */
+const PHOTO_RATIO_CAP = 3
 
 /** A device that was slow once will be slow again this session; start where it ended up. */
 function readQuality(): QualityTier {
@@ -178,6 +186,16 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     onQuality(cb) {
       qualityListeners.add(cb)
       return () => void qualityListeners.delete(cb)
+    },
+    capture(read) {
+      renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, PHOTO_RATIO_CAP))
+      renderer.setSize(window.innerWidth, window.innerHeight, false)
+      try {
+        renderer.render(scene, camera)
+        return read(renderer.domElement)
+      } finally {
+        resize()
+      }
     },
     framesSinceRestore: () => sinceRestore,
     dispose() {

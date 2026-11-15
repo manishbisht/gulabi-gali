@@ -766,6 +766,13 @@ export const STRINGS = {
     hi: 'Dor ek doosre se katrao, phir kheencho. Ghumane ke liye ungli ghumao ya A/D dabao. Space se kheencho.',
     en: 'Cross strings with a rival, then pull. Drag or press A/D to steer, and hold Space to pull.',
   },
+  photoOpen: { hi: 'Photo', en: 'Photo' },
+  photoOpenLabel: { hi: 'Photo mode kholo', en: 'Open photo mode' },
+  photoShutter: { hi: 'Photo kheencho', en: 'Take photo' },
+  photoExit: { hi: 'Photo mode se wapas', en: 'Leave photo mode' },
+  photoFrame: { hi: 'Photo ka frame', en: 'Photo frame' },
+  photoDownloaded: { hi: 'Photo aapke phone mein save ho gayi.', en: 'Photo saved to your phone.' },
+  photoFailed: { hi: 'Photo nahi ban payi. Phir se try karo.', en: "Couldn't take the photo. Try again." },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

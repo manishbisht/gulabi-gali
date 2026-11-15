@@ -1650,3 +1650,80 @@ small.words-hint {
 .hud-actions:empty {
   display: none;
 }
+
+/*
+ * Photo mode: nothing over the street but a thin frame, the wordmark, a shutter and a way back. The overlay
+ * itself lets touches through; only the two buttons take them.
+ */
+.photo-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.photo-frame {
+  position: absolute;
+  inset: calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+    calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+  border: 2px solid rgb(245 230 216 / 0.85);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgb(42 29 36 / 0.35);
+}
+
+.photo-wordmark {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgb(42 29 36 / 0.7);
+}
+
+.photo-exit,
+.photo-shutter {
+  position: absolute;
+  pointer-events: auto;
+  border: 1px solid var(--sandstone);
+  background: rgb(42 29 36 / 0.72);
+  cursor: pointer;
+}
+
+.photo-exit {
+  top: calc(22px + env(safe-area-inset-top));
+  right: calc(22px + env(safe-area-inset-right));
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.photo-shutter {
+  left: 50%;
+  bottom: calc(44px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: 68px;
+  height: 68px;
+  border: 4px solid var(--cream);
+  border-radius: 50%;
+  background: var(--pink);
+}
+
+.photo-shutter:disabled {
+  opacity: 0.5;
+}
+
+.photo-note {
+  position: absolute;
+  left: 50%;
+  bottom: calc(126px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgb(42 29 36 / 0.92);
+  font-size: 0.9rem;
+  text-align: center;
+}
