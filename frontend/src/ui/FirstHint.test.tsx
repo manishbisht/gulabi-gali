@@ -41,6 +41,14 @@ it('on a first visit: a non-modal dialog with three steps, the keys for a keyboa
   expect(document.activeElement).toBe(d.querySelector('button'))
 })
 
+it('the keyboard line says Shift jogs, in either language', () => {
+  mount('en')
+  expect(dialog()!.querySelector('li')!.textContent).toMatch(/Hold Shift to jog/)
+  act(() => root.render(<></>))
+  mount('hi')
+  expect(dialog()!.querySelector('li')!.textContent).toMatch(/Shift dabaye rakho/)
+})
+
 it('on a touch screen it says joystick and tap instead', () => {
   coarse = true
   mount('hi')

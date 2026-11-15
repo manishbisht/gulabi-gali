@@ -620,7 +620,13 @@ export default function App() {
         }
         bottom={
           <>
-            {!kiteFrom && <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />}
+            {!kiteFrom && (
+              <Joystick
+                lang={lang}
+                jogs={!drive.driving}
+                onChange={(v) => controlsRef.current?.setJoystick(v)}
+              />
+            )}
             {drive.driving ? (
               // at the wheel the stick drives; nothing else opens until the player gets out
               <DriveButtons lang={lang} onHorn={drive.honk} onExit={drive.exit} />

@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react'
 import { t, type Lang } from '../i18n/strings'
+import { rimJog } from '../player/controls'
 import type { Vec2 } from '../world/types'
 
 /** Knob travel from centre, in CSS px. A push this far is full speed. */
@@ -11,11 +12,15 @@ interface Props {
   lang: Lang
   /** x is right, z is forward (screen up), length at most 1. */
   onChange: (v: Vec2) => void
+  /** The stick walks (not the wheel, nor a kite's string): at its rim it jogs, and the knob is tinted to say so. */
+  jogs?: boolean
 }
 
-export function Joystick({ lang, onChange }: Props) {
+export function Joystick({ lang, onChange, jogs = false }: Props) {
   const [coarse] = useState(isCoarse)
   const [knob, setKnob] = useState({ x: 0, y: 0 })
+  /** At the rim: the walk is a jog (the same rule as the controls'), and the knob is tinted to say so. */
+  const [jog, setJog] = useState(false)
   const origin = useRef<{ id: number; x: number; y: number } | null>(null)
   if (!coarse) return null
 
@@ -30,18 +35,21 @@ export function Joystick({ lang, onChange }: Props) {
       dy = (dy / len) * RADIUS
     }
     setKnob({ x: dx, y: dy })
+    setJog((was) => rimJog(was, Math.min(len, RADIUS) / RADIUS))
     onChange({ x: dx / RADIUS, z: -dy / RADIUS })
   }
   const release = (e: PointerEvent<HTMLDivElement>) => {
     if (origin.current?.id !== e.pointerId) return
     origin.current = null
     setKnob({ x: 0, y: 0 })
+    setJog(false)
     onChange({ x: 0, z: 0 })
   }
 
   return (
     <div
       className="joystick"
+      data-jog={jogs && jog ? '' : undefined}
       role="group"
       aria-label={t('joystickLabel', lang)}
       onPointerDown={(e) => {

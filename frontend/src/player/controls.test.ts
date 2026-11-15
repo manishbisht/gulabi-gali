@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createControls, type Controls } from './controls'
+import { createControls, rimJog, type Controls } from './controls'
 
 /** A minimal Window stand-in: just enough EventTarget to carry key events. */
 function fakeWindow() {
@@ -231,5 +231,70 @@ describe('createControls', () => {
     c.freeze(false)
     c.holdLook(false)
     expect(c.look(1 / 30).held).toBe(false)
+  })
+
+  it('jogs while Shift is held or the stick is pushed past 90% of its reach; never while frozen', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    expect(c.jog()).toBe(false)
+    press(w, 'ShiftLeft')
+    expect(c.jog()).toBe(true)
+    press(w, 'ShiftLeft', 'keyup')
+    press(w, 'ShiftRight')
+    expect(c.jog()).toBe(true)
+    press(w, 'ShiftRight', 'keyup')
+    expect(c.jog()).toBe(false)
+    c.setJoystick({ x: 0, z: 0.85 }) // most of the way: still a walk
+    expect(c.jog()).toBe(false)
+    c.setJoystick({ x: 0, z: 0.95 })
+    expect(c.jog()).toBe(true)
+    c.setJoystick({ x: -0.7, z: 0.7 }) // a diagonal at the rim counts as much as straight up
+    expect(c.jog()).toBe(true)
+    c.freeze(true)
+    expect(c.jog()).toBe(false)
+    press(w, 'ShiftLeft')
+    expect(c.jog()).toBe(false)
+  })
+
+  it('the stick jogs from past 90% and keeps jogging until it eases back under 80%, so the rim does not flicker', () => {
+    const c = (controls = createControls(fakeWindow()))
+    const at = (z: number) => (c.setJoystick({ x: 0, z }), c.jog())
+    expect(at(0.85)).toBe(false) // not jogging yet: 85% is a walk
+    expect(at(0.95)).toBe(true)
+    expect(at(0.85)).toBe(true) // jogging: 85% stays a jog
+    expect(at(0.81)).toBe(true)
+    expect(at(0.75)).toBe(false)
+    expect(at(0.85)).toBe(false) // and walking again, 85% is a walk again
+    expect(at(0.95)).toBe(true)
+    expect(at(0)).toBe(false) // let go
+    expect(at(0.85)).toBe(false)
+    expect(at(0.95)).toBe(true)
+    c.freeze(true) // a minigame takes the stick: the jog goes with it
+    c.freeze(false)
+    expect(at(0.85)).toBe(false)
+  })
+
+  it('rimJog is the one rule for the stick and its tint: in above 0.9, out below 0.8', () => {
+    expect(rimJog(false, 0.9)).toBe(false)
+    expect(rimJog(false, 0.91)).toBe(true)
+    expect(rimJog(true, 0.8)).toBe(true)
+    expect(rimJog(true, 0.79)).toBe(false)
+  })
+
+  it('a wheel or pinch zooms: factors multiply until read, then are consumed; frozen, they are dropped', () => {
+    const c = (controls = createControls(fakeWindow()))
+    expect(c.zoom()).toBe(1)
+    c.addZoom(1.2)
+    c.addZoom(1.5)
+    expect(c.zoom()).toBeCloseTo(1.8)
+    expect(c.zoom()).toBe(1)
+    for (const bad of [0, -2, NaN, Infinity]) c.addZoom(bad)
+    expect(c.zoom()).toBe(1)
+    c.addZoom(0.5)
+    c.freeze(true)
+    c.addZoom(0.5)
+    expect(c.zoom()).toBe(1)
+    c.freeze(false)
+    expect(c.zoom()).toBe(1)
   })
 })

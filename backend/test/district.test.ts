@@ -1,9 +1,16 @@
 import { applyD1Migrations, env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
-import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'
+import {
+  JOG_BURST_M,
+  JOG_MAX_SPEED,
+  JOG_SPEED,
+  LIVE_CLOSE,
+  type DistrictId,
+  type ServerMsg,
+} from '../src/protocol'
 import { BENCH_POSITIONS, BENCHES, DISTRICT_IDS, LANES, readWho, whoHeader, type Who } from '../src/district'
-import { closeAll, live, login, openLive, resident, WAIT } from './helpers'
+import { closeAll, devId, live, login, openLive, resident, WAIT } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const stub = (id: DistrictId) => testEnv.DISTRICT.get(testEnv.DISTRICT.idFromName(id))
@@ -260,6 +267,94 @@ describe('DistrictDO', () => {
     // that was all the burst there is
     a.send({ t: 'move', x: 40, z: 0, ry: 0, v: 'auto' })
     expect((await a.next('error')).code).toBe('too-fast')
+  })
+
+  /** Plays move frames into a new resident's socket at clock offsets (ms) from now; gives back the errors heard. */
+  async function playMoves(name: string, frames: [ms: number, x: number, extra?: object][]) {
+    const a = await live('mi-road', { token: await resident(name) })
+    await a.next('welcome')
+    await runInDurableObject(stub('mi-road'), async (instance, state) => {
+      const ws = state
+        .getWebSockets()
+        .find((s) => (s.deserializeAttachment() as { userId?: string } | null)?.userId === devId(name))!
+      const t = Date.now()
+      try {
+        for (const [ms, x, extra] of frames) {
+          instance.clock = () => t + ms
+          await instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x, z: 0, ry: 0, ...extra }))
+        }
+      } finally {
+        instance.clock = Date.now
+      }
+    })
+    await a.sync()
+    return a.all('error')
+  }
+  const JOG = { pace: 'jog' }
+  /**
+   * Ten seconds of jogging (a move every 100 ms, as the client throttles them), then `stall` seconds with nothing
+   * heard whose distance lands in four hops at once, then a second more of jogging. Ends at `end` (ms, x).
+   */
+  function jogged(stall: number, extra?: object) {
+    const frames: [number, number, object?][] = []
+    for (let i = 0; i <= 100; i++) frames.push([i * 100, (i * JOG_SPEED) / 10, extra])
+    let ms = 10_000 + stall * 1000
+    let x = JOG_SPEED * 10
+    for (let k = 1; k <= 4; k++) frames.push([ms, x + (k * JOG_SPEED * stall) / 4, extra])
+    x += JOG_SPEED * stall
+    for (let i = 1; i <= 10; i++) frames.push([ms + i * 100, x + (i * JOG_SPEED) / 10, extra])
+    ms += 1000
+    x += JOG_SPEED
+    return { frames, end: { ms, x } }
+  }
+
+  it('the jog claim: 8 m/s with a 16 m burst, two seconds of a 7.2 m/s jog (1.8x the 4 m/s walk)', () => {
+    expect(JOG_SPEED).toBeCloseTo(7.2)
+    expect(JOG_MAX_SPEED).toBeGreaterThan(JOG_SPEED)
+    expect(JOG_BURST_M).toBeGreaterThanOrEqual(2 * JOG_SPEED)
+    expect(JOG_BURST_M).toBeLessThan(20)
+  })
+
+  it('claiming a jog, a jogger whose frames stall for 2 s is not refused; a 20 m hop still is, a 15.9 m one not', async () => {
+    const { frames, end } = jogged(2, JOG)
+    // stood still five seconds: a full burst, and no more
+    frames.push([end.ms + 5000, end.x + 20, JOG], [end.ms + 5000, end.x + 15.9, JOG])
+    const errors = await playMoves('Jog Jaya', frames)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatchObject({ code: 'too-fast', z: 0 })
+    expect((errors[0] as { x: number }).x).toBeCloseTo(end.x)
+  })
+
+  it('a 1.5 s stall at a jog is refused without the claim, and not with it', async () => {
+    const plain = await playMoves('Plain Pooja', jogged(1.5).frames)
+    expect(plain.length).toBeGreaterThan(0)
+    expect(plain.every((e) => e.code === 'too-fast')).toBe(true)
+    expect(await playMoves('Claim Chetan', jogged(1.5, JOG).frames)).toEqual([])
+  })
+
+  it('an unflagged 10 m hop is still refused; a claim other than "jog" is ignored, not a bad frame', async () => {
+    const errors = await playMoves('Hop Harsh', [
+      [0, 0],
+      [5000, 10],
+      [5000, 10, { pace: 'run' }],
+      [5000, 10, { pace: 1 }],
+      [5000, 10, { pace: null }],
+      [5000, 10, JOG], // the claim's own burst covers it
+    ])
+    expect(errors.map((e) => e.code)).toEqual(['too-fast', 'too-fast', 'too-fast', 'too-fast'])
+  })
+
+  it('outrunning a jog for long is still refused, claim or not: 10 m/s runs out of burst', async () => {
+    for (const [name, extra] of [
+      ['Dash Dinesh', undefined],
+      ['Dash Divya', JOG],
+    ] as const) {
+      const frames: [number, number, object?][] = []
+      for (let i = 0; i <= 120; i++) frames.push([i * 100, i, extra])
+      const errors = await playMoves(name, frames)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors.every((e) => e.code === 'too-fast')).toBe(true)
+    }
   })
 
   it('a ghost cannot status/sit/say', async () => {

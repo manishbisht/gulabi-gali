@@ -27,6 +27,7 @@ import { createPosters, type Posters } from './posters'
 import { createRooftop, roofHeight, type RoofHooks, type Rooftop } from './rooftop'
 import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
+import { createZoomGestures } from './zoomGestures'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
 const SKY = '#BFD6DE'
@@ -350,6 +351,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         hooks,
       ),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
+      createZoomGestures(canvas, controls),
     ]
     if (posters)
       systems.push({
@@ -625,6 +627,8 @@ function createInteraction(
     touching.add(e.pointerId)
     // A second finger on the canvas (a pinch) or a right or middle click is not a tap, and spoils the one in progress.
     down = touching.size > 1 || (e.button ?? 0) > 0 ? null : { x: e.clientX, y: e.clientY, at: e.timeStamp }
+    // a pinch zooms (see zoomGestures): the finger that was looking stops turning the view
+    if (touching.size > 1) stopLook()
     // the first of them may look; a second finger never takes over
     if (down && look.id === -1) {
       look.id = e.pointerId
@@ -858,6 +862,8 @@ function createPresence(
     move.ry = player.heading()
     // at the wheel the others draw an auto under us, and the server allows the faster pace
     move.v = player.driving() ? 'auto' : undefined
+    // a jog asks for the jog's allowance, so a stall while jogging is not pulled back (never relayed)
+    move.pace = player.jogging() ? 'jog' : undefined
     conn.send(move)
   }
   const onMsg = (m: ServerMsg) => {

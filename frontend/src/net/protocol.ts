@@ -141,14 +141,27 @@ export type LivePerson = PublicPerson & {
 /** What a person is riding, when they are riding anything. Absent means on foot. */
 export type Vehicle = 'auto'
 
+/** How fast the client jogs on foot (Shift held, or the stick pushed to its rim), in m/s: 1.8x its 4 m/s walk. */
+export const JOG_SPEED = 7.2
+/**
+ * A move that claims `pace: 'jog'` may go this fast (m/s), with this burst (m): two seconds of jogging, rounded
+ * up, so a jogger's frames stalled for 2 s are not pulled back, as a walker's are not. A client can claim a jog
+ * it is not making; the cost is one 16 m hop after standing still, which is accepted.
+ */
+export const JOG_MAX_SPEED = 8
+export const JOG_BURST_M = 16
+/** How a person on foot says they are moving, when faster than a walk. Absent means walking. */
+export type Pace = 'jog'
+
 export type ClientMsg =
   /**
    * `v: 'auto'` says the sender is driving one: they may then go 12 m/s (a 24 m burst, two seconds' worth)
    * instead of walking pace, and the others draw an auto under them. Absent means on foot; any other value
    * is a bad frame. A client can claim an auto it is not in; the cost is a 1.5x pace and a 3x burst, which
-   * is accepted.
+   * is accepted. `pace: 'jog'` says the sender is jogging on foot (see `JOG_BURST_M`); it is never relayed,
+   * and any other value is ignored, as an unknown field is (an older server ignores it too).
    */
-  | { t: 'move'; x: number; z: number; ry: number; v?: Vehicle }
+  | { t: 'move'; x: number; z: number; ry: number; v?: Vehicle; pace?: Pace }
   | { t: 'sit'; bench: string | null }
   | { t: 'say'; text: string }
   | { t: 'status'; text: string }
