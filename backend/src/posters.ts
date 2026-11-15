@@ -332,10 +332,18 @@ export async function publicPosters(env: Env, district: string): Promise<Respons
   if (!isDistrict(district)) return fail('not found', 404)
   const key = wallKey(district)
   const hit = await caches.default.match(key).catch(() => undefined)
-  if (hit) return hit
+  if (hit) {
+    // The browser still needs it, to keep a signed-out copy apart from a signed-in one.
+    const out = new Response(hit.body, hit)
+    out.headers.set('vary', 'Authorization')
+    return out
+  }
   const res = await listPosters(env, district, null)
+  // The edge's copy without `Vary`: the edge cache may refuse, or split, an entry that has one.
+  const stored = new Response(res.clone().body, res)
+  stored.headers.delete('vary')
   await caches.default
-    .put(key, res.clone())
+    .put(key, stored)
     .catch((err: unknown) => console.error('posters: cache put failed', err))
   return res
 }
