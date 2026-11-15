@@ -11,8 +11,10 @@ import { closeAll, devId, live, resident, WAIT } from './helpers'
 vi.mock('../src/filter/words', () => ({
   WORDS: ['badword', 'ganda', 'गंदा', 'zzzstatus', 'namesafe', 'penword'],
   NAME_SAFE: ['namesafe'],
-  // the strong-abuse subset: the only words two neighbouring tokens are glued into
+  // the words two neighbouring tokens are glued into
   STRONG: ['badword', 'गंदा'],
+  // refused only where others read who someone is: names, profile fields, posters, request notes
+  PUBLIC_ONLY: ['zzzpublic'],
 }))
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -242,6 +244,32 @@ describe('every write path rejects with field', () => {
     expect(saved.profile.name).toBe('Filter Fatima')
   })
 
+  it('a profile-only word: refused in name, status and about, fine in chat', async () => {
+    const token = await resident('Filter Gauri')
+    for (const field of ['name', 'status', 'about'] as const) {
+      const res = await put(token, { [field]: field === 'name' ? 'Zzzpublic' : 'hi zzzpublic' })
+      expect(res.status, field).toBe(400)
+      expect(await res.json()).toEqual({ error: 'words', field })
+    }
+    const other = await resident('Filter Hari')
+    const { id } = (await (
+      await api('/api/requests', other, {
+        method: 'POST',
+        body: JSON.stringify({ to: devId('Filter Gauri'), reason: 'Mujhe bhi sketching pasand hai' }),
+      })
+    ).json()) as { id: string }
+    const { matchId } = (await (
+      await api(`/api/requests/${id}/accept`, token, { method: 'POST' })
+    ).json()) as {
+      matchId: string
+    }
+    const said = await api(`/api/matches/${matchId}/messages`, token, {
+      method: 'POST',
+      body: JSON.stringify({ body: 'zzzpublic, in a chat' }),
+    })
+    expect(said.status).toBe(201)
+  })
+
   it('request reason', async () => {
     const a = await resident('Filter Asha')
     await resident('Filter Bilal')
@@ -250,6 +278,11 @@ describe('every write path rejects with field', () => {
     const res = await send('You are such a b4dword person')
     expect(res.status).toBe(400)
     expect(await res.json()).toEqual({ error: 'words', field: 'reason' })
+    // a request note reaches a stranger: the profile-only words are refused there too
+    expect(await (await send('Mujhe bhi zzzpublic pasand hai')).json()).toEqual({
+      error: 'words',
+      field: 'reason',
+    })
     expect((await send('Mujhe bhi gandalf pasand hai')).status).toBe(201)
   })
 
@@ -300,6 +333,17 @@ describe('every write path rejects with field', () => {
       expect(b.all('bench', from)).toEqual([])
       a.send({ t: 'say', text: 'chai peeoge?' })
       expect((await b.next('bench')).text).toBe('chai peeoge?')
+      // a profile-only word: said at the bench it is heard; as a status it is refused
+      await new Promise((r) => setTimeout(r, 1100))
+      const before = a.all('error').filter((m) => m.code === 'words').length
+      a.send({ t: 'say', text: 'zzzpublic ki baat' })
+      expect((await b.next('bench', (m) => m.text === 'zzzpublic ki baat')).text).toBe('zzzpublic ki baat')
+      await new Promise((r) => setTimeout(r, 1100)) // say and status share the one-a-second lane
+      a.send({ t: 'status', text: 'zzzpublic' })
+      await vi.waitFor(
+        () => expect(a.all('error').filter((m) => m.code === 'words')).toHaveLength(before + 1),
+        WAIT,
+      )
     }, 30_000)
   })
 })

@@ -18,7 +18,12 @@ import { POSTER_SLOTS, type PosterView } from '../src/protocol'
 import { api, devId, live, login, resident, settle, type LiveClient } from './helpers'
 
 // Placeholder tokens only: no real slur appears in any test.
-vi.mock('../src/filter/words', () => ({ WORDS: ['badword', 'ganda'], NAME_SAFE: [], STRONG: ['badword'] }))
+vi.mock('../src/filter/words', () => ({
+  WORDS: ['badword', 'ganda'],
+  NAME_SAFE: [],
+  STRONG: ['badword'],
+  PUBLIC_ONLY: ['zzzpublic'],
+}))
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 const db = testEnv.DB
@@ -201,6 +206,10 @@ describe('posters', () => {
     const res = await pin(token, { text: 'Come play, you b4dword people' })
     expect(res.status).toBe(400)
     expect(await res.json()).toEqual({ error: 'words', field: 'text' })
+    // a profile-only word (refused where others read who someone is, not in chat) is refused on a poster
+    const word = await pin(token, { text: 'Zzzpublic night at the tapri' })
+    expect(word.status).toBe(400)
+    expect(await word.json()).toEqual({ error: 'words', field: 'text' })
     // Too short, too long (in characters, after the clean), or not text: invalid.
     for (const text of ['short', 'x'.repeat(141), 42, '   chai     ']) {
       const bad = await pin(token, { text })

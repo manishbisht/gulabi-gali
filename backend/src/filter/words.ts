@@ -9,7 +9,7 @@
  *   https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words, licensed
  *   CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/). Only its single-word entries of 3+ letters are
  *   used, minus a few that people say about an ordinary day.
- *   Changes: entries removed as described; none edited.
+ *   Changes: entries removed as described (sex and porn moved to `PUBLIC_ONLY`); none edited.
  * - HINGLISH (Roman script) starts from LDNOOBW's Hindi file, same licence and same treatment, minus words
  *   that are ordinary Hinglish on their own ("chod" is "leave it", "maal" is "stuff", "gucchi" is a brand),
  *   plus a curated set of common spellings of the clearly abusive terms, written for this project. The
@@ -20,8 +20,10 @@
  * - kamini, kutti, kuttia, dick, lund, lunds, kike, mong, guro, dalli, tarki, kanjar: first names, surnames,
  *   a Swedish city and similar. Real people are called Kamini, Kutti, Dick, Lund and Kike.
  * - kamina, kamine: kept, but `NAME_SAFE` exempts them from the name field.
- * - sexy, nude, cum, tit: ordinary in a bio or a message ("cum" and "tit" are also words and birds).
- *   Plainly abusive forms (cumshot, porn, ...) stay.
+ * - cum, tit: ordinary in a bio or a message ("cum" and "tit" are also words and birds). Plainly abusive
+ *   forms (cumshot, porno, ...) stay.
+ * - sex, porn (taken out of ENGLISH), sexy, nude: fine in chat between two people, but refused where others
+ *   read who someone is (see `PUBLIC_ONLY`).
  * - "bc" and "mc" are never listed: they are also British Columbia, "master of ceremonies" and so on.
  *
  * Backend only. The page never gets this file: it gets SHA-1 hashes (see `./server.ts`).
@@ -193,7 +195,6 @@ export const ENGLISH: readonly string[] = [
   'poon',
   'poontang',
   'poopchute',
-  'porn',
   'porno',
   'pornography',
   'pthc',
@@ -213,7 +214,6 @@ export const ENGLISH: readonly string[] = [
   'schlong',
   'scissoring',
   'semen',
-  'sex',
   'sexcam',
   'sexo',
   'shemale',
@@ -494,97 +494,40 @@ export const NAME_SAFE: readonly string[] = ['kamina', 'kamine', 'kaminey', 'क
 export const WORDS: readonly string[] = [...ENGLISH, ...HINGLISH, ...DEVANAGARI]
 
 /**
- * The strong-abuse subset: the only words two neighbouring tokens are glued into (`fu ck`, a compound typed in
- * two halves). Every other listed word is matched as a whole token only, because glued pairs made ordinary
- * phrases into listed words ("pen is", "an Al", "who re", "let's hit"). So a word belongs here only when it is
- * unmistakable abuse and no everyday pair of words glues into it: the f-word family, the gendered and racial
- * slurs, and the Hinglish compounds people split on purpose (every "-chod", the chutiya, bhosdike and haramzada
- * families), in both scripts. Each one is also in `WORDS`.
+ * Words refused only where other people read who someone is: names, profile fields (status too, live on the
+ * map), posters and request notes. Bench lines, 1:1 chat and report notes may say them. Whole tokens, like the
+ * rest: Essex, sextant and unisex are fine. The owner's call (2026-11-15).
  */
-export const STRONG: readonly string[] = [
-  'clusterfuck',
-  'cunt',
-  'bitch',
-  'bitches',
-  'faggot',
-  'fuck',
-  'fuckin',
-  'fucking',
-  'fucktards',
-  'motherfucker',
-  'nigga',
-  'nigger',
-  'slut',
-  'bahanchod',
-  'bahenchod',
-  'behenchod',
-  'behnchod',
-  'benchod',
-  'beti-chod',
-  'betichod',
-  'bhainchod',
-  'bhanchod',
-  'bhenchod',
-  'bhenchodd',
-  'maachod',
-  'madarchod',
-  'maderchod',
-  'madharchod',
-  'madhavchod',
-  'bhonsdi',
-  'bhosadi',
-  'bhosadike',
-  'bhosdi',
-  'bhosdika',
-  'bhosdike',
-  'bhosdiwala',
-  'chinaal',
-  'chinal',
-  'chhinal',
-  'chootia',
-  'chootiya',
-  'chutia',
-  'chutiya',
-  'chutiyaa',
-  'chutiye',
-  'gaandu',
-  'gandu',
-  'haramjada',
-  'haramjade',
-  'haramkhor',
-  'haramzaade',
-  'haramzada',
-  'haramzade',
-  'haramzadi',
-  'kutiya',
-  'kuttiya',
-  'lauda',
-  'lavda',
-  'lawda',
-  'raandi',
-  'randi',
-  'भेनचोद',
-  'भैनचोद',
-  'बहनचोद',
-  'बहनचोदों',
-  'बेटीचोद',
-  'मदरचोद',
-  'मादरचोद',
-  'मादरचोदो',
-  'चुतिया',
-  'चूतिया',
-  'चूतीया',
-  'चुतिये',
-  'चूतिये',
-  'भोसड़ीके',
-  'भोसडीके',
-  'हरामज़ादा',
-  'हरामज़ादी',
-  'हरामजादा',
-  'हरामजादी',
-  'हरामखोर',
-  'कुतिया',
-  'कुत्तिया',
-  'रंडी',
-  'रण्डी',
+export const PUBLIC_ONLY: readonly string[] = ['sex', 'sexy', 'porn', 'nude']
+
+/**
+ * Two neighbouring tokens are glued (`fu ck`, `bhen chod`) into every listed word but these: each has a real
+ * everyday split, given beside it, that gluing would refuse ("pen is" is not a slur). Each is still refused as
+ * a whole token, spelled out, leet or masked. Add a word here only with the everyday phrase that splits it.
+ */
+export const UNGLUED: readonly (readonly [word: string, split: string])[] = [
+  ['anal', 'an al'],
+  ['anus', 'an us'],
+  ['bareback', 'bare back'],
+  ['creampie', 'cream pie'],
+  ['deepthroat', 'deep throat'],
+  ['penis', 'pen is'],
+  ['shit', 's hit'],
+  ['shota', 'shot a'],
+  ['spic', 's pic'],
+  ['spunk', 's punk'],
+  ['strapon', 'strap on'],
+  ['swinger', 's winger'],
+  ['tits', 't its'],
+  ['twink', 't wink'],
+  ['wetback', 'wet back'],
+  ['whore', 'who re'],
+  ['kamina', 'ka mina'],
+  ['kamine', 'ka mine'],
+  ['paki', 'pa ki'],
+  ['tharki', 'thar ki'],
 ]
+
+const unglued = new Set(UNGLUED.map(([word]) => word))
+/** The words two neighbouring tokens are glued into: every listed one, `PUBLIC_ONLY` too, but `UNGLUED`. */
+export const STRONG: readonly string[] = [...WORDS, ...PUBLIC_ONLY].filter((w) => !unglued.has(w))

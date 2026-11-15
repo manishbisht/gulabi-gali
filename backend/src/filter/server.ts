@@ -1,20 +1,36 @@
 import { buildList, check } from './index'
-import { NAME_SAFE, STRONG, WORDS } from './words'
+import { NAME_SAFE, PUBLIC_ONLY, STRONG, WORDS } from './words'
 
-/** The list as a `Set`, built on first use and kept for the life of the isolate: every bench line checks it. */
-let list: Set<string> | undefined
-const serverList = () => (list ??= buildList(WORDS, STRONG))
-/** The same without `NAME_SAFE`, for the one field where those words are somebody's name. */
-let nameList: Set<string> | undefined
-const serverNameList = () =>
-  (nameList ??= buildList(
-    WORDS.filter((w) => !NAME_SAFE.includes(w)),
-    STRONG,
+/**
+ * Fields others read as who someone is: their profile (status too, also set live on the map), a poster and a
+ * request note. These also refuse `PUBLIC_ONLY`; bench lines, 1:1 chat and report notes do not.
+ */
+const PUBLIC_FIELDS: readonly string[] = ['name', 'status', 'about', 'poster', 'reason']
+
+type Scope = 'chat' | 'public' | 'name'
+/** Each list as a `Set`, built on first use and kept for the life of the isolate: every bench line checks one. */
+const lists: Partial<Record<Scope, Set<string>>> = {}
+function listFor(scope: Scope): Set<string> {
+  const cached = lists[scope]
+  if (cached) return cached
+  const all = scope === 'chat' ? WORDS : [...WORDS, ...PUBLIC_ONLY]
+  // `NAME_SAFE` words are somebody's name: the name field alone lets them through.
+  const words = scope === 'name' ? all.filter((w) => !NAME_SAFE.includes(w)) : all
+  return (lists[scope] = buildList(
+    words,
+    words.filter((w) => STRONG.includes(w)),
   ))
+}
+const serverList = () => listFor('chat')
 
-/** Whether `text` (already cleaned) is fit to show other people. The server's one answer. */
+/**
+ * Whether `text` (already cleaned) is fit to show other people in `field`. The server's one answer. A field in
+ * `PUBLIC_FIELDS` also refuses `PUBLIC_ONLY`; `name` alone spares `NAME_SAFE`; anything else (a bench line, a
+ * chat message, a report note) is checked against the plain list.
+ */
 export const wordsOk = (text: string, field?: string): boolean =>
-  check(text, field === 'name' ? serverNameList() : serverList()).ok
+  check(text, listFor(field === 'name' ? 'name' : field && PUBLIC_FIELDS.includes(field) ? 'public' : 'chat'))
+    .ok
 
 const sha1 = async (s: string) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(s)))]

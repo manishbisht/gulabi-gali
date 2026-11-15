@@ -245,7 +245,7 @@ export async function pinPoster(
   if (muted) return muted
   const p = parse(raw, now)
   if ('field' in p) return invalid(p.field)
-  if (!wordsOk(p.text)) return fail('words', 400, { field: 'text' })
+  if (!wordsOk(p.text, 'poster')) return fail('words', 400, { field: 'text' })
   const live = await env.DB.prepare(LIVE_OF).bind(userId, now).first<{ n: number }>()
   if ((live?.n ?? 0) >= MAX_LIVE_POSTERS) return fail('limit', 409)
   // Taken before the poster goes up, so two pins at once cannot both slip past the fifth; given back when it

@@ -962,7 +962,7 @@ export class DistrictDO extends DurableObject<Env> {
       case 'status':
         if (!seat.person) return this.send(ws, GHOST)
         if (this.muted(seat.userId, now)) return this.send(ws, MUTED)
-        return wordsOk(msg.text) ? this.status(ws, seat, msg.text) : this.send(ws, WORDS)
+        return wordsOk(msg.text, 'status') ? this.status(ws, seat, msg.text) : this.send(ws, WORDS)
       case 'sit':
         return seat.person ? this.sit(ws, seat, msg.bench) : this.send(ws, GHOST)
       case 'say':
