@@ -56,17 +56,18 @@ const hits = (x: number, z: number, r: number, c: AABB) =>
   x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r
 
 /**
- * Whether the straight line from (x0, z0) to (x1, z1) crosses the box (slab test). Used to refuse an exit point
- * only reachable through a thin wall, which `hits` alone cannot see: the point itself is clear.
+ * Whether a walker of radius `pad` going straight from (x0, z0) to (x1, z1) touches the box (slab test on the
+ * box grown by `pad`). Used to refuse an exit point only reachable through a thin wall (or past its end, too
+ * close to brush it), which `hits` alone cannot see: the point itself is clear.
  */
-function crosses(x0: number, z0: number, x1: number, z1: number, c: AABB): boolean {
+export function crosses(x0: number, z0: number, x1: number, z1: number, c: AABB, pad = 0): boolean {
   let lo = 0
   let hi = 1
   const dx = x1 - x0
   const dz = z1 - z0
   const slabs = [
-    [dx, x0, c.minX, c.maxX],
-    [dz, z0, c.minZ, c.maxZ],
+    [dx, x0, c.minX - pad, c.maxX + pad],
+    [dz, z0, c.minZ - pad, c.maxZ + pad],
   ] as const
   for (const [d, p, min, max] of slabs) {
     if (Math.abs(d) < 1e-9) {
@@ -157,7 +158,9 @@ export function createVehicle(kind: 'auto'): Vehicle {
           // inside (a loose box round a prop) is no wall to cross.
           if (
             colliders.some(
-              (k) => !(x > k.minX && x < k.maxX && z > k.minZ && z < k.maxZ) && crosses(x, z, px, pz, k),
+              (k) =>
+                !(x > k.minX && x < k.maxX && z > k.minZ && z < k.maxZ) &&
+                crosses(x, z, px, pz, k, walkerRadius),
             )
           )
             continue

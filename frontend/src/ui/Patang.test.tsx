@@ -167,3 +167,50 @@ it('Enter on the focused Pull button holds the pull, like Space', () => {
   act(() => void stop.dispatchEvent(other))
   expect(other.defaultPrevented).toBe(false) // Stop still clicks
 })
+
+it('Again hands focus to the dialog (the button that had it is gone), and the next round runs', () => {
+  mount()
+  act(() => {
+    for (let i = 0; i < 300; i++) frames.forEach((f) => f(0.25))
+  })
+  const again = document.querySelector<HTMLButtonElement>('.patang-score button')!
+  expect(document.activeElement).toBe(again)
+  act(() => again.click())
+  expect(document.querySelector('.patang-score')).toBeNull()
+  expect(document.activeElement).toBe(document.querySelector('.patang'))
+  expect(frames).toHaveLength(1) // the first round's frame callback was let go
+})
+
+it('a click with no press before it (assistive tech) pulls for a moment, then lets go', () => {
+  vi.useFakeTimers()
+  try {
+    vi.stubEnv('VITE_TEST_HOOKS', '1')
+    history.replaceState(null, '', '/?gg-test=1')
+    mount()
+    act(() => window.__gg.patang().forceCross())
+    const pull = document.querySelector<HTMLButtonElement>('.patang-pull')!
+    // detail 0: what a screen reader's activate sends
+    act(() => void pull.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 })))
+    act(() => window.__gg.patang().step(0.7))
+    expect(window.__gg.patang().score()).toBeGreaterThanOrEqual(1) // it pulled through the contest
+    act(() => void vi.advanceTimersByTime(900)) // past the pull's end
+    act(() => window.__gg.patang().forceCross())
+    const before = window.__gg.patang().score()
+    act(() => window.__gg.patang().step(0.7))
+    expect(window.__gg.patang().score()).toBe(before) // let go: nobody pulling, no contest
+  } finally {
+    vi.useRealTimers()
+    history.replaceState(null, '', '/')
+  }
+})
+
+it('on the way out, focus goes back to the element that had it, else to the stage canvas', () => {
+  document.body.innerHTML = '<div id="app"></div><canvas></canvas>'
+  const r = createRoot(document.getElementById('app')!)
+  act(() => r.render(<Patang lang="en" stage={stage} controls={controls} at={at} onExit={() => {}} />))
+  act(() => r.render(<></>))
+  const canvas = document.querySelector('canvas')!
+  expect(canvas.tabIndex).toBe(-1)
+  expect(document.activeElement).toBe(canvas)
+  act(() => r.unmount())
+})

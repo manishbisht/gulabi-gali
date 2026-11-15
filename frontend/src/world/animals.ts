@@ -425,6 +425,8 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       step.z = uz * len
       moveWithCollision(a, step, colliders, RADIUS, a)
       a.moving = true
+      // backing off a crowding player is no pinning: the count towards a snap starts again
+      a.stuck = 0
       return
     }
     const speed = d > TROT_FROM ? FOLLOW_SPEED * 2 : FOLLOW_SPEED

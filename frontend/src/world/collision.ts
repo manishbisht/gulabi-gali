@@ -39,7 +39,7 @@ export function moveWithCollision(
 ): Vec2 {
   let stepX = step.x
   let stepZ = step.z
-  let solid = colliders
+  let inside = false
   for (let i = 0; i < colliders.length; i++) {
     const c = colliders[i]!
     if (!overlaps(from.x, from.z, radius, c)) continue
@@ -52,12 +52,21 @@ export function moveWithCollision(
     else if (least === east) stepX = Math.max(stepX, 0)
     else if (least === north) stepZ = Math.min(stepZ, 0)
     else stepZ = Math.max(stepZ, 0)
-    // The colliders it stands inside are held by the rule above; the rest stop it as usual. Only in this
-    // case a new list, so an ordinary step allocates nothing.
-    if (solid === colliders) solid = colliders.filter((k) => !overlaps(from.x, from.z, radius, k))
+    inside = true
   }
-  return slideAll(from, stepX, stepZ, solid, radius, out)
+  if (!inside) return slideAll(from, stepX, stepZ, colliders, radius, out)
+  // The colliders it stands inside are held by the rule above; the rest stop it as usual (in a list kept for
+  // the purpose, so even this case allocates nothing once it has grown).
+  solidBuf.length = 0
+  for (let i = 0; i < colliders.length; i++)
+    if (!overlaps(from.x, from.z, radius, colliders[i]!)) solidBuf.push(colliders[i]!)
+  const moved = slideAll(from, stepX, stepZ, solidBuf, radius, out)
+  solidBuf.length = 0
+  return moved
 }
+
+/** The colliders a walker standing inside some does not slide along (see `moveWithCollision`). */
+const solidBuf: AABB[] = []
 
 /** The step, in sub-steps of at most `radius`, sliding along every collider in the way. */
 function slideAll(
