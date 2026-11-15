@@ -52,11 +52,10 @@ export function PhotoMode({ stage, lang, onExit }: Props) {
       <button type="button" className="photo-exit" aria-label={t('photoExit', lang)} onClick={onExit}>
         <span aria-hidden="true">✕</span>
       </button>
-      {note && (
-        <p className="photo-note" role="status">
-          {note}
-        </p>
-      )}
+      {/* mounted from the start and only its text changes, so a screen reader hears the change */}
+      <p className="photo-note" role="status">
+        {note}
+      </p>
       <button
         ref={shutter}
         type="button"

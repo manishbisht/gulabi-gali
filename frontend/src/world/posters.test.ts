@@ -97,6 +97,13 @@ function setup(first: PosterView[] = []) {
 }
 
 describe('poster walls', () => {
+  it('marks every wall mesh as kept out of photos (the sheets print people\u2019s names)', () => {
+    const t = setup()
+    expect(t.meshes().length).toBeGreaterThan(0)
+    for (const m of t.meshes()) expect(m.userData.noPhoto).toBe(true)
+    t.posters.dispose()
+  })
+
   it('drops a poster whose time has passed (6 h after its when) within a minute, without a refetch', async () => {
     vi.useFakeTimers()
     try {

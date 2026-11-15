@@ -236,6 +236,7 @@ export function createPosters(opts: {
     const material = new THREE.MeshLambertMaterial({ map: texture })
     const mesh = new THREE.Mesh(geometry, material)
     mesh.name = `posters-${wall.index}`
+    mesh.userData.noPhoto = true // the sheet prints authors' names: photo mode leaves it out
     mesh.position.set(wall.at.x, 0, wall.at.z)
     // The same turn as the prop (see buildProps): `rot` degrees, clockwise seen from above.
     mesh.rotation.y = (-wall.rot * Math.PI) / 180

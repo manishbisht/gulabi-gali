@@ -152,6 +152,7 @@ it('photo mode hides the HUD, the joystick, the name labels and the toasts, take
   await act(async () => q('.photo-exit')!.click())
   expect(q('.photo-frame')).toBeNull()
   expect(q('.hud')).not.toBeNull()
+  expect(document.activeElement).toBe(q('.photo-button')) // focus goes back to where it came from
   expect(q('.npc-bubbles')!.hidden).toBe(false)
   await act(async () => root.unmount())
 })

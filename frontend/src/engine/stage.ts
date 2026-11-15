@@ -70,11 +70,18 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   let slow = 0
   let sampled = 0
 
+  /** The size last fitted, in CSS px: a capture draws at this and goes back to it. */
+  let fitW = 0
+  let fitH = 0
+  const tierRatio = () => (lite ? LITE_RATIO : Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
+
   function resize() {
     const width = window.innerWidth
     const height = window.innerHeight
     if (!width || !height) return
-    renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
+    fitW = width
+    fitH = height
+    renderer.setPixelRatio(tierRatio())
     renderer.setSize(width, height, false)
     camera.aspect = width / height
     // A phone held upright sees a narrow slice of street; open the lens a little so a lane fits.
@@ -188,13 +195,28 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       return () => void qualityListeners.delete(cb)
     },
     capture(read) {
+      const gone = () => disposed || lost || !fitW || renderer.getContext().isContextLost()
+      if (gone()) throw new Error('capture: the WebGL context is lost')
       renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, PHOTO_RATIO_CAP))
-      renderer.setSize(window.innerWidth, window.innerHeight, false)
+      renderer.setSize(fitW, fitH, false)
+      // Poster sheets print people's names; whatever is marked noPhoto stays out of the picture.
+      const hidden: THREE.Object3D[] = []
+      scene.traverse((o) => {
+        if (o.userData.noPhoto && o.visible) {
+          o.visible = false
+          hidden.push(o)
+        }
+      })
       try {
         renderer.render(scene, camera)
+        // the bigger buffer can cost a low-end phone its context; a lost one draws nothing
+        if (gone()) throw new Error('capture: the WebGL context was lost while drawing')
         return read(renderer.domElement)
       } finally {
-        resize()
+        for (const o of hidden) o.visible = true
+        // directly, not resize(): that bails out when the window reports no size
+        renderer.setPixelRatio(tierRatio())
+        renderer.setSize(fitW, fitH, false)
       }
     },
     framesSinceRestore: () => sinceRestore,

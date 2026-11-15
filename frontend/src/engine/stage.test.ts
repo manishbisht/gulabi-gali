@@ -6,6 +6,9 @@ const renderer = vi.hoisted(() => ({
   calls: [] as string[],
   antialias: [] as boolean[],
   ratios: [] as number[],
+  lost: false,
+  /** Set to make the context report lost from the next render on. */
+  loseOnRender: false,
 }))
 vi.mock('three', async (orig) => {
   const real = await orig<typeof import('three')>()
@@ -20,8 +23,12 @@ vi.mock('three', async (orig) => {
       renderer.ratios.push(r)
     }
     setSize() {}
+    getContext() {
+      return { isContextLost: () => renderer.lost }
+    }
     render() {
       renderer.calls.push('render')
+      if (renderer.loseOnRender) renderer.lost = true
     }
     dispose() {
       renderer.calls.push('dispose')
@@ -101,6 +108,7 @@ describe('capture', () => {
   beforeEach(() => {
     renderer.ratios.length = 0
     renderer.calls.length = 0
+    renderer.lost = renderer.loseOnRender = false
     vi.stubGlobal('devicePixelRatio', 3)
   })
   afterEach(() => vi.unstubAllGlobals())
@@ -119,6 +127,64 @@ describe('capture', () => {
     expect(out).toBe('png')
     expect(seen).toEqual([canvas, ['render']]) // read right after the one render, in the same task
     expect(renderer.ratios).toEqual([3, 1]) // the lowest tier draws at 1; the photo does not
+    stage.dispose()
+  })
+
+  it('hides what is marked noPhoto for the one render, and shows it again after, even when reading throws', () => {
+    const stage = createStage(document.createElement('canvas'))
+    const wall = new THREE.Mesh()
+    wall.userData.noPhoto = true
+    const hiddenAlready = new THREE.Mesh()
+    hiddenAlready.userData.noPhoto = true
+    hiddenAlready.visible = false
+    stage.scene.add(wall, hiddenAlready)
+    let seen: boolean[] = []
+    const draw = () => (seen = [wall.visible, hiddenAlready.visible])
+    const origRender = vi.spyOn(THREE.WebGLRenderer.prototype, 'render').mockImplementation(draw)
+    stage.capture(() => 'x')
+    expect(seen).toEqual([false, false])
+    expect([wall.visible, hiddenAlready.visible]).toEqual([true, false])
+    expect(() =>
+      stage.capture(() => {
+        throw new Error('boom')
+      }),
+    ).toThrow('boom')
+    expect([wall.visible, hiddenAlready.visible]).toEqual([true, false])
+    origRender.mockRestore()
+    stage.dispose()
+  })
+
+  it('throws, and reads nothing, when the context is lost before, or the stage is gone', () => {
+    const canvas = document.createElement('canvas')
+    const stage = createStage(canvas)
+    const read = vi.fn(() => 'png')
+    renderer.lost = true
+    expect(() => stage.capture(read)).toThrow(/lost/)
+    renderer.lost = false
+    canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
+    expect(() => stage.capture(read)).toThrow(/lost/)
+    canvas.dispatchEvent(new Event('webglcontextrestored'))
+    stage.dispose()
+    expect(() => stage.capture(read)).toThrow()
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('throws, and reads nothing, when the context is lost by the bigger buffer itself', () => {
+    const stage = createStage(document.createElement('canvas'))
+    renderer.loseOnRender = true
+    const read = vi.fn(() => 'png')
+    expect(() => stage.capture(read)).toThrow(/lost/)
+    expect(read).not.toHaveBeenCalled()
+    stage.dispose()
+  })
+
+  it('goes back to the tier ratio even when the window reports no size', () => {
+    sessionStorage.setItem('gg-quality', '1')
+    const stage = createStage(document.createElement('canvas'))
+    renderer.ratios.length = 0
+    vi.stubGlobal('innerWidth', 0)
+    stage.capture(() => 'x')
+    expect(renderer.ratios).toEqual([3, 1.25])
     stage.dispose()
   })
 

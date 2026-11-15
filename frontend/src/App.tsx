@@ -100,6 +100,12 @@ export default function App() {
   const stageRef = useRef<Stage | null>(null)
   /** Photo mode: the stage it takes pictures with, while it is on. */
   const [photo, setPhoto] = useState<Stage | null>(null)
+  const wasPhoto = useRef(false)
+  useEffect(() => {
+    // back from photo mode, focus returns to the camera chip that opened it
+    if (wasPhoto.current && !photo) document.querySelector<HTMLElement>('.photo-button')?.focus()
+    wasPhoto.current = !!photo
+  }, [photo])
   /** The kite fight, while one runs: where the player stood, and the stage and controls it borrows. */
   const [kiteFrom, setKiteFrom] = useState<{ at: Vec2; stage: Stage; controls: Controls } | null>(null)
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()

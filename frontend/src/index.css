@@ -1727,3 +1727,13 @@ small.words-hint {
   font-size: 0.9rem;
   text-align: center;
 }
+
+.photo-note:empty {
+  display: none;
+}
+
+.photo-exit:focus-visible,
+.photo-shutter:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 3px;
+}
