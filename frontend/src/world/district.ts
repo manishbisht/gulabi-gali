@@ -4,6 +4,8 @@ import { buildBlock } from './kit'
 import { bake, merge } from './kit/parts'
 import { PALETTE } from './palette'
 import { buildProps, type ParkedAutos } from './props'
+import { buildRoof } from './rooftop'
+import { buildSignposts } from './signposts'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
 /** The four districts, in the order the metro lists them. */
@@ -77,6 +79,13 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
   const props = buildProps(def.props)
   root.add(props.group)
   colliders.push(...props.colliders)
+  const signs = buildSignposts(def)
+  root.add(signs.group)
+  colliders.push(...signs.colliders)
+  if (def.roof) {
+    root.add(buildRoof(def.roof))
+    colliders.push(def.roof.flight)
+  }
   colliders.push(...boundary(def.size / 2))
 
   const hemi = new THREE.HemisphereLight('#E4EEF4', PALETTE.sandstone, 1.6)
@@ -123,7 +132,10 @@ function disposeTree(root: THREE.Object3D): void {
     if (o instanceof THREE.InstancedMesh) o.dispose() // its per-instance buffers
     ;(o.geometry as THREE.BufferGeometry).dispose()
     const m = o.material as THREE.Material | THREE.Material[]
-    for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
+    for (const mat of Array.isArray(m) ? m : [m]) {
+      ;(mat as THREE.MeshLambertMaterial).map?.dispose() // a canvas's lettering (the signposts)
+      mat.dispose()
+    }
   })
 }
 

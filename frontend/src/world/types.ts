@@ -53,6 +53,29 @@ export interface NpcDef {
   route: Vec2[]
   speed: number
 }
+/** A district's rooftop viewpoint (see rooftop.ts `roofOver`): a stair up one building to a strip of its roof. */
+export interface RoofDef {
+  /** The roof's top, in metres above the street. */
+  y: number
+  /** The strip the player walks on up there: their middle stays inside it (less their radius). */
+  area: AABB
+  /** Where the climb sets the player: the middle of the strip. */
+  landing: Vec2
+  /** What the player and the view turn to on arriving up there. */
+  view: Vec2
+  /** The stair's foot, on the street: E here climbs, and coming down sets the player here. */
+  stair: Vec2
+  /** Out of the building's front, toward the street (unit, along x or z). */
+  out: Vec2
+  /** Out of the side wall the stair stands against (unit). */
+  side: Vec2
+  /** The stair's flight beside that wall: a collider. Its low end is at the front. */
+  flight: AABB
+  /** How far back the flight runs from its low end. */
+  run: number
+  /** The building's footprint. */
+  building: AABB
+}
 export interface DistrictDef {
   id: DistrictId
   name: { hi: string; en: string }
@@ -74,4 +97,8 @@ export interface DistrictDef {
   landmarks: LandmarkDef[]
   npcs: NpcDef[]
   props: PropSpec[]
+  /** The main crossings, where a signpost points the way to each landmark and the metro (see signposts.ts). */
+  signposts?: Vec2[]
+  /** The rooftop viewpoint (see rooftop.ts). */
+  roof?: RoofDef
 }

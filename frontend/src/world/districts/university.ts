@@ -2,6 +2,7 @@ import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { buildJkk, JKK } from '../landmarks/jkk'
 import { buildUniversityGate, UNIVERSITY_GATE } from '../landmarks/universityGate'
+import { roofAt } from '../rooftop'
 import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
 import { centred, createFill, grow, placed, rect, wall, type Facing } from './layout'
 
@@ -256,6 +257,14 @@ const university: DistrictDef = {
   landmarks,
   npcs,
   props,
+  /** Where the cross street meets JLN Marg, before the university's plaza, and before JKK's forecourt. */
+  signposts: [
+    { x: -6, z: 48 },
+    { x: -31, z: 32.5 },
+    { x: 27, z: 32.6 },
+  ],
+  /** The department beside the gate: its roof looks across the campus to JKK. */
+  roof: roofAt(buildings, { x: -62, z: 0 }, -1, JKK_AT),
 }
 
 export default university

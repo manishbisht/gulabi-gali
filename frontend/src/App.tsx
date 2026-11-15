@@ -26,6 +26,7 @@ import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
 import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
+import { useRooftop } from './world/useRooftop'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
@@ -124,6 +125,9 @@ export default function App() {
   /** Driving a parked auto: one in reach, at the wheel, and "no room to get out". */
   const drive = useDrive()
   const { hooks: driveHooks, bind: bindDrive } = drive
+  /** The rooftop viewpoint: its stair in reach, being up there, and the fade between. */
+  const roof = useRooftop()
+  const { hooks: roofHooks, bind: bindRoof } = roof
   /** The street animals: the one in reach, the one following, and their passing lines. */
   const animals = useAnimals()
   const { hooks: animalHooks, bind: bindAnimals } = animals
@@ -296,6 +300,7 @@ export default function App() {
         drive: driveHooks,
         animals: animalHooks,
         bandar: bandarHooks,
+        roof: roofHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -308,10 +313,12 @@ export default function App() {
     bindPosters(city)
     bindDrive(city)
     bindAnimals(city)
+    bindRoof(city)
     bindMap({ session: city, stage })
 
     return () => {
       bindMap(null)
+      bindRoof(null)
       bindAnimals(null)
       bindDrive(null)
       bindPosters(null)
@@ -348,6 +355,8 @@ export default function App() {
     animalHooks,
     bindAnimals,
     bindMap,
+    roofHooks,
+    bindRoof,
     bandarHooks,
     current,
     now,
@@ -447,7 +456,7 @@ export default function App() {
     mapBlockedRef.current = sheetUp
   }, [sheetUp, mapBlockedRef])
   // the monkey keeps off the street while anything is over it
-  const bandarBlocked = sheetUp || !!near || !!ride || !!kiteFrom || !!bench.seat || map.open
+  const bandarBlocked = sheetUp || !!near || !!ride || !!kiteFrom || !!bench.seat || map.open || roof.up
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked
@@ -624,12 +633,23 @@ export default function App() {
                       {t('driveMount', lang)}
                     </button>
                   )}
+                  {(roof.near || roof.up) && !near && !sheetOpen && !card && !bench.seat && (
+                    <button
+                      type="button"
+                      className="metro-button roof-button"
+                      aria-keyshortcuts="E"
+                      onClick={roof.climb}
+                    >
+                      {t(roof.up ? 'roofDown' : 'roofUp', lang)}
+                    </button>
+                  )}
                   {patangAvailable({
                     festival,
                     driving: drive.driving,
                     seated: !!bench.seat,
                     card: !!card,
                   }) &&
+                    !roof.up &&
                     !near &&
                     !sheetOpen && (
                       <button
@@ -781,7 +801,7 @@ export default function App() {
         />
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
-      <div className="fade" data-on={fading || undefined} aria-hidden="true" />
+      <div className="fade" data-on={fading || roof.fading || undefined} aria-hidden="true" />
       {kiteFrom && (
         <Patang
           lang={lang}

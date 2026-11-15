@@ -24,6 +24,7 @@ import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
 import { createPeople, createPeopleLabels, type People, type Remote } from './people'
 import { createPosters, type Posters } from './posters'
+import { createRooftop, roofHeight, type RoofHooks, type Rooftop } from './rooftop'
 import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 
@@ -41,6 +42,8 @@ const DRAG_TILT = 0.5
  * frozen. The next welcome brings back whoever is still about.
  */
 const STALE_MS = 3000
+/** An angle brought into [-π, π]. */
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
 export type Player = ReturnType<typeof createPlayer>
 
@@ -110,6 +113,8 @@ export interface SessionHooks {
   animals?: AnimalHooks
   /** The Galta bandar (Walled City): `blocked` while a card, sheet, bench, kite game or metro ride is up. */
   bandar?: { blocked(): boolean; event(e: BandarEvent): void }
+  /** The rooftop viewpoint: its stair in reach, being up there, and the fade between (see useRooftop). */
+  roof?: RoofHooks
 }
 
 export interface CitySessionOptions {
@@ -163,6 +168,8 @@ export interface CitySession {
   exitAuto(): void
   /** The horn: only while driving, at most twice a second, and only heard here. */
   honk(): void
+  /** At the rooftop stair's foot, climbs ("Chhat pe chalo"); up there, comes down. Not seated or at the wheel. */
+  climb(): void
   /** "Saath chalo": calls the animal in reach (the cow answers with a line instead). */
   callAnimal(): void
   /** "Ghar jao": the follower goes back to where it lives. */
@@ -195,6 +202,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     posters: Posters | null
     driving: Driving
     animals: Animals
+    roof: Rooftop | null
   } | null = null
   /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
   const stationMemory = createStationMemory()
@@ -266,7 +274,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     })
     const sky = createSky(stage, district, hooks)
     // made here, not in the presence, so taps and E can reach the people too
-    const people = hooks.presence ? createPeople(stage.scene) : null
+    // someone inside the rooftop strip is up on the roof (nobody on the street can stand there)
+    const roofDef = district.def.roof
+    const people = hooks.presence ? createPeople(stage.scene, (x, z) => roofHeight(roofDef, x, z)) : null
     // sits and lines go out on the live socket, which opens below
     let presence: Presence | null = null
     const sitting =
@@ -296,6 +306,15 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         },
       },
     })
+    const roof = roofDef
+      ? createRooftop({
+          roof: roofDef,
+          player,
+          hooks: hooks.roof ?? { near() {}, up() {}, fade() {} },
+          // the view swings round to look out from the roof (eased, under the fade)
+          face: (yaw) => controls.addLook(wrapAngle(yaw - player.view().yaw), 0),
+        })
+      : null
     const systems: DistrictSystem[] = [
       npcs,
       {
@@ -315,6 +334,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       sky,
       createLights(stage, district),
       { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
+      ...(roof ? [{ update: (_dt: number, pos: Vec2) => roof.update(pos), dispose: roof.dispose }] : []),
       createInteraction(
         canvas,
         stage,
@@ -326,6 +346,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         posters,
         driving,
         animals,
+        roof,
         hooks,
       ),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
@@ -358,7 +379,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, people, sitting, posters, driving, animals }
+    here = { district, player, systems, presence, people, sitting, posters, driving, animals, roof }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -394,6 +415,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           }
         }),
       freezeAnimals: animals.freeze,
+      roof: () =>
+        roofDef ? { up: roof!.up(), y: player.elevation(), stair: roofDef.stair, area: roofDef.area } : null,
+      signposts: () => district.def.signposts ?? [],
       festival: hooks.festival,
       sky: sky.params,
       procession: () => ({ count: sky.procession() }),
@@ -466,6 +490,10 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     mount: () => here?.driving.mount(),
     exitAuto: () => here?.driving.exit(),
     honk: () => here?.driving.honk(),
+    climb() {
+      if (!here?.roof || here.player.driving() || here.sitting?.seated()) return
+      here.roof.toggle()
+    },
     callAnimal() {
       if (here) here.animals.call(here.player.position())
     },
@@ -549,9 +577,9 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 }
 
 /**
- * E and taps: a landmark's stamp, the metro, a bench, a poster wall, an auto, the character card and the person
- * card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
- * the landmark and metro wait until they do. A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
+ * E and taps: a landmark's stamp, the metro, a bench, a poster wall, an auto, the rooftop stair, the character
+ * card and the person card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
+ * the landmark and metro wait until they do; up on the roof, E comes down (a card that is up closes first). A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
  *
  * A drag is the look: the first pointer down on the canvas (a mouse's main button, or one finger) that moves past
@@ -571,6 +599,7 @@ function createInteraction(
   posters: Posters | null,
   drive: Driving,
   animals: Animals,
+  roof: Rooftop | null,
   hooks: SessionHooks,
 ): DistrictSystem {
   /** Where the player stands, for a tap on an animal. */
@@ -659,8 +688,15 @@ function createInteraction(
       hooks.personCard.close()
       return hooks.posters?.tap(poster)
     }
-    // last: an animal, unless a card is up, a landmark has the screen or the player is seated
-    if (landmarkNear || postering || hooks.npcCard.isOpen() || hooks.personCard.isOpen() || sitting?.seated())
+    // last: an animal, unless a card is up, a landmark has the screen, or the player is seated or up on a roof
+    if (
+      landmarkNear ||
+      postering ||
+      hooks.npcCard.isOpen() ||
+      hooks.personCard.isOpen() ||
+      sitting?.seated() ||
+      roof?.up()
+    )
       return
     const pet = animals.pick(ray, at)
     if (pet) animals.call(at, pet.id)
@@ -691,7 +727,10 @@ function createInteraction(
       const driving = drive.driving()
       if (controls.horn()) drive.honk()
       if (driving && key) drive.exit()
-      const pressed = key && !driving
+      // up on the roof E comes down (or closes a card that is up), and nothing below hears it
+      const onRoof = roof?.up() ?? false
+      const press = key && !driving
+      const pressed = press && !onRoof
       const chatting = hooks.npcCard.isOpen()
       const meeting = hooks.personCard.isOpen()
       // a poster's card or the composer is a card like any other: E is not for anything under it
@@ -714,10 +753,17 @@ function createInteraction(
       // E by a parked auto drives it, unless anything above has the key
       const auto = pressed && !card && !seated && !landmarkNear && !metro && !bench && !wall && drive.near()
       if (auto) drive.mount()
+      // E at the rooftop stair climbs, unless anything above has the key; up there it comes down
+      const stair =
+        !!roof &&
+        press &&
+        !card &&
+        (onRoof || (!seated && !landmarkNear && !metro && !bench && !wall && !auto && roof.near()))
+      if (stair) roof.toggle()
       hooks.npcCard.step(
         pos,
         npcs,
-        pressed && !meeting && !postering && !bench && !wall && !auto && (chatting || !metro),
+        press && !stair && !meeting && !postering && !bench && !wall && !auto && (chatting || !metro),
         landmarkNear,
       )
       // a character that just opened (or closed on this very E) keeps the key from the person card
@@ -725,7 +771,8 @@ function createInteraction(
         hooks.personCard.step(
           pos,
           people,
-          pressed &&
+          press &&
+            !stair &&
             !chatting &&
             !postering &&
             !bench &&
@@ -744,6 +791,7 @@ function createInteraction(
         !bench &&
         !wall &&
         !auto &&
+        !stair &&
         !hooks.npcCard.isOpen() &&
         !hooks.personCard.isOpen()
       )

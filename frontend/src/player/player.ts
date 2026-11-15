@@ -27,7 +27,11 @@ interface Options {
 export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
   let avatar = buildAvatar(look)
   scene.add(avatar)
-  const follow = createFollowCamera(camera, occluders)
+  /** Up on a roof (see world/rooftop.ts): the body stands at `y`, and only `walls` hold it in. */
+  let floor: { y: number; walls: AABB[] } | null = null
+  /** What the camera keeps out of: nothing on a roof, whose own building has the player inside its footprint. */
+  const seen = [...(occluders ?? [])]
+  const follow = createFollowCamera(camera, seen)
   const fwd = new THREE.Vector3()
   let pos: Vec2 = { x: 0, z: 0 }
   // driving: the vehicle holds the speed and the heading; this file holds the body, and the collisions
@@ -41,7 +45,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
    * Only frames bring the view round behind the auto, so getting in never whips it round in one step.
    */
   function sync(dt: number, frame = false) {
-    avatar.position.set(pos.x, driving ? SEAT_Y : 0, pos.z)
+    avatar.position.set(pos.x, driving ? SEAT_Y : (floor?.y ?? 0), pos.z)
     if (driving && ride) {
       ride.position.set(pos.x, 0, pos.z)
       ride.rotation.y = vehicle.heading
@@ -66,6 +70,18 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       sync(1) // dt of 1 s: the camera is effectively there too
     },
     driving: (): boolean => driving,
+    /**
+     * Up on a roof: the body stands at `floor.y` and walks only within `floor.walls` (the street's colliders do
+     * not hold it up there), and the camera keeps out of nothing. Null: back on the street. `teleport` places it.
+     */
+    setFloor(next: { y: number; walls: AABB[] } | null) {
+      floor = next
+      seen.length = 0
+      if (!next) seen.push(...(occluders ?? []))
+      sync(1)
+    },
+    /** How high the player's feet are: a roof's height up there, else 0. */
+    elevation: (): number => floor?.y ?? 0,
     /** Gets into an auto standing at (x, z) and facing `ry`. */
     mount(x: number, z: number, ry: number) {
       if (driving) return
@@ -121,7 +137,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         const dx = fx * input.z - fz * input.x
         const dz = fz * input.z + fx * input.x
         const step = { x: dx * WALK_SPEED * dt, z: dz * WALK_SPEED * dt }
-        pos = moveWithCollision(pos, step, colliders, PLAYER_RADIUS)
+        pos = moveWithCollision(pos, step, floor ? floor.walls : colliders, PLAYER_RADIUS)
         avatar.rotation.y = Math.atan2(dx, dz)
       }
       sync(dt, true)

@@ -9,6 +9,7 @@ import type { District } from './district'
 import miRoad from './districts/miRoad'
 import walledCity from './districts/walledCity'
 import { benchesOf, seatPose } from './benches'
+import { ROOF_FADE_MS } from './rooftop'
 import { createCitySession, type SessionHooks } from './session'
 import type { DistrictDef } from './types'
 
@@ -1151,5 +1152,114 @@ describe('drag to look', () => {
     fire('pointermove', 70)
     window.dispatchEvent(new Event('blur')) // a lost drag lets go too
     expect(controls.holdLook).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe('the rooftop viewpoint', () => {
+  afterEach(() => vi.useRealTimers())
+
+  /** The Walled City offline, the player at its stair's foot, with the rooftop's hooks spied on. */
+  async function atStair(extra: Partial<SessionHooks> = {}, nearestAuto = -1) {
+    const roofHooks = { near: vi.fn(), up: vi.fn(), fade: vi.fn() }
+    const live = open('walled-city', { roof: roofHooks, ...extra })
+    loads[0]!.resolve({
+      ...fakeDistrict(walledCity),
+      autos: {
+        nearest: () => nearestAuto,
+        pose: () => ({ x: 0, z: 0, ry: 0 }),
+        take: vi.fn(),
+        leave: vi.fn(),
+      },
+    })
+    await settle()
+    vi.useFakeTimers()
+    const roof = walledCity.roof!
+    live.session.player()!.teleport(roof.stair.x, roof.stair.z)
+    live.tick(1 / 30)
+    return { ...live, roof, roofHooks }
+  }
+  const press = (tick: (dt: number) => void) => {
+    const interact = vi.spyOn(controls, 'interact').mockReturnValueOnce(true)
+    tick(1 / 30)
+    interact.mockRestore()
+  }
+  const fadeThrough = (tick: (dt: number) => void) => {
+    vi.advanceTimersByTime(ROOF_FADE_MS * 2)
+    tick(1 / 30)
+  }
+
+  it('E at the stair climbs, the view turns out over the street, and E on the roof comes down to the stair', async () => {
+    const { session, tick, roof, roofHooks, hooks: h } = await atStair()
+    expect(roofHooks.near).toHaveBeenLastCalledWith(true)
+    const npc = vi.spyOn(h.npcCard, 'step')
+    vi.mocked(controls.addLook).mockClear()
+    press(tick)
+    // the stair had the key: nothing after it in line heard that press
+    expect(npc.mock.calls.at(-1)![2]).toBe(false)
+    fadeThrough(tick)
+    expect(roofHooks.up).toHaveBeenLastCalledWith(true)
+    expect(session.player()!.position()).toEqual(roof.landing)
+    expect(session.player()!.elevation()).toBe(roof.y)
+    expect(controls.addLook).toHaveBeenCalled()
+    // up there E comes down, and nothing else hears it
+    press(tick)
+    expect(npc.mock.calls.at(-1)![2]).toBe(false)
+    fadeThrough(tick)
+    expect(roofHooks.up).toHaveBeenLastCalledWith(false)
+    expect(session.player()!.position()).toEqual(roof.stair)
+    expect(session.player()!.elevation()).toBe(0)
+    session.dispose()
+  })
+
+  it('the button climbs too; not with a card up (E closes the card), and not at the wheel', async () => {
+    const { session, tick, roofHooks, hooks: h } = await atStair()
+    const open = vi.spyOn(h.npcCard, 'isOpen').mockReturnValue(true)
+    press(tick)
+    fadeThrough(tick)
+    expect(roofHooks.up).not.toHaveBeenCalled()
+    open.mockReturnValue(false)
+    // at the wheel the button does nothing
+    const wheel = vi.spyOn(session.player()!, 'driving').mockReturnValue(true)
+    session.climb()
+    fadeThrough(tick)
+    expect(roofHooks.up).not.toHaveBeenCalled()
+    wheel.mockRestore()
+    session.climb()
+    fadeThrough(tick)
+    expect(roofHooks.up).toHaveBeenLastCalledWith(true)
+    session.dispose()
+    expect(roofHooks.up).toHaveBeenLastCalledWith(false)
+  })
+
+  it('an auto in reach of the stair outranks it: E drives', async () => {
+    const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+    const { session, tick, roofHooks } = await atStair({ drive }, 0)
+    press(tick)
+    fadeThrough(tick)
+    expect(drive.driving).toHaveBeenLastCalledWith(true)
+    expect(roofHooks.up).not.toHaveBeenCalled()
+    session.dispose()
+  })
+
+  it('other people on the roof are drawn up there; on the street, on the street', async () => {
+    const live = openLive()
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    const ws = sockets()[0]!
+    ws.onopen?.()
+    const roof = walledCity.roof!
+    ws.say({
+      t: 'welcome',
+      you: { id: null, visible: false },
+      people: [
+        { ...asha, x: roof.landing.x, z: roof.landing.z },
+        { ...asha, id: 'dev:ravi', x: roof.stair.x, z: roof.stair.z },
+      ],
+    })
+    live.session.player()!.teleport(roof.stair.x, roof.stair.z)
+    live.tick(1 / 30)
+    expect(live.stage.scene.getObjectByName('person-dev:asha')!.position.y).toBe(roof.y)
+    expect(live.stage.scene.getObjectByName('person-dev:ravi')!.position.y).toBe(0)
+    live.session.dispose()
   })
 })
