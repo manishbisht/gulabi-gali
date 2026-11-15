@@ -5,8 +5,11 @@ import { DISTRICT_IDS } from '../src/district'
 import {
   LATE_MS,
   putGoing,
+  remindBudget,
   remindMeetups,
   REMIND_BEFORE_MS,
+  REMIND_BUDGET,
+  REMIND_OVERHEAD,
   REMIND_PER_PERSON,
   RSVP_LIMIT,
 } from '../src/meetups'
@@ -39,6 +42,14 @@ const sql = (q: string, ...args: unknown[]) =>
     .prepare(q)
     .bind(...args)
     .run()
+/** Who on poster `posterId` is still owed a reminder. */
+const unreminded = async (posterId: string) =>
+  (
+    await db
+      .prepare('SELECT user_id FROM rsvps WHERE poster_id = ? AND reminded = 0 ORDER BY user_id')
+      .bind(posterId)
+      .all<{ user_id: string }>()
+  ).results.map((r) => r.user_id)
 const rsvps = async (posterId: string) =>
   (
     await db
@@ -351,16 +362,66 @@ describe('the reminder an hour before', () => {
       await view(t, poster.id, 'PUT')
     }
     const at = when - 30 * 60_000
-    // Room for one person with two devices, not two.
+    // Room for the run's own statements and one person with two devices, not two.
+    const budget = REMIND_OVERHEAD + REMIND_PER_PERSON + 2
     const first = service()
-    expect(await remindMeetups(testEnv, at, first.fetcher, { budget: 2 + REMIND_PER_PERSON })).toBe(1)
+    expect(await remindMeetups(testEnv, at, first.fetcher, { budget })).toBe(1)
     expect(first.got.size).toBe(2)
+    // Only the person pushed was claimed: the other is still waiting.
+    expect(await unreminded(poster.id)).toHaveLength(1)
     const second = service()
-    expect(await remindMeetups(testEnv, at + 60_000, second.fetcher, { budget: 2 + REMIND_PER_PERSON })).toBe(
-      1,
-    )
+    expect(await remindMeetups(testEnv, at + 60_000, second.fetcher, { budget })).toBe(1)
     expect(second.got.size).toBe(2)
     expect(new Set([...first.got.keys(), ...second.got.keys()])).toEqual(new Set(phones))
+  })
+
+  it('fits the Workers Free plan by default (about 50 subrequests a run, shared with the other sweeps)', () => {
+    expect(REMIND_BUDGET).toBeLessThanOrEqual(30)
+    expect(remindBudget({} as Env)).toBe(REMIND_BUDGET)
+    // A Paid account raises it with the REMIND_BUDGET var; nonsense keeps the default.
+    expect(remindBudget({ REMIND_BUDGET: '300' } as Env)).toBe(300)
+    for (const bad of ['', 'lots', '-5', '0'])
+      expect(remindBudget({ REMIND_BUDGET: bad } as Env)).toBe(REMIND_BUDGET)
+  })
+
+  it('takes its budget from the REMIND_BUDGET var when no budget is passed', async () => {
+    const now = Date.now()
+    await resident('Var Owner')
+    const when = now + 3 * HOUR
+    const poster = await pinAt('Var Owner', when, now)
+    for (const name of ['Asha Var', 'Bela Var']) {
+      const t = await resident(name)
+      await device(t, 'en')
+      await view(t, poster.id, 'PUT')
+    }
+    const small = { ...testEnv, REMIND_BUDGET: String(REMIND_OVERHEAD + REMIND_PER_PERSON + 1) }
+    const svc = service()
+    expect(await remindMeetups(small, when - 30 * 60_000, svc.fetcher)).toBe(1)
+    expect(svc.got.size).toBe(1)
+  })
+
+  it('a reminder the push service refuses (a 500) or that throws is not lost: the next run sends it', async () => {
+    const now = Date.now()
+    await resident('Retry Owner')
+    const when = now + 3 * HOUR
+    const poster = await pinAt('Retry Owner', when, now)
+    const ria = await resident('Ria Retry')
+    const phone = await device(ria, 'en')
+    await view(ria, poster.id, 'PUT')
+    const at = when - 50 * 60_000
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const refusing = (async () => new Response(null, { status: 500 })) as typeof fetch
+    expect(await remindMeetups(testEnv, at, refusing)).toBe(0)
+    expect(await unreminded(poster.id)).toEqual([devId('Ria Retry')])
+    const throwing = (async () => {
+      throw new Error('network down')
+    }) as typeof fetch
+    expect(await remindMeetups(testEnv, at + 15 * 60_000, throwing)).toBe(0)
+    expect(await unreminded(poster.id)).toEqual([devId('Ria Retry')])
+    const svc = service()
+    expect(await remindMeetups(testEnv, at + 30 * 60_000, svc.fetcher)).toBe(1)
+    expect([...svc.got.keys()]).toEqual([phone.endpoint])
+    expect(await unreminded(poster.id)).toEqual([])
   })
 
   it('pushes once to those coming who have push on, naming nobody; not the owner, not inside the hour', async () => {

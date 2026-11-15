@@ -61,5 +61,8 @@
     // Named in every push's VAPID token, so a push service knows whose they are (src/push.ts). The key itself
     // is the secret VAPID_PRIVATE_JWK (scripts/vapid-setup.mjs); without it push is off.
     "VAPID_SUBJECT": "https://gulabi-gali.manishbisht.me",
+    // Subrequests (D1 calls included) one cron run may spend on meet-up reminders (src/meetups.ts). Sized for the
+    // Workers Free plan's ~50 a run, shared with the other sweeps; on the Paid plan (1000 a run) make it "300".
+    "REMIND_BUDGET": "24",
   },
 }

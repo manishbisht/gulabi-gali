@@ -211,10 +211,11 @@ export const forgetPushOf = (env: Env, userId: string): D1PreparedStatement =>
 
 /**
  * Tells `userId`'s subscribed devices that something of `kind` arrived, when they have no inbox open (the
- * inbox decides; see `InboxDO.notify`), or that a plan they are going to is an hour away (`meetup`). Nothing when push is off, they are no resident now (a ban), they have
- * no device, or they are past `PUSH_LIMIT` (`meetup` counts against its own limit only). The push service
- * holds it for `ttlS` seconds (at least `MIN_PUSH_TTL_S`) while the phone is off. A device whose push service
- * answers 404 or 410 has gone and is forgotten. Never throws; answers how many devices took it.
+ * inbox decides; see `InboxDO.notify`), or that a plan they are going to is an hour away (`meetup`). Nothing
+ * when push is off, they are no resident now (a ban), they have no device, or they are past `PUSH_LIMIT`
+ * (`meetup` counts against its own limit only). The push service holds it for `ttlS` seconds (at least
+ * `MIN_PUSH_TTL_S`) while the phone is off. A device whose push service answers 404 or 410 has gone and is
+ * forgotten. Never throws; answers how many devices took it.
  */
 export async function pushTo(
   env: Env,
@@ -224,24 +225,41 @@ export async function pushTo(
   now = Date.now(),
   ttlS = PUSH_TTL_S,
 ): Promise<number> {
+  return (await deliver(env, userId, kind, fetcher, now, ttlS)).took
+}
+
+/**
+ * `pushTo`, saying also whether to try again later: `retry` when no device took it because something failed
+ * (a push service error other than 404/410, a network error, D1 unreachable), never when there was simply
+ * nothing to send (push off, no resident, no device, past the limit) or a device took it. Never throws.
+ */
+export async function deliver(
+  env: Env,
+  userId: string,
+  kind: PushTopic,
+  fetcher: typeof fetch = fetch,
+  now = Date.now(),
+  ttlS = PUSH_TTL_S,
+): Promise<{ took: number; retry: boolean }> {
+  const none = { took: 0, retry: false }
   try {
     const vapid = await vapidOf(env)
-    if (!vapid || !(await activeRow(env, userId))) return 0
+    if (!vapid || !(await activeRow(env, userId))) return none
     const { results } = await env.DB.prepare(
       'SELECT endpoint, p256dh, auth, lang FROM push_subs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
     )
       .bind(userId, PUSH_DEVICES)
       .all<{ endpoint: string; p256dh: string; auth: string; lang: PushLang }>()
-    if (!results.length) return 0
+    if (!results.length) return none
     const { minute, hour, meetup } = PUSH_LIMIT
     if (kind === 'meetup') {
-      if (!(await allow(env, userId, meetup.bucket, meetup.perWindow, meetup.windowMs, now))) return 0
+      if (!(await allow(env, userId, meetup.bucket, meetup.perWindow, meetup.windowMs, now))) return none
     } else {
-      if (!(await allow(env, userId, minute.bucket, minute.perWindow, minute.windowMs, now))) return 0
-      if (!(await allow(env, userId, hour.bucket, hour.perWindow, hour.windowMs, now))) return 0
+      if (!(await allow(env, userId, minute.bucket, minute.perWindow, minute.windowMs, now))) return none
+      if (!(await allow(env, userId, hour.bucket, hour.perWindow, hour.windowMs, now))) return none
     }
-    const took = await Promise.all(
-      results.map(async (sub) => {
+    const outcomes = await Promise.all(
+      results.map(async (sub): Promise<'took' | 'gone' | 'failed'> => {
         try {
           // The whole payload: what kind of thing, and the language to say it in. No name, no text, no id.
           const payload = JSON.stringify({ t: kind, lang: sub.lang })
@@ -255,20 +273,21 @@ export async function pushTo(
             await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?')
               .bind(sub.endpoint, userId)
               .run()
-            return false
+            return 'gone'
           }
-          if (status >= 200 && status < 300) return true
+          if (status >= 200 && status < 300) return 'took'
           console.error('push: refused', status)
-          return false
+          return 'failed'
         } catch (err) {
           console.error('push: send failed', err)
-          return false
+          return 'failed'
         }
       }),
     )
-    return took.filter(Boolean).length
+    const took = outcomes.filter((o) => o === 'took').length
+    return { took, retry: took === 0 && outcomes.includes('failed') }
   } catch (err) {
     console.error('push: failed', err)
-    return 0
+    return { took: 0, retry: true }
   }
 }

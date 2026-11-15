@@ -5,7 +5,7 @@ import { firstName } from './names'
 import { forgetWalls } from './posters'
 import { VISIBLE, visibleRow } from './profiles'
 import { MAX_GOING_NAMES, type DistrictId, type GoingView } from './protocol'
-import { PUSH_DEVICES, pushTo } from './push'
+import { deliver, PUSH_DEVICES } from './push'
 import { isVerified } from './trust'
 
 /**
@@ -24,17 +24,28 @@ export const REMIND_BEFORE_MS = 3600_000
 /** "Main aaunga/aaungi" is refused once the plan's time is more than this far gone (the poster stays up 6 h after). */
 export const LATE_MS = 30 * 60_000
 /**
- * What one cron run may spend on reminders, in subrequests: each device pushed is one `fetch`, and each person
- * pushed costs `REMIND_PER_PERSON` D1 calls besides (see `pushTo`). Well inside the Workers cap of 1000 with the
- * rest of the cron. Whoever does not fit goes on the next run, while the plan is still ahead.
+ * What one cron run may spend on reminders, in subrequests, D1 calls included: the run's own statements
+ * (`REMIND_OVERHEAD`), and for each person pushed `REMIND_PER_PERSON` D1 calls (see `deliver`) and one `fetch`
+ * per device. The account is on the Workers Free plan: about 50 subrequests and 50 D1 queries per invocation,
+ * shared with the cron's other sweeps, so this leaves them room (and each device the push service says is gone,
+ * one more delete). Whoever does not fit goes on the next run, while the plan is still ahead. A Paid account
+ * (1000 a run) can raise it with the `REMIND_BUDGET` var, to 300 say (see `remindBudget`).
  */
-export const REMIND_BUDGET = 300
-/** The D1 calls `pushTo` makes for one person before any device: the resident check, their devices, the limit. */
+export const REMIND_BUDGET = 24
+/** The run's own D1 statements: the people due, claiming them, and giving back the ones a failure left unsent. */
+export const REMIND_OVERHEAD = 3
+/** The D1 calls `deliver` makes for one person before any device: the resident check, their devices, the limit. */
 export const REMIND_PER_PERSON = 3
 /** Rows one run looks at: far more than a budget's worth. */
 const REMIND_CANDIDATES = 500
 
 const fail = (error: string, status: number) => Response.json({ error }, { status })
+
+/** A run's budget: the `REMIND_BUDGET` var when it is a positive whole number, else `REMIND_BUDGET`. */
+export function remindBudget(env: Env): number {
+  const n = Number(env.REMIND_BUDGET)
+  return env.REMIND_BUDGET && Number.isInteger(n) && n > 0 ? n : REMIND_BUDGET
+}
 
 /**
  * Poster `?1` as `?2` may see it at `?3`, as SQL: up, and theirs, or not hidden, its owner seen by others and
@@ -152,16 +163,18 @@ export const forgetRsvpsOf = (env: Env, userId: string): D1PreparedStatement =>
 /**
  * The cron's reminder: for every plan due within `REMIND_BEFORE_MS` of `now` on a poster still up for everyone
  * (not hidden, its owner seen by others), each person coming who is, as it sends, seen by others and verified,
- * and was not reminded yet, is marked reminded and pushed once (`pushTo`, which names nobody: "your plan is in an
- * hour", held by the push service only until the plan). Someone with push off is marked and costs nothing. A run
- * spends at most `budget` subrequests, counted by device (see `REMIND_BUDGET`), always taking at least one
- * person. Answers how many people's devices took it. Throws only when D1 cannot be reached.
+ * and was not reminded yet, is marked reminded and pushed once (`deliver`, which names nobody: "your plan is in
+ * an hour", held by the push service only until the plan). Someone with push off is marked and costs nothing.
+ * A run spends at most `budget` subrequests (see `REMIND_BUDGET`), always taking at least one person, and claims
+ * only the people it then pushes; a push that failed (no device took it, and not because there was nothing to
+ * send) is given back, for the next run while the plan is still ahead. Answers how many people's devices took
+ * it. Throws only when D1 cannot be reached.
  */
 export async function remindMeetups(
   env: Env,
   now = Date.now(),
   fetcher: typeof fetch = fetch,
-  { budget = REMIND_BUDGET }: { budget?: number } = {},
+  { budget = remindBudget(env) }: { budget?: number } = {},
 ): Promise<number> {
   const { results } = await env.DB.prepare(
     `SELECT r.rowid AS rid, r.user_id, po.at_when,
@@ -184,7 +197,7 @@ export async function remindMeetups(
   }
   const rids: number[] = []
   const due = new Map<string, number>()
-  let spent = 0
+  let spent = REMIND_OVERHEAD
   for (const [id, p] of people) {
     const cost = p.devices ? p.devices + REMIND_PER_PERSON : 0
     if (cost && due.size && spent + cost > budget) continue
@@ -196,15 +209,24 @@ export async function remindMeetups(
   // Claimed in one statement: a run overlapping this one cannot push the same person again.
   const claimed = await env.DB.prepare(
     `UPDATE rsvps SET reminded = 1 WHERE rowid IN (SELECT value FROM json_each(?1)) AND reminded = 0
-     RETURNING user_id`,
+     RETURNING rowid AS rid, user_id`,
   )
     .bind(JSON.stringify(rids))
-    .all<{ user_id: string }>()
-  const mine = new Set(claimed.results.map((r) => r.user_id))
-  const took = await Promise.all(
+    .all<{ rid: number; user_id: string }>()
+  const mine = new Map<string, number[]>()
+  for (const r of claimed.results) mine.set(r.user_id, [...(mine.get(r.user_id) ?? []), r.rid])
+  const sent = await Promise.all(
     [...due]
       .filter(([id]) => mine.has(id))
-      .map(([id, at]) => pushTo(env, id, 'meetup', fetcher, now, (at - now) / 1000)),
+      .map(async ([id, at]) => ({
+        id,
+        ...(await deliver(env, id, 'meetup', fetcher, now, (at - now) / 1000)),
+      })),
   )
-  return took.filter((n) => n > 0).length
+  const failed = sent.filter((s) => s.retry).flatMap((s) => mine.get(s.id)!)
+  if (failed.length)
+    await env.DB.prepare('UPDATE rsvps SET reminded = 0 WHERE rowid IN (SELECT value FROM json_each(?1))')
+      .bind(JSON.stringify(failed))
+      .run()
+  return sent.filter((s) => s.took > 0).length
 }

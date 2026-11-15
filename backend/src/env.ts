@@ -42,4 +42,9 @@ export interface Env {
   VAPID_PRIVATE_JWK?: string
   /** Who sends the pushes, for the push services (an https: URL). A var in wrangler.jsonc. Unset: push is off. */
   VAPID_SUBJECT?: string
+  /**
+   * Subrequests one cron run may spend on meet-up reminders (see `REMIND_BUDGET`). A number; sized for the
+   * Workers Free plan when unset. On Paid, 300 is plenty.
+   */
+  REMIND_BUDGET?: string
 }
