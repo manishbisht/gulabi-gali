@@ -9,13 +9,18 @@ import { FADE_MS, savedDistrict, STATION_RANGE, useTravel, type Swap } from './u
 
 /** Whether any render so far showed the coach's "still waiting" line. */
 let sawWaiting = false
+/** Every different `ride` the hook rendered, in order (a value that flashed and went is here too). */
+let rides: (ReturnType<typeof useTravel>['ride'] | 'none')[] = []
 
 function mount() {
   const out = {} as ReturnType<typeof useTravel>
   sawWaiting = false
+  rides = []
   function Probe() {
     Object.assign(out, useTravel())
     if (out.ride?.waiting) sawWaiting = true
+    const now = out.ride ?? 'none'
+    if (JSON.stringify(rides.at(-1)) !== JSON.stringify(now)) rides.push(now)
     return null
   }
   const root = createRoot(document.createElement('div'))
@@ -60,6 +65,8 @@ describe('travelTo', () => {
     expect(swap).toHaveBeenCalledWith('mi-road', expect.any(AbortSignal))
     expect(localStorage.getItem('gg-district')).toBe('mi-road')
     expect(travel.fading).toBe(false)
+    // the coach is set once when the screen is black and cleared once on arrival: nothing flashed in between
+    expect(rides).toEqual(['none', { from: 'walled-city', to: 'mi-road', waiting: false }, 'none'])
   })
 
   it('ignores further taps while a trip is under way', async () => {

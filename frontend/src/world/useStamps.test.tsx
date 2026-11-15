@@ -43,21 +43,22 @@ const HAWA = { id: 'hawa-mahal', name: { hi: 'Hawa Mahal', en: 'Hawa Mahal' }, a
 const JKK = { id: 'jkk', name: { hi: 'JKK', en: 'JKK' }, at: { x: 100, z: 0 }, radius: 5 }
 const LANDMARKS = [HAWA, JKK] as unknown as LandmarkDef[]
 
-function mount(account: Account) {
+function mount(account: Account, signedIn: boolean = account !== null) {
   const out = {} as ReturnType<Hook['useStamps']>
   let root: Root
-  function Probe({ acc }: { acc: Account }) {
-    Object.assign(out, hook.useStamps('en', acc))
+  function Probe({ acc, on }: { acc: Account; on: boolean }) {
+    Object.assign(out, hook.useStamps('en', acc, on))
     return null
   }
   const host = document.createElement('div')
   act(() => {
     root = createRoot(host)
-    root.render(<Probe acc={account} />)
+    root.render(<Probe acc={account} on={signedIn} />)
   })
   return {
     out,
-    rerender: (acc: Account) => act(() => root.render(<Probe acc={acc} />)),
+    rerender: (acc: Account, on: boolean = acc !== null) =>
+      act(() => root.render(<Probe acc={acc} on={on} />)),
     /** Lets the push's promises settle. */
     settle: () => act(async () => {}),
     unmount: () => act(() => root.unmount()),
@@ -168,4 +169,43 @@ it('signing out stops the pushing', async () => {
   collectAt(out, HAWA)
   await settle()
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it("signing out wipes the device's set, so the next account on it neither shows nor pushes it", async () => {
+  const fetchMock = server()
+  const { out, rerender, settle } = mount(resident([], 'dev:asha'))
+  collectAt(out, HAWA)
+  await settle()
+  expect(pushed(fetchMock)).toEqual([['hawa-mahal']])
+  rerender(null) // Asha signs out
+  expect(out.have).toEqual([])
+  expect(JSON.parse(localStorage.getItem('gg-stamps')!)).toEqual([])
+  fetchMock.mockClear()
+  rerender(resident([], 'dev:ravi')) // Ravi signs in on the same device
+  await settle()
+  expect(out.have).toEqual([])
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it('a set left by another account (the page closed without a sign-out) is not inherited or pushed', async () => {
+  localStorage.setItem('gg-stamps', JSON.stringify(['hawa-mahal']))
+  localStorage.setItem('gg-stamps-owner', 'dev:asha')
+  const fetchMock = server(['wtp'])
+  const { out, settle } = mount(resident(['wtp'], 'dev:ravi'))
+  await settle()
+  expect(fetchMock).not.toHaveBeenCalled() // nothing of Asha's went up under Ravi
+  expect(out.have).toEqual(['wtp']) // only what the server holds for Ravi
+})
+
+it('the account that signs in keeps what its ghost collected, and the same account on a reload keeps its set', async () => {
+  const fetchMock = server()
+  const { out, rerender, settle } = mount(null)
+  collectAt(out, HAWA)
+  rerender(resident([], 'dev:asha'))
+  await settle()
+  expect(pushed(fetchMock)).toEqual([['hawa-mahal']])
+  expect(localStorage.getItem('gg-stamps-owner')).toBe('dev:asha')
+  const again = mount(resident(['hawa-mahal'], 'dev:asha'))
+  await settle()
+  expect(again.out.have).toEqual(['hawa-mahal'])
 })

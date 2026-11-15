@@ -163,6 +163,11 @@ it('the delete step says your own blocks go and where your sign-in email stays',
   expect(STRINGS.deleteWhat.hi).toContain('block')
 })
 
+it('the delete step names the Jaipur Darshan stamps the server keeps, in both languages', () => {
+  expect(STRINGS.deleteWhat.en).toContain('Jaipur Darshan stamps')
+  expect(STRINGS.deleteWhat.hi).toContain('Jaipur Darshan ke stamps')
+})
+
 it('the link field warns that every verified member can see it', () => {
   expect(STRINGS.profileLinkHint.en).toContain('Every verified member can see it')
   expect(STRINGS.profileLinkHint.hi).toContain('Har verified member')

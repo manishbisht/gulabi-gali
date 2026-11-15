@@ -3,7 +3,7 @@ import type { Lang } from '../i18n/strings'
 import { t } from '../i18n/strings'
 import { putStamps } from '../net/api'
 import type { LandmarkDef, Vec2 } from './types'
-import { collect, collected, mergeStamps, nearestLandmark, STAMPS } from './stamps'
+import { claim, collect, collected, mergeStamps, nearestLandmark, release, STAMPS } from './stamps'
 
 const TOAST_MS = 3500
 
@@ -28,8 +28,12 @@ const keyOf = (ids: readonly string[]) => [...ids].sort().join(',')
  * not confirmed (on sign-in, after each new stamp) the set is pushed, and the answer (everything the server
  * holds) joins too. A failed push is silent and is tried again on the next stamp or the next load; nothing
  * here ever waits on the server.
+ *
+ * The set on the device belongs to the account that signed in last (`claim`), and goes when they sign out
+ * (`signedIn` turning false), so it never reaches the next account. `signedIn` is separate from `account`,
+ * which is also null while a resident's profile is still loading.
  */
-export function useStamps(lang: Lang, account: StampAccount | null) {
+export function useStamps(lang: Lang, account: StampAccount | null, signedIn: boolean = account !== null) {
   const [near, setNear] = useState<LandmarkDef | null>(null)
   const [have, setHave] = useState(collected)
   const [toast, setToast] = useState<string | null>(null)
@@ -55,6 +59,25 @@ export function useStamps(lang: Lang, account: StampAccount | null) {
   /** The set the server is known to hold for `user`, and the one being pushed now. */
   const synced = useRef<{ user: string; key: string } | null>(null)
   const pushing = useRef<{ user: string; key: string } | null>(null)
+
+  // Before anything is merged or pushed: a set that is another account's is wiped, this one's is kept.
+  useEffect(() => {
+    if (!user) return
+    // the device's storage changed under the page (an external system): show what it holds now
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (claim(user)) setHave(collected())
+  }, [user])
+  // Signing out empties the device's set (a ghost afterwards starts from none).
+  const wasSignedIn = useRef(signedIn)
+  useEffect(() => {
+    if (wasSignedIn.current && !signedIn) {
+      release()
+      synced.current = null
+      pushing.current = null
+      setHave([])
+    }
+    wasSignedIn.current = signedIn
+  }, [signedIn])
 
   // What the profile says the server holds joins the stamps here (a second device's show up).
   useEffect(() => {

@@ -201,6 +201,7 @@ export default function App() {
   const { near, have, toast, collectHere, track } = useStamps(
     lang,
     shown ? { id: residentId, token: auth.token, stamps: shown.stamps ?? [] } : null,
+    auth.signedIn,
   )
   const liveToken = useRef<() => Promise<string | null>>(async () => null)
   const liveAs = useRef<string | null>(null)

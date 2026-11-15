@@ -24,6 +24,14 @@ it('starts empty and ignores a corrupt save', () => {
   expect(stamps.collected()).toEqual([])
 })
 
+it('counts each known stamp once: a save with repeats or ids this page does not know cannot inflate the HUD', () => {
+  localStorage.setItem('gg-stamps', JSON.stringify(['jkk', 'jkk', 'taj-mahal', 7, 'hawa-mahal', 'jkk']))
+  expect(stamps.collected()).toEqual(['jkk', 'hawa-mahal'])
+  expect(stamps.collect('jkk')).toBe(false)
+  expect(stamps.collect('wtp')).toBe(true)
+  expect(stamps.collected()).toEqual(['jkk', 'hawa-mahal', 'wtp'])
+})
+
 it("merges another device's stamps in after the local ones, known stamps only, once each", () => {
   stamps.collect('jkk')
   expect(stamps.mergeStamps(['hawa-mahal', 'jkk', 'taj-mahal', 'hawa-mahal'])).toBe(true)
