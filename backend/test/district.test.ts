@@ -637,7 +637,7 @@ describe('DistrictDO', () => {
     await vi.waitFor(() => expect(a.closes).toEqual([LIVE_CLOSE.invalid]), WAIT)
     // One `rate` for the whole stretch, not one per frame.
     expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
-  })
+  }, 10_000) // the flood itself takes 3 s; the default 5 s left no room under a loaded machine
 
   it('a replaced socket stays gone after the object wakes', async () => {
     const district = stub('walled-city')
