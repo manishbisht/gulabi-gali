@@ -248,3 +248,11 @@
   width: 100%;
   margin-top: 8px;
 }
+
+/* A sample stack: long lines wrap rather than push the page sideways on a phone. */
+.admin-stack {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

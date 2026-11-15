@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { reportError } from '../net/errorBeacon'
 
 export type QualityTier = 0 | 1 | 2
 
@@ -132,6 +133,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     // Without preventDefault the browser never offers the context back.
     event.preventDefault()
     lost = true
+    // how often phones drop the GPU is worth knowing (our own dispose removes this listener first)
+    reportError('webgl-lost', 'WebGL context lost')
   }
   const onRestored = () => {
     // three.js re-creates its GL state and re-uploads resources itself; we re-fit and start counting again.

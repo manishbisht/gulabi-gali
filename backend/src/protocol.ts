@@ -469,3 +469,39 @@ export interface AdminStats {
   openReports: number
   hidden: number
 }
+
+/** Where a client error was caught: a window error, an unhandled rejection, the WebGL context lost, or React. */
+export type ClientErrorWhere = 'error' | 'rejection' | 'webgl-lost' | 'react'
+
+/** The kind of browser a client error came from: never the user agent itself. */
+export type UaDevice = 'mobile' | 'desktop'
+/** In-app browsers by name (`other`: anything else, a plain browser included). */
+export type UaApp = 'instagram' | 'facebook' | 'other'
+
+/**
+ * `POST /api/errors`, unauthenticated, at most 4 kB: one error the page caught. No account id, no names, no
+ * text anyone typed; URLs carry no query string. `stack` is its first 1 kB. `build` is the bundle's git short
+ * sha. The answer is always an empty 204 (or a 400/429), never anything from the body.
+ */
+export interface ClientErrorReport {
+  msg: string
+  stack: string | null
+  where: ClientErrorWhere
+  ua: { device: UaDevice; app: UaApp }
+  build: string
+  district: DistrictId | null
+}
+
+/**
+ * `GET /api/admin/errors`: the most frequent client errors of the last 14 days, by fingerprint (where + the
+ * message with its numbers taken out). `sample` is the latest one's; `ua` counts each `device/app`.
+ */
+export interface AdminErrorGroup {
+  fingerprint: string
+  where: ClientErrorWhere
+  msg: string
+  count: number
+  lastSeen: number
+  sample: { stack: string | null; build: string; district: DistrictId | null }
+  ua: Record<string, number>
+}

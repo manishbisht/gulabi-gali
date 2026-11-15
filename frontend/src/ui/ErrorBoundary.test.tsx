@@ -2,7 +2,10 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
+import { reportError } from '../net/errorBeacon'
 import { ErrorBoundary } from './ErrorBoundary'
+
+vi.mock('../net/errorBeacon', () => ({ reportError: vi.fn() }))
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => {
@@ -28,5 +31,7 @@ it('shows a bilingual reload screen instead of a blank page when rendering throw
   )
   expect(host.textContent).toContain('Kuch gadbad ho gayi')
   expect(host.querySelector('button')!.textContent).toBe('Reload karo')
+  // and the error goes to the beacon, caught by React
+  expect(reportError).toHaveBeenCalledWith('react', expect.objectContaining({ message: 'render blew up' }))
   await act(async () => root.unmount())
 })

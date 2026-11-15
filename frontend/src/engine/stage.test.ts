@@ -23,6 +23,9 @@ vi.mock('three', async (orig) => {
   return { ...real, WebGLRenderer: FakeRenderer }
 })
 
+vi.mock('../net/errorBeacon', () => ({ reportError: vi.fn() }))
+
+import { reportError } from '../net/errorBeacon'
 import { clampDelta, createStage } from './stage'
 
 it('clamps frame delta to 0.1s', () => {
@@ -38,4 +41,16 @@ it('dispose releases the WebGL context', () => {
   expect(renderer.calls).toContain('forceContextLoss')
   stage.dispose() // idempotent
   expect(renderer.calls.filter((c) => c === 'forceContextLoss')).toHaveLength(1)
+})
+
+it('a lost WebGL context goes to the error beacon, and our own dispose does not', () => {
+  const canvas = document.createElement('canvas')
+  const stage = createStage(canvas)
+  const lost = new Event('webglcontextlost', { cancelable: true })
+  canvas.dispatchEvent(lost)
+  expect(lost.defaultPrevented).toBe(true)
+  expect(reportError).toHaveBeenCalledWith('webgl-lost', 'WebGL context lost')
+  stage.dispose()
+  canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
+  expect(reportError).toHaveBeenCalledTimes(1)
 })

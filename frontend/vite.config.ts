@@ -1,8 +1,20 @@
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
+import { analyticsCsp, analyticsTag } from './src/analytics.ts'
+
+/** The commit being built (git short sha; `GG_BUILD_SHA` overrides), so an error report names its bundle. */
+function buildSha(): string {
+  if (process.env.GG_BUILD_SHA) return process.env.GG_BUILD_SHA
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim() || 'dev'
+  } catch {
+    return 'dev'
+  }
+}
 
 /**
  * Clerk's Frontend API host, which a publishable key carries base64-encoded
@@ -28,6 +40,8 @@ function clerkHost(key: string | undefined): string | null {
  * - Clerk (only when a key is set): its host for clerk-js and its API, img.clerk.com for
  *   avatars, and Cloudflare's challenge (a script and a frame) for bot protection on sign-up.
  *   Clerk injects its own <style>, which style-src already allows.
+ * - Cloudflare Web Analytics (only when VITE_CF_BEACON_TOKEN is set): its beacon script, put in
+ *   the page here, and the host it reports to (see src/analytics.ts).
  * - frame-ancestors cannot be set from a <meta>; that one needs a header.
  */
 function contentSecurityPolicy(): Plugin {
@@ -56,7 +70,10 @@ function contentSecurityPolicy(): Plugin {
     },
     transformIndexHtml: {
       order: 'post',
-      handler(html) {
+      handler(page) {
+        const beacon = analyticsTag(env.VITE_CF_BEACON_TOKEN)
+        const html = beacon ? page.replace('</body>', `  ${beacon}\n  </body>`) : page
+        const analytics = analyticsCsp(env.VITE_CF_BEACON_TOKEN)
         const api = new URL(env.VITE_API_URL || 'http://127.0.0.1:8787')
         const socket = `${api.protocol === 'https:' ? 'wss:' : 'ws:'}//${api.host}`
         const clerk = clerkHost(env.VITE_CLERK_PUBLISHABLE_KEY)
@@ -66,11 +83,22 @@ function contentSecurityPolicy(): Plugin {
         )
         const policy = {
           'default-src': ["'self'"],
-          'script-src': ["'self'", ...inline, ...(clerk ? [`https://${clerk}`, challenge] : [])],
+          'script-src': [
+            "'self'",
+            ...inline,
+            ...(clerk ? [`https://${clerk}`, challenge] : []),
+            ...analytics.script,
+          ],
           'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
           'font-src': ["'self'", 'https://fonts.gstatic.com'],
           'img-src': ["'self'", 'data:', 'blob:', ...(clerk ? ['https://img.clerk.com'] : [])],
-          'connect-src': ["'self'", api.origin, socket, ...(clerk ? [`https://${clerk}`] : [])],
+          'connect-src': [
+            "'self'",
+            api.origin,
+            socket,
+            ...(clerk ? [`https://${clerk}`] : []),
+            ...analytics.connect,
+          ],
           'worker-src': ["'self'", 'blob:'],
           'frame-src': clerk ? [challenge] : ["'none'"],
           'manifest-src': ["'self'"],
@@ -95,6 +123,8 @@ function contentSecurityPolicy(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), babel({ presets: [reactCompilerPreset()] }), contentSecurityPolicy()],
+  // read by src/net/errorBeacon.ts
+  define: { __GG_BUILD__: JSON.stringify(buildSha()) },
   build: {
     // The `three` chunk is Three.js itself, about 570 kB minified (~145 kB gzipped), and is
     // split out on purpose so it caches across deploys. It is the one chunk allowed past

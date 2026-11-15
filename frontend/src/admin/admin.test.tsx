@@ -3,7 +3,14 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthContext, SIGNED_OUT, type AuthState } from '../auth/useAuth'
-import type { AdminHidden, AdminReport, AdminReportPage, AdminStats, AdminUser } from '../net/protocol'
+import type {
+  AdminErrorGroup,
+  AdminHidden,
+  AdminReport,
+  AdminReportPage,
+  AdminStats,
+  AdminUser,
+} from '../net/protocol'
 import { storage } from '../storage'
 import AdminPage from './AdminPage'
 import { STATS_MS, when } from './adminApi'
@@ -83,6 +90,7 @@ function stubApi(routes: Record<string, () => Response>) {
 const ADMIN_ROUTES = (over: Record<string, () => Response> = {}) => ({
   'GET /api/admin/stats': () => json(stats),
   'GET /api/admin/hidden': () => json([] satisfies AdminHidden[]),
+  'GET /api/admin/errors': () => json([] satisfies AdminErrorGroup[]),
   'GET /api/admin/reports': () => json({ reports: [chatReport], next: null } satisfies AdminReportPage),
   ...over,
 })
@@ -554,4 +562,59 @@ it(`stats are asked for every ${STATS_MS / 1000} s, and only while the page is i
   await act(async () => void vi.advanceTimersByTime(STATS_MS))
   await settle()
   expect(asked()).toBe(4)
+})
+
+it('Errors lists the top fingerprints as text: count, last seen, the browsers, and a sample stack', async () => {
+  const groups: AdminErrorGroup[] = [
+    {
+      fingerprint: 'f1',
+      where: 'error',
+      msg: 'TypeError: <img src=x onerror="alert(1)">',
+      count: 7,
+      lastSeen: AT,
+      sample: { stack: 'at tick (https://g.test/a.js:1:2)', build: 'abc1234', district: 'mi-road' },
+      ua: { 'mobile/instagram': 5, 'desktop/other': 2 },
+    },
+    {
+      fingerprint: 'f2',
+      where: 'webgl-lost',
+      msg: 'WebGL context lost',
+      count: 1,
+      lastSeen: AT,
+      sample: { stack: null, build: 'abc1234', district: null },
+      ua: { 'mobile/facebook': 1 },
+    },
+  ]
+  const calls = stubApi(ADMIN_ROUTES({ 'GET /api/admin/errors': () => json(groups) }))
+  const host = await render()
+  const section = host.querySelector('[aria-labelledby="admin-errors"]')!
+  expect(section.querySelector('h2')!.textContent).toBe('Errors')
+  const cards = section.querySelectorAll('.admin-card')
+  expect(cards).toHaveLength(2)
+  expect(cards[0]!.textContent).toContain('TypeError: <img src=x onerror="alert(1)">')
+  expect(section.querySelector('img')).toBeNull()
+  expect(cards[0]!.textContent).toContain(`7 times · last: ${when(AT)}`)
+  expect(cards[0]!.textContent).toContain('mobile/instagram 5 · desktop/other 2')
+  expect(cards[0]!.textContent).toContain('MI Road')
+  expect(cards[0]!.querySelector('pre')!.textContent).toBe('at tick (https://g.test/a.js:1:2)')
+  expect(cards[1]!.querySelector('pre')).toBeNull()
+  // asked once, and again only on Refresh
+  expect(calls.filter((c) => c.path === '/api/admin/errors')).toHaveLength(1)
+  await click(section, 'Refresh')
+  await settle()
+  expect(calls.filter((c) => c.path === '/api/admin/errors')).toHaveLength(2)
+})
+
+it('Errors says when there are none, and when they could not be loaded', async () => {
+  stubApi(ADMIN_ROUTES())
+  const host = await render()
+  expect(host.querySelector('[aria-labelledby="admin-errors"]')!.textContent).toContain(
+    'No errors in the last 14 days.',
+  )
+  for (const root of roots) act(() => root.unmount())
+  roots = []
+  document.body.innerHTML = ''
+  stubApi(ADMIN_ROUTES({ 'GET /api/admin/errors': () => json({ error: 'x' }, 500) }))
+  const failed = await render()
+  expect(failed.querySelector('[aria-labelledby="admin-errors"] [role="alert"]')).not.toBeNull()
 })

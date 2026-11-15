@@ -17,6 +17,7 @@ import {
   when,
   type Token,
 } from './adminApi'
+import { ClientErrors } from './ClientErrors'
 import { ReportQueue } from './ReportQueue'
 import { UserLookup, UserSummary } from './UserLookup'
 
@@ -196,6 +197,7 @@ function Console({ lang, token }: { lang: Lang; token: Token }) {
       <AutoHidden lang={lang} token={token} version={version} onChanged={changed} onUnhidden={unhidden} />
       <ReportQueue key={queue} lang={lang} token={token} onChanged={changed} />
       <UserLookup lang={lang} token={token} onChanged={changed} />
+      <ClientErrors lang={lang} token={token} />
       <section className="admin-section">
         <button
           type="button"

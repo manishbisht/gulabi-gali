@@ -154,8 +154,9 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_BASE_URL }}
           # Empty keeps none-mode (everyone is a ghost); set it to turn Clerk sign-in on.
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
-          # Build id, for future error reporting.
-          VITE_RELEASE: ${{ github.sha }}
+          # Empty keeps Cloudflare Web Analytics off (no beacon, and the CSP is not widened); set it to count
+          # visits. The error beacon's build id is the commit's short sha, read by vite.config.ts from git.
+          VITE_CF_BEACON_TOKEN: ${{ secrets.VITE_CF_BEACON_TOKEN }}
         run: npm run build -w frontend -- --base "${PAGES_BASE_PATH}/"
 
       - name: Upload site artifact

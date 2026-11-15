@@ -13,6 +13,7 @@ const SECTIONS: [StringKey, StringKey][] = [
   ['privacyStoredTitle', 'privacyStoredWaitlist'],
   ['privacyStoredTitle', 'privacyStoredPosters'],
   ['privacyStoredTitle', 'privacyStoredTombstone'],
+  ['privacyStoredTitle', 'privacyStoredErrors'],
   ['privacyBenchTitle', 'privacyBench'],
   ['privacyReportsTitle', 'profilePrivacy'],
   ['privacyReportsTitle', 'privacyReportsKept'],

@@ -6,11 +6,12 @@ import { listMatches, listMessages, postMessage, unmatch } from './chat'
 import { allowedOrigin, corsHeaders } from './cors'
 import { openDistrict } from './district'
 import type { Env } from './env'
+import { ERROR_IP_LIMIT, ERROR_MAX_BODY, purgeClientErrors, recordClientError } from './errors'
 import { listEnded, purgeEvidence } from './evidence'
 import { GATE_NAME, joinWaitlist, purgeWaitlist } from './gate'
 import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
-import { inviteIpLimit, ipLimit, muteGate, purgeCounters, readLimit } from './limits'
+import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
 import { listPosters, pinPoster, publicPosters, purgePosters, removeOwnPoster } from './posters'
 import { fileReport, purgeReportEvidence } from './reports'
@@ -74,9 +75,9 @@ function withCors(res: Response, origin: string | null): Response {
 /** The biggest JSON body any route reads: a profile is a few hundred bytes, so this is generous. */
 const MAX_BODY = 16 * 1024
 
-/** The parsed body, or null when it is not JSON or is over `MAX_BODY` (read in chunks, so a big one is never held). */
-async function readJson(request: Request): Promise<unknown> {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY) return null
+/** The parsed body, or null when it is not JSON or is over `max` (read in chunks, so a big one is never held). */
+async function readJson(request: Request, max = MAX_BODY): Promise<unknown> {
+  if (Number(request.headers.get('content-length') ?? 0) > max) return null
   const reader = request.body?.getReader()
   if (!reader) return null
   const chunks: Uint8Array[] = []
@@ -85,7 +86,7 @@ async function readJson(request: Request): Promise<unknown> {
     const { done, value } = await reader.read().catch(() => ({ done: true, value: undefined }))
     if (done) break
     size += value.byteLength
-    if (size > MAX_BODY) {
+    if (size > max) {
       void reader.cancel().catch(() => undefined)
       return null
     }
@@ -127,6 +128,15 @@ async function devGate(env: Env, raw: unknown): Promise<Response> {
 async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
   const { method } = request
   const { pathname } = url
+  // A page reporting an error it caught (no sign-in; see errors.ts). Ahead of the writes limit, with its own
+  // per-address allowance: a page that keeps failing must not use up the writes of everyone behind its address.
+  if (pathname === '/api/errors') {
+    if (method !== 'POST') return Response.json({ error: 'not found' }, { status: 404 })
+    return (
+      (await ipWindowLimit(env, request, ERROR_IP_LIMIT)) ??
+      recordClientError(env, await readJson(request, ERROR_MAX_BODY))
+    )
+  }
   // Every write counts against its address, whoever signed it (dev login included): a flood ceiling, not a
   // per-person quota (many people share one carrier address), so it is roomy.
   if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
@@ -294,5 +304,6 @@ export default {
     ctx.waitUntil(purgeCounters(env).catch((err) => console.error('counter sweep failed', err)))
     ctx.waitUntil(purgeWaitlist(env).catch((err) => console.error('waitlist sweep failed', err)))
     ctx.waitUntil(purgePosters(env).catch((err) => console.error('poster sweep failed', err)))
+    ctx.waitUntil(purgeClientErrors(env).catch((err) => console.error('client error sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

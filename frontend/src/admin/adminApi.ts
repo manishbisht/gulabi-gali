@@ -1,6 +1,7 @@
 import type { StringKey } from '../i18n/strings'
 import { API_BASE } from '../net/api'
 import type {
+  AdminErrorGroup,
   AdminHidden,
   AdminReport,
   AdminReportClosed,
@@ -40,6 +41,8 @@ const id = (x: string) => encodeURIComponent(x)
 
 export const getStats = (token: Token) => call<AdminStats>(token, '/api/admin/stats')
 export const getHidden = (token: Token) => call<AdminHidden[]>(token, '/api/admin/hidden')
+/** The most frequent client errors of the last 14 days (see backend/src/errors.ts). */
+export const getErrors = (token: Token) => call<AdminErrorGroup[]>(token, '/api/admin/errors')
 export const getReports = (token: Token, state: ReportState, cursor: string | null) =>
   call<AdminReportPage>(token, `/api/admin/reports?state=${state}&cursor=${id(cursor ?? '')}`)
 export const findUsers = (token: Token, q: string) => call<AdminUser[]>(token, `/api/admin/users?q=${id(q)}`)

@@ -6,6 +6,7 @@ import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
 import { useMe } from './profile/useMe'
 import { deleteMyAccount } from './net/api'
+import { noteDistrict } from './net/errorBeacon'
 import { useRateNotice } from './net/useRateNotice'
 import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
@@ -87,6 +88,8 @@ export default function App() {
   const [entered, setEntered] = useState(false)
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [here, setHere] = useState<DistrictId>('walled-city')
+  // an error report says which district it happened in (none before the city opens)
+  useEffect(() => noteDistrict(entered ? here : null), [entered, here])
   const [webgl] = useState(hasWebGL)
   /** The renderer could not start (WebGL2 missing or the context was refused). */
   const [stageFailed, setStageFailed] = useState(false)

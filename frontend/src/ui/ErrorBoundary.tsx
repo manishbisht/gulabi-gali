@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react'
 import { useLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
+import { reportError } from '../net/errorBeacon'
 
 function Crashed() {
   const [lang] = useLang()
@@ -15,11 +16,14 @@ function Crashed() {
   )
 }
 
-/** Last resort: if rendering throws, show a reload screen rather than an empty page. */
+/** Last resort: if rendering throws, show a reload screen rather than an empty page, and tell the error beacon. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, { crashed: boolean }> {
   state = { crashed: false }
   static getDerivedStateFromError() {
     return { crashed: true }
+  }
+  componentDidCatch(error: unknown) {
+    reportError('react', error)
   }
   render() {
     return this.state.crashed ? <Crashed /> : this.props.children

@@ -1,5 +1,6 @@
 import { DISTRICT_IDS } from './district'
 import type { Env } from './env'
+import { listClientErrors } from './errors'
 import { GATE_NAME } from './gate'
 import { floating, type Later } from './inbox'
 import { firstName } from './names'
@@ -79,6 +80,7 @@ export async function handleAdmin(
     if (pathname === '/api/admin/users') return searchUsers(env, searchParams.get('q'))
     if (pathname === '/api/admin/hidden') return listHidden(env)
     if (pathname === '/api/admin/stats') return stats(env)
+    if (pathname === '/api/admin/errors') return listClientErrors(env)
     if (pathname === '/api/admin/waitlist.csv') return waitlistCsv(env)
     const vouched = pathname.match(/^\/api\/admin\/users\/([^/]+)\/verified$/)
     if (vouched) return listVouched(env, decode(vouched[1]!))

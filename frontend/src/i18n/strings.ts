@@ -481,6 +481,10 @@ export const STRINGS = {
     hi: 'Account delete karne ke baad bhi, agar us par ban, hide, mute ya request ka 14 din ka intezaar laga ho, toh sirf account id aur woh rok ek chhote record mein rehti hai, taaki delete karke unse bacha na ja sake.',
     en: 'After an account is deleted, if a ban, hide, mute or a 14-day request wait was on it, a small record with only the account id and that state stays, so deleting is no way around them.',
   },
+  privacyStoredErrors: {
+    hi: 'Jab page pe kuch toot jaata hai, toh uski chhoti si report hamare apne server pe jaati hai: kya toota, phone tha ya computer, Instagram/Facebook ke andar khula tha ya nahi, aur kaun si jagah. Naam, id ya tumhara likha kuch nahi. 14 din mein mit jaati hai. Kitne log aaye, ye hum Cloudflare Web Analytics se ginte hain, bina cookie ke.',
+    en: 'When something breaks on the page, a short report goes to our own server: what broke, phone or computer, whether it opened inside Instagram/Facebook, and which area. No names, ids or anything you typed. It is deleted within 14 days. We count visits with Cloudflare Web Analytics, which uses no cookies.',
+  },
   privacyBenchTitle: { hi: 'Bench ki baatein', en: 'Bench talk' },
   privacyBench: {
     hi: 'Bench pe ki gayi baat-cheet save nahi hoti. Bas ek chhota sa 10 minute ka hissa server ki memory mein rehta hai, aur tabhi padha jaata hai jab us bench ki report hoti hai.',
@@ -622,6 +626,15 @@ export const STRINGS = {
   adminSearch: { hi: 'Dhundo', en: 'Search' },
   adminNoResults: { hi: 'Koi nahi mila.', en: 'Nobody found.' },
   adminWaitlist: { hi: 'Waitlist CSV download karo', en: 'Download waitlist CSV' },
+  adminErrors: { hi: 'Errors', en: 'Errors' },
+  adminErrorsHelp: {
+    hi: 'Pichhle 14 din mein logon ke phone pe jo toota, sabse zyada baar wala pehle. Isme kisi ka naam, id ya likha hua kuch nahi hota.',
+    en: "What broke on people's phones in the last 14 days, the most frequent first. No names, ids or anything anyone typed.",
+  },
+  adminErrorsNone: { hi: 'Pichhle 14 din mein koi error nahi aaya.', en: 'No errors in the last 14 days.' },
+  adminErrorsLine: { hi: '{n} baar · aakhri baar: {when}', en: '{n} times · last: {when}' },
+  adminErrorsStack: { hi: 'Ek sample stack', en: 'A sample stack' },
+  adminErrorsRefresh: { hi: 'Phir se lao', en: 'Refresh' },
   adminBanned: { hi: 'Banned', en: 'Banned' },
   adminHidden: { hi: 'Chhupa hua', en: 'Hidden' },
   adminMutedUntil: { hi: '{time} tak mute', en: 'Muted until {time}' },
