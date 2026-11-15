@@ -118,6 +118,7 @@ it('ProfileSheet lists the people you blocked by first name, and Unblock removes
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   const host = document.body.appendChild(document.createElement('div'))
@@ -163,6 +164,7 @@ it('ProfileSheet: Report next to Unblock files a report about the person you blo
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   const host = document.body.appendChild(document.createElement('div'))

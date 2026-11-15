@@ -6,6 +6,7 @@ import { HERE_FOR, type BlockListEntry, type HereFor, type HomeArea, type Me } f
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { ReportSheet } from '../ui/ReportSheet'
+import { StampsLine } from '../ui/StampsLine'
 import { DeleteAccount } from './DeleteAccount'
 import { AvatarBuilder } from './AvatarBuilder'
 import { areaLabel, HERE_FOR_LABEL, HOME_AREAS } from './homeAreas'
@@ -21,6 +22,8 @@ const linkAllowed = (s: string) =>
 interface Props {
   me: Me
   lang: Lang
+  /** Your Jaipur Darshan stamps, as this device holds them (the server's set merged in). */
+  stamps?: readonly string[]
   /** Lets the sheet list the people you blocked (first names), with Unblock and Report. */
   token?: () => Promise<string | null>
   onSave: (p: ProfileInput) => Promise<SaveOutcome>
@@ -32,7 +35,17 @@ interface Props {
   onDelete?: () => Promise<boolean>
 }
 
-export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPrivacy, onDelete }: Props) {
+export function ProfileSheet({
+  me,
+  lang,
+  stamps,
+  token,
+  onSave,
+  onClose,
+  onSignOut,
+  onPrivacy,
+  onDelete,
+}: Props) {
   const p = me.profile
   const [name, setName] = useState(p?.name ?? '')
   const [look, setLook] = useState<AvatarLook>(() => (p && lookFromWire(p.look)) || loadOrCreateLook())
@@ -127,6 +140,7 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
         aria-label={t('profileTitle', lang)}
       >
         <h2>{t('profileTitle', lang)}</h2>
+        {stamps && <StampsLine ids={stamps} lang={lang} hint />}
         <form className="auth-form" onSubmit={submit}>
           <label>
             {t('profileName', lang)}

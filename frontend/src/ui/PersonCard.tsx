@@ -4,6 +4,7 @@ import type { FullProfile, LivePerson } from '../net/protocol'
 import { t, type Lang } from '../i18n/strings'
 import { BlockConfirm } from './BlockConfirm'
 import { ReportSheet } from './ReportSheet'
+import { StampsLine } from './StampsLine'
 import type { Sent } from './RequestComposer'
 import { areaLabel, HERE_FOR_LABEL } from '../profile/homeAreas'
 
@@ -93,6 +94,7 @@ export function PersonCard({
               ` · ${t('personHereFor', lang, { what: t(HERE_FOR_LABEL[profile.hereFor], lang) })}`}
           </p>
           {profile.about && <p>{profile.about}</p>}
+          {profile.stamps?.length > 0 && <StampsLine ids={profile.stamps} lang={lang} />}
           {profile.link && (
             <p className="person-link">
               {t('personLink', lang)}:{' '}

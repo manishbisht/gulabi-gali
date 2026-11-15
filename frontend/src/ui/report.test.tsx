@@ -316,6 +316,7 @@ it('ProfileSheet: the privacy line sits by the pledge, and a block with no saved
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   const host = await render(

@@ -237,6 +237,38 @@ button {
   font-style: italic;
 }
 
+/* Jaipur Darshan on a card or your own sheet: the count, then the landmarks as small wrapping chips. */
+.person-stamps {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+}
+
+.person-stamps p {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.person-stamps .person-stamps-none {
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+.person-stamps ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person-stamps li {
+  padding: 2px 8px;
+  border: 1px solid var(--sandstone);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .person-actions {
   display: flex;
   flex-wrap: wrap;

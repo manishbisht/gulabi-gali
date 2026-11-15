@@ -5,7 +5,7 @@ import { DISTRICTS, loadDistrict, type District } from './district'
 import { footprint } from './kit'
 import { CAST } from './cast'
 import { DISTRICT_NAMES } from './districtNames'
-import { TOTAL_STAMPS } from './stamps'
+import { STAMPS, TOTAL_STAMPS } from './stamps'
 import BENCHES from './benches.json'
 import type { AABB, LandmarkDef, Vec2 } from './types'
 
@@ -147,6 +147,12 @@ describe('the city', () => {
     const all = await Promise.all(DISTRICTS.map(load))
     expect(all.reduce((n, d) => n + d.def.landmarks.length, 0)).toBe(TOTAL_STAMPS)
     expect(TOTAL_STAMPS).toBe(9)
+  })
+
+  it('the stamp list (stamps.json, which the server checks ids against) is every landmark, by its own name', async () => {
+    const all = await Promise.all(DISTRICTS.map(load))
+    const landmarks = all.flatMap((d) => d.def.landmarks.map((l) => ({ id: l.id, ...l.name })))
+    expect(STAMPS).toEqual(landmarks)
   })
 
   it.each(DISTRICTS)('%s: names itself the way the metro lists it', async (id) => {

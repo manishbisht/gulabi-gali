@@ -62,6 +62,7 @@ describe('profiles API', () => {
       hereFor: 'friends',
       about: 'Painter, slow walker.',
       pauseRequests: false,
+      stamps: [],
       // your own link comes back to you, so the editor can show it; other people's needs a verified viewer
       link: 'https://example.com/asha',
     })

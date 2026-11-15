@@ -85,6 +85,7 @@ it('the profile sheet offers delete and privacy only for someone with a profile'
     hereFor: null,
     about: '',
     pauseRequests: false,
+    stamps: [] as string[],
   } as const
   const render = (me: Parameters<typeof ProfileSheet>[0]['me']) =>
     act(async () =>

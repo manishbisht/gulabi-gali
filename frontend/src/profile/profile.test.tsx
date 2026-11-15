@@ -120,6 +120,34 @@ it('look round-trips wire format', () => {
   expect(lookFromWire({ skin: 9, outfit: 'nope', head: 'x' } as never)).toBeNull()
 })
 
+it('shows your own Jaipur Darshan stamps: the count, and the landmarks by name', async () => {
+  const sheet = (stamps: string[]) =>
+    act(async () =>
+      root.render(
+        <ProfileSheet
+          me={{ id: 'u', profile: null, complete: false, verified: false }}
+          lang="en"
+          stamps={stamps}
+          onSave={vi.fn()}
+          onClose={() => {}}
+          onSignOut={() => {}}
+        />,
+      ),
+    )
+  await sheet(['jkk', 'hawa-mahal'])
+  const line = host.querySelector('.person-stamps')!
+  expect(line.textContent).toContain('Jaipur Darshan · 2/9')
+  expect([...line.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+    'Jawahar Kala Kendra',
+    'Hawa Mahal',
+  ])
+  expect(line.querySelector('ul')!.getAttribute('aria-label')).toBe('Jaipur Darshan stamps')
+  // none yet: the count, and where to find them
+  await sheet([])
+  expect(host.querySelector('.person-stamps')!.textContent).toContain('Jaipur Darshan · 0/9')
+  expect(host.querySelector('.person-stamps li')).toBeNull()
+})
+
 it('a resident can pause requests, and un-pause them, with the rest of the profile', async () => {
   const onSave = vi.fn<Save>(async () => ({ ok: true }) as const)
   const profile = {
@@ -131,6 +159,7 @@ it('a resident can pause requests, and un-pause them, with the rest of the profi
     hereFor: null,
     about: '',
     pauseRequests: false,
+    stamps: [] as string[],
   } as const
   const render = (pauseRequests: boolean) =>
     act(async () =>
@@ -170,6 +199,7 @@ describe('the profile link', () => {
     hereFor: null,
     about: '',
     pauseRequests: false,
+    stamps: [] as string[],
     link: 'https://example.com/asha',
   } as const
   const open = async (onSave: Save) =>

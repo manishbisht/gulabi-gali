@@ -7,6 +7,12 @@ export const STRINGS = {
   stampButton: { hi: 'Stamp lo', en: 'Collect stamp' },
   stampHave: { hi: 'Stamp mil chuka hai', en: 'Stamp already collected' },
   stampCount: { hi: 'Jaipur Darshan stamps', en: 'Jaipur Darshan stamps' },
+  stampsLine: { hi: 'Jaipur Darshan · {n}/{total}', en: 'Jaipur Darshan · {n}/{total}' },
+  stampsList: { hi: 'Jaipur Darshan ke stamps', en: 'Jaipur Darshan stamps' },
+  stampsNone: {
+    hi: 'Abhi koi nahi. Kisi landmark ke paas jaao aur stamp lo.',
+    en: 'None yet. Walk up to a landmark and collect its stamp.',
+  },
   loading: { hi: 'Ruko zara, gali khul rahi hai…', en: 'One moment, the lane is opening…' },
   noWebgl: {
     hi: 'Is phone/browser pe 3D nahi chal raha. Chrome mein kholo — wahan chalega.',
@@ -454,8 +460,8 @@ export const STRINGS = {
   privacyTitle: { hi: 'Aapki privacy', en: 'Your privacy' },
   privacyStoredTitle: { hi: 'Kya save hota hai', en: 'What we keep' },
   privacyStored: {
-    hi: 'Aapka profile (naam, avatar, mohalla, status, about, link), aapke bheje aur mile requests, aapki 1:1 chats, aur aapke dwara ya aapke khilaaf ki gayi reports ke record.',
-    en: 'Your profile (name, avatar, neighbourhood, status, about, link), the requests you sent and got, your 1:1 chats, and the records of reports you filed or that were filed about you.',
+    hi: 'Aapka profile (naam, avatar, mohalla, status, about, link, Jaipur Darshan ke stamps), aapke bheje aur mile requests, aapki 1:1 chats, aur aapke dwara ya aapke khilaaf ki gayi reports ke record.',
+    en: 'Your profile (name, avatar, neighbourhood, status, about, link, Jaipur Darshan stamps), the requests you sent and got, your 1:1 chats, and the records of reports you filed or that were filed about you.',
   },
   privacyStoredHeld: {
     hi: 'Jab koi chat unmatch ya block se khatam hoti hai, uske aakhri 30 messages 30 din tak rakhe jaate hain, taaki dono mein se koi bhi use report kar sake. Sirf moderator unhe padh sakta hai, aur woh bhi tabhi jab report ho.',
@@ -507,8 +513,8 @@ export const STRINGS = {
   },
   privacyDeleteTitle: { hi: 'Account delete karna', en: 'Deleting your account' },
   privacyDelete: {
-    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile, invite codes, deewar ke poster, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye.',
-    en: 'Open your profile and press "Delete my account" at the bottom. Your profile, invite codes, posters, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to {OWNER_CONTACT} to have it removed.',
+    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile aur stamps, invite codes, deewar ke poster, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye.',
+    en: 'Open your profile and press "Delete my account" at the bottom. Your profile and stamps, invite codes, posters, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to {OWNER_CONTACT} to have it removed.',
   },
   privacyContactTitle: { hi: 'Sawaal ya shikayat', en: 'Questions or complaints' },
   privacyContact: { hi: 'Likhiye: {OWNER_CONTACT}', en: 'Write to: {OWNER_CONTACT}' },

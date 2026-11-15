@@ -1,0 +1,11 @@
+[
+  { "id": "hawa-mahal", "hi": "Hawa Mahal", "en": "Hawa Mahal" },
+  { "id": "jantar-mantar", "hi": "Jantar Mantar", "en": "Jantar Mantar" },
+  { "id": "tripolia-gate", "hi": "Tripolia Gate", "en": "Tripolia Gate" },
+  { "id": "badi-chaupar", "hi": "Badi Chaupar", "en": "Badi Chaupar" },
+  { "id": "albert-hall", "hi": "Albert Hall", "en": "Albert Hall" },
+  { "id": "ram-niwas-gate", "hi": "Ram Niwas Bagh", "en": "Ram Niwas Bagh" },
+  { "id": "university-gate", "hi": "Rajasthan University", "en": "University of Rajasthan" },
+  { "id": "jkk", "hi": "Jawahar Kala Kendra", "en": "Jawahar Kala Kendra" },
+  { "id": "wtp", "hi": "World Trade Park", "en": "World Trade Park" }
+]

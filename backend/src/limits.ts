@@ -116,6 +116,18 @@ export async function requestLimit(env: Env, userId: string, now = Date.now()): 
   return (await allow(env, userId, 'requests', limit, DAY_MS, now)) ? null : rateLimited(DAY_MS, now)
 }
 
+/**
+ * `PUT /api/me/stamps` per account: a page pushes once when it opens signed in and once per new stamp (nine in
+ * all), so 30 an hour is room for many reloads, and a stuck loop stops there.
+ */
+export const STAMP_LIMIT = { perWindow: 30, windowMs: 3600_000, bucket: 'stamps' } as const
+
+/** One stamp push's allowance (see `STAMP_LIMIT`). Null while within it, else the 429. */
+export async function stampLimit(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
+  const { perWindow, windowMs, bucket } = STAMP_LIMIT
+  return (await allow(env, userId, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
+}
+
 /** One chat message's allowance against the per-minute cap. Null while within it, else the 429. */
 export async function messageLimit(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
   const { messagesPerMinute } = ACCOUNT_LIMIT

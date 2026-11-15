@@ -27,6 +27,7 @@ const full: FullProfile = {
   hereFor: 'art',
   about: 'Paints walls',
   pauseRequests: false,
+  stamps: [],
 }
 
 const crowd = (list: { person: LivePerson; x: number; z: number; ver?: number }[]) =>
@@ -155,6 +156,31 @@ it('resident viewer loads full profile', async () => {
   const meet = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Say hello')!
   act(() => meet.click())
   expect(props.onRequest).toHaveBeenCalledWith(asha)
+})
+
+it('a resident sees the Jaipur Darshan stamps the person has collected, by name', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json({ ...full, stamps: ['hawa-mahal', 'university-gate'] })),
+  )
+  const { host, render } = show('resident', { lang: 'hi' })
+  await render()
+  const line = host.querySelector('.person-stamps')!
+  expect(line.textContent).toContain('Jaipur Darshan · 2/9')
+  const names = [...line.querySelectorAll('li')].map((li) => li.textContent)
+  expect(names).toEqual(['Hawa Mahal', 'Rajasthan University'])
+  expect(line.querySelector('ul')!.getAttribute('aria-label')).toBe('Jaipur Darshan ke stamps')
+})
+
+it('no stamps yet: the card has no stamp line', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json(full)),
+  )
+  const { host, render } = show('resident')
+  await render()
+  expect(host.textContent).toContain('Asha Sharma')
+  expect(host.querySelector('.person-stamps')).toBeNull()
 })
 
 it.each([

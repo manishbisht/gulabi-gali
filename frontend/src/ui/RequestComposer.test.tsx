@@ -166,6 +166,7 @@ it('a resident who is not verified sees "Say hello" off and a way to get verifie
         hereFor: null,
         about: '',
         pauseRequests: false,
+        stamps: [],
       }),
     ),
   )
@@ -207,6 +208,7 @@ it('a verified viewer sees the link, and a resident does not get one from the se
         hereFor: null,
         about: '',
         pauseRequests: false,
+        stamps: [],
         link: 'https://example.com/asha',
       }),
     ),

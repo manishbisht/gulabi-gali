@@ -84,6 +84,12 @@ export type FullProfile = PublicPerson & {
   hereFor: HereFor | null
   about: string
   pauseRequests: boolean
+  /**
+   * Their Jaipur Darshan stamps: landmark ids from `stamps.json`, in its order. Never on a `PublicPerson`. A
+   * resident adds their own with `PUT /api/me/stamps {stamps: string[]}`, which only ever adds (at most one of
+   * each id; an unknown one is 400 `invalid`, a ghost 403 `ghost`) and answers `{stamps}`, the whole set.
+   */
+  stamps: string[]
   /** An https link, only for a verified viewer (and for the owner, who sees their own). Never on a `PublicPerson`. */
   link?: string
 }

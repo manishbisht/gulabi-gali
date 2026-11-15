@@ -72,7 +72,9 @@ Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`). The new dis
 once it is in does the old one leave; if loading fails the player stays where they were. Three.js is its own
 `three` chunk (`vite.config.ts`), so its hash survives deploys that only touch the app.
 
-The remembered district and the collected stamps (9 landmarks) live in `localStorage` (`src/storage.ts`).
+The remembered district and the collected stamps (9 landmarks) live in `localStorage` (`src/storage.ts`). A
+resident's stamps are also kept on the server (see "Jaipur Darshan stamps" under phase 4), so a second device
+shows them; a ghost's stay on the device.
 
 ## Live city
 
@@ -331,7 +333,7 @@ is `unconfirmed` and never counts. Unhiding closes no report: they stay open, ev
 Per address, three Workers Rate Limiting bindings (sockets 120 a minute, sign-ins 20 a minute, writes 300 a
 minute) plus an hourly invite-redemption count in D1; loopback is exempt only in dev. Per account, D1
 `counters`: requests 5 a day for an account under 7 days old and 20 after, messages 30 a minute, reports 20 a
-day, blocks and unblocks 30 an hour together. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotice.ts`).
+day, blocks and unblocks 30 an hour together, stamp pushes 30 an hour. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotice.ts`).
 
 ### Admin (`admin.ts`, `frontend/src/admin/`)
 
@@ -354,7 +356,7 @@ banned, hidden or deleted.
 
 `DELETE /api/me`, open to a banned person too (the ban stays on the tombstone). Every match ends through
 `endMatch(..., 'delete')`, holding its last 30 messages as evidence, and the other person hears `unmatched`.
-Then one D1 batch deletes the profile, every pending or accepted request in either direction (`ignored` ones
+Then one D1 batch deletes the profile and its stamps, every pending or accepted request in either direction (`ignored` ones
 stay with their reason blanked: they are the 14-day cooldowns, which the cron sweeps), the invites they own,
 their posters (and what `poster_owners` remembers of them), the blocks they made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is
 kept), and deletes the `users` row. Blocks others made against them stay (their saved name blanked), so they
@@ -429,6 +431,22 @@ report (`DELETE /api/admin/posters/:id`), which also closes every open report on
 report on a hidden poster, when none was actioned, puts it back up and pushes it to its district as a fresh pin
 would (`unhidePoster`). A ban and an account deletion take the person's posters down; a hide takes them off
 everyone's walls but their own.
+
+### Jaipur Darshan stamps (`stamps.ts`, `frontend/src/world/useStamps.ts`)
+
+The stamp list is one data file, `backend/src/stamps.json` (id plus the landmark's Hinglish and English name),
+with a byte-for-byte copy at `frontend/src/world/stamps.json` (checked by `check:protocol`; a frontend test checks
+it against the districts' landmarks). D1 keeps `user_stamps(user_id, stamp, at)` (migration `0005`).
+`PUT /api/me/stamps {stamps}` is for residents (`ACTIVE`; anyone else 403 `ghost`), 30 an hour per account: it
+refuses an unknown id or more ids than there are stamps (400 `invalid`), adds the rest (never removes one) and
+answers the whole set, so an empty list is a read. A profile (`GET /api/me`, `GET /api/profiles/:id`) carries
+`stamps` in list order, under the profile's own rules (hidden, banned or blocked is a 404). Deleting the account
+deletes the rows.
+
+The page keeps `gg-stamps` as before. For a resident, `useStamps` merges the profile's `stamps` into it, and
+pushes the local set whenever it holds one the server has not confirmed (after sign-in, after each new stamp);
+the answer is merged in too. A failed push is silent and is tried again on the next stamp or the next load. The
+person card and your own profile sheet show "Jaipur Darshan · n/9" and the landmarks by name (`ui/StampsLine.tsx`).
 
 ### The client-only extras: nothing is broadcast
 

@@ -296,6 +296,7 @@ it('signing out brings the ghost look back on the player at once', async () => {
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   vi.stubGlobal('fetch', async (url: string) =>
@@ -388,6 +389,7 @@ it('a live session is told of its ban at once, and a new sign-in starts clean', 
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   let banned = false
@@ -441,6 +443,7 @@ it('the live socket follows who you are, and says so when another tab takes over
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   vi.stubGlobal('fetch', async (url: string) =>
@@ -495,6 +498,7 @@ it('saving a new name, look or status reconnects the live socket, so others see 
       hereFor: null,
       about: '',
       pauseRequests: false,
+      stamps: [],
     },
   }
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {

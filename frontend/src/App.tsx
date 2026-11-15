@@ -99,7 +99,6 @@ export default function App() {
   const stageRef = useRef<Stage | null>(null)
   /** The kite fight, while one runs: where the player stood, and the stage and controls it borrows. */
   const [kiteFrom, setKiteFrom] = useState<{ at: Vec2; stage: Stage; controls: Controls } | null>(null)
-  const { near, have, toast, collectHere, track } = useStamps(lang)
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
   const {
     open: meeting,
@@ -198,6 +197,11 @@ export default function App() {
   const residentId = auth.signedIn && me?.complete ? me.id : null
   const shown = residentId && me?.profile
   const liveKey = shown ? JSON.stringify([residentId, shown.name, lookKey, shown.status]) : null
+  /** A resident's stamps are kept on the server too (a ghost's only here). */
+  const { near, have, toast, collectHere, track } = useStamps(
+    lang,
+    shown ? { id: residentId, token: auth.token, stamps: shown.stamps } : null,
+  )
   const liveToken = useRef<() => Promise<string | null>>(async () => null)
   const liveAs = useRef<string | null>(null)
   const [replaced, setReplaced] = useState(false)
@@ -693,6 +697,7 @@ export default function App() {
         <ProfileSheet
           me={me}
           lang={lang}
+          stamps={have}
           token={auth.token}
           onSave={save}
           onClose={closeProfile}

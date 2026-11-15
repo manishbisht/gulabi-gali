@@ -24,6 +24,22 @@ it('starts empty and ignores a corrupt save', () => {
   expect(stamps.collected()).toEqual([])
 })
 
+it("merges another device's stamps in after the local ones, known stamps only, once each", () => {
+  stamps.collect('jkk')
+  expect(stamps.mergeStamps(['hawa-mahal', 'jkk', 'taj-mahal', 'hawa-mahal'])).toBe(true)
+  expect(stamps.collected()).toEqual(['jkk', 'hawa-mahal'])
+  expect(JSON.parse(localStorage.getItem('gg-stamps')!)).toEqual(['jkk', 'hawa-mahal'])
+  // nothing new: nothing written, and it says so
+  expect(stamps.mergeStamps(['hawa-mahal'])).toBe(false)
+  expect(stamps.collected()).toEqual(['jkk', 'hawa-mahal'])
+})
+
+it('names a stamp in either language, and knows how many there are', () => {
+  expect(stamps.TOTAL_STAMPS).toBe(9)
+  expect(stamps.stampName('university-gate', 'hi')).toBe('Rajasthan University')
+  expect(stamps.stampName('university-gate', 'en')).toBe('University of Rajasthan')
+})
+
 it('finds the landmark only inside its radius', () => {
   const l = { id: 'x', at: { x: 10, z: 0 }, radius: 6 } as LandmarkDef
   expect(stamps.nearestLandmark({ x: 5, z: 0 }, [l])?.id).toBe('x')

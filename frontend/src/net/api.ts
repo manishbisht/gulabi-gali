@@ -111,6 +111,27 @@ export async function putProfile(token: string, input: ProfileInput): Promise<Sa
   return { ok: true, me: (await res.json()) as Me }
 }
 
+/**
+ * Adds these Jaipur Darshan stamps to the resident's own on the server: the whole set it then holds, or null for
+ * any failure (a ghost, a 429, offline). Never rejects. Plain `fetch`: a refused push is retried later, quietly.
+ */
+export async function putStamps(token: string, stamps: readonly string[]): Promise<string[] | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me/stamps`, {
+      method: 'PUT',
+      headers: { ...bearer(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stamps }),
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as { stamps?: unknown }
+    return Array.isArray(body.stamps)
+      ? body.stamps.filter((id): id is string => typeof id === 'string')
+      : null
+  } catch {
+    return null
+  }
+}
+
 export async function getProfile(
   token: string,
   id: string,

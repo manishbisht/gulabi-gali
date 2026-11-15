@@ -2,6 +2,7 @@ import { devSlug, mintDevToken } from './auth'
 import type { Env } from './env'
 import { wordsOk } from './filter/server'
 import { cleanName, firstName } from './names'
+import { stampsOf } from './stamps'
 import {
   HEADS,
   HERE_FOR,
@@ -42,8 +43,11 @@ export function toPublic(p: PublicPerson): PublicPerson {
   return { id: p.id, name: firstName(p.name), look: { ...p.look }, status: p.status }
 }
 
-/** `withLink`: the viewer is verified, or it is the owner's own profile. Everyone else never gets the link. */
-function toFull(row: ProfileRow, withLink = false): FullProfile {
+/**
+ * `withLink`: the viewer is verified, or it is the owner's own profile. Everyone else never gets the link.
+ * `stamps`: theirs, from `stampsOf` (a profile row does not hold them).
+ */
+function toFull(row: ProfileRow, withLink = false, stamps: string[] = []): FullProfile {
   return {
     id: row.user_id,
     name: row.name,
@@ -53,6 +57,7 @@ function toFull(row: ProfileRow, withLink = false): FullProfile {
     hereFor: row.here_for as HereFor | null,
     about: row.about,
     pauseRequests: row.pause_requests === 1,
+    stamps,
     ...(withLink && row.link ? { link: row.link } : {}),
   }
 }
@@ -176,7 +181,7 @@ export async function getMe(env: Env, userId: string): Promise<Me> {
   return {
     id: userId,
     // Your own link is yours to see and edit, verified or not.
-    profile: row ? toFull(row, true) : null,
+    profile: row ? toFull(row, true, await stampsOf(env, userId)) : null,
     complete: row ? isComplete(row) : false,
     verified: verified?.verified === 1,
   }
@@ -263,7 +268,7 @@ export async function getProfile(env: Env, id: string, viewerId: string): Promis
   const viewer = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
     .bind(viewerId)
     .first<{ verified: number }>()
-  return Response.json(toFull(row, viewer?.verified === 1))
+  return Response.json(toFull(row, viewer?.verified === 1, await stampsOf(env, id)))
 }
 
 /** The public face of a profile row. */

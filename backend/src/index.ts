@@ -15,6 +15,7 @@ import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLim
 import type { CitySnapshot } from './protocol'
 import { listPosters, pinPoster, publicPosters, purgePosters, removeOwnPoster } from './posters'
 import { fileReport, purgeReportEvidence } from './reports'
+import { putStamps } from './stamps'
 import { devVerify, listInvites, redeemInvite } from './trust'
 import { activeRow, bannedGate, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
@@ -191,6 +192,8 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
       (await muteGate(env, user.id)) ??
       putProfile(env, user.id, await readJson(request))
     )
+  if (pathname === '/api/me/stamps' && method === 'PUT')
+    return putStamps(env, user.id, await readJson(request))
   if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
   if (pathname === '/api/invites/redeem' && method === 'POST') {
     // Per address as well as per person (which `redeemInvite` counts): one person cannot spread guesses over accounts.
