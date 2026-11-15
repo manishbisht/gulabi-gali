@@ -9,7 +9,11 @@ test.beforeEach(({ page }) => page.routeWebSocket(/\/api\/districts\/[^/]+\/live
 test('shows the no-3D screen without WebGL', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      ...rest: unknown[]
+    ) {
       return type.startsWith('webgl') ? null : orig.call(this, type, ...rest)
     } as typeof orig
   })
@@ -20,7 +24,11 @@ test('shows the no-3D screen without WebGL', async ({ page }) => {
 test('shows the no-3D screen when only WebGL2 is missing', async ({ page }) => {
   await page.addInitScript(() => {
     const orig = HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      ...rest: unknown[]
+    ) {
       return type === 'webgl2' ? null : orig.call(this, type, ...rest)
     } as typeof orig
   })
@@ -122,6 +130,14 @@ test.describe('on a phone', () => {
     const moving = await page.evaluate(() => window.__gg.position())
     await touch('touchEnd', y - 40)
     expect(distance(spawn, moving)).toBeGreaterThan(1)
+    // letting go stops the walk, and dragging the stick never scrolls or pans the page under it
+    await page.waitForTimeout(300)
+    const stopped = await page.evaluate(() => window.__gg.position())
+    await page.waitForTimeout(600)
+    expect(distance(stopped, await page.evaluate(() => window.__gg.position()))).toBeLessThan(0.05)
+    expect(await page.evaluate(() => [window.scrollX, window.scrollY, window.visualViewport?.scale])).toEqual(
+      [0, 0, 1],
+    )
   })
 
   test('tapping a character opens their card', async ({ page }) => {

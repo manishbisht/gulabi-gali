@@ -94,6 +94,10 @@ numbered files in `backend/migrations/`, applied with the same command.
    fetches Clerk's key set and caches it. Set both. Without either, every token is refused and everyone is a
    ghost.
 
+   Before the Worker has ever been deployed, `wrangler secret put` finds no Worker to attach the secret to:
+   when it offers to create one, say yes (or deploy once first, then set the secrets). Secrets survive later
+   deploys.
+
 5. The publishable key (`pk_...`) goes to GitHub as `VITE_CLERK_PUBLISHABLE_KEY`, in section 2.
    The moderator: once you have signed in on the site, copy your Clerk user id (Clerk, Users, `user_...`) and
    set it as a Worker secret, `npx wrangler secret put ADMIN_USER_IDS`, as `clerk:user_...` (comma-separate

@@ -292,10 +292,13 @@ export async function endMatch(
               `INSERT INTO requests (id, from_id, to_id, reason, created_at, state)
              SELECT ?1, ?2, ?3, '', ?4, 'ignored' WHERE EXISTS (SELECT 1 FROM matches WHERE id = ?5)`,
             ).bind(crypto.randomUUID(), other, userId, now, match?.id ?? ''),
+            // Likewise only while that same match stands, so a stale unmatch cannot delete the accepted request
+            // of a newer match between the two.
             env.DB.prepare(
               `DELETE FROM requests WHERE state = 'accepted'
-             AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))`,
-            ).bind(userId, other),
+             AND ((from_id = ?1 AND to_id = ?2) OR (from_id = ?2 AND to_id = ?1))
+             AND EXISTS (SELECT 1 FROM matches WHERE id = ?3)`,
+            ).bind(userId, other, match?.id ?? ''),
           ]
         : [
             env.DB.prepare(
