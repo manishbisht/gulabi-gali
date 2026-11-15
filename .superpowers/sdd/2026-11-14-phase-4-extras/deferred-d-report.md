@@ -63,3 +63,25 @@ Cause: `sideBySide` called `boundingBox()` right after `teleport()`, before the 
 - `useStamps` carries one `eslint-disable react-hooks/set-state-in-effect` (same pattern as ChatView).
 - Playwright servers use fixed ports 8787/5173; another agent running e2e at once would collide.
 - The 1.3e visible label for English mode is still Devanagari, which is only fixed in the accessible name.
+
+## Rebase onto 25a3ceb and final gate
+
+Rebased cleanly, no conflicts. New SHAs: 3c7df44, 6861e5a, 9ab36ef, 1cc4eb4, then a docs commit for this section.
+
+Gate (lint, npm test, build, check:test-hooks), raw:
+
+    Test Files  69 passed (69)
+         Tests  612 passed (612)
+    Test Files  26 passed (26)
+         Tests  359 passed (359)
+    built in 1.62s / 1.59s
+    ok: no __gg in the production build
+
+Playwright full run, raw tail:
+
+    1 skipped
+    46 passed (2.6m)
+
+`npx playwright test hud.spec.ts --repeat-each=10`, raw tail:
+
+    50 passed (2.1m)
