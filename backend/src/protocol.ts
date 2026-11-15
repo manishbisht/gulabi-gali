@@ -226,7 +226,8 @@ export type ServerMsg =
   | { t: 'posters' }
   /**
    * `from` greeted `to` (see `REACTIONS`): sent to both, and to everyone else here who stands within 60 m
-   * of `from` and is blocked either way with neither. Draw it over both; never stored.
+   * of `from` and is blocked either way with neither. Draw it over both; never stored. Past six a minute to one
+   * person (from everyone together) it goes to its sender alone, so a crowd cannot flood anyone.
    */
   | { t: 'react'; from: string; to: string; kind: Reaction }
   /** A `react` this socket sent was not passed on, and why (see `ReactRefusal`). */

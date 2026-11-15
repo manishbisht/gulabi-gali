@@ -153,8 +153,14 @@ const MAX_BENCH_ID = 64
 const MAX_LANDMARK_ID = 64
 /** A user id in a `react` frame: longer than any we hand out. */
 const MAX_PERSON_ID = 64
-/** The window `REACT_PER_MINUTE` counts over. */
+/** The window `REACT_PER_MINUTE` and `REACT_INBOUND_PER_MINUTE` count over. */
 const REACT_WINDOW_MS = 60_000
+/**
+ * The most greetings one person is shown in a minute, from everyone together: several accounts cannot flood
+ * one person. Past it a greeting is dropped unseen, and its sender is shown the usual success, so the cap
+ * cannot be used to learn anything about the target.
+ */
+export const REACT_INBOUND_PER_MINUTE = 6
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
 const PING = '{"t":"ping"}'
 const PONG = '{"t":"pong"}'
@@ -524,11 +530,14 @@ export class DistrictDO extends DurableObject<Env> {
   /** When the alarm last reloaded everyone's trust state (see `alarm`). */
   private trustSweptAt = -Infinity
   /**
-   * Per sender, the reactions they sent in the last `REACT_WINDOW_MS`, oldest first: when, and to whom. Memory
+   * Per sender, the reactions they sent in the last `REACT_WINDOW_MS`, oldest first: when, and to whom (a
+   * greeting dropped by the target's cap counts too: the sender saw it go). Memory
    * only (a reaction itself is never kept), by user id so a reconnect does not reset it, and kept awake for the
    * window like a bench's lines (see `stayAwake`).
    */
   private reacts = new Map<string, { at: number; to: string }[]>()
+  /** Per target, when each greeting they were shown in the last `REACT_WINDOW_MS` came. Memory only, like `reacts`. */
+  private greeted = new Map<string, number[]>()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -1258,7 +1267,9 @@ export class DistrictDO extends DurableObject<Env> {
    * A greeting from `seat`'s person to `m.to` (see `REACTIONS`). Refused, with a `react-no` to the sender only,
    * for a ghost or hidden sender, a muted one, anyone the sender may not greet here (gone, a ghost, hidden or
    * blocked either way: all `gone` alike, so a block is never told), a sender not on the street or more than
-   * `REACT_RANGE_M` from them, and past the per-pair and per-minute allowances. Otherwise it goes to both and to
+   * `REACT_RANGE_M` from them, and past the per-pair and per-minute allowances. A target already shown
+   * `REACT_INBOUND_PER_MINUTE` this minute is not shown it, and nor is anyone else: only the sender, as if it
+   * went (see there). Otherwise it goes to both and to
    * every other socket within `INTEREST_M` of the sender that is blocked either way with neither (ghosts
    * watching included: they see the street), and nowhere else. Nothing of it is stored.
    */
@@ -1290,6 +1301,14 @@ export class DistrictDO extends DurableObject<Env> {
     this.reacts.set(from, sent)
     if (!this.awake) this.stayAwake()
     const text = JSON.stringify({ t: 'react', from, to: m.to, kind: m.kind } satisfies ServerMsg)
+    const heard = (this.greeted.get(m.to) ?? []).filter((at) => now - at < REACT_WINDOW_MS)
+    if (heard.length >= REACT_INBOUND_PER_MINUTE) {
+      // the target has had their fill: only the sender sees it go, as any other
+      this.greeted.set(m.to, heard)
+      return this.sendRaw(ws, text)
+    }
+    heard.push(now)
+    this.greeted.set(m.to, heard)
     const reach = INTEREST_M * INTEREST_M
     for (const other of this.sockets()) {
       if (other === ws || other === target) {
@@ -1320,7 +1339,13 @@ export class DistrictDO extends DurableObject<Env> {
       if (keep.length) this.reacts.set(id, keep)
       else this.reacts.delete(id)
     }
-    if (this.transcripts.size || this.reacts.size) this.awake = setTimeout(() => this.stayAwake(), AWAKE_MS)
+    for (const [id, times] of this.greeted) {
+      const keep = times.filter((at) => now - at < REACT_WINDOW_MS)
+      if (keep.length) this.greeted.set(id, keep)
+      else this.greeted.delete(id)
+    }
+    if (this.transcripts.size || this.reacts.size || this.greeted.size)
+      this.awake = setTimeout(() => this.stayAwake(), AWAKE_MS)
   }
 
   /** Notes that `userId` sat at, or got up from, `bench` at `now`, and forgets anyone gone for 10 minutes. */

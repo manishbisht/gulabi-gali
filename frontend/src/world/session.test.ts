@@ -527,7 +527,7 @@ it('a quick reconnect keeps the street as it is', async () => {
 })
 
 describe('reactions', () => {
-  /** A resident on a live street, with Asha 3 m away and Ravi 20 m away. */
+  /** A resident on a live street, with Asha 3 m away, Ravi 20 m away and Door 70 m away (not drawn). */
   async function greeting() {
     const reactions = { got: vi.fn(), sent: vi.fn(), refused: vi.fn() }
     const live = openLive(async () => 'tok', { reactions })
@@ -544,6 +544,8 @@ describe('reactions', () => {
       people: [
         { ...asha, x: x + 3, z },
         { ...asha, id: 'dev:ravi', name: 'Ravi', x: x - 20, z },
+        // past the draw range: listed, but not drawn
+        { ...asha, id: 'dev:door', name: 'Door', x, z: z + 70 },
       ],
     })
     live.tick(1 / 30)
@@ -560,6 +562,8 @@ describe('reactions', () => {
     expect(session.react('dev:asha', 'namaste')).toBeNull()
     expect(reacts().map((s) => JSON.parse(s))).toEqual([{ t: 'react', to: 'dev:asha', kind: 'namaste' }])
     expect(session.react('dev:ravi', 'wave')).toBe('far')
+    // still on the street, only too far to be drawn (their card may still be open): far, not gone
+    expect(session.react('dev:door', 'wave')).toBe('far')
     expect(session.react('dev:nobody', 'wave')).toBe('gone')
     expect(reacts()).toHaveLength(1)
     session.dispose()

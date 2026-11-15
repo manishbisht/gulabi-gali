@@ -1,6 +1,6 @@
 import { applyD1Migrations, env, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { parseClientMsg } from '../src/district'
+import { parseClientMsg, REACT_INBOUND_PER_MINUTE } from '../src/district'
 import type { Env } from '../src/env'
 import { REACT_PAIR_MS, REACT_PER_MINUTE, REACT_RANGE_M, type DistrictId } from '../src/protocol'
 import { api, closeAll, devId, live, login, resident, type LiveClient } from './helpers'
@@ -246,6 +246,46 @@ describe('reactions', () => {
       }
       a.send({ t: 'react', to: ids[4]!, kind: 'namaste' })
       expect(await a.next('react-no', undefined, from)).toEqual({ t: 'react-no', to: ids[4], why: 'wait' })
+    })
+  }, 20_000)
+
+  it(`one person hears at most ${REACT_INBOUND_PER_MINUTE} a minute from everyone together; the rest vanish unseen`, async () => {
+    expect(REACT_INBOUND_PER_MINUTE).toBe(6)
+    const d: DistrictId = 'university'
+    const target = await walker('Crowd Tara', d, -80, 80)
+    const watcher = await walker('Crowd Watcher', d, -78, 82)
+    const senders: LiveClient[] = []
+    for (let i = 0; i < 7; i++)
+      senders.push(await walker(`Crowd Sender ${i}`, d, -80 + (i % 4), 81 + Math.floor(i / 4)))
+    const to = devId('Crowd Tara')
+    const [ft, fw] = [target.mark(), watcher.mark()]
+    for (const s of senders.slice(0, 6)) {
+      s.send({ t: 'react', to, kind: 'wave' })
+      await s.next('react', (m) => m.to === to)
+    }
+    await target.sync()
+    expect(target.all('react', ft)).toHaveLength(6)
+    // the seventh: its sender sees the usual success, so the cap cannot be probed; nobody else hears of it
+    const last = senders[6]!
+    const fl = last.mark()
+    last.send({ t: 'react', to, kind: 'namaste' })
+    expect(await last.next('react', (m) => m.from === devId('Crowd Sender 6'), fl)).toEqual({
+      t: 'react',
+      from: devId('Crowd Sender 6'),
+      to,
+      kind: 'namaste',
+    })
+    await last.sync()
+    expect(last.all('react-no', fl)).toEqual([])
+    await target.sync()
+    await watcher.sync()
+    expect(target.all('react', ft)).toHaveLength(6)
+    expect(watcher.all('react', fw).filter((m) => m.from === devId('Crowd Sender 6'))).toEqual([])
+    // a minute on, they are heard again
+    await later(d, 61_000, async () => {
+      const mark = target.mark()
+      senders[0]!.send({ t: 'react', to, kind: 'wave' })
+      await target.next('react', undefined, mark)
     })
   }, 20_000)
 })

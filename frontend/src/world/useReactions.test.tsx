@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { REACT_PAIR_MS } from '../net/protocol'
 import { ReactionToast } from '../ui/ReactionToast'
-import { REPEAT_MS, useReactions } from './useReactions'
+import { countGreeting, REPEAT_MS, useReactions } from './useReactions'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -75,6 +75,39 @@ it('a greeting is a gentle toast; the third from one person in a few minutes off
   expect(out.notice).toMatchObject({ again: true })
   act(() => out.dismiss())
   expect(out.notice).toBeNull()
+})
+
+it('a block on offer stays until dismissed or timed out: no greeting or notice pushes it off', () => {
+  const { out } = mountHook()
+  for (let i = 0; i < 3; i++) act(() => out.hooks.got(asha, 'wave'))
+  expect(out.notice).toMatchObject({ id: 'dev:asha', again: true })
+  // someone else greets, a refusal comes in, Asha greets again: the offer is still Asha's
+  const offer = out.notice
+  act(() => out.hooks.got({ id: 'dev:ravi', name: 'Ravi' }, 'namaste'))
+  expect(out.notice).toEqual(offer)
+  act(() => out.hooks.refused('dev:ravi', 'wait'))
+  expect(out.notice).toEqual(offer)
+  act(() => out.react('dev:ravi', 'wave'))
+  expect(out.notice).toEqual(offer)
+  // more from Asha does not restart its time either
+  act(() => vi.advanceTimersByTime(6000))
+  act(() => out.hooks.got(asha, 'wave'))
+  expect(out.notice).toEqual(offer)
+  act(() => vi.advanceTimersByTime(4000))
+  expect(out.notice).toBeNull()
+  // once it is down, the next greeting shows as usual
+  act(() => out.hooks.got({ id: 'dev:ravi', name: 'Ravi' }, 'namaste'))
+  expect(out.notice).toMatchObject({ id: 'dev:ravi', again: false })
+})
+
+it('forgets anyone who has gone quiet for the window', () => {
+  const heard = new Map([
+    ['dev:old', [0, 1000]],
+    ['dev:recent', [REPEAT_MS - 10]],
+  ])
+  expect(countGreeting(heard, 'dev:asha', REPEAT_MS + 1000)).toBe(1)
+  expect([...heard.keys()].sort()).toEqual(['dev:asha', 'dev:recent'])
+  expect(countGreeting(heard, 'dev:recent', REPEAT_MS + 1000)).toBe(2)
 })
 
 it('greetings further apart than the window, or from different people, never add up', () => {

@@ -37,6 +37,8 @@ interface Props {
   onReact?(person: LivePerson, kind: Reaction): void
   /** A greeting of theirs that reached this person within the pair's wait: the buttons rest, and the card says so. */
   reacted?: Reaction
+  /** Opens with "Block them?" already asked (a block offered elsewhere, such as on a reaction toast). */
+  askBlock?: boolean
   onClose(): void
 }
 
@@ -59,9 +61,10 @@ export function PersonCard({
   onBlock,
   onReact,
   reacted,
+  askBlock = false,
   onClose,
 }: Props) {
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState(askBlock)
   const [reporting, setReporting] = useState(false)
   /** Blocked from this card with "Also report?": the form offers no block, and closing it closes the card. */
   const [blocked, setBlocked] = useState(false)

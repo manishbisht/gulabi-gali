@@ -31,6 +31,22 @@ export const REPEAT_MS = 5 * 60_000
 const REPEAT_AT = 3
 
 /**
+ * Notes a greeting from `id` at `now` in `heard` (each person's greetings within `REPEAT_MS`), forgetting
+ * everyone who has been quiet for that long, and answers how many `id` has sent within it.
+ */
+export function countGreeting(heard: Map<string, number[]>, id: string, now: number): number {
+  for (const [who, times] of heard) {
+    const recent = times.filter((at) => now - at < REPEAT_MS)
+    if (recent.length) heard.set(who, recent)
+    else heard.delete(who)
+  }
+  const times = heard.get(id) ?? []
+  times.push(now)
+  heard.set(id, times)
+  return times.length
+}
+
+/**
  * Reactions as the page sees them: the passing toast, and whom the player greeted within the pair's wait (so
  * the card rests its buttons, as the server would refuse). Kept in memory only: a reload forgets it all. `hooks`
  * goes to the session; App binds the session's `react` once it is up.
@@ -41,8 +57,10 @@ export function useReactions() {
   const actions = useRef<ReactionActions | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const sentTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  /** When each person's recent greetings arrived, by id. */
+  /** When each person's recent greetings arrived, by id (see `countGreeting`). */
   const heard = useRef(new Map<string, number[]>())
+  /** A block on offer is up: nothing but a dismiss or its own time takes it down. */
+  const offering = useRef(false)
   useEffect(() => {
     const timers = sentTimers.current
     return () => {
@@ -53,20 +71,25 @@ export function useReactions() {
   }, [])
 
   const show = useCallback((n: ReactionNotice | null) => {
+    if (n && offering.current) return
     clearTimeout(noticeTimer.current)
+    offering.current = n?.t === 'got' && n.again
     setNotice(n)
     if (n)
-      noticeTimer.current = setTimeout(() => setNotice(null), n.t === 'got' && n.again ? AGAIN_MS : NOTICE_MS)
+      noticeTimer.current = setTimeout(
+        () => {
+          offering.current = false
+          setNotice(null)
+        },
+        offering.current ? AGAIN_MS : NOTICE_MS,
+      )
   }, [])
 
   const hooks = useMemo<ReactionHooks>(
     () => ({
       got(from, kind) {
-        const now = Date.now()
-        const times = (heard.current.get(from.id) ?? []).filter((at) => now - at < REPEAT_MS)
-        times.push(now)
-        heard.current.set(from.id, times)
-        show({ t: 'got', id: from.id, name: from.name, kind, again: times.length >= REPEAT_AT })
+        const n = countGreeting(heard.current, from.id, Date.now())
+        show({ t: 'got', id: from.id, name: from.name, kind, again: n >= REPEAT_AT })
       },
       sent(to, kind) {
         setSent((was) => ({ ...was, [to]: kind }))

@@ -210,8 +210,8 @@ export interface CitySession {
   refreshPosters(): void
   /**
    * Greets `to` ("Namaste", "Haath hilao"): null once it went out on the socket (the server's answer follows,
-   * see `hooks.reactions`), or why it could not go: no open socket, they are not drawn, or more than
-   * `REACT_RANGE_M` away.
+   * see `hooks.reactions`), or why it could not go: no open socket, they are not on the street (`gone`), or
+   * more than `REACT_RANGE_M` away, drawn or not (`far`).
    */
   react(to: string, kind: Reaction): ReactionRefusal | null
   /** Leaves the district and stops; a district still loading is disposed when it arrives. */
@@ -1062,9 +1062,11 @@ function createPresence(
     react(to, kind) {
       if (conn.state() !== 'open') return 'offline'
       const r = people.get(to)
-      if (!r || !r.body.visible) return 'gone'
+      // not listed at all: gone; listed but past the draw range (their card still up): too far
+      if (!r) return 'gone'
       const { x, z } = player.position()
-      if (Math.hypot(r.body.position.x - x, r.body.position.z - z) > REACT_RANGE_M) return 'far'
+      if (!r.body.visible || Math.hypot(r.body.position.x - x, r.body.position.z - z) > REACT_RANGE_M)
+        return 'far'
       conn.send({ t: 'react', to, kind })
       return null
     },
