@@ -147,6 +147,22 @@ export function woKaata(): boolean {
   return true
 }
 
+/**
+ * Whether the city's ambience may play: the sound switch is on AND the visitor has chosen it (a stored
+ * `on`, not just the default), so a first visit stays silent apart from the horn.
+ */
+export function ambientOn(): boolean {
+  return soundOn() && storage.get(KEY) === 'on'
+}
+
+/**
+ * The page's one audio context, for the ambience to build on (made here if there is none yet; the caller
+ * only asks from inside a tap or key press). Typed loosely: the ambience declares what it uses.
+ */
+export function sharedAudio(): unknown {
+  return context()
+}
+
 /** Lets the audio context go (the page is leaving the city); the next honk makes a fresh one. */
 export function closeAudio(): void {
   const c = ctx
