@@ -23,6 +23,11 @@ export interface Stage {
   framesSinceRestore(): number
   /** Seconds of game time the frames have run: the sum of their clamped dts, so slow frames count less than the wall clock. */
   gameTime(): number
+  /**
+   * Starts a warm-up (about 2 s of frames) in which frame times are not measured for quality: a district has just
+   * opened, and its shader compiles and texture uploads are a burst, not a slow phone.
+   */
+  settle(): void
   dispose(): void
 }
 
@@ -36,6 +41,12 @@ export function clampDelta(ms: number): number {
 const HITCH_MS = 600
 /** Slow frames a window needs before it can step down; two hitches alone are not a slow device. */
 const MIN_SLOW_FRAMES = 4
+/** Frame time, in ms, after a start, a district load or a context restore that is not measured for quality. */
+const WARMUP_MS = 2000
+/** Length of one quality window, in ms of frames. */
+const WINDOW_MS = 2000
+/** Bad windows in a row before a step down: one burst fills one window, a slow phone fills every window. */
+const BAD_WINDOWS = 2
 const QUALITY_KEY = 'gg-quality'
 /** Vertical field of view, in degrees: landscape screens, and phones held upright. */
 const FOV = 60
@@ -76,6 +87,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   let gameClock = 0
   let slow = 0
   let slowFrames = 0
+  let badWindows = 0
+  let warmup = WARMUP_MS
   let sampled = 0
 
   /** The size last fitted, in CSS px: a capture draws at this and goes back to it. */
@@ -99,26 +112,40 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
   /*
    * Adaptive quality. The city draws every frame, so every frame is measured:
-   * if over 60% of ~2.5 s of frames took longer than 22 ms (under ~45 fps) it
+   * if over 60% of ~2 s of frames took longer than 22 ms (under ~45 fps) it
    * steps one tier down. It never steps back up within a tab session; flapping
    * between tiers looks worse than either one.
    * A very long frame is clamped (to HITCH_MS), not skipped: a phone at 2 to 4 fps
    * must still step down. One hitch (a tab switch, a GC pause, a district load)
-   * cannot, because it is at most HITCH_MS of the ~2.5 s window and the window
+   * cannot, because it is at most HITCH_MS of the ~2 s window and the window
    * also needs MIN_SLOW_FRAMES slow frames.
    */
   function measure(delta: number) {
     if (quality === 0) return
     const ms = Math.min(delta, HITCH_MS)
+    if (warmup > 0) {
+      warmup -= ms
+      return
+    }
     sampled += ms
     if (ms > 22) {
       slow += ms
       slowFrames++
     }
-    if (sampled < 2500) return
+    if (sampled < WINDOW_MS) return
     const tooSlow = slow / sampled > 0.6 && slowFrames >= MIN_SLOW_FRAMES
     slow = sampled = slowFrames = 0
-    if (tooSlow) applyQuality((quality - 1) as QualityTier)
+    badWindows = tooSlow ? badWindows + 1 : 0
+    if (badWindows >= BAD_WINDOWS) {
+      applyQuality((quality - 1) as QualityTier)
+      warmUp() // the new pixel ratio and shadow setting recompile things
+    }
+  }
+
+  /** Forget the window so far and skip the next WARMUP_MS of frames. */
+  function warmUp() {
+    slow = sampled = slowFrames = badWindows = 0
+    warmup = WARMUP_MS
   }
 
   function applyQuality(tier: QualityTier) {
@@ -158,7 +185,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   function start() {
     cancelAnimationFrame(frame)
     last = performance.now()
-    slow = sampled = slowFrames = 0
+    warmUp()
     frame = requestAnimationFrame(tick)
   }
 
@@ -177,7 +204,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     // three.js re-creates its GL state and re-uploads resources itself; we re-fit and start counting again.
     lost = false
     sinceRestore = 0
-    slow = sampled = slowFrames = 0
+    warmUp()
     resize()
   }
   canvas.addEventListener('webglcontextlost', onLost)
@@ -238,6 +265,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     },
     framesSinceRestore: () => sinceRestore,
     gameTime: () => gameClock,
+    settle: warmUp,
     dispose() {
       if (disposed) return
       disposed = true

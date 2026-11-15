@@ -226,7 +226,7 @@ describe('adaptive quality', () => {
   })
 
   it('steps one tier down after ~2.5 s of slow frames, and remembers it for the tab session', () => {
-    const { stage, tiers } = run(40, 70) // 70 x 40 ms = 2.8 s at 25 fps
+    const { stage, tiers } = run(40, 160) // 6.4 s at 25 fps: 2 s warm-up, two 2 s windows
     expect(tiers).toEqual([1])
     expect(stage.quality).toBe(1)
     expect(sessionStorage.getItem('gg-quality')).toBe('1')
@@ -239,7 +239,7 @@ describe('adaptive quality', () => {
 
   it('steps down on a phone that really crawls: 300 to 600 ms frames, within a few seconds', () => {
     for (const ms of [300, 450, 600, 2000]) {
-      const { stage, tiers } = run(ms, Math.ceil(2500 / Math.min(ms, 600))) // one window, no more
+      const { stage, tiers } = run(ms, Math.ceil(8000 / Math.min(ms, 600)))
       expect(tiers, `${ms} ms frames`).toEqual([1])
       expect(sessionStorage.getItem('gg-quality')).toBe('1')
       stage.dispose()
@@ -264,7 +264,8 @@ describe('adaptive quality', () => {
     stage.dispose()
   })
 
-  it('does not step down for a few hitches in a row either', () => {
+  /** A stage with a hand-cranked frame loop. `play(ms, n)` draws n frames of that length. */
+  function crank() {
     const queue: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => queue.push(cb))
     vi.stubGlobal('cancelAnimationFrame', () => undefined)
@@ -272,10 +273,65 @@ describe('adaptive quality', () => {
     sessionStorage.clear()
     const stage = createStage(document.createElement('canvas'))
     let now = 0
-    // two long frames and nothing else for a window's length: not enough slow frames to call it sustained
-    for (const ms of [2000, 2000, 16, 16]) queue.shift()!((now += ms))
+    const play = (ms: number, n = 1) => {
+      for (let i = 0; i < n; i++) queue.shift()!((now += ms))
+    }
+    return { stage, play }
+  }
+
+  it('does not step down for a few hitches in a row either', () => {
+    const { stage, play } = crank()
+    play(16, 400) // past the warm-up
+    play(2000, 2)
+    play(16, 400) // enough fast frames to complete several windows
     expect(stage.quality).toBe(2)
     stage.dispose()
+  })
+
+  it('does not step down for the burst of slow frames as the city opens (shader compiles, uploads)', () => {
+    for (const ms of [400, 500, 600]) {
+      const { stage, play } = crank()
+      play(ms, 6) // straight after start
+      play(16, 400)
+      expect(stage.quality, `${ms} ms burst after start`).toBe(2)
+      stage.dispose()
+    }
+  })
+
+  it('does not step down for a burst after a district load, settled or not', () => {
+    const { stage, play } = crank()
+    play(16, 400)
+    stage.settle() // the session calls this when a district opens
+    play(500, 6)
+    play(16, 400)
+    expect(stage.quality).toBe(2)
+    stage.dispose()
+  })
+
+  it('does not step down for one bad window in steady state, since the next is fine', () => {
+    for (let warm = 300; warm < 470; warm += 10) {
+      // wherever the burst falls against the window edges
+      const { stage, play } = crank()
+      play(16, warm) // warm-up over
+      play(500, 6) // one window of slow frames
+      play(16, 400)
+      expect(stage.quality, `after ${warm} fast frames`).toBe(2)
+      stage.dispose()
+    }
+  })
+
+  it('steps down for sustained slowness within 8 s of game start', () => {
+    for (const ms of [300, 450, 600, 2000]) {
+      const { stage, play } = crank()
+      let t = 0
+      while (stage.quality === 2 && t < 8000) {
+        play(ms)
+        t += Math.min(ms, 600)
+      }
+      expect(stage.quality, `${ms} ms frames`).toBe(1)
+      expect(t, `${ms} ms frames`).toBeLessThanOrEqual(8000)
+      stage.dispose()
+    }
   })
 
   it('counts game time as the clamped dts, so slow frames run behind the wall clock', () => {

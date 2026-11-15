@@ -39,13 +39,16 @@ median.
 | 9   | Touch                                  | Joystick with one thumb, tap a landmark, rotate the phone mid-walk.                                                                                                                   | no stuck input, no blank canvas                                    |
 | 10  | **Open the link from an Instagram DM** | On Android, send the link to yourself in an Instagram DM and open it in the in-app browser.                                                                                           | the canvas shows, the joystick works, and nothing scrolls the page |
 
-**How the tier moves.** The stage measures every frame (the city draws continuously). Once it has about 2.5 s
-of frames, if more than 60% of that time was spent in frames slower than 22 ms it steps one tier down
-(`frontend/src/engine/stage.ts`, `measure` and `applyQuality`). A very long frame is clamped to 600 ms, not
-ignored, so a phone running at 2 to 4 fps steps down within a few seconds. One hitch (a tab switch, a GC pause, a
-district load, the first shader compile) cannot step it down: it adds at most 600 ms to the window, and a window
-also needs at least 4 slow frames. It never steps back up within a tab session, so
-to measure full quality again open a new tab or run `sessionStorage.removeItem('gg-quality')` and reload.
+**How the tier moves.** The stage measures every frame (the city draws continuously) in windows of about 2 s.
+A window is bad if more than 60% of its time was spent in frames slower than 22 ms, and it holds at least 4 such
+frames. Two bad windows in a row step the tier down one step (`frontend/src/engine/stage.ts`, `measure` and
+`applyQuality`); a good window in between starts the count again. A very long frame is clamped to 600 ms, not
+ignored, so a phone running at 2 to 4 fps still steps down, about 6 to 7 s after the city opens (2 s warm-up, then two
+windows). Nothing is measured for the first 2 s after the stage starts, after a district opens (the session calls
+`stage.settle()`), after a context restore, and after a step down, so the shader compiles and texture uploads of a
+load cannot count. One hitch or one burst (a tab switch, a GC pause, a district load) fills at most one window and
+cannot step it down. It never steps back up within a tab session, so to measure full quality again open a new tab
+or run `sessionStorage.removeItem('gg-quality')` and reload.
 
 Paste results into a copy of the table below with the device in the heading.
 

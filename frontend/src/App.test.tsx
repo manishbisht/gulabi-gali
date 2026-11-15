@@ -39,6 +39,7 @@ vi.mock('./engine/stage', () => ({
       onQuality: (f: (q: number) => void) => (stage.qualities.add(f), () => void stage.qualities.delete(f)),
       framesSinceRestore: () => 0,
       gameTime: () => 0,
+      settle: () => {},
       capture: <T,>(read: (c: HTMLCanvasElement) => T) => read(document.createElement('canvas')),
       dispose: () => {},
     }

@@ -257,6 +257,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     if (at === 'station') here?.animals.beginTravel()
     leave()
     stage.scene.add(district.root)
+    stage.settle() // its first frames compile shaders and upload textures: not a slow phone
     const player = createPlayer({
       scene: stage.scene,
       camera: stage.camera,

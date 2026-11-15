@@ -21,7 +21,11 @@ describe('skyParams', () => {
   })
 
   it('unusable sun times read as night, never NaN', () => {
-    for (const bad of [{ sunrise: 'nope' }, { sunset: 'nope' }, { sunrise: base.sunset, sunset: base.sunrise }]) {
+    for (const bad of [
+      { sunrise: 'nope' },
+      { sunset: 'nope' },
+      { sunrise: base.sunset, sunset: base.sunrise },
+    ]) {
       const p = skyParams({ ...base, ...bad }, noon)
       expect(p.sunElevationDeg).toBe(-10)
       expect(Number.isFinite(p.sunAzimuthDeg)).toBe(true)
