@@ -518,7 +518,7 @@ function createSky(
     paint,
     params: () => sky!,
     procession: festivalFx.processionCount,
-    forceProcession: (kind) => festivalFx.forceProcession(kind, stage.quality),
+    forceProcession: (kind) => festivalFx.forceProcession?.(kind, stage.quality),
     update(dt: number) {
       fx.update(dt)
       festivalFx.update(dt)

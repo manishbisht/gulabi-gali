@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Stage } from '../engine/stage'
 import { loadDistrict, type District } from '../world/district'
 import { FLOOR_H } from '../world/kit/parts'
@@ -123,18 +123,27 @@ describe('createFestivalFx', () => {
     district.dispose()
   })
 
+  it('has no way to force a procession in a build without the test hooks', async () => {
+    const district = await loadDistrict('walled-city')
+    const fx = createFestivalFx({ scene: new THREE.Scene() } as Stage, district)
+    expect(fx.forceProcession).toBeUndefined()
+    fx.dispose()
+  })
+
   it('can walk a procession under the Sankranti kites, for the all-at-once performance run', async () => {
+    vi.stubEnv('VITE_TEST_HOOKS', '1')
     const scene = new THREE.Scene()
     const district = await loadDistrict('walled-city')
     const fx = createFestivalFx({ scene } as Stage, district)
+    vi.unstubAllEnvs()
     fx.set('sankranti', 2)
-    fx.forceProcession('gangaur', 2)
+    fx.forceProcession!('gangaur', 2)
     expect(fx.processionCount()).toBe(40)
     expect(scene.getObjectByName('kites')!.visible).toBe(true)
     fx.set('sankranti', 1) // a tier change keeps the forced procession, at the new tier's size
     expect(fx.processionCount()).toBe(20)
     fx.update(1 / 30)
-    fx.forceProcession(null, 1)
+    fx.forceProcession!(null, 1)
     expect(fx.processionCount()).toBe(0)
     expect(scene.getObjectByName('procession')).toBeUndefined()
     fx.dispose()

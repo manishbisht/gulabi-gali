@@ -36,9 +36,10 @@ export interface FestivalFx {
   processionCount(): number
   /**
    * Walks a procession whatever the festival (null hands it back to the festival). Only the test hooks call it,
-   * so the performance run can have Sankranti's kites and a procession up at once.
+   * so the performance run can have Sankranti's kites and a procession up at once; a build without
+   * `VITE_TEST_HOOKS` does not carry it at all.
    */
-  forceProcession(kind: ProcessionKind | null, quality: Tier): void
+  forceProcession?(kind: ProcessionKind | null, quality: Tier): void
   dispose(): void
 }
 
@@ -285,10 +286,14 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
       }
     },
     processionCount: () => procession?.count ?? 0,
-    forceProcession(kind, quality) {
-      forced = kind
-      setProcession(id, quality)
-    },
+    ...(import.meta.env.VITE_TEST_HOOKS === '1'
+      ? {
+          forceProcession(kind: ProcessionKind | null, quality: Tier) {
+            forced = kind
+            setProcession(id, quality)
+          },
+        }
+      : {}),
     dispose() {
       procession?.dispose()
       procession = null
