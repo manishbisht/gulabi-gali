@@ -1,5 +1,5 @@
--- A ban forgets the person's push devices. Additive only, like 0002 to 0007: CI applies it before the Worker
--- that needs it ships.
+-- A ban forgets the person's push devices. Additive only, like 0002 to 0007. Apply it by hand with
+-- `wrangler d1 migrations apply gulabi-gali --remote` before deploying the Worker (see docs/deployment.md).
 
 -- `pushTo` already sends a banned person nothing (it checks `activeRow` first), but their subscriptions, each an
 -- endpoint and the browser's keys, have no reason to be kept: a ban takes them, wherever it comes from (the admin

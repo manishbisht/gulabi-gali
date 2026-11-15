@@ -221,6 +221,14 @@ button {
   max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* a focused control scrolled to the edge keeps its whole focus ring in view */
+  scroll-padding-block: 6px;
+}
+
+/* inside a scrolling card the note would be clipped above the button; show it below instead */
+.hud-bottom > .landmark-card .place-invite-note {
+  bottom: auto;
+  top: calc(100% + 6px);
 }
 
 .toast {

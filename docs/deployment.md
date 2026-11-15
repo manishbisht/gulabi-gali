@@ -17,7 +17,7 @@ database and two Durable Objects; the Durable Object classes are created by the 
 ## Owner checklist, in order
 
 1. Cloudflare account, token and KV namespace (section 1, steps 1 and 2).
-2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0004`).
+2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0008`).
 3. **Clerk** (section 1b): create the app, then set the Worker secrets.
 4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); a run of the workflow on `main`
    deploys (dispatch it by hand: pushes do not start it at the moment, see **CI caveats** in section 3).
