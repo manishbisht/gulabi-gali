@@ -1650,3 +1650,54 @@ small.words-hint {
 .hud-actions:empty {
   display: none;
 }
+
+/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
+button.stamp-count {
+  min-height: 44px;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  font-size: 0.95rem;
+  pointer-events: auto;
+}
+
+.darshan-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.darshan-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+}
+
+.darshan-list li[data-got='false'] {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.darshan-district {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.darshan-list em {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.darshan-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--sandstone);
+  color: #2a1d24;
+  font-size: 0.85rem;
+  font-weight: 700;
+}

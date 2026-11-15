@@ -9,6 +9,12 @@ export const STRINGS = {
   stampCount: { hi: 'Jaipur Darshan stamps', en: 'Jaipur Darshan stamps' },
   stampsLine: { hi: 'Jaipur Darshan · {n}/{total}', en: 'Jaipur Darshan · {n}/{total}' },
   stampsList: { hi: 'Jaipur Darshan ke stamps', en: 'Jaipur Darshan stamps' },
+  darshanTitle: { hi: 'Jaipur Darshan', en: 'Jaipur Darshan' },
+  darshanOpen: { hi: 'Jaipur Darshan ki list kholo', en: 'Open the Jaipur Darshan list' },
+  darshanClose: { hi: 'Band karo', en: 'Close' },
+  darshanListLabel: { hi: 'Jaipur Darshan ke landmark', en: 'Jaipur Darshan landmarks' },
+  darshanBadge: { hi: 'Jaipur Darshan poora', en: 'Jaipur Darshan complete' },
+  darshanLocked: { hi: 'Abhi baaki hai', en: 'Still to find' },
   stampsNone: {
     hi: 'Abhi koi nahi. Kisi landmark ke paas jaao aur stamp lo.',
     en: 'None yet. Walk up to a landmark and collect its stamp.',

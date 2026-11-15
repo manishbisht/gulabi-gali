@@ -53,6 +53,7 @@ import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
 import { InviteSheet } from './ui/InviteSheet'
 import { PrivacySheet } from './ui/PrivacySheet'
+import { DarshanList } from './ui/DarshanList'
 import { AccountClosed } from './ui/AccountClosed'
 import { FullScreen } from './ui/FullScreen'
 import { FirstHint } from './ui/FirstHint'
@@ -153,6 +154,7 @@ export default function App() {
   }, [refresh])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [darshanOpen, setDarshanOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
   const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
   const profileLookRef = useRef(profileLook)
@@ -423,6 +425,7 @@ export default function App() {
     connShown ||
     inviteOpen ||
     privacyOpen ||
+    darshanOpen ||
     !!queue.card
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
@@ -491,6 +494,7 @@ export default function App() {
         banner={festival ? t(FESTIVALS[festival], lang) : undefined}
         procession={processionKey && t(processionKey, lang)}
         stamps={`${have.length}/${TOTAL_STAMPS}`}
+        onStamps={() => setDarshanOpen(true)}
         lang={lang}
         onLang={setLang}
         bandar={here === 'walled-city' ? { off: bandar.off, onToggle: bandar.toggle } : undefined}
@@ -712,6 +716,7 @@ export default function App() {
         />
       )}
       {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
+      {darshanOpen && <DarshanList ids={have} lang={lang} onClose={() => setDarshanOpen(false)} />}
       {inviteOpen && me && residentId && (
         <InviteSheet
           me={me}
