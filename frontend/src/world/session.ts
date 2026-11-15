@@ -24,6 +24,7 @@ import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
 import { createPeople, createPeopleLabels, type People, type Remote } from './people'
 import { createPosters, type Posters } from './posters'
+import { createTaxi, type Taxi, type TaxiHooks } from './taxi'
 import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 import { createZoomGestures } from './zoomGestures'
@@ -107,6 +108,8 @@ export interface SessionHooks {
   posters?: SessionPosterHooks
   /** Driving a parked auto: what it tells React (see useDrive). */
   drive?: DriveHooks
+  /** The auto-taxi ("Le chalo"): what it tells React (see useTaxi). */
+  taxi?: TaxiHooks
   /** The street animals: the one in reach, the one following, and their passing lines (see useAnimals). */
   animals?: AnimalHooks
   /** The Galta bandar (Walled City): `blocked` while a card, sheet, bench, kite game or metro ride is up. */
@@ -164,6 +167,10 @@ export interface CitySession {
   exitAuto(): void
   /** The horn: only while driving, at most twice a second, and only heard here. */
   honk(): void
+  /** "Le chalo": the auto-taxi from the parked auto in reach to landmark `to`; false when it may not go now. */
+  taxi(to: string): boolean
+  /** Cuts the taxi ride short: on foot beside the landmark at once. */
+  skipTaxi(): void
   /** "Saath chalo": calls the animal in reach (the cow answers with a line instead). */
   callAnimal(): void
   /** "Ghar jao": the follower goes back to where it lives. */
@@ -195,6 +202,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sitting: Sitting | null
     posters: Posters | null
     driving: Driving
+    taxi: Taxi
     animals: Animals
   } | null = null
   /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
@@ -297,6 +305,19 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         },
       },
     })
+    // a ride goes out on the live socket, which opens below
+    const taxi = createTaxi({
+      def: district.def,
+      autos: district.autos,
+      player,
+      send: (m) => presence?.send(m),
+      blocked: () =>
+        !!sitting?.seated() ||
+        hooks.npcCard.isOpen() ||
+        hooks.personCard.isOpen() ||
+        (hooks.posters?.isOpen() ?? false),
+      hooks: hooks.taxi ?? { near() {}, riding() {}, dark() {}, refused() {} },
+    })
     const systems: DistrictSystem[] = [
       npcs,
       {
@@ -316,6 +337,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       sky,
       createLights(stage, district),
       { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
+      taxi,
       createInteraction(
         canvas,
         stage,
@@ -351,6 +373,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
             people,
             sitting,
             posters,
+            taxi,
             hooks.presence,
             opts.WebSocketImpl,
           )
@@ -360,7 +383,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, people, sitting, posters, driving, animals }
+    here = { district, player, systems, presence, people, sitting, posters, driving, taxi, animals }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -465,9 +488,13 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sit: () => here?.sitting?.sit(),
     stand: () => here?.sitting?.stand(),
     say: (text) => here?.sitting?.say(text) ?? false,
-    mount: () => here?.driving.mount(),
+    mount() {
+      if (!here?.taxi.riding()) here?.driving.mount()
+    },
     exitAuto: () => here?.driving.exit(),
     honk: () => here?.driving.honk(),
+    taxi: (to) => here?.taxi.go(to) ?? false,
+    skipTaxi: () => here?.taxi.skip(),
     callAnimal() {
       if (here) here.animals.call(here.player.position())
     },
@@ -799,6 +826,8 @@ function createPresence(
   people: People,
   sitting: Sitting | null,
   posters: Posters | null,
+  /** While it rides, nothing is said of where the player is: the server already set them down at the landmark. */
+  taxi: Pick<Taxi, 'riding' | 'refused'>,
   hooks: NonNullable<SessionHooks['presence']>,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
@@ -809,6 +838,7 @@ function createPresence(
   /** Reused for every frame's move: the socket copies what it sends. */
   const move: Extract<ClientMsg, { t: 'move' }> = { t: 'move', x: 0, z: 0, ry: 0 }
   const sendMove = (pos: Vec2) => {
+    if (taxi.riding()) return
     move.x = pos.x
     move.z = pos.z
     move.ry = player.heading()
@@ -820,6 +850,7 @@ function createPresence(
   }
   const onMsg = (m: ServerMsg) => {
     if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
+    if (m.t === 'error' && m.code === 'no-ride') return taxi.refused()
     if (m.t === 'queued') return hooks.queued?.(m.position, false)
     if (m.t === 'poster' || m.t === 'posters') return posters?.apply(m)
     people.apply(m)

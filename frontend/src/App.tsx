@@ -26,6 +26,8 @@ import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
 import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
+import { useTaxi } from './world/useTaxi'
+import { taxiAvailable } from './world/taxi'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
@@ -50,6 +52,8 @@ import { PosterComposer } from './ui/PosterComposer'
 import { RequestComposer, type Sent } from './ui/RequestComposer'
 import { NoWebGL } from './ui/NoWebGL'
 import { MetroRide } from './ui/MetroRide'
+import { TaxiRide } from './ui/TaxiRide'
+import { TaxiSheet } from './ui/TaxiSheet'
 import { TravelSheet } from './ui/TravelSheet'
 import { BenchChat, BenchGhost } from './ui/BenchChat'
 import { Connections } from './ui/Connections'
@@ -124,6 +128,9 @@ export default function App() {
   /** Driving a parked auto: one in reach, at the wheel, and "no room to get out". */
   const drive = useDrive()
   const { hooks: driveHooks, bind: bindDrive } = drive
+  /** The auto-taxi: an auto at its stand in reach, the "Le chalo" list, and the ride. */
+  const taxi = useTaxi()
+  const { hooks: taxiHooks, bind: bindTaxi } = taxi
   /** The street animals: the one in reach, the one following, and their passing lines. */
   const animals = useAnimals()
   const { hooks: animalHooks, bind: bindAnimals } = animals
@@ -249,7 +256,7 @@ export default function App() {
   const festival = override ?? snapshot?.festival ?? null
   const processionKey = processionLine(festival, here)
   /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
-  const map = useCityMap(entered && !ride && !kiteFrom && !photo)
+  const map = useCityMap(entered && !ride && !taxi.riding && !kiteFrom && !photo)
   const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
   // in photo mode the pillar keeps out of the view (and out of every capture, see `Stage.capture`)
   useEffect(() => hideMapPillar(!!photo), [photo, hideMapPillar])
@@ -294,6 +301,7 @@ export default function App() {
         bench: benchHooks,
         posters: posterHooks,
         drive: driveHooks,
+        taxi: taxiHooks,
         animals: animalHooks,
         bandar: bandarHooks,
         place: (def) => {
@@ -307,12 +315,14 @@ export default function App() {
     bindBench(city)
     bindPosters(city)
     bindDrive(city)
+    bindTaxi(city)
     bindAnimals(city)
     bindMap({ session: city, stage })
 
     return () => {
       bindMap(null)
       bindAnimals(null)
+      bindTaxi(null)
       bindDrive(null)
       bindPosters(null)
       bindBench(null)
@@ -345,6 +355,8 @@ export default function App() {
     bindPosters,
     driveHooks,
     bindDrive,
+    taxiHooks,
+    bindTaxi,
     animalHooks,
     bindAnimals,
     bindMap,
@@ -437,6 +449,7 @@ export default function App() {
   const sheetUp =
     !!card ||
     sheetOpen ||
+    taxi.sheetOpen ||
     profileShown ||
     connShown ||
     inviteOpen ||
@@ -447,7 +460,7 @@ export default function App() {
     mapBlockedRef.current = sheetUp
   }, [sheetUp, mapBlockedRef])
   // the monkey keeps off the street while anything is over it
-  const bandarBlocked = sheetUp || !!near || !!ride || !!kiteFrom || !!bench.seat || map.open
+  const bandarBlocked = sheetUp || !!near || !!ride || taxi.riding || !!kiteFrom || !!bench.seat || map.open
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked
@@ -532,7 +545,8 @@ export default function App() {
         onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
         connectionsBadge={conn.badge}
         onMap={map.def ? map.toggle : undefined}
-        photo={!!photo}
+        // the taxi ride shows the street clear, as photo mode does; the HUD is back on arrival
+        photo={!!photo || taxi.riding}
         onPhoto={
           kiteFrom || drive.driving
             ? undefined
@@ -580,6 +594,11 @@ export default function App() {
                     {t('driveRescued', lang)}
                   </div>
                 )}
+                {taxi.refused && (
+                  <div className="toast" role="status">
+                    {t('taxiRefused', lang)}
+                  </div>
+                )}
                 {animals.notice && (
                   <div className="toast" role="status">
                     {t(animals.notice.key, lang, animals.notice.vars)}
@@ -623,11 +642,24 @@ export default function App() {
               <DriveButtons lang={lang} onHorn={drive.honk} onExit={drive.exit} />
             ) : (
               <>
-                {/* the street's actions: beside the joystick, they stack upward when a small phone has no room */}
-                <div className="hud-actions">
+                {/* the street's actions: beside the joystick, they stack upward when a small phone has no room
+                    (the "Le chalo" list has the row to itself) */}
+                <div className="hud-actions" hidden={taxi.sheetOpen}>
                   {drive.near && !near && !sheetOpen && !card && (bench.seat || !bench.near) && (
                     <button type="button" className="metro-button drive-button" onClick={drive.mount}>
                       {t('driveMount', lang)}
+                    </button>
+                  )}
+                  {taxiAvailable({
+                    near: taxi.near,
+                    seated: !!bench.seat,
+                    driving: drive.driving,
+                    card: !!card || !!near || sheetOpen || taxi.sheetOpen,
+                    kite: !!kiteFrom,
+                    metro: !!ride || fading,
+                  }) && (
+                    <button type="button" className="metro-button taxi-button" onClick={taxi.open}>
+                      {t('taxiOpen', lang)}
                     </button>
                   )}
                   {patangAvailable({
@@ -718,6 +750,16 @@ export default function App() {
                     onPick={(id) => void travelTo(id, here)}
                     onClose={closeSheet}
                   />
+                ) : taxi.sheetOpen ? (
+                  <TaxiSheet
+                    stops={taxi.stops}
+                    lang={lang}
+                    onPick={(stop) => {
+                      controlsRef.current?.setJoystick({ x: 0, z: 0 }) // the joystick goes with the HUD
+                      taxi.go(stop)
+                    }}
+                    onClose={taxi.close}
+                  />
                 ) : (
                   card ||
                   (bench.notice === 'ghost' && (
@@ -787,7 +829,7 @@ export default function App() {
         />
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
-      <div className="fade" data-on={fading || undefined} aria-hidden="true" />
+      <div className="fade" data-on={fading || taxi.dark || undefined} aria-hidden="true" />
       {kiteFrom && (
         <Patang
           lang={lang}
@@ -798,6 +840,7 @@ export default function App() {
         />
       )}
       {ride && <MetroRide {...ride} lang={lang} onSkip={skipRide} onBack={cancelRide} />}
+      {taxi.riding && taxi.place && <TaxiRide place={taxi.place[lang]} lang={lang} onSkip={taxi.skip} />}
       {closed}
     </>
   )

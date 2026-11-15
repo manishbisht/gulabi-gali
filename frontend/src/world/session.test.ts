@@ -1233,3 +1233,74 @@ describe('drag to look', () => {
     expect(vi.mocked(controls.addZoom).mock.calls[0]![0]).toBeGreaterThan(1)
   })
 })
+
+describe('the auto-taxi', () => {
+  /** Johari Bazaar's auto, at its stand, and the player beside it; the socket welcomed, as a ghost. */
+  async function byStand() {
+    const taxi = { near: vi.fn(), riding: vi.fn(), dark: vi.fn(), refused: vi.fn() }
+    const live = openLive(async () => null, { taxi })
+    const home = { x: -2.6, z: 30, ry: -Math.PI }
+    let taken = false
+    loads[0]!.resolve({
+      ...fakeDistrict(walledCity),
+      autos: {
+        nearest: (p: { x: number; z: number }, r: number) =>
+          !taken && Math.hypot(p.x - home.x, p.z - home.z) <= r ? 0 : -1,
+        pose: () => home,
+        take: () => void (taken = true),
+        leave: () => void (taken = false),
+      },
+    })
+    await settle()
+    live.session.player()!.teleport(-0.6, 30)
+    const ws = sockets()[0]!
+    ws.onopen?.()
+    ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [] })
+    live.tick(1 / 30)
+    const sent = () => ws.sent.map((m) => JSON.parse(m) as { t: string })
+    return { ...live, ws, taxi, sent }
+  }
+
+  it('the ride goes out on the socket from where the player stood, and no move goes out until it ends', async () => {
+    const { session, tick, taxi, sent } = await byStand()
+    expect(taxi.near).toHaveBeenLastCalledWith(true)
+    let t = Date.now()
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => t)
+    try {
+      const before = sent().length
+      expect(session.taxi('hawa-mahal')).toBe(true)
+      expect(sent().slice(before)).toEqual([{ t: 'ride', to: 'hawa-mahal', x: -0.6, z: 30 }])
+      expect(taxi.riding).toHaveBeenLastCalledWith(true)
+      // "Auto chalao" cannot take the wheel from the taxi
+      session.mount()
+      for (let i = 0; i < 10; i++) {
+        t += 1000 // past any throttle: the player is in the auto, but says nothing of it
+        tick(1 / 30)
+      }
+      expect(sent().slice(before + 1)).toEqual([])
+      session.skipTaxi()
+      expect(taxi.riding).toHaveBeenLastCalledWith(false)
+      t += 1000
+      tick(1 / 30)
+      // on foot by Hawa Mahal: that is where the next move says the player is
+      expect(sent().at(-1)).toMatchObject({ t: 'move' })
+      const p = session.player()!.position()
+      expect(Math.hypot(p.x - 35, p.z + 12.5)).toBeLessThanOrEqual(6)
+    } finally {
+      now.mockRestore()
+      session.dispose()
+    }
+  })
+
+  it("the server's no-ride ends the ride by the stand, and is no bench's business", async () => {
+    const { session, ws, taxi, hooks: h } = await byStand()
+    session.taxi('hawa-mahal')
+    ws.say({ t: 'error', code: 'no-ride' })
+    expect(taxi.refused).toHaveBeenCalled()
+    expect(taxi.riding).toHaveBeenLastCalledWith(false)
+    expect(h.bench!.refused).not.toHaveBeenCalled()
+    const p = session.player()!.position()
+    expect(Math.hypot(p.x + 2.6, p.z - 30)).toBeLessThanOrEqual(6)
+    session.dispose()
+  })
+})

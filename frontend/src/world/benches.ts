@@ -169,7 +169,7 @@ export function createSitting(opts: {
       } else if (m.t === 'bench') {
         if (seat && m.bench === seat.bench.id)
           hooks.line({ from: m.from, name: m.name, text: m.text, at: m.at })
-      } else if (m.t === 'error' && m.code !== 'too-fast') {
+      } else if (m.t === 'error' && m.code !== 'too-fast' && m.code !== 'no-ride') {
         if (asked && m.code !== 'rate') {
           asked = false
           hooks.refused(m.code)

@@ -162,6 +162,14 @@ export type ClientMsg =
    * and any other value is ignored, as an unknown field is (an older server ignores it too).
    */
   | { t: 'move'; x: number; z: number; ry: number; v?: Vehicle; pace?: Pace }
+  /**
+   * The auto-taxi ("Le chalo"): a ride from beside a parked auto at one of this district's stands to landmark
+   * `to` of the same district (both in `taxi.json`). `x`, `z` is where the sender stands as they get in, which
+   * must be a walk on from their last accepted point. The server then puts them at that landmark's drop point
+   * itself (its own figure, never the client's) and takes them off the street until their next move there; a
+   * ride it will not give is refused with `no-ride`, and their point stays where it was.
+   */
+  | { t: 'ride'; to: string; x: number; z: number }
   | { t: 'sit'; bench: string | null }
   | { t: 'say'; text: string }
   | { t: 'status'; text: string }
@@ -191,9 +199,9 @@ export type ServerMsg =
    * `far`: a sit from further than the server allows from the bench, by the last point it accepted. `full`: a
    * bench with every seat taken, or (followed by a close with `LIVE_CLOSE.full`) a district or an address with
    * as many sockets as it may hold. `muted`: a moderator has muted this person, so `say` and `status` are refused. `words`: a `say` or
-   * `status` the word filter refused (never a strike).
+   * `status` the word filter refused (never a strike). `no-ride`: a `ride` the server would not give (see there).
    */
-  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' | 'muted' | 'words' }
+  | { t: 'error'; code: 'ghost' | 'invalid' | 'full' | 'rate' | 'far' | 'muted' | 'words' | 'no-ride' }
   /** A refused step carries the last point the server accepted: the client goes back there. */
   | { t: 'error'; code: 'too-fast'; x: number; z: number; ry: number }
   | { t: 'pong' }
