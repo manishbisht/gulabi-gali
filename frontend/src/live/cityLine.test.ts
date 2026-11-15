@@ -21,18 +21,31 @@ it('dust beats heat', () => {
 })
 
 it('speaks the air band otherwise, in either language', () => {
-  expect(cityLine(base, 'en')).toBe('Clear air today. You can see all the way to Nahargarh.')
+  expect(cityLine(base, 'en')).toBe('Clear air — you can see Nahargarh.')
   expect(cityLine({ ...base, aqiBand: 'moderate' }, 'hi')).toBe('Hawa theek-thaak hai. Chai pe chalo?')
   expect(cityLine({ ...base, aqiBand: 'poor' }, 'en')).toBe('A bit hazy today. Keep a mask handy.')
   for (const aqiBand of ['unhealthy', 'severe'] as const) {
-    expect(cityLine({ ...base, aqiBand }, 'hi')).toBe('Hawa kharab hai, Hukum — aaj andar hi raho.')
+    expect(cityLine({ ...base, aqiBand }, 'hi')).toBe('Hawa kharab hai, Hukum — ghar pe raho.')
   }
 })
 
+it('keeps every line short enough for one row of the HUD card on a 360 px phone', () => {
+  // an orphaned last word costs a row of the top block; 44 characters is the festival procession line's length
+  const snaps: CitySnapshot[] = [
+    ...(['good', 'moderate', 'poor', 'unhealthy', 'severe'] as const).map((aqiBand) => ({
+      ...base,
+      aqiBand,
+    })),
+    { ...base, condition: 'rain' },
+    { ...base, condition: 'dust' },
+    { ...base, tempC: 44 },
+  ]
+  for (const s of snaps)
+    for (const lang of ['hi', 'en'] as const) expect(cityLine(s, lang).length).toBeLessThanOrEqual(44)
+})
+
 it('never counts a missing temperature as heat', () => {
-  expect(cityLine({ ...base, tempC: null }, 'en')).toBe(
-    'Clear air today. You can see all the way to Nahargarh.',
-  )
+  expect(cityLine({ ...base, tempC: null }, 'en')).toBe('Clear air — you can see Nahargarh.')
   expect(cityLine({ ...base, tempC: undefined } as unknown as CitySnapshot, 'en')).toContain('Clear air')
   expect(cityLine({ ...base, tempC: 42 }, 'en')).toBe('Heatwave out there. Keep drinking water.')
   expect(cityLine({ ...base, tempC: 41.9 }, 'en')).toContain('Clear air')

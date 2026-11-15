@@ -7,3 +7,14 @@ export const DISTRICT_NAMES: Record<DistrictId, { hi: string; en: string }> = {
   university: { hi: 'University–JKK', en: 'University & JKK' },
   'malviya-nagar': { hi: 'Malviya Nagar–WTP', en: 'Malviya Nagar & WTP' },
 }
+
+/**
+ * What the HUD's place chip shows: the name without its second half, so the chip, the weather and the stamps
+ * keep one row on a small phone. The chip's accessible name is still the full name above.
+ */
+export const DISTRICT_SHORT_NAMES: Record<DistrictId, { hi: string; en: string }> = {
+  'walled-city': DISTRICT_NAMES['walled-city'],
+  'mi-road': { hi: 'MI Road', en: 'MI Road' },
+  university: { hi: 'University', en: 'University' },
+  'malviya-nagar': { hi: 'Malviya Nagar', en: 'Malviya Nagar' },
+}

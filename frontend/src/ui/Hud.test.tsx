@@ -36,6 +36,28 @@ it('the place chip is the map button: named for the map and the place, M, and it
   expect(host.querySelector('.map-button')).toBeNull()
 })
 
+it('a short place name shows on the chip while the full name stays its accessible name', async () => {
+  const host = document.body.appendChild(document.createElement('div'))
+  await act(async () =>
+    createRoot(host).render(
+      <Hud
+        place="MI Road–Raja Park"
+        placeShort="MI Road"
+        snapshot={null}
+        stamps="0/9"
+        lang="hi"
+        onLang={() => {}}
+        onMap={() => {}}
+      />,
+    ),
+  )
+  const chip = host.querySelector('.hud-top .hud-chip')!
+  expect(chip.textContent).toBe('MI Road')
+  // label in name: the visible text is part of the accessible name
+  expect(chip.getAttribute('aria-label')).toBe('Naksha · MI Road–Raja Park')
+  expect(chip.getAttribute('aria-label')).toContain(chip.textContent!)
+})
+
 it('before a district is in (no onMap) the place is plain text', async () => {
   const host = await mount()
   const chip = host.querySelector('.hud-top .hud-chip')!

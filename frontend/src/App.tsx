@@ -35,7 +35,7 @@ import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
 import { useCityMap } from './world/useCityMap'
 import { processionLine } from './live/procession'
-import { DISTRICT_NAMES } from './world/districtNames'
+import { DISTRICT_NAMES, DISTRICT_SHORT_NAMES } from './world/districtNames'
 import { savedDistrict, useTravel } from './world/useTravel'
 import type { DistrictId, FestivalId } from './net/protocol'
 import type { DistrictDef, Vec2 } from './world/types'
@@ -534,6 +534,7 @@ export default function App() {
         place={
           typeof place === 'string' ? t(place === 'failed' ? 'loadFailed' : 'loading', lang) : place[lang]
         }
+        placeShort={typeof place === 'string' ? undefined : DISTRICT_SHORT_NAMES[here][lang]}
         snapshot={snapshot}
         line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
         banner={festival ? t(FESTIVALS[festival], lang) : undefined}
