@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
+import { patangAvailable } from './games/patang'
 import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
@@ -31,12 +32,13 @@ import { processionLine } from './live/procession'
 import { DISTRICT_NAMES } from './world/districtNames'
 import { savedDistrict, useTravel } from './world/useTravel'
 import type { DistrictId, FestivalId } from './net/protocol'
-import type { DistrictDef } from './world/types'
+import type { DistrictDef, Vec2 } from './world/types'
 import { Hud } from './ui/Hud'
 import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
 import { DriveButtons } from './ui/DriveButtons'
 import { Joystick } from './ui/Joystick'
+import { Patang } from './ui/Patang'
 import { NpcCard } from './ui/NpcCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
 import { PosterCard } from './ui/PosterCard'
@@ -89,6 +91,9 @@ export default function App() {
   const [stageFailed, setStageFailed] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
+  const stageRef = useRef<Stage | null>(null)
+  /** The kite fight, while one runs: where the player stood, and the stage and controls it borrows. */
+  const [kiteFrom, setKiteFrom] = useState<{ at: Vec2; stage: Stage; controls: Controls } | null>(null)
   const { near, have, toast, collectHere, track } = useStamps(lang)
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
   const {
@@ -216,6 +221,8 @@ export default function App() {
   }, [residentId])
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
+  // the kite fight is Sankranti's: if the festival goes (the snapshot changes mid-round), so does it
+  if (kiteFrom && festival !== 'sankranti') setKiteFrom(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -230,6 +237,7 @@ export default function App() {
     }
     const controls = createControls(window)
     controlsRef.current = controls
+    stageRef.current = stage
     const city = createCitySession({
       stage,
       controls,
@@ -279,6 +287,7 @@ export default function App() {
       disposeAvatarCache() // after the last player and NPC, before the renderer that drew them goes
       controls.dispose()
       controlsRef.current = null
+      stageRef.current = null
       stage.dispose()
     }
   }, [
@@ -523,7 +532,7 @@ export default function App() {
         }
         bottom={
           <>
-            <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />
+            {!kiteFrom && <Joystick lang={lang} onChange={(v) => controlsRef.current?.setJoystick(v)} />}
             {drive.driving ? (
               // at the wheel the stick drives; nothing else opens until the player gets out
               <DriveButtons lang={lang} onHorn={drive.honk} onExit={drive.exit} />
@@ -534,6 +543,22 @@ export default function App() {
                     {t('driveMount', lang)}
                   </button>
                 )}
+                {patangAvailable({ festival, driving: drive.driving, seated: !!bench.seat, card: !!card }) &&
+                  !near &&
+                  !sheetOpen && (
+                    <button
+                      type="button"
+                      className="metro-button patang-button"
+                      onClick={() => {
+                        const at = session.current?.player()?.position()
+                        const stage = stageRef.current
+                        const controls = controlsRef.current
+                        if (at && stage && controls) setKiteFrom({ at, stage, controls })
+                      }}
+                    >
+                      {t('patangStart', lang)}
+                    </button>
+                  )}
                 {nearStation && !near && !sheetOpen && !bench.seat && (
                   <button type="button" className="metro-button" onClick={openSheet}>
                     {t('metro', lang)}
@@ -656,6 +681,15 @@ export default function App() {
         />
       )}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
+      {kiteFrom && (
+        <Patang
+          lang={lang}
+          stage={kiteFrom.stage}
+          controls={kiteFrom.controls}
+          at={kiteFrom.at}
+          onExit={() => setKiteFrom(null)}
+        />
+      )}
       {ride && <MetroRide {...ride} lang={lang} onSkip={skipRide} onBack={cancelRide} />}
       {closed}
     </>

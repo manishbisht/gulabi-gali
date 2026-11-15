@@ -666,6 +666,21 @@ export const STRINGS = {
     hi: 'Poster nahi utra. Dobara try karo.',
     en: "Couldn't take it down. Try again.",
   },
+  patangStart: { hi: 'Patang udao', en: 'Fly a kite' },
+  patangLabel: { hi: 'Patang-baazi', en: 'Kite fight' },
+  patangPull: { hi: 'Kheencho', en: 'Pull' },
+  patangStop: { hi: 'Band karo', en: 'Stop' },
+  patangAgain: { hi: 'Phir se', en: 'Again' },
+  patangCut: { hi: 'Wo kaata!', en: 'Wo kaata! Cut!' },
+  patangLost: { hi: 'Kat gayi! 😅', en: 'Your string got cut! 😅' },
+  patangTimeUp: { hi: 'Samay khatam! 🪁', en: "Time's up! 🪁" },
+  patangCuts: { hi: 'Kaate: {n}', en: 'Cuts: {n}' },
+  patangBest: { hi: 'Sabse zyada: {n}', en: 'Best: {n}' },
+  patangTime: { hi: '{n} sec', en: '{n}s' },
+  patangHelp: {
+    hi: 'Dor ek doosre se katrao, phir kheencho. Ghumane ke liye ungli ghumao ya A/D dabao. Space se kheencho.',
+    en: 'Cross strings with a rival, then pull. Drag or press A/D to steer, and hold Space to pull.',
+  },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

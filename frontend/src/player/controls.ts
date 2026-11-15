@@ -14,6 +14,12 @@ export interface Controls {
   /** True once per press of Space (the horn); reading it consumes the press. */
   horn(): boolean
   setJoystick(v: Vec2): void
+  /**
+   * Holds the player still while a minigame has the keys and the stick: `move()` and `drive()` read zero, and
+   * E and Space (the horn) are not heard. Letting go (or `freeze(false)`) hands them back; a key held through
+   * it carries on being held.
+   */
+  freeze(on: boolean): void
   dispose(): void
 }
 
@@ -35,6 +41,7 @@ export function createControls(target: Window): Controls {
   let joystick: Vec2 = { x: 0, z: 0 }
   let interactQueued = false
   let hornQueued = false
+  let frozen = false
   /** What `drive()` hands back, reused: a frame of driving allocates nothing. */
   const drived: Vec2 = { x: 0, z: 0 }
 
@@ -44,6 +51,7 @@ export function createControls(target: Window): Controls {
   const onKeyDown = (e: Event) => {
     // Typing a line (bench chat, the profile) is not walking, nor pressing E.
     if (typing(e.target)) return
+    if (frozen) return
     const code = (e as KeyboardEvent).code
     if (code === 'KeyE' && !down.has(code)) interactQueued = true
     if (code === 'Space' && !down.has(code)) hornQueued = true
@@ -59,6 +67,7 @@ export function createControls(target: Window): Controls {
 
   return {
     move() {
+      if (frozen) return { x: 0, z: 0 }
       if (joystick.x !== 0 || joystick.z !== 0) {
         const len = Math.hypot(joystick.x, joystick.z)
         return len > 1 ? { x: joystick.x / len, z: joystick.z / len } : { ...joystick }
@@ -69,6 +78,11 @@ export function createControls(target: Window): Controls {
       return { x, z }
     },
     drive() {
+      if (frozen) {
+        drived.x = 0
+        drived.z = 0
+        return drived
+      }
       if (joystick.x !== 0 || joystick.z !== 0) {
         const len = Math.hypot(joystick.x, joystick.z)
         const k = len > 1 ? 1 / len : 1
@@ -89,6 +103,11 @@ export function createControls(target: Window): Controls {
       const fired = hornQueued
       hornQueued = false
       return fired
+    },
+    freeze(on) {
+      frozen = on
+      interactQueued = false
+      hornQueued = false
     },
     setJoystick(v) {
       joystick = { x: v.x, z: v.z }

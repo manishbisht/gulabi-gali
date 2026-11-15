@@ -125,6 +125,28 @@ export function chime(): boolean {
   return true
 }
 
+/**
+ * A short rising chirp for a cut string ("Wo kaata!"). Like the chime it never makes a context: the pull
+ * button wakes one (`unlockAudio`), and with sound off or none running this stays silent.
+ */
+export function woKaata(): boolean {
+  const c = ctx
+  if (!c || !soundOn() || c.state !== 'running') return false
+  const t = c.currentTime
+  const gain = c.createGain()
+  gain.gain.setValueAtTime(0.0001, t)
+  gain.gain.linearRampToValueAtTime(0.1, t + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28)
+  gain.connect(c.destination)
+  const o = c.createOscillator()
+  o.type = 'triangle'
+  o.frequency.value = 520
+  o.connect(gain)
+  o.start(t)
+  o.stop(t + 0.3)
+  return true
+}
+
 /** Lets the audio context go (the page is leaving the city); the next honk makes a fresh one. */
 export function closeAudio(): void {
   const c = ctx

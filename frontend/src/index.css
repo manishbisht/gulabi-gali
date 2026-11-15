@@ -1311,3 +1311,165 @@ small.words-hint {
   font: inherit;
   background: #1d1117;
 }
+
+/* Patang-baazi, the Sankranti kite fight: over the street, which keeps drawing behind it. */
+.patang {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  outline: none;
+  pointer-events: none;
+}
+
+.patang-sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.patang-top {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.patang-stop {
+  margin-left: auto;
+  pointer-events: auto;
+  border: 2px solid var(--cream);
+  background: var(--pink);
+  color: var(--plum);
+  font-family: inherit;
+  font-weight: 700;
+  min-height: 40px;
+}
+
+.patang-flash {
+  position: absolute;
+  top: 22%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.patang-cut {
+  display: inline-block;
+  font: 800 2.2rem/1.1 'Baloo 2', system-ui, sans-serif;
+  color: #fff;
+  text-shadow: 0 2px 0 var(--plum), 0 0 14px rgb(214 51 108 / 0.8);
+  animation: patang-cut 1.4s ease-out forwards;
+}
+
+@keyframes patang-cut {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-6deg);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1.15) rotate(-3deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) translateY(-24px) rotate(-3deg);
+  }
+}
+
+.patang-help {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 190px;
+  margin: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 3px rgb(42 29 36 / 0.8);
+  pointer-events: none;
+}
+
+.patang-controls {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.patang-controls .joystick {
+  /* steering is sideways only here, but the stick is the same one */
+  margin-right: auto;
+}
+
+.patang-pull {
+  margin-left: auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 3px solid var(--cream);
+  background: var(--pink);
+  color: var(--plum);
+  font: 800 1.3rem 'Baloo 2', system-ui, sans-serif;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.patang-pull:active {
+  background: #f2a81d;
+}
+
+.patang-score {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(86vw, 340px);
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--cream);
+  color: var(--plum);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.patang-score h2 {
+  margin: 0 0 8px;
+  font-family: 'Baloo 2', system-ui, sans-serif;
+}
+
+.patang-big {
+  margin: 0;
+  font: 800 2rem 'Baloo 2', system-ui, sans-serif;
+}
+
+.patang-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.patang-quit {
+  background: var(--cream);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .patang-cut {
+    animation: none;
+  }
+}
+
+/* The kite fight has the screen: the HUD is inert beneath it, and is not drawn over the sky. */
+.hud[inert] {
+  visibility: hidden;
+}

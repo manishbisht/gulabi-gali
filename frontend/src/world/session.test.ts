@@ -67,6 +67,7 @@ const controls: Controls = {
   horn: () => false,
   drive: () => ({ x: 0, z: 0 }),
   setJoystick() {},
+  freeze() {},
   dispose() {},
 }
 

@@ -37,7 +37,7 @@ export interface FestivalFx {
   dispose(): void
 }
 
-const KITE_COLOURS = [
+export const KITE_COLOURS = [
   PALETTE.pink,
   PALETTE.marigold,
   PALETTE.teal,
@@ -58,7 +58,7 @@ const DIYA_SPACING = 2.2
 const rand = (n: number) => Math.random() * n
 
 /** A flat diamond with a short ragged tail, in the XY plane, facing +z. */
-function kiteGeometry() {
+export function kiteGeometry() {
   const g = new THREE.BufferGeometry()
   // diamond, then a thin tail quad hanging below it
   const v = [

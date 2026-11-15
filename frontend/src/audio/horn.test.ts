@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { storage } from '../storage'
-import { chime, closeAudio, HONK_GAP_MS, honk, resetHorn, setSoundOn, soundOn, unlockAudio } from './horn'
+import {
+  chime,
+  closeAudio,
+  woKaata,
+  HONK_GAP_MS,
+  honk,
+  resetHorn,
+  setSoundOn,
+  soundOn,
+  unlockAudio,
+} from './horn'
 
 let made = 0
 let oscillators = 0
@@ -106,4 +116,16 @@ it('a chime never makes an audio context, and only sounds with sound on and a ru
   expect(made).toBe(1)
   setSoundOn(false)
   expect(chime()).toBe(false)
+})
+
+it('a wo-kaata chirp sounds only with sound on and a running context, and never makes one', () => {
+  expect(woKaata()).toBe(false)
+  expect(made).toBe(0)
+  unlockAudio() // the pull button's tap
+  expect(made).toBe(1)
+  const before = oscillators
+  expect(woKaata()).toBe(true)
+  expect(oscillators).toBe(before + 1)
+  setSoundOn(false)
+  expect(woKaata()).toBe(false)
 })

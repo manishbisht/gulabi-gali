@@ -118,4 +118,21 @@ describe('createControls', () => {
     expect(c.drive().z).toBeCloseTo(-0.3)
     expect(c.drive().x).toBeCloseTo(0.3)
   })
+
+  it('frozen for a minigame: no walking, no driving, no E or horn, until it thaws', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    press(w, 'KeyW')
+    c.setJoystick({ x: 0, z: 1 })
+    c.freeze(true)
+    press(w, 'KeyE')
+    press(w, 'Space')
+    expect(c.move()).toEqual({ x: 0, z: 0 })
+    expect(c.drive()).toEqual({ x: 0, z: 0 })
+    expect(c.interact()).toBe(false)
+    expect(c.horn()).toBe(false)
+    c.freeze(false)
+    expect(c.interact()).toBe(false) // the frozen press is gone, not saved up
+    expect(c.move().z).toBe(1)
+  })
 })

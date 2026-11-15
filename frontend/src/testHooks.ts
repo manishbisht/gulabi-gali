@@ -39,6 +39,16 @@ export interface GgTestApi {
   people(): { id: string; x: number; z: number; sx: number; sy: number }[]
   /** Every poster up on this district's walls, and where its middle is on the page (CSS px). */
   posters(): { id: string; wall: number; slot: number; text: string; sx: number; sy: number }[]
+  /** The kite fight: whether one is running, and the levers a test needs to play a short round. */
+  patang(): {
+    active: boolean
+    /** Ties a rival's string across the player's and holds it there (see `Patang.forceCross`). */
+    forceCross(): void
+    /** Plays the rest of the round out at once. */
+    finish(): void
+    score(): number
+    rivals(): number
+  }
 }
 
 declare global {
