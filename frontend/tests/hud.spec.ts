@@ -12,7 +12,7 @@ const API = 'http://127.0.0.1:8787'
 test.afterEach(closePeople)
 
 /** The festival with a procession, the city line and the weather, all at once: the busiest the news gets. */
-async function busiest(page: Page, district?: string, lang?: 'hi' | 'en') {
+async function busiest(page: Page, district?: string, lang?: 'hi' | 'en', festival = 'gangaur') {
   if (district) await page.addInitScript((d) => localStorage.setItem('gg-district', d), district)
   if (lang) await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
   // The city line's text sets how the HUD wraps. A live /api/city reply (the local Worker asks Open-Meteo, up
@@ -34,7 +34,7 @@ async function busiest(page: Page, district?: string, lang?: 'hi' | 'en') {
       },
     }),
   )
-  await page.goto('/?gg-test=1&gg-festival=gangaur')
+  await page.goto(`/?gg-test=1&gg-festival=${festival}`)
   await page.getByRole('button', { name: lang === 'en' ? 'Come in' : 'Padharo!' }).click()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
   await page.evaluate(() =>
@@ -156,56 +156,58 @@ const shot = (page: Page, name: string) =>
   process.env.GG_HUD_SHOTS ? page.screenshot({ path: `${process.env.GG_HUD_SHOTS}/${name}.png` }) : undefined
 
 for (const lang of LANGS)
-  for (const [id, hi, en] of DISTRICTS) {
-    const place = lang === 'en' ? en : hi
-    test(`a guest's busiest HUD fits in ${place} (${lang}): festival, procession, city line, sign-in nudge`, async ({
-      page,
-    }) => {
-      await busiest(page, id, lang)
-      await laidOut(
-        {
-          ...common(page, place, lang),
-          ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
-          signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
-        },
-        NEWS,
-      )
-      await shot(page, `guest-${lang}-${id}`)
-    })
-
-    test(`signed in on a small phone, the identity row fits too in ${place} (${lang}): visibility, profile, invite, connections and its badge`, async ({
-      browser,
-    }) => {
-      const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
-      const asha = await resident(browser, 'Asha', phone)
-      // someone verified asks to meet her, so Connections carries a badge
-      const ravi = await resident(browser, 'Ravi')
-      expect(
-        (await ravi.page.request.post(`${API}/api/dev/verify`, { data: { userId: ravi.id } })).status(),
-      ).toBe(200)
-      const token = await ravi.page.evaluate(() => sessionStorage.getItem('gg-dev-token')!)
-      const asked = await ravi.page.request.post(`${API}/api/requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { to: asha.id, reason: 'Mujhe bhi chai aur kitaabein pasand hain' },
+  for (const [id, hi, en] of DISTRICTS)
+    // Gangaur everywhere; a Teej day too, in the district with the longest name
+    for (const festival of id === 'malviya-nagar' ? ['gangaur', 'teej'] : ['gangaur']) {
+      const place = lang === 'en' ? en : hi
+      test(`a guest's busiest HUD fits in ${place} (${lang}, ${festival}): festival, procession, city line, sign-in nudge`, async ({
+        page,
+      }) => {
+        await busiest(page, id, lang, festival)
+        await laidOut(
+          {
+            ...common(page, place, lang),
+            ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+            signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+          },
+          NEWS,
+        )
+        await shot(page, `guest-${lang}-${id}-${festival}`)
       })
-      expect(asked.status()).toBe(201)
 
-      const { page } = asha
-      await busiest(page, id, lang)
-      const conn = page.locator('.conn-button')
-      const items: Record<string, Locator> = {
-        ...common(page, place, lang),
-        visibility: page.getByText(WORDS[lang].sees, { exact: true }),
-        profile: page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
-        invite: page.locator('.invite-button'),
-        connections: conn,
-        badge: conn.locator('.conn-badge'),
-      }
-      await expect(items.badge!).toHaveText('1')
-      await laidOut(items, [['connections', 'badge'], ...NEWS])
-      await shot(page, `signed-${lang}-${id}`)
-    })
-  }
+      test(`signed in on a small phone, the identity row fits too in ${place} (${lang}, ${festival}): visibility, profile, invite, connections and its badge`, async ({
+        browser,
+      }) => {
+        const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+        const asha = await resident(browser, 'Asha', phone)
+        // someone verified asks to meet her, so Connections carries a badge
+        const ravi = await resident(browser, 'Ravi')
+        expect(
+          (await ravi.page.request.post(`${API}/api/dev/verify`, { data: { userId: ravi.id } })).status(),
+        ).toBe(200)
+        const token = await ravi.page.evaluate(() => sessionStorage.getItem('gg-dev-token')!)
+        const asked = await ravi.page.request.post(`${API}/api/requests`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: { to: asha.id, reason: 'Mujhe bhi chai aur kitaabein pasand hain' },
+        })
+        expect(asked.status()).toBe(201)
+
+        const { page } = asha
+        await busiest(page, id, lang, festival)
+        const conn = page.locator('.conn-button')
+        const items: Record<string, Locator> = {
+          ...common(page, place, lang),
+          visibility: page.getByText(WORDS[lang].sees, { exact: true }),
+          profile: page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
+          invite: page.locator('.invite-button'),
+          connections: conn,
+          badge: conn.locator('.conn-badge'),
+        }
+        await expect(items.badge!).toHaveText('1')
+        await laidOut(items, [['connections', 'badge'], ...NEWS])
+        await shot(page, `signed-${lang}-${id}-${festival}`)
+      })
+    }
 
 test('the HUD switches say what they do, and show their state only through aria-pressed', async ({
   page,

@@ -299,5 +299,5 @@ test('a Teej procession names the Teej swing cart', async ({ page }) => {
   await page.getByRole('button', { name: 'Padharo!' }).click()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
   await expect.poll(() => page.evaluate(() => window.__gg.procession().count)).toBeGreaterThan(0)
-  await expect(page.getByText('Hari lehariya mein Teej ka jhoola gali-gali ghoom raha hai')).toBeVisible()
+  await expect(page.getByText('Teej ka jhoola gali-gali ghoom raha hai')).toBeVisible()
 })
