@@ -102,6 +102,8 @@ describe('socket caps', () => {
     expect(testEnv.MAX_IP_SOCKETS).toBe('24')
     expect(ipKey('203.0.113.7')).toBe('203.0.113.7')
     expect(ipKey('::ffff:203.0.113.7')).toBe('203.0.113.7')
+    expect(ipKey('::ffff:cb00:7107')).toBe('203.0.113.7')
+    expect(ipKey('0:0:0:0:0:ffff:cb00:7107')).toBe('203.0.113.7')
     for (const same of ['2001:db8:1:2::a', '2001:DB8:1:2:ffff::b', '2001:0db8:0001:0002:0:0:0:c'])
       expect(ipKey(same)).toBe('2001:db8:1:2::/64')
     expect(ipKey('2001:db8:1:3::a')).toBe('2001:db8:1:3::/64')

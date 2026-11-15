@@ -252,6 +252,13 @@ export function ipKey(ip: string): string {
   if (!a.includes(':')) return a
   const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
   if (mapped) return mapped[1]!
+  // The same address written in hex (::ffff:7f00:1) is the IPv4 one too.
+  const hex = a.match(/^(?:0:0:0:0:0|::):?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+  if (hex) {
+    const hi = parseInt(hex[1]!, 16)
+    const lo = parseInt(hex[2]!, 16)
+    return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`
+  }
   const [head, tail] = a.split('::') as [string, string | undefined]
   const h = head ? head.split(':') : []
   const t = tail ? tail.split(':') : []
@@ -481,6 +488,7 @@ export class DistrictDO extends DurableObject<Env> {
   private trust = new Map<string, Trust>()
   /** Per person, the newest `refresh` asked for (see there). */
   private refreshSeq = new Map<string, number>()
+  private refreshCount = 0
   /** Whether `trust` holds everyone connected since this instance started; `warming` while it loads. */
   private warm = false
   private warming: Promise<boolean> | null = null
@@ -799,11 +807,16 @@ export class DistrictDO extends DurableObject<Env> {
     }
     if (!(await this.ready())) throw new Error('district: trust state unavailable')
     // Loads can finish out of order: only the newest one asked for may be applied.
-    const seq = (this.refreshSeq.get(userId) ?? 0) + 1
+    const seq = ++this.refreshCount
     this.refreshSeq.set(userId, seq)
-    const [got, person] = await Promise.all([loadTrust(this.env, [userId]), loadResident(this.env, userId)])
-    if (this.refreshSeq.get(userId) !== seq) return
-    this.apply(userId, got.get(userId) ?? noTrust(), person, why)
+    try {
+      const [got, person] = await Promise.all([loadTrust(this.env, [userId]), loadResident(this.env, userId)])
+      if (this.refreshSeq.get(userId) !== seq) return
+      this.apply(userId, got.get(userId) ?? noTrust(), person, why)
+    } finally {
+      // Only the newest ask clears the entry, so the map holds just the people with a load in flight.
+      if (this.refreshSeq.get(userId) === seq) this.refreshSeq.delete(userId)
+    }
   }
 
   /**
@@ -844,13 +857,15 @@ export class DistrictDO extends DurableObject<Env> {
    * `TRUST_SWEEP_MS` or so. Run by the alarm, which comes round at least every `IDLE_MS` while anyone is here.
    */
   private async resweep(now: number): Promise<void> {
-    this.trustSweptAt = now
     const ids = new Set<string>()
     for (const ws of this.sockets()) {
       const { userId } = this.seat(ws)
       if (userId) ids.add(userId)
     }
-    if (!ids.size || now - this.trustFailedAt < TRUST_RETRY_MS) return
+    // Skipped for a recent failure: not counted as done, so the next alarm tries rather than waiting a minute.
+    if (ids.size && now - this.trustFailedAt < TRUST_RETRY_MS) return
+    this.trustSweptAt = now
+    if (!ids.size) return
     let got: Map<string, Trust>
     try {
       got = await loadTrust(this.env, [...ids])
