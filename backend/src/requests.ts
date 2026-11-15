@@ -152,7 +152,8 @@ export async function sendRequest(
       return Response.json({ matched: matchId })
     }
   }
-  later(notify(env, to, { t: 'request', id }))
+  // The sender passed `visibleRow` above (a hidden person cannot ask), so this one may push.
+  later(notify(env, to, { t: 'request', id }, { push: true }))
   return Response.json({ id }, { status: 201 })
 }
 

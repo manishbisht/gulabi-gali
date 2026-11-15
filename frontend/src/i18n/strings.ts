@@ -187,6 +187,36 @@ export const STRINGS = {
     hi: 'Koi tumhe nayi request nahi bhej payega. Jo chats chal rahi hain, chalti rahengi.',
     en: 'Nobody can send you a new request. Chats you already have carry on.',
   },
+  /** Push notifications, opted into per device in the profile sheet (see src/push). */
+  pushToggle: { hi: 'Naye messages pe batao', en: 'Tell me about new messages' },
+  pushHint: {
+    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega. Screen pe sirf "ek nayi request" ya "ek naya message" aayega: na kisi ka naam, na koi baat.',
+    en: 'Your phone lets you know about a new request or message even when Gulabi Gali is shut. The screen only ever says "a new request" or "a new message": never a name, never what was said.',
+  },
+  pushInApp: {
+    hi: 'Instagram ke andar wale browser mein notifications nahi aa sakte. Gulabi Gali ko Chrome ya Safari mein kholo, wahan chalu karo.',
+    en: "Instagram's built-in browser can't show notifications. Open Gulabi Gali in Chrome or Safari and turn them on there.",
+  },
+  pushIos: {
+    hi: 'iPhone pe notifications tab hi aate hain jab Gulabi Gali home screen pe ho: Safari mein Share, phir "Add to Home Screen", aur wahan se kholo.',
+    en: 'On iPhone, notifications only work once Gulabi Gali is on your home screen: in Safari tap Share, then "Add to Home Screen", and open it from there.',
+  },
+  pushUnsupported: {
+    hi: 'Is browser mein notifications nahi chalte.',
+    en: "This browser can't show notifications.",
+  },
+  pushDenied: {
+    hi: 'Is browser ne Gulabi Gali ke notifications rok rakhe hain. Browser ki site settings mein allow karo, phir yahan chalu karo.',
+    en: 'This browser is blocking notifications from Gulabi Gali. Allow them in its site settings, then turn them on here.',
+  },
+  pushFailed: {
+    hi: 'Notifications chalu nahi ho paaye. Thodi der baad phir try karo.',
+    en: "Couldn't turn notifications on. Try again in a little while.",
+  },
+  /** What the lock screen shows (public/sw.js holds the same words, checked by sw.test.ts): never a name or text. */
+  pushTitle: { hi: 'Gulabi Gali', en: 'Gulabi Gali' },
+  pushRequest: { hi: 'Ek nayi request', en: 'A new request' },
+  pushMessage: { hi: 'Ek naya message', en: 'A new message' },
   profileLink: { hi: 'Apna link (zaroori nahi)', en: 'Your link (optional)' },
   profileLinkHint: {
     hi: 'https:// se shuru hone wala. Har verified member ise dekh sakta hai, isliye wahi link daalo jo un sab ko dikhana theek lage.',
@@ -566,6 +596,10 @@ export const STRINGS = {
   privacyStoredErrors: {
     hi: 'Jab page pe kuch toot jaata hai, toh uski chhoti si report hamare apne server pe jaati hai: kya toota, phone tha ya computer, Instagram/Facebook ke andar khula tha ya nahi, aur kaun si jagah. Aapka naam, id ya aapka likha kuch nahi. 14 din mein mit jaati hai.',
     en: 'When something breaks on the page, a short report goes to our own server: what broke, phone or computer, whether it opened inside Instagram/Facebook, and which area. No names, ids or anything you typed. It is deleted within 14 days.',
+  },
+  privacyStoredPush: {
+    hi: 'Agar aap "Naye messages pe batao" chalu karte ho, toh us phone ka notification address (browser ki push service ka) save hota hai. Notification mein sirf "ek nayi request" ya "ek naya message" jaata hai, kabhi naam ya baat nahi. Band karne, logout karne ya account delete karne par ye mit jaata hai.',
+    en: 'If you turn on "Tell me about new messages", that phone\'s notification address (from the browser\'s push service) is kept. A notification only ever says "a new request" or "a new message", never a name or what was said. It is deleted when you turn it off, sign out or delete your account.',
   },
   /** Only in a build with Web Analytics (`ANALYTICS_ON`). */
   privacyAnalytics: {

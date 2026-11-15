@@ -147,6 +147,14 @@ export function woKaata(): boolean {
   return true
 }
 
+/**
+ * The page's one audio context, for the ambience to build on (made here if there is none yet; the caller
+ * only asks from inside a tap or key press). Typed loosely: the ambience declares what it uses.
+ */
+export function sharedAudio(): unknown {
+  return context()
+}
+
 /** Lets the audio context go (the page is leaving the city); the next honk makes a fresh one. */
 export function closeAudio(): void {
   const c = ctx

@@ -4,7 +4,7 @@ import { holdEvidence } from './evidence'
 import { wordsOk } from './filter/server'
 import { floating, notify, type Later } from './inbox'
 import { firstName } from './names'
-import { ACTIVE, activeRow, isBlocked, toPublic } from './profiles'
+import { ACTIVE, activeRow, isBlocked, toPublic, visibleRow } from './profiles'
 import { pairOf } from './requests'
 import {
   MAX_MESSAGE,
@@ -233,7 +233,16 @@ export async function postMessage(
     const still = await env.DB.prepare('SELECT 1 AS x FROM matches WHERE id = ?').bind(match.id).first()
     return still ? rateLimited(MESSAGE_GAP_MS, now) : notFound()
   }
-  later(notify(env, match.other, { t: 'message', matchId: match.id, id }))
+  // The open inbox always hears it; a push only when the sender is someone others can see (a hidden person
+  // keeps their chats, but is never notified about).
+  later(
+    visibleRow(env, userId)
+      .then(
+        (row) => row !== null,
+        () => false,
+      )
+      .then((push) => notify(env, match.other, { t: 'message', matchId: match.id, id }, { push })),
+  )
   const sent: ChatMessage = { id, body, at: now, mine: true }
   return Response.json(sent, { status: 201 })
 }

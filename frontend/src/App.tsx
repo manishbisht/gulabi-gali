@@ -10,12 +10,14 @@ import { noteDistrict } from './net/errorBeacon'
 import { useRateNotice } from './net/useRateNotice'
 import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
+import { usePush } from './push/usePush'
 import { VisibilityChip } from './ui/VisibilityChip'
 import { loadOrCreateLook, lookFromWire } from './player/avatar'
 import { useLang } from './i18n/lang'
 import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
 import { useLiveCity } from './live/useLiveCity'
+import { setAmbienceDuck } from './audio/ambience'
 import { setSoundOn, soundOn } from './audio/horn'
 import { createControls, type Controls } from './player/controls'
 import { disposeAvatarCache } from './player/avatar'
@@ -255,6 +257,18 @@ export default function App() {
   if (!residentId && connOpen) setConnOpen(false)
   if (!residentId && inviteOpen) setInviteOpen(false)
   const connShown = connOpen && !!residentId
+  /** Push notifications: a tapped one opens the inbox (once there is a resident), and each visit refreshes it. */
+  const push = usePush({
+    ready: auth.ready,
+    signedIn: auth.signedIn,
+    resident: !!residentId,
+    token: auth.token,
+    lang,
+  })
+  if (push.inboxAsked && residentId) {
+    push.inboxDone()
+    setConnOpen(true)
+  }
   // C opens and closes Connections, unless a text field has the keys
   useEffect(() => {
     if (!residentId) return
@@ -275,6 +289,9 @@ export default function App() {
   const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
   // in photo mode the pillar keeps out of the view (and out of every capture, see `Stage.capture`)
   useEffect(() => hideMapPillar(!!photo), [photo, hideMapPillar])
+  // photo mode and the taxi ride duck the city sounds to half (see setAmbienceDuck)
+  const ducked = !!photo || taxi.riding
+  useEffect(() => setAmbienceDuck(ducked), [ducked])
   // the kite fight is Sankranti's: if the festival goes (the snapshot changes mid-round), so does it
   if (kiteFrom && festival !== 'sankranti') setKiteFrom(null)
 

@@ -10,6 +10,7 @@ import { getPosters } from '../net/api'
 import { connectLive, type LiveConn, type LiveState } from '../net/live'
 import type { ClientMsg, DistrictId, FestivalId, LivePerson, PosterView, ServerMsg } from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
+import { createAmbience } from '../audio/ambience'
 import { closeAudio } from '../audio/horn'
 import { DRAG_TURN } from '../player/camera'
 import type { Controls } from '../player/controls'
@@ -377,6 +378,13 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         dispose: bandar.dispose,
       },
       sky,
+      createAmbience({
+        district: district.def.id,
+        sky: sky.params,
+        festival: hooks.festival,
+        quality: () => stage.quality,
+        onQuality: stage.onQuality,
+      }),
       createLights(stage, district),
       { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
       taxi,

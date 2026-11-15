@@ -189,6 +189,57 @@ it('a resident can pause requests, and un-pause them, with the rest of the profi
   expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ pauseRequests: false }))
 })
 
+describe('push notifications in the sheet', () => {
+  const profile = {
+    id: 'u',
+    name: 'Asha',
+    look: { skin: 1, outfit: 'teal', head: 'none' },
+    status: '',
+    homeArea: 'Raja Park',
+    hereFor: null,
+    about: '',
+    pauseRequests: false,
+    stamps: [] as string[],
+  } as const
+  const render = (complete: boolean) =>
+    act(async () =>
+      root.render(
+        <ProfileSheet
+          me={{ id: 'u', profile, complete, verified: false }}
+          lang="hi"
+          token={async () => 'tok'}
+          onSave={vi.fn()}
+          onClose={() => {}}
+          onSignOut={() => {}}
+        />,
+      ),
+    )
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('a resident finds "Naye messages pe batao" (here, a browser without push says so)', async () => {
+    vi.stubEnv(
+      'VITE_VAPID_PUBLIC_KEY',
+      'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U',
+    )
+    await render(true)
+    expect(host.querySelector('.push-setting')!.textContent).toContain('Naye messages pe batao')
+  })
+
+  it('not before the profile is complete (nobody can ask a ghost), nor in a build without a key', async () => {
+    vi.stubEnv(
+      'VITE_VAPID_PUBLIC_KEY',
+      'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U',
+    )
+    await render(false)
+    expect(host.querySelector('.push-setting')).toBeNull()
+    vi.stubEnv('VITE_VAPID_PUBLIC_KEY', '')
+    await act(async () => root.unmount())
+    root = createRoot(host)
+    await render(true)
+    expect(host.querySelector('.push-setting')).toBeNull()
+  })
+})
+
 describe('the profile link', () => {
   const stored = {
     id: 'u',

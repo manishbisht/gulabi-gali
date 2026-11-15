@@ -157,6 +157,9 @@ jobs:
           # Empty keeps Cloudflare Web Analytics off (no beacon, and the CSP is not widened); set it to count
           # visits. The error beacon's build id is the commit's short sha, read by vite.config.ts from git.
           VITE_CF_BEACON_TOKEN: ${{ secrets.VITE_CF_BEACON_TOKEN }}
+          # Push notifications' VAPID public key (scripts/vapid-setup.mjs sets it). Empty keeps push off: the
+          # profile sheet shows no switch.
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
         run: npm run build -w frontend -- --base "${PAGES_BASE_PATH}/"
 
       - name: Upload site artifact
