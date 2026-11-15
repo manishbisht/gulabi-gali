@@ -238,11 +238,14 @@ export interface MessagePage {
   messages: ChatMessage[]
   before: string | null
 }
-/** A match, with the other person's public face and the last thing said, if anything has been. */
+/**
+ * A match, with the other person's public face and the last thing said, if anything has been. `last.id` is that
+ * message's id: a page compares it with the last one it read to tell an unread chat without fetching it.
+ */
 export interface MatchView {
   id: string
   person: PublicPerson
-  last?: Omit<ChatMessage, 'id'>
+  last?: ChatMessage
 }
 /**
  * `not-found` covers a match that does not exist and one the asker is not (or no longer may be) in alike.

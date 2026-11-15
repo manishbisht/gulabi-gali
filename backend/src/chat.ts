@@ -129,7 +129,7 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
   // One query: the other side's profile and each match's last message come in by join.
   const { results } = await env.DB.prepare(
     `SELECT m.id, p.user_id, p.name, p.look, p.status,
-            l.body AS last_body, l.created_at AS last_at, l.sender AS last_sender
+            l.id AS last_id, l.body AS last_body, l.created_at AS last_at, l.sender AS last_sender
      FROM matches m
      JOIN profiles p ON p.user_id = CASE WHEN m.a = ?1 THEN m.b ELSE m.a END
      JOIN users u ON u.id = p.user_id
@@ -147,6 +147,7 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
       name: string
       look: string
       status: string
+      last_id: string | null
       last_body: string | null
       last_at: number | null
       last_sender: string | null
@@ -160,7 +161,11 @@ export async function listMatches(env: Env, userId: string): Promise<Response> {
     })
     return r.last_at === null
       ? { id: r.id, person }
-      : { id: r.id, person, last: { body: r.last_body!, at: r.last_at, mine: r.last_sender === userId } }
+      : {
+          id: r.id,
+          person,
+          last: { id: r.last_id!, body: r.last_body!, at: r.last_at, mine: r.last_sender === userId },
+        }
   })
   return Response.json(out)
 }

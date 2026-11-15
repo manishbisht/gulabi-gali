@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  acceptRequest,
-  getEnded,
-  getMatches,
-  getMessages,
-  getRequests,
-  ignoreRequest,
-  unmatch,
-} from '../net/api'
+import { acceptRequest, getEnded, getMatches, getRequests, ignoreRequest, unmatch } from '../net/api'
 import { connectInbox } from '../net/inbox'
 import type { EndedChat, InboxNotice, MatchView, RequestLists } from '../net/protocol'
 import { storage } from '../storage'
@@ -78,7 +70,7 @@ export function useConnections({
   const [matches, setMatches] = useState<MatchView[]>([])
   const [seen, setSeen] = useState<ReadonlySet<string>>(new Set())
   const [read, setRead] = useState<ReadMap>(loadRead)
-  /** The newest message id known per match, from a notice or a fetch. */
+  /** The newest message id known per match: from the list's last line, a notice, or the chat read. */
   const [latest, setLatest] = useState<Record<string, string>>({})
   const [messageTicks, setTicks] = useState<Record<string, number>>({})
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set())
@@ -91,7 +83,6 @@ export function useConnections({
   const tokenRef = useRef(token)
   const bannedRef = useRef(onBanned)
   const alive = useRef(true)
-  const asked = useRef(new Set<string>())
   useEffect(() => {
     tokenRef.current = token
     bannedRef.current = onBanned
@@ -137,17 +128,12 @@ export function useConnections({
           const keep = Object.keys(r).filter((k) => ids.has(k))
           return keep.length === Object.keys(r).length ? r : Object.fromEntries(keep.map((k) => [k, r[k]!]))
         })
-        // A chat's last line carries no id: for a chat read before, ask once what its newest id is
-        for (const m of mat.value) {
-          if (!m.last || m.last.mine || asked.current.has(m.id)) continue
-          asked.current.add(m.id)
-          void getMessages(tok, m.id)
-            .then((page) => {
-              const id = page?.messages.at(-1)?.id
-              if (id && alive.current && g === gen.current) setLatest((l) => ({ ...l, [m.id]: id }))
-            })
-            .catch(() => asked.current.delete(m.id))
-        }
+        // each chat's last line names its message: that is its newest id, no fetch of the chat needed
+        setLatest((l) => {
+          const next = { ...l }
+          for (const m of mat.value) if (m.last) next[m.id] = m.last.id
+          return next
+        })
       }
     },
     [writeRead],
@@ -156,7 +142,6 @@ export function useConnections({
   useEffect(() => {
     if (!user) return
     const generation = gen
-    const questions = asked
     const conn = connectInbox({
       token: () => tokenRef.current(),
       onBanned: () => bannedRef.current?.(),
@@ -178,7 +163,6 @@ export function useConnections({
     return () => {
       conn.close()
       generation.current++
-      questions.current.clear()
       setLists(NONE)
       setMatches([])
       setSeen(new Set())
@@ -195,9 +179,9 @@ export function useConnections({
     (matchId: string) => {
       const m = matches.find((x) => x.id === matchId)
       if (!m?.last || m.last.mine) return false
-      // no mark yet: never opened. A mark with the newest id still unknown reads as read until it is known.
+      // no mark yet: never opened. Otherwise unread while the newest id is not the one read up to.
       if (read[matchId] === undefined) return true
-      return latest[matchId] !== undefined && latest[matchId] !== read[matchId]
+      return (latest[matchId] ?? m.last.id) !== read[matchId]
     },
     [matches, read, latest],
   )

@@ -253,7 +253,10 @@ describe('chat', () => {
     }
     const now = Date.now()
     expect((await postMessage(testEnv, id('chata8'), matchId, { body: 'Pehla' }, now)).status).toBe(201)
-    expect((await postMessage(testEnv, id('chatb8'), matchId, { body: 'Doosra' }, now + 1)).status).toBe(201)
+    const second = await postMessage(testEnv, id('chatb8'), matchId, { body: 'Doosra' }, now + 1)
+    expect(second.status).toBe(201)
+    // the last line carries its message id: a page tells unread from read without fetching the chat
+    const { id: lastId } = (await second.json()) as { id: string }
 
     const res = await api('/api/matches', a)
     expect(res.status).toBe(200)
@@ -267,14 +270,14 @@ describe('chat', () => {
           look: { skin: 1, outfit: 'pink', head: 'none' },
           status: 'chai pe',
         },
-        last: { body: 'Doosra', at: now + 1, mine: false },
+        last: { id: lastId, body: 'Doosra', at: now + 1, mine: false },
       },
       { id: other, person: expect.objectContaining({ id: id('chatc8') }) },
     ])
     expect(JSON.stringify(list)).not.toContain('Private')
     const theirs = (await (await api('/api/matches', b)).json()) as MatchView[]
     expect(theirs).toEqual([
-      expect.objectContaining({ id: matchId, last: { body: 'Doosra', at: now + 1, mine: true } }),
+      expect.objectContaining({ id: matchId, last: { id: lastId, body: 'Doosra', at: now + 1, mine: true } }),
     ])
 
     // Someone banned drops out of the list.

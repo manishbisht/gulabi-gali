@@ -64,7 +64,7 @@ beforeEach(() => {
   msgs = [{ id: 'z9', body: 'hello', at: 5, mine: false }]
   localStorage.clear()
   requests = { incoming: [incomingFrom(asha, 'Chai pe chalein? JKK ke baad')], sent: [] }
-  matches = [{ id: 'm1', person: ravi, last: { body: 'hello', at: 5, mine: false } }]
+  matches = [{ id: 'm1', person: ravi, last: { id: 'z9', body: 'hello', at: 5, mine: false } }]
   vi.stubGlobal('WebSocket', FakeSocket)
   vi.stubGlobal(
     'fetch',
@@ -152,6 +152,48 @@ it('badge counts unread', async () => {
   expect(q('[data-testid=badge]').textContent).toBe('2')
   // looking at the incoming tab reads the request; the chat stays unread
   await click(q('[data-testid=open]'))
+  await settle()
+  expect(q('[data-testid=badge]').textContent).toBe('1')
+})
+
+it("loading the inbox fetches no chat's messages: a chat's last id is in the list", async () => {
+  localStorage.setItem('gg-read', JSON.stringify({ m1: 'z9' }))
+  const { q } = await mount()
+  expect(calls.filter((c) => c.includes('/messages'))).toEqual([])
+  // read up to its last line: only the request counts
+  expect(q('[data-testid=badge]').textContent).toBe('1')
+})
+
+it('a chat read before is unread again once its last line is newer, and read once opened', async () => {
+  localStorage.setItem('gg-read', JSON.stringify({ m1: 'z8' }))
+  const { host, q, button, click } = await mount()
+  expect(calls.filter((c) => c.includes('/messages'))).toEqual([])
+  expect(q('[data-testid=badge]').textContent).toBe('2')
+  await click(q('[data-testid=open]'))
+  await settle()
+  await click([...host.querySelectorAll('[role=tab]')].find((b) => b.textContent?.includes('Chats'))!)
+  await click(button(/Ravi/))
+  await settle()
+  expect(q('[data-testid=badge]').textContent).toBe('0')
+  expect(JSON.parse(localStorage.getItem('gg-read')!)).toEqual({ m1: 'z9' })
+})
+
+it('a new message (a notice, then the list) makes a read chat unread, without fetching it', async () => {
+  localStorage.setItem('gg-read', JSON.stringify({ m1: 'z9' }))
+  const { q } = await mount()
+  expect(q('[data-testid=badge]').textContent).toBe('1')
+  matches = [{ id: 'm1', person: ravi, last: { id: 'z10', body: 'aur?', at: 6, mine: false } }]
+  await act(async () =>
+    FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'message', matchId: 'm1', id: 'z10' }) }),
+  )
+  await settle()
+  expect(q('[data-testid=badge]').textContent).toBe('2')
+  expect(calls.filter((c) => c.includes('/messages'))).toEqual([])
+  // my own reply as the last line is never unread
+  matches = [{ id: 'm1', person: ravi, last: { id: 'z11', body: 'chalo', at: 7, mine: true } }]
+  await act(async () =>
+    FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'message', matchId: 'm1', id: 'z11' }) }),
+  )
   await settle()
   expect(q('[data-testid=badge]').textContent).toBe('1')
 })

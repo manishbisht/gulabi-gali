@@ -249,6 +249,12 @@ important lives in the notice, so a lost one is harmless; the client refetches o
 (`src/net/inbox.ts`, `src/net/reconnect.ts`, `src/connections/useConnections.ts`) and the lists in
 `ui/Connections.tsx` and `ui/ChatView.tsx` come from D1.
 
+Unread is worked out on the page, with no fetch per chat: `GET /api/matches` gives each chat's last line with
+its message id (`MatchView.last.id`), a `message` notice names its id too, and `gg-read` in `localStorage`
+keeps, per match, the id of the newest message read. A chat is unread when its last line is someone else's and
+its newest id is not the one read (or it was never opened); opening it marks it read. The badge counts those
+plus incoming requests not looked at yet this session.
+
 ### The cap and the waitlist: GateDO
 
 One `GateDO` (named `global`, `backend/src/gate.ts`) counts the residents seen across all four districts,
