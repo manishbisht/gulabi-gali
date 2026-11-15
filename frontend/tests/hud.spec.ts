@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { closePeople, hopTo, resident } from './support/people'
+import { closePeople, hopTo, resident, verify } from './support/people'
 
 /** A small phone, held upright. */
 const PHONE = { width: 360, height: 740 }
@@ -429,4 +429,152 @@ test('seated at a tapri on a small phone, the panel head keeps its title, "Bulao
   for (const b of boxes.slice(1)) expect(Math.abs(mid(b) - mid(boxes[0]!)), 'one row').toBeLessThan(6)
   for (const b of boxes.slice(1)) expect(b.height, 'thumb-sized').toBeGreaterThanOrEqual(44)
   if (process.env.GG_BENCH_SHOT) await page.screenshot({ path: process.env.GG_BENCH_SHOT })
+})
+
+/** The Pink City's poster wall on Johari Bazaar, at (-6, 48), its face to +x: 1.5 m in front of it. */
+const BY_WALL = { x: -4.5, z: 48 }
+/** A plan as long as a poster takes (140 characters), so the card is as tall as it gets. */
+const LONG_PLAN = (tag: string) =>
+  `Chai at the Tapri, then a slow walk round Johari Bazaar and up to the Hawa Mahal view, all welcome ${tag}`
+    .padEnd(140, '.')
+    .slice(0, 140)
+
+/**
+ * A card at the bottom fits between the top block and the screen's foot (it scrolls inside when it must), and
+ * every control in it can be reached: scrolled into view it is on the screen, inside the card, and nothing
+ * covers it (a trial tap would land on it).
+ */
+async function reachable(page: Page, card: Locator, controls: Locator[]) {
+  await card.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const head = (await page.locator('.hud-head').boundingBox())!
+  const c = (await card.boundingBox())!
+  expect.soft(c.y, 'card top below the HUD head').toBeGreaterThanOrEqual(head.y + head.height)
+  expect.soft(c.y + c.height, 'card bottom on the screen').toBeLessThanOrEqual(PHONE.height)
+  expect.soft(c.x, 'card left').toBeGreaterThanOrEqual(0)
+  expect.soft(c.x + c.width, 'card right').toBeLessThanOrEqual(PHONE.width)
+  for (const control of controls) {
+    await expect(control).toBeVisible()
+    await control.scrollIntoViewIfNeeded()
+    const b = (await control.boundingBox())!
+    const name = (await control.textContent()) ?? ''
+    expect.soft(b.y, `${name} top`).toBeGreaterThanOrEqual(c.y - 0.5)
+    expect
+      .soft(b.y + b.height, `${name} bottom`)
+      .toBeLessThanOrEqual(Math.min(PHONE.height, c.y + c.height) + 0.5)
+    expect.soft(b.height, `${name} thumb-sized`).toBeGreaterThanOrEqual(44)
+    await control.click({ trial: true, timeout: 2000 })
+  }
+}
+
+test('a poster card on a small phone: a 140-character plan you are coming to, and its owner with the names, every button in reach', async ({
+  browser,
+}) => {
+  const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+  const owner = await resident(browser, 'Asha', phone)
+  await verify(owner.page)
+  const viewer = await resident(browser, 'Bina', phone)
+  await verify(viewer.page)
+  const plan = LONG_PLAN(String(Date.now() % 100000))
+  expect(plan).toHaveLength(140)
+  const token = await owner.page.evaluate(() => sessionStorage.getItem('gg-dev-token')!)
+  const pinned = await owner.page.request.post(`${API}/api/posters`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { district: 'walled-city', wall: 0, text: plan, when: Date.now() + 3 * 3600_000 },
+  })
+  expect(pinned.status()).toBe(201)
+
+  const tapPlan = async (page: Page) => {
+    await hopTo(page, BY_WALL.x, BY_WALL.z)
+    await expect
+      .poll(() => page.evaluate((text) => window.__gg.posters().some((p) => p.text === text), plan))
+      .toBe(true)
+    const [at] = await page.evaluate((text) => window.__gg.posters().filter((p) => p.text === text), plan)
+    await page.mouse.click(at!.sx, at!.sy)
+    const card = page.getByRole('region', { name: 'Deewar ka poster' })
+    await expect(card).toBeVisible()
+    return card
+  }
+
+  await test.step('a verified viewer who said they are coming', async () => {
+    const card = await tapPlan(viewer.page)
+    await card.getByRole('button', { name: 'Main aaunga/aaungi' }).click()
+    await expect(card.getByText('Aane wale: 1')).toBeVisible()
+    await reachable(viewer.page, card, [
+      card.getByRole('button', { name: 'Nahi aa paunga/paungi' }),
+      card.getByRole('button', { name: 'Block karo' }),
+      card.getByRole('button', { name: 'Report karo' }),
+      card.getByRole('button', { name: 'Band karo' }),
+    ])
+    if (process.env.GG_CARD_SHOT)
+      await viewer.page.screenshot({ path: `${process.env.GG_CARD_SHOT}-poster-viewer.png` })
+  })
+
+  await test.step("the owner's card, with who is coming", async () => {
+    const card = await tapPlan(owner.page)
+    await expect(card.getByText(`Kaun aa raha hai: ${viewer.name}`)).toBeVisible()
+    await reachable(owner.page, card, [
+      card.getByRole('button', { name: 'Utaaro' }),
+      card.getByRole('button', { name: 'Band karo' }),
+    ])
+    if (process.env.GG_CARD_SHOT)
+      await owner.page.screenshot({ path: `${process.env.GG_CARD_SHOT}-poster-owner.png` })
+  })
+})
+
+test('a person card on a small phone, with its greetings row, and a greeting toast offering a block: all in reach', async ({
+  browser,
+}) => {
+  const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+  const ravi = await resident(browser, 'Ravi', phone)
+  const asha = await resident(browser, 'Asha', phone)
+  await verify(asha.page)
+  // Asha's district socket goes through here, so the test can hand her page what the district would say
+  let socket: import('@playwright/test').WebSocketRoute | null = null
+  await asha.page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, (ws) => {
+    socket = ws
+    ws.connectToServer()
+  })
+  await asha.page.reload()
+  await asha.page.getByRole('button', { name: 'Padharo!' }).click()
+  await asha.page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  await expect(asha.page.getByText('Jaipur tumhe dekh sakta hai')).toBeVisible()
+  await expect
+    .poll(() => asha.page.evaluate((id) => window.__gg.people().some((p) => p.id === id), ravi.id))
+    .toBe(true)
+
+  await test.step("Ravi's card, with the greetings row", async () => {
+    const at = await ravi.page.evaluate(() => window.__gg.position())
+    await hopTo(asha.page, at.x + 1.2, at.z)
+    await asha.page.keyboard.press('e')
+    const card = asha.page.getByRole('region', { name: ravi.name })
+    await expect(card).toBeVisible()
+    const greet = card.getByRole('group', { name: 'Door se hi salaam' })
+    await reachable(asha.page, card, [
+      greet.getByRole('button', { name: 'Haath hilao 👋' }),
+      greet.getByRole('button', { name: 'Namaste 🙏' }),
+      card.getByRole('button', { name: 'Block karo' }),
+      card.getByRole('button', { name: 'Band karo' }),
+    ])
+    if (process.env.GG_CARD_SHOT)
+      await asha.page.screenshot({ path: `${process.env.GG_CARD_SHOT}-person.png` })
+    await card.getByRole('button', { name: 'Band karo' }).click()
+  })
+
+  await test.step('a third greeting from the same person: the toast offers a block, in reach', async () => {
+    for (let i = 0; i < 3; i++)
+      socket!.send(JSON.stringify({ t: 'react', from: ravi.id, to: asha.id, kind: 'wave' }))
+    const offer = asha.page.getByRole('button', { name: `${ravi.name} ko block karo` })
+    await expect(offer).toBeVisible()
+    const toast = asha.page.locator('.reaction-toast')
+    const t = (await toast.boundingBox())!
+    expect.soft(t.x, 'toast left').toBeGreaterThanOrEqual(0)
+    expect.soft(t.x + t.width, 'toast right').toBeLessThanOrEqual(PHONE.width)
+    expect.soft(t.y + t.height, 'toast bottom').toBeLessThanOrEqual(PHONE.height)
+    const b = (await offer.boundingBox())!
+    expect.soft(b.height, 'block offer thumb-sized').toBeGreaterThanOrEqual(44)
+    expect.soft(b.y + b.height, 'block offer on the screen').toBeLessThanOrEqual(PHONE.height)
+    await offer.click({ trial: true, timeout: 2000 })
+    if (process.env.GG_CARD_SHOT)
+      await asha.page.screenshot({ path: `${process.env.GG_CARD_SHOT}-toast.png` })
+  })
 })

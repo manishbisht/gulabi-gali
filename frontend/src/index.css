@@ -204,9 +204,23 @@ button {
 
 .hud-bottom {
   margin-top: auto;
+  /* may shrink to the room left under the HUD's head, so a tall card scrolls inside it (below) */
+  min-height: 0;
   display: flex;
   align-items: flex-end;
   gap: 12px;
+}
+
+/*
+ * A card in the bottom row never runs off a small phone: it takes at most the room between the HUD's head (and
+ * any toast under it) and the screen's foot, and scrolls inside when its lines need more (a 140-character plan
+ * with the meet-up lines, a person's card with its greetings, a report form opened in it). Every button stays
+ * reachable.
+ */
+.hud-bottom > .landmark-card {
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .toast {
