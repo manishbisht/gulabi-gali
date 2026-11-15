@@ -90,13 +90,15 @@ export function useTravel() {
         await coach.done
         if (!bound()) return
         let arrived = false
+        let lost = false
         void loading.then(
           () => (arrived = true),
-          () => {},
+          () => (lost = true),
         )
-        // out of ride before the district is in: keep the coach, with a line saying so
+        // out of ride before the district is in: keep the coach, with a line saying so (not for a load that
+        // already failed: that goes straight to the failure, with no waiting line flashed first)
         await Promise.resolve()
-        if (!arrived) setRide({ from, to: id, waiting: true })
+        if (!arrived && !lost) setRide({ from, to: id, waiting: true })
         // "go back" aborts: the district that arrives late is thrown away and the failure path runs
         await Promise.race([
           loading,

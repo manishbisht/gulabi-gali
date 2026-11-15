@@ -7,10 +7,15 @@ import { FADE_MS, savedDistrict, STATION_RANGE, useTravel, type Swap } from './u
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+/** Whether any render so far showed the coach's "still waiting" line. */
+let sawWaiting = false
+
 function mount() {
   const out = {} as ReturnType<typeof useTravel>
+  sawWaiting = false
   function Probe() {
     Object.assign(out, useTravel())
+    if (out.ride?.waiting) sawWaiting = true
     return null
   }
   const root = createRoot(document.createElement('div'))
@@ -207,6 +212,7 @@ describe('the ride', () => {
     await act(() => trip) // no RIDE_MS wait
     expect(travel.ride).toBeNull()
     expect(travel.failed).toBe('university')
+    expect(sawWaiting).toBe(false) // a load that failed never flashes the waiting line
   })
 })
 

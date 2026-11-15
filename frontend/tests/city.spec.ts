@@ -259,7 +259,7 @@ test('a Gangaur procession walks the street, with its line on screen', async ({ 
   await expect(page.getByText('Gangaur ki sawari Tripolia se nikal rahi hai')).toBeVisible()
 })
 
-test('a Teej procession on another street names the Teej swing cart', async ({ page }) => {
+test('a Teej procession names the Teej swing cart', async ({ page }) => {
   await page.goto('/?gg-test=1&gg-festival=teej')
   await page.getByRole('button', { name: 'Padharo!' }).click()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)

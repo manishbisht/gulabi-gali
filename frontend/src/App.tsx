@@ -225,6 +225,7 @@ export default function App() {
   }, [residentId])
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
+  const processionKey = processionLine(festival, here)
   // the kite fight is Sankranti's: if the festival goes (the snapshot changes mid-round), so does it
   if (kiteFrom && festival !== 'sankranti') setKiteFrom(null)
 
@@ -480,7 +481,7 @@ export default function App() {
         snapshot={snapshot}
         line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
         banner={festival ? t(FESTIVALS[festival], lang) : undefined}
-        procession={processionLine(festival, here) && t(processionLine(festival, here)!, lang)}
+        procession={processionKey && t(processionKey, lang)}
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
