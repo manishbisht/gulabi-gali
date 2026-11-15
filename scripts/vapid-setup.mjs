@@ -37,7 +37,16 @@ async function main() {
   console.log('1/2 Worker secret VAPID_PRIVATE_JWK (wrangler secret put, from backend/)')
   pipeInto('npx', ['wrangler', 'secret', 'put', 'VAPID_PRIVATE_JWK'], privateJwk, path.join(ROOT, 'backend'))
   console.log('2/2 GitHub secret VITE_VAPID_PUBLIC_KEY (environment github-pages)')
-  pipeInto('gh', ['secret', 'set', 'VITE_VAPID_PUBLIC_KEY', '--env', 'github-pages'], publicKey, ROOT)
+  try {
+    pipeInto('gh', ['secret', 'set', 'VITE_VAPID_PUBLIC_KEY', '--env', 'github-pages'], publicKey, ROOT)
+  } catch (err) {
+    // The Worker holds the new private key, but the site would still be built with the old public key (or
+    // none): the two no longer match. A fresh run makes a new pair and sets both.
+    throw new Error(
+      `${err.message}. The Worker already has the new private key but GitHub does not have its public key, ` +
+        'so they do not match. Run `node scripts/vapid-setup.mjs` again (a fresh pair replaces both).',
+    )
+  }
   console.log(
     'Done. Push turns on once the Worker is deployed and the site is built again (see docs/deployment.md).',
   )

@@ -1,6 +1,8 @@
 import { applyD1Migrations, env } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
+import { postMessage } from '../src/chat'
+import type { Later } from '../src/inbox'
 import { PUSH_DEVICES, PUSH_LIMIT, pushTo, putPush } from '../src/push'
 import { b64url } from '../src/webpush'
 import { api, closeAll, devId, inbox, login, pair, resident, WAIT } from './helpers'
@@ -104,6 +106,11 @@ describe('subscribing a device', () => {
       { ...d.body, endpoint: `https://fcm.googleapis.com/${'x'.repeat(1100)}` },
       { ...d.body, keys: { ...d.ua.keys, p256dh: b64url.encode(new Uint8Array(65)) } },
       { ...d.body, keys: { ...d.ua.keys, auth: b64url.encode(new Uint8Array(8)) } },
+      // 65 bytes and the right prefix, but not a point on P-256
+      {
+        ...d.body,
+        keys: { ...d.ua.keys, p256dh: b64url.encode(new Uint8Array([4, ...new Uint8Array(64).fill(1)])) },
+      },
       { ...d.body, keys: { ...d.ua.keys, auth: 'not base64!' } },
       { ...d.body, lang: 'fr' },
       { ...d.body, server: undefined },
@@ -269,6 +276,125 @@ describe('the inbox decides to push', () => {
     await db.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(devId('Push Banned')).run()
     const fake = fakePushService()
     expect(await pushTo(testEnv, devId('Push Banned'), 'request')).toBe(0)
+    expect(fake.got).toHaveLength(0)
+  })
+
+  /** A `later` that keeps the notices, so a test can wait for them to finish (each one decides about pushing). */
+  function collected() {
+    const work: Promise<unknown>[] = []
+    const later: Later = (p) => void work.push(p)
+    return { later, settled: () => Promise.all(work) }
+  }
+
+  it('a hidden sender’s message still reaches an open inbox, but never pushes', async () => {
+    const { b, aId, matchId } = await pair('Push Hid A', 'Push Hid B')
+    const d = await device()
+    expect((await subscribe(b, d.body)).status).toBe(204)
+    await db.prepare('UPDATE users SET hidden = 1 WHERE id = ?').bind(aId).run()
+    const fake = fakePushService()
+    // inbox shut: no push
+    const shut = collected()
+    const res = await postMessage(testEnv, aId, matchId, { body: 'suno' }, 10_000_000, shut.later)
+    expect(res.status).toBe(201)
+    await shut.settled()
+    expect(fake.got).toHaveLength(0)
+    // inbox open: the notice still arrives there, as before
+    const box = await inbox(b)
+    const open = collected()
+    expect(
+      (await postMessage(testEnv, aId, matchId, { body: 'phir se' }, 10_002_000, open.later)).status,
+    ).toBe(201)
+    await open.settled()
+    await box.next('message')
+    expect(fake.got).toHaveLength(0)
+  })
+
+  it('a visible sender’s message, the same way, does push (the check above is about hiding)', async () => {
+    const { b, aId, matchId } = await pair('Push Vis A', 'Push Vis B')
+    expect((await subscribe(b, (await device()).body)).status).toBe(204)
+    const fake = fakePushService()
+    const shut = collected()
+    expect((await postMessage(testEnv, aId, matchId, { body: 'suno' }, 20_000_000, shut.later)).status).toBe(
+      201,
+    )
+    await shut.settled()
+    expect(fake.got).toHaveLength(1)
+  })
+
+  it('a blocked pair, either way round: no request, no message, no push', async () => {
+    const { a, b, aId, bId, matchId } = await pair('Push Blk A', 'Push Blk B')
+    for (const t of [a, b]) expect((await subscribe(t, (await device()).body)).status).toBe(204)
+    expect((await api('/api/blocks', b, { method: 'POST', body: JSON.stringify({ id: aId }) })).status).toBe(
+      204,
+    )
+    const fake = fakePushService()
+    const sent = await api(`/api/matches/${matchId}/messages`, a, {
+      method: 'POST',
+      body: JSON.stringify({ body: 'hello?' }),
+    })
+    expect(sent.status).toBe(404)
+    expect((await ask(a, bId)).status).toBe(404)
+    expect((await ask(b, aId)).status).toBe(404)
+    expect(fake.got).toHaveLength(0)
+  })
+
+  it('a declined request asked again is refused, and pushes nothing', async () => {
+    const asker = await resident('Push Dup A')
+    const t = await resident('Push Dup B')
+    const first = await ask(asker, devId('Push Dup B'))
+    expect(first.status).toBe(201)
+    const { id } = (await first.json()) as { id: string }
+    expect((await api(`/api/requests/${id}/ignore`, t, { method: 'POST' })).status).toBe(204)
+    expect((await subscribe(t, (await device()).body)).status).toBe(204)
+    const fake = fakePushService()
+    expect((await ask(asker, devId('Push Dup B'))).status).toBe(409)
+    expect(fake.got).toHaveLength(0)
+  })
+
+  it('someone who paused requests gets no request, and no push', async () => {
+    const asker = await resident('Push Pause A')
+    const t = await resident('Push Pause B', { pauseRequests: true })
+    expect((await subscribe(t, (await device()).body)).status).toBe(204)
+    const fake = fakePushService()
+    const res = await ask(asker, devId('Push Pause B'))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: 'paused' })
+    expect(fake.got).toHaveLength(0)
+  })
+
+  it('a muted sender can neither ask nor write, so nothing pushes', async () => {
+    const { a, b, aId, matchId } = await pair('Push Mute A', 'Push Mute B')
+    const c = await resident('Push Mute C')
+    for (const t of [b, c]) expect((await subscribe(t, (await device()).body)).status).toBe(204)
+    await db
+      .prepare('UPDATE users SET muted_until = ? WHERE id = ?')
+      .bind(Date.now() + 3600_000, aId)
+      .run()
+    const fake = fakePushService()
+    expect((await ask(a, devId('Push Mute C'))).status).toBe(403)
+    const sent = await api(`/api/matches/${matchId}/messages`, a, {
+      method: 'POST',
+      body: JSON.stringify({ body: 'hello?' }),
+    })
+    expect(sent.status).toBe(403)
+    expect(fake.got).toHaveLength(0)
+  })
+
+  it('a ghost cannot ask anyone, and a ghost’s devices (a row left behind) get nothing', async () => {
+    const ghost = await login('Push Ghost Asker')
+    const t = await resident('Push Ghost Target')
+    expect((await subscribe(t, (await device()).body)).status).toBe(204)
+    const fake = fakePushService()
+    expect((await ask(ghost, devId('Push Ghost Target'))).status).toBe(403)
+    // a row for someone with no profile (it cannot be made through the API): still nothing
+    const d = await device()
+    await db
+      .prepare(
+        'INSERT INTO push_subs (endpoint, user_id, p256dh, auth, lang, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(d.endpoint, devId('Push Ghost Asker'), d.ua.keys.p256dh, d.ua.keys.auth, 'en', 1)
+      .run()
+    expect(await pushTo(testEnv, devId('Push Ghost Asker'), 'request')).toBe(0)
     expect(fake.got).toHaveLength(0)
   })
 })

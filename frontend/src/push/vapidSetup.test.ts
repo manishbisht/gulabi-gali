@@ -73,6 +73,18 @@ it('when wrangler fails, GitHub is not touched and it exits non-zero', () => {
   expect(out.stderr).toContain('vapid-setup:')
 })
 
+it('when gh fails after wrangler took its key, it says to run it again, still printing no key', () => {
+  const { out, read } = run({ gh: 1 })
+  expect(out.status).toBe(1)
+  expect(read('npx.args')).toBe('wrangler secret put VAPID_PRIVATE_JWK')
+  expect(out.stderr).toMatch(/Run `node scripts\/vapid-setup\.mjs` again/)
+  const jwk = JSON.parse(read('npx.stdin')!) as { d: string; x: string }
+  for (const secret of [jwk.d, jwk.x, read('gh.stdin')!]) {
+    expect(out.stdout).not.toContain(secret)
+    expect(out.stderr).not.toContain(secret)
+  }
+})
+
 it('a fresh pair every run', () => {
   const first = run().read('gh.stdin')
   const second = run().read('gh.stdin')

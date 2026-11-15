@@ -91,6 +91,22 @@ interface Subscription {
   server: string
 }
 
+/** Whether `p256dh` is a point on P-256, which the encryption needs: one that is not would fail every push. */
+async function onCurve(p256dh: string): Promise<boolean> {
+  try {
+    await crypto.subtle.importKey(
+      'raw',
+      b64url.decode(p256dh),
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false,
+      [],
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** A `PUT /api/me/push` body, or null. */
 function parseSubscription(env: Env, raw: unknown): Subscription | null {
   const b = (raw ?? {}) as Record<string, unknown>
@@ -128,7 +144,7 @@ async function subLimit(env: Env, userId: string, now: number): Promise<Response
 /**
  * `PUT /api/me/push {endpoint, keys: {p256dh, auth}, lang, server}`: this device wants a push for a new request
  * or message while the app is shut. 204. A resident only (403 `ghost` for anyone else); 404 `off` when push is
- * not configured; 400 `invalid` for an endpoint off the known push services or keys that are not keys; 409
+ * not configured; 400 `invalid` for an endpoint off the known push services or keys that are not keys (`p256dh` must be a point on P-256); 409
  * `key` when the browser subscribed with another server key than ours (the page re-subscribes); 429 past
  * `PUSH_SUB_LIMIT`. The endpoint is the row's key, so the same browser signed in as someone else moves to them;
  * past `PUSH_DEVICES` the oldest device goes.
@@ -140,7 +156,7 @@ export async function putPush(env: Env, userId: string, raw: unknown, now = Date
   const slow = await subLimit(env, userId, now)
   if (slow) return slow
   const sub = parseSubscription(env, raw)
-  if (!sub) return Response.json({ error: 'invalid' }, { status: 400 })
+  if (!sub || !(await onCurve(sub.p256dh))) return Response.json({ error: 'invalid' }, { status: 400 })
   if (sub.server !== vapid.publicKey) return Response.json({ error: 'key' }, { status: 409 })
   await env.DB.batch([
     env.DB.prepare(

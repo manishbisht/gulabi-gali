@@ -101,13 +101,15 @@ export interface Vapid {
 
 /**
  * The VAPID identity from the `VAPID_PRIVATE_JWK` secret (a P-256 private JWK, `d`, `x` and `y`) and the
- * subject, or null when either is missing or the key does not import: then push is off.
+ * subject (an https: or mailto: URL), or null when either is missing or wrong or the key does not import:
+ * then push is off.
  */
 export async function vapidFrom(
   jwkText: string | undefined,
   subject: string | undefined,
 ): Promise<Vapid | null> {
-  if (!jwkText || !subject) return null
+  // RFC 8292: the subject is a mailto: or an https: URL; anything else and a push service may refuse us.
+  if (!jwkText || !subject || !/^(https:|mailto:)/.test(subject)) return null
   try {
     const jwk = JSON.parse(jwkText) as JsonWebKey
     if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.d || !jwk.x || !jwk.y) return null

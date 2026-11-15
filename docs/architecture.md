@@ -613,8 +613,10 @@ someone else moves to them; at most 5 devices a person. Endpoints must be https 
 (FCM, `*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`; loopback http only under
 `DEV_AUTH`), so the Worker never posts to an address of a client's choosing. `PUT` is residents only, 409 `key`
 when the browser subscribed with another server key, 404 `off` without VAPID; both routes count against
-`push-sub` (30 an hour). `InboxDO.notify` sends a notice to the open sockets and, only when none is open and the
-notice is a `request` or a `message`, calls `pushTo`: nothing for a banned person or past the per-person limit
+`push-sub` (30 an hour). `InboxDO.notify` sends a notice to the open sockets and, only when none is open, the
+notice is a `request` or a `message`, and the caller vouched for the sender (`notify(..., { push })`: a
+request's sender has passed `visibleRow`; a message pushes only if its sender passes `visibleRow` now, so a
+hidden person's messages reach an open inbox but never a lock screen), calls `pushTo`: nothing for a banned person or past the per-person limit
 (`push-minute` 1, `push-hour` 10, counted with `allow`), else one push per device, `TTL` a day, `Topic` the kind
 (so pending ones collapse at the push service). The payload is `{t, lang}` and nothing else, so the lock screen
 can never show a name or a message, and `sw.js` shows only its own words (`pushTitle`, `pushRequest`,

@@ -104,4 +104,17 @@ describe('VAPID (RFC 8292)', () => {
     const { jwk } = await testKeys()
     expect(await vapidFrom(jwk, undefined)).toBeNull()
   })
+
+  it('a subject that is not an https: or mailto: URL is no VAPID either: push is off', async () => {
+    const { jwk } = await testKeys()
+    for (const subject of [
+      'gulabi-gali.manishbisht.me',
+      'http://gulabi-gali.manishbisht.me',
+      'ftp://x',
+      ' https://x',
+    ])
+      expect(await vapidFrom(jwk, subject), subject).toBeNull()
+    expect(await vapidFrom(jwk, 'https://gulabi-gali.manishbisht.me')).not.toBeNull()
+    expect(await vapidFrom(jwk, 'mailto:owner@example.com')).not.toBeNull()
+  })
 })
