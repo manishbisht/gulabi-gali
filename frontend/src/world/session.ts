@@ -565,7 +565,12 @@ function createInteraction(
   const ndc = new THREE.Vector2()
   let landmarkNear = false
   let down: { x: number; y: number; at: number } | null = null
-  const onDown = (e: PointerEvent) => void (down = { x: e.clientX, y: e.clientY, at: e.timeStamp })
+  const onDown = (e: PointerEvent) => {
+    // A second finger (a pinch) or a right or middle click is not a tap, and spoils the one in progress.
+    down =
+      e.isPrimary === false || (e.button ?? 0) > 0 ? null : { x: e.clientX, y: e.clientY, at: e.timeStamp }
+  }
+  const onCancel = () => void (down = null)
   const onUp = (e: PointerEvent) => {
     const d = down
     down = null
@@ -599,6 +604,7 @@ function createInteraction(
   }
   canvas.addEventListener('pointerdown', onDown)
   canvas.addEventListener('pointerup', onUp)
+  canvas.addEventListener('pointercancel', onCancel)
   return {
     update(_dt, pos) {
       at.x = pos.x
@@ -669,6 +675,7 @@ function createInteraction(
     dispose() {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       hooks.npcCard.close()
       hooks.personCard.close()
     },

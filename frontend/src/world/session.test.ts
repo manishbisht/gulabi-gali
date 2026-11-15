@@ -914,3 +914,29 @@ it('a failed trip leaves the follower where it is', async () => {
   expect(animals.following).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'dog' }))
   session.dispose()
 })
+
+it('only a plain primary tap counts: a right click, a second finger or a cancelled touch is not one', async () => {
+  const { hooks: h, stage } = await withPersonAhead()
+  const canvas = document.querySelector('canvas')!
+  stage.camera.position.set(0, 1, 0)
+  stage.camera.lookAt(0, 1, -5)
+  stage.camera.updateMatrixWorld(true)
+  const tap = vi.spyOn(h.personCard, 'tap')
+  const fire = (type: string, extra: object = {}) =>
+    canvas.dispatchEvent(Object.assign(new Event(type), { clientX: 50, clientY: 50 }, extra))
+  const press = (down: object, up: object = {}) => {
+    fire('pointerdown', down)
+    fire('pointerup', up)
+  }
+  press({ button: 2 })
+  press({ isPrimary: false })
+  fire('pointerdown', { isPrimary: true, button: 0 })
+  fire('pointerdown', { isPrimary: false }) // the second finger lands: no tap when the first lifts
+  fire('pointerup', { isPrimary: true })
+  fire('pointerdown', { isPrimary: true, button: 0 })
+  fire('pointercancel')
+  fire('pointerup')
+  expect(tap).not.toHaveBeenCalled()
+  press({ isPrimary: true, button: 0 }) // and a plain tap still works
+  expect(tap).toHaveBeenCalledTimes(1)
+})
