@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { FestivalId } from '../net/protocol'
-import { createAmbience, mixFor, phaseOf, type AmbientCtx } from './ambience'
+import { storage } from '../storage'
+import { createAmbience, mixFor, phaseOf, setAmbienceDuck, thinMix, type AmbientCtx } from './ambience'
+import { resetHorn, setSoundOn } from './horn'
 
 const DAY = { sunElevationDeg: 50, sunAzimuthDeg: 200 }
 const NIGHT = { sunElevationDeg: -30, sunAzimuthDeg: 20 }
@@ -126,6 +128,7 @@ beforeEach(() => {
   enabled = true
   festival = null
   sky = DAY
+  setAmbienceDuck(false)
 })
 afterEach(() => vi.useRealTimers())
 
@@ -183,11 +186,10 @@ it('fades every layer out when sound is switched off mid-visit', () => {
   const c = made[0]
   enabled = false
   vi.advanceTimersByTime(500)
-  // the layer buses (gains 1 to 5 after the master) were last told to go to 0
-  for (const g of c.gains.slice(1, 6)) {
-    const last = g.gain.setTargetAtTime.mock.calls.at(-1)!
-    expect(last[0]).toBe(0)
-  }
+  // every layer bus (all but the master) was last told to go to 0
+  const buses = c.gains.slice(1).filter((g) => g.gain.setTargetAtTime.mock.calls.length > 0)
+  expect(buses.length).toBeGreaterThan(0)
+  for (const g of buses) expect(g.gain.setTargetAtTime.mock.calls.at(-1)![0]).toBe(0)
   a.dispose()
 })
 
@@ -207,6 +209,143 @@ it('plays drums only on a festival, from the live festival', () => {
   a.dispose()
 })
 
+it('follows the sound switch by default, not a separate setting', () => {
+  storage.clear()
+  resetHorn()
+  const a = createAmbience({
+    district: 'walled-city',
+    sky: () => sky,
+    festival: () => null,
+    context: () => {
+      const c = new Fake()
+      made.push(c)
+      return c
+    },
+    doc: doc as unknown as Document,
+    random: () => 0.5,
+  })
+  setSoundOn(false)
+  doc.fire('pointerdown')
+  expect(made).toHaveLength(0)
+  setSoundOn(true)
+  doc.fire('pointerdown')
+  expect(made).toHaveLength(1)
+  a.dispose()
+  resetHorn()
+  storage.clear()
+})
+
+it('hears taps on phones too, and wakes a suspended or interrupted context on a later one', () => {
+  for (const e of ['pointerup', 'touchend', 'click']) {
+    doc = new FakeDoc()
+    const b = make()
+    doc.fire(e)
+    expect(made).toHaveLength(1)
+    b.dispose()
+    made = []
+  }
+  doc = new FakeDoc()
+  const a = make()
+  doc.fire('pointerdown')
+  const c = made[0]
+  const timers = vi.getTimerCount()
+  c.state = 'interrupted'
+  c.resume.mockClear()
+  doc.fire('touchend')
+  expect(c.resume).toHaveBeenCalledTimes(1)
+  doc.fire('click') // running again: no more resumes, and no second graph or timer
+  expect(c.resume).toHaveBeenCalledTimes(1)
+  expect(made).toHaveLength(1)
+  expect(vi.getTimerCount()).toBe(timers)
+  a.dispose()
+})
+
+it('stops its timer while the tab is hidden and restarts it when shown', () => {
+  const a = make()
+  doc.fire('pointerdown')
+  expect(vi.getTimerCount()).toBe(1)
+  doc.visibilityState = 'hidden'
+  doc.fire('visibilitychange')
+  expect(vi.getTimerCount()).toBe(0)
+  doc.visibilityState = 'visible'
+  doc.fire('visibilitychange')
+  expect(vi.getTimerCount()).toBe(1)
+  a.dispose()
+})
+
+it('runs a continuous layer only while it is audible, and retargets only on a change', () => {
+  sky = DAY // university by day: birds only, no murmur, no crickets
+  const a = make('university')
+  doc.fire('pointerdown')
+  const c = made[0]
+  expect(c.sources).toBe(2) // the two bird notes, no steady oscillators
+  const calls = () => c.gains.reduce((n, g) => n + g.gain.setTargetAtTime.mock.calls.length, 0)
+  const n = calls()
+  c.currentTime = 0.1
+  vi.advanceTimersByTime(400)
+  expect(calls()).toBe(n) // same mix: nothing retargeted
+  sky = NIGHT
+  vi.advanceTimersByTime(400)
+  expect(c.sources).toBeGreaterThanOrEqual(4) // the cricket pair starts now
+  a.dispose()
+})
+
+it('thins to one steady layer and no blips on the lowest quality tier', () => {
+  const full = mixFor('walled-city', DUSK, 'holi')
+  const thin = thinMix(full)
+  expect([thin.birds, thin.bells, thin.drums]).toEqual([0, 0, 0])
+  expect(thin.murmur > 0 && thin.crickets === 0).toBe(true)
+  expect(thinMix(mixFor('university', NIGHT, null)).crickets).toBeGreaterThan(0)
+})
+
+it('drops to the thin mix when the quality steps down', () => {
+  let cb: ((q: 0 | 1 | 2) => void) | null = null
+  festival = 'holi'
+  const a = createAmbience({
+    district: 'walled-city',
+    sky: () => DUSK,
+    festival: () => festival,
+    enabled: () => true,
+    context: () => {
+      const c = new Fake()
+      made.push(c)
+      return c
+    },
+    quality: () => 2,
+    onQuality: (f) => {
+      cb = f
+      return () => void (cb = null)
+    },
+    doc: doc as unknown as Document,
+    random: () => 0.5,
+  })
+  doc.fire('pointerdown')
+  const c = made[0]
+  const before = c.sources
+  cb!(0)
+  c.currentTime = 50
+  vi.advanceTimersByTime(800)
+  expect(c.sources).toBe(before) // no bell, drum or bird after the step down
+  a.dispose()
+  expect(cb).toBeNull()
+})
+
+it('ducks to about half in photo mode and the taxi ride, never a hard mute', () => {
+  const a = make()
+  doc.fire('pointerdown')
+  const master = made[0].gains[0]
+  expect(master.gain.value).toBeGreaterThan(0)
+  const full = master.gain.value
+  setAmbienceDuck(true)
+  vi.advanceTimersByTime(400)
+  const last = master.gain.setTargetAtTime.mock.calls.at(-1)!
+  expect(last[0]).toBeCloseTo(full * 0.5, 5)
+  setAmbienceDuck(false)
+  vi.advanceTimersByTime(400)
+  expect(master.gain.setTargetAtTime.mock.calls.at(-1)![0]).toBeCloseTo(full, 5)
+  a.dispose()
+})
+
 it('disposes everything on leave: sources stopped, graph cut, no timers, no listeners', () => {
   const a = make()
   doc.fire('pointerdown')
@@ -214,7 +353,7 @@ it('disposes everything on leave: sources stopped, graph cut, no timers, no list
   const started = c.sources
   a.dispose()
   expect(c.stopped).toBe(started)
-  expect(c.disconnected).toBe(5) // the noise, the three steady oscillators and the master
+  expect(c.disconnected).toBeGreaterThanOrEqual(2) // the steady sources and the master
   expect(doc.count()).toBe(0)
   expect(vi.getTimerCount()).toBe(0)
   c.currentTime = 100
