@@ -223,6 +223,23 @@ describe('poster walls', () => {
     }
   })
 
+  it('a welcome fetch that supersedes a block nudge keeps the nudge owed: its failure still goes bare', async () => {
+    vi.useFakeTimers()
+    try {
+      const { posters, land, fail, meshes } = setup()
+      posters.refresh()
+      await land([poster()])
+      posters.apply({ t: 'posters' })
+      // The socket's welcome asks again before the nudge's fetch answered.
+      posters.refresh()
+      await fail()
+      expect(meshes()[0]!.visible).toBe(false)
+      posters.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('says which posters left: taken down, dropped by a fetch, or pushed out of their slot', async () => {
     const { posters, land, hooks } = setup()
     posters.refresh()

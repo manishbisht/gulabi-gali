@@ -182,6 +182,8 @@ export function createBandar(
   let landX = 0
   let landZ = 0
   let bound: BandarPlayer | null = null
+  /** The cooldown's clock as it was before this raid began (see the drop's end). */
+  let lastBefore: number | null = null
   let disposed = false
 
   const restore = () => {
@@ -223,6 +225,7 @@ export function createBandar(
         m.y = reduced ? 0 : DROP_FROM
         m.ry = a + Math.PI
         gear = opts.look().head as Gear
+        lastBefore = memory.last
         memory.last = now()
         phase = 'drop'
         t = 0
@@ -245,8 +248,9 @@ export function createBandar(
         m.y = reduced ? 0 : DROP_FROM * Math.max(0, 1 - t / DROP_S)
         pose(0)
         if (t < DROP_S) return null
-        // switched off on its way down: it goes without taking anything
+        // switched off on its way down: it goes without taking anything, and the raid does not count
         if (bandarOff()) {
+          memory.last = lastBefore
           restore()
           return { kind: 'ended' }
         }
