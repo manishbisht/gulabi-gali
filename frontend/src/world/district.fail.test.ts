@@ -26,7 +26,9 @@ vi.mock('./districts/university', async () => {
       {
         id: 'ok',
         build: async () =>
-          new three.Group().add(new three.Mesh(good.geometry as THREE.BufferGeometry, good.material as THREE.Material)),
+          new three.Group().add(
+            new three.Mesh(good.geometry as THREE.BufferGeometry, good.material as THREE.Material),
+          ),
         footprint: { minX: 0, maxX: 1, minZ: 0, maxZ: 1 },
       },
       {

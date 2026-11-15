@@ -277,3 +277,42 @@ it('the account that signs in keeps what its ghost collected, and the same accou
   await settle()
   expect(again.out.have).toEqual(['hawa-mahal'])
 })
+
+it("another account's tagged set is not shown even for the first render", () => {
+  localStorage.setItem('gg-stamps', JSON.stringify(['hawa-mahal']))
+  localStorage.setItem('gg-stamps-owner', 'dev:asha')
+  server()
+  const seen: string[][] = []
+  function Probe() {
+    seen.push(hook.useStamps('en', resident([], 'dev:ravi')).have)
+    return null
+  }
+  act(() => createRoot(document.createElement('div')).render(<Probe />))
+  expect(seen.length).toBeGreaterThan(0)
+  expect(seen.every((have) => have.length === 0)).toBe(true)
+})
+
+it('the stamp toast follows a language switch while it is up', async () => {
+  vi.useFakeTimers()
+  try {
+    const out = {} as ReturnType<Hook['useStamps']>
+    let root!: Root
+    function Probe({ lang }: { lang: 'hi' | 'en' }) {
+      Object.assign(out, hook.useStamps(lang, null))
+      return null
+    }
+    const named = { ...HAWA, name: { hi: 'हवा महल', en: 'Hawa Mahal' } } as unknown as LandmarkDef
+    act(() => {
+      root = createRoot(document.createElement('div'))
+      root.render(<Probe lang="en" />)
+    })
+    act(() => void out.track(named.at, [named], true))
+    expect(out.toast).toContain('Hawa Mahal')
+    act(() => root.render(<Probe lang="hi" />))
+    expect(out.toast).toContain('हवा महल')
+    act(() => void vi.advanceTimersByTime(10_000))
+    expect(out.toast).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})

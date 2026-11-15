@@ -662,3 +662,36 @@ it('a ghost who tries to sit is told to be seen first, with a way in', async () 
   expect(host.textContent).not.toContain('Baithne ke liye pehle dikhna padega')
   await act(async () => root.unmount())
 })
+
+it('says so when the first district cannot be loaded, and unmounting while it loads leaves no city', async () => {
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  localStorage.setItem('gg-lang', 'en')
+  localStorage.setItem('gg-district', 'walled-city')
+  unreachable.add('walled-city')
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  await vi.waitFor(
+    () => expect(host.querySelector('.hud-top')?.textContent).toContain("Couldn't open the lane"),
+    {
+      timeout: 10_000,
+    },
+  )
+  await act(async () => root.unmount())
+
+  // leaving while a chunk is still on its way: the late arrival must not build or mount anything
+  unreachable.clear()
+  let release!: () => void
+  hold.until = new Promise<void>((r) => (release = r))
+  const host2 = document.body.appendChild(document.createElement('div'))
+  const root2 = createRoot(host2)
+  await act(async () => root2.render(<App />))
+  await act(async () => host2.querySelector<HTMLButtonElement>('.enter')!.click())
+  const scene = stage.scene
+  await act(async () => root2.unmount())
+  release()
+  await new Promise((r) => setTimeout(r, 50))
+  expect(scene.getObjectByName('walled-city')).toBeUndefined()
+  expect(stage.frames.size).toBe(0)
+})

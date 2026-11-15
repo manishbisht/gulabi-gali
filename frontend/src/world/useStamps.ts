@@ -3,7 +3,17 @@ import type { Lang } from '../i18n/strings'
 import { t } from '../i18n/strings'
 import { putStamps } from '../net/api'
 import type { LandmarkDef, Vec2 } from './types'
-import { claim, collect, collected, mergeStamps, nearestLandmark, park, release, STAMPS } from './stamps'
+import {
+  claim,
+  collect,
+  collected,
+  collectedFor,
+  mergeStamps,
+  nearestLandmark,
+  park,
+  release,
+  STAMPS,
+} from './stamps'
 
 const TOAST_MS = 3500
 
@@ -39,16 +49,17 @@ const keyOf = (ids: readonly string[]) => [...ids].sort().join(',')
 export function useStamps(lang: Lang, account: StampAccount | null) {
   const [near, setNear] = useState<LandmarkDef | null>(null)
   const [have, setHave] = useState(() => {
-    if (!account) park() // a page that opens with a set tagged to someone must not show it as the street's
-    return collected()
+    if (!account) {
+      park() // a page that opens with a set tagged to someone must not show it as the street's
+      return collected()
+    }
+    return collectedFor(account.id) // another account's tagged set is not shown, not even for one render
   })
-  const [toast, setToast] = useState<string | null>(null)
+  /** The landmark just stamped; its line is worded at render, so a language switch changes it at once. */
+  const [stamped, setStamped] = useState<LandmarkDef | null>(null)
+  const toast = stamped ? t('stampGot', lang, { place: stamped.name[lang] }) : null
   const nearRef = useRef<LandmarkDef | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const langRef = useRef(lang)
-  useEffect(() => {
-    langRef.current = lang
-  }, [lang])
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const user = account?.id ?? null
@@ -125,9 +136,9 @@ export function useStamps(lang: Lang, account: StampAccount | null) {
     const landmark = nearRef.current
     if (!landmark || !collect(landmark.id)) return
     setHave(collected())
-    setToast(t('stampGot', langRef.current, { place: landmark.name[langRef.current] }))
+    setStamped(landmark)
     clearTimeout(timer.current)
-    timer.current = setTimeout(() => setToast(null), TOAST_MS)
+    timer.current = setTimeout(() => setStamped(null), TOAST_MS)
   }, [])
 
   /** Call every frame; re-renders only when the nearby landmark changes. Returns that landmark. */

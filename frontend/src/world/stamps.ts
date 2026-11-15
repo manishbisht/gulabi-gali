@@ -22,6 +22,12 @@ export function collected(): string[] {
   return idsAt(KEY)
 }
 
+/** What `user` may see of the device's set before `claim` has run: nothing while it is tagged to someone else. */
+export function collectedFor(user: string): string[] {
+  const owner = storage.get(OWNER) || null
+  return owner !== null && owner !== user ? [] : collected()
+}
+
 /** Where an account's stamps wait while someone else (or nobody) is signed in on this device. */
 const stashKey = (user: string) => `gg-stamps-of:${user}`
 
