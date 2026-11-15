@@ -608,9 +608,21 @@ function createInteraction(
     const pet = animals.pick(ray, at)
     if (pet) animals.call(at, pet.id)
   }
+  // A pointer whose up and cancel never came (a lost capture, a backgrounded tab, a call over the page) must not
+  // count as down for good, or every later tap would look like a pinch.
+  const forgetAll = () => {
+    touching.clear()
+    down = null
+  }
+  const onHidden = () => {
+    if (document.visibilityState === 'hidden') forgetAll()
+  }
   canvas.addEventListener('pointerdown', onDown)
   canvas.addEventListener('pointerup', onUp)
   canvas.addEventListener('pointercancel', onCancel)
+  canvas.addEventListener('lostpointercapture', onCancel)
+  window.addEventListener('blur', forgetAll)
+  document.addEventListener('visibilitychange', onHidden)
   return {
     update(_dt, pos) {
       at.x = pos.x
@@ -682,6 +694,9 @@ function createInteraction(
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
       canvas.removeEventListener('pointercancel', onCancel)
+      canvas.removeEventListener('lostpointercapture', onCancel)
+      window.removeEventListener('blur', forgetAll)
+      document.removeEventListener('visibilitychange', onHidden)
       hooks.npcCard.close()
       hooks.personCard.close()
     },

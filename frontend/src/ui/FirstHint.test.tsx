@@ -85,3 +85,26 @@ it('is never shown once seen', () => {
   mount()
   expect(dialog()).toBeNull()
 })
+
+it('Escape in the same task the dialog appears in already closes it: the key is heard from the commit, not after paint', async () => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+  try {
+    let heard = false
+    const seen = new Promise<void>((resolve) => {
+      const mo = new MutationObserver(() => {
+        if (!dialog()) return
+        mo.disconnect()
+        // the first microtask after the commit: the point a fast key press could land between commit and effects
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+        heard = storage.get(HINTED_KEY) === '1'
+        resolve()
+      })
+      mo.observe(host, { childList: true, subtree: true })
+    })
+    root.render(<FirstHint lang="en" />)
+    await seen
+    expect(heard).toBe(true)
+  } finally {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  }
+})

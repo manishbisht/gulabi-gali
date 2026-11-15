@@ -962,3 +962,49 @@ it('a tap on the canvas counts while another thumb holds the joystick (a pointer
   fire('pointerup')
   expect(tap).toHaveBeenCalledTimes(1)
 })
+
+it('a touch id that got stuck (no up or cancel ever came) stops blocking taps after the page loses focus or capture', async () => {
+  const { hooks: h, stage, session } = await withPersonAhead()
+  const canvas = document.querySelector('canvas')!
+  stage.camera.position.set(0, 1, 0)
+  stage.camera.lookAt(0, 1, -5)
+  stage.camera.updateMatrixWorld(true)
+  const tap = vi.spyOn(h.personCard, 'tap')
+  const fire = (type: string, extra: object = {}) =>
+    canvas.dispatchEvent(
+      Object.assign(new Event(type), { clientX: 50, clientY: 50, pointerId: 1, button: 0 }, extra),
+    )
+  const tapOnce = () => {
+    fire('pointerdown')
+    fire('pointerup')
+  }
+  const stick = () => fire('pointerdown', { pointerId: 9 }) // its up never arrives
+  const recoveries: [string, () => void][] = [
+    ['blur', () => window.dispatchEvent(new Event('blur'))],
+    ['lostpointercapture', () => fire('lostpointercapture', { pointerId: 9 })],
+    [
+      'visibilitychange to hidden',
+      () => {
+        const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+        document.dispatchEvent(new Event('visibilitychange'))
+        hidden.mockRestore()
+      },
+    ],
+  ]
+  for (const [, recover] of recoveries) {
+    stick()
+    tapOnce()
+    expect(tap).not.toHaveBeenCalled() // stuck: two pointers look down
+    recover()
+    tapOnce()
+    expect(tap).toHaveBeenCalledTimes(1)
+    tap.mockClear()
+  }
+  const offWindow = vi.spyOn(window, 'removeEventListener')
+  const offDocument = vi.spyOn(document, 'removeEventListener')
+  const offCanvas = vi.spyOn(canvas, 'removeEventListener')
+  session.dispose()
+  expect(offWindow).toHaveBeenCalledWith('blur', expect.any(Function))
+  expect(offDocument).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+  expect(offCanvas).toHaveBeenCalledWith('lostpointercapture', expect.any(Function))
+})

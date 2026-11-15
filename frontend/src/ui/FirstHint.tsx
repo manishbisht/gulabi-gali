@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import { storage } from '../storage'
 
@@ -24,7 +24,9 @@ export function FirstHint({ lang }: { lang: Lang }) {
   const button = useRef<HTMLButtonElement>(null)
   const title = useId()
 
-  useEffect(() => {
+  // A layout effect: the Escape listener is on from the commit that shows the hint, so a key pressed before the
+  // next paint (an effect would still be pending) is not lost.
+  useLayoutEffect(() => {
     if (!open) return
     button.current?.focus()
     const onKey = (e: KeyboardEvent) => {
