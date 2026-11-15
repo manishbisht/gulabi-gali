@@ -43,10 +43,16 @@ export function fallbackSnapshot(now: Date): CitySnapshot {
   }
 }
 
-/** Never rejects: any failure yields the stale default. */
+/** A city read that takes longer than this is given up on: the default sky stands in. */
+const CITY_TIMEOUT_MS = 8000
+
+/** Never rejects: any failure, or no answer in `CITY_TIMEOUT_MS`, yields the stale default. */
 export async function fetchCity(signal?: AbortSignal): Promise<CitySnapshot> {
   try {
-    const res = await fetchNoting(`${API_BASE}/api/city`, { signal })
+    const timeout = AbortSignal.timeout(CITY_TIMEOUT_MS)
+    const res = await fetchNoting(`${API_BASE}/api/city`, {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    })
     if (!res.ok) return fallbackSnapshot(new Date())
     return (await res.json()) as CitySnapshot
   } catch {

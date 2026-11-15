@@ -11,6 +11,26 @@ it('maps WMO codes and dust to conditions', () => {
   expect(toCondition(61, 180, 2)).toBe('rain') // rain beats dust
 })
 
+it('an unknown precipitation (null from the feed) reads as dry: dust still shows', () => {
+  expect(toCondition(1, 180, null)).toBe('dust')
+  expect(toCondition(1, 180, 0.4)).toBe('clear') // a little rain keeps the dust down
+})
+
+it('a non-OK answer from either endpoint is an error, not a snapshot', async () => {
+  const json = {
+    current: { temperature_2m: 31, weather_code: 0, precipitation: 0, us_aqi: 50, dust: 10 },
+    daily: { sunrise: ['2026-11-14T06:44'], sunset: ['2026-11-14T17:34'] },
+  }
+  const now = new Date('2026-11-14T06:30:00Z')
+  for (const failing of ['https://api.open-meteo.com/', 'https://air-quality-api.open-meteo.com/']) {
+    const fake = (async (input: RequestInfo | URL) =>
+      String(input).startsWith(failing)
+        ? new Response('down', { status: 503 })
+        : Response.json(json)) as typeof fetch
+    await expect(fetchSnapshot(fake, now), failing).rejects.toThrow(/upstream 503/)
+  }
+})
+
 it('bands US AQI', () => {
   expect([40, 90, 140, 190, 260, null].map(toAqiBand)).toEqual([
     'good',

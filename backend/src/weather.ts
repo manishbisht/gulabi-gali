@@ -8,12 +8,12 @@ const DUST_THRESHOLD = 150 // ug/m3
 export function toCondition(
   weatherCode: number,
   dustUgM3: number | null,
-  precipitationMm: number,
+  precipitationMm: number | null,
 ): Condition {
   if (weatherCode >= 95 && weatherCode <= 99) return 'storm'
   if ((weatherCode >= 51 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82)) return 'rain'
   if (weatherCode === 45 || weatherCode === 48) return 'fog'
-  if (dustUgM3 !== null && dustUgM3 >= DUST_THRESHOLD && precipitationMm === 0) return 'dust'
+  if (dustUgM3 !== null && dustUgM3 >= DUST_THRESHOLD && (precipitationMm ?? 0) === 0) return 'dust'
   if (weatherCode <= 1) return 'clear'
   return 'cloudy'
 }
@@ -45,7 +45,7 @@ export function defaultSnapshot(now: Date): CitySnapshot {
 }
 
 interface Forecast {
-  current: { temperature_2m: number; weather_code: number; precipitation: number }
+  current: { temperature_2m: number; weather_code: number; precipitation: number | null }
   daily: { sunrise: string[]; sunset: string[] }
 }
 interface Air {

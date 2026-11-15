@@ -8,6 +8,8 @@ import type { AvatarLook } from '../world/types'
 export const SKINS = ['#F1C9A5', '#D9A877', '#B98055', '#8D5A3B', '#5E3A26'] as const
 export const HEADS: AvatarLook['head'][] = ['none', 'safa', 'cap', 'dupatta', 'bun']
 export const OUTFITS = Object.keys(PALETTE) as PaletteKey[]
+/** What a random look may wear: not the colours of the street itself (asphalt, sandstone, plain white, glass). */
+const RANDOM_OUTFITS = OUTFITS.filter((k) => !['road', 'sandstone', 'white', 'glass'].includes(k))
 const LOOK_KEY = 'gg-look'
 
 const pick = <T>(items: readonly T[], rand: () => number): T =>
@@ -15,7 +17,7 @@ const pick = <T>(items: readonly T[], rand: () => number): T =>
 
 export function randomLook(rand: () => number = Math.random): AvatarLook {
   const skin = pick([0, 1, 2, 3, 4] as const, rand)
-  const outfit = pick(OUTFITS, rand)
+  const outfit = pick(RANDOM_OUTFITS, rand)
   const head = pick(HEADS, rand)
   return { skin, outfit, head }
 }

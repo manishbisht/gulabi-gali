@@ -65,6 +65,13 @@ describe('avatar', () => {
     expect(Object.keys(PALETTE)).toContain(top.outfit)
   })
 
+  it('a random look never dresses someone in asphalt, sandstone, plain white or window glass', () => {
+    const seen = new Set<string>()
+    for (let i = 0; i < 200; i++) seen.add(randomLook(() => i / 200).outfit)
+    for (const dull of ['road', 'sandstone', 'white', 'glass']) expect(seen.has(dull), dull).toBe(false)
+    expect(seen.size).toBeGreaterThan(3) // and still varied
+  })
+
   it('loadOrCreateLook creates once, persists under gg-look, and ignores junk', () => {
     storage.set('gg-look', '{"nope":1}')
     const made = loadOrCreateLook()

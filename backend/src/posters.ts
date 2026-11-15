@@ -349,6 +349,9 @@ export async function publicPosters(
   // The edge's copy without `Vary`: the edge cache may refuse, or split, an entry that has one.
   const stored = new Response(res.clone().body, res)
   stored.headers.delete('vary')
+  // The put happens after the response (`later`), so a hide or takedown that lands in between and calls
+  // `forgetWalls` first can be followed by this put of the list read before it: that copy can show the poster for
+  // up to `PUBLIC_WALLS_S` (30 s) more at this location, the same bound every other location has anyway.
   later(
     caches.default.put(key, stored).catch((err: unknown) => console.error('posters: cache put failed', err)),
   )

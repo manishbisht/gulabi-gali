@@ -17,6 +17,28 @@ it('storage survives a throwing localStorage', () => {
   expect(storage.getJSON('gg-missing', [])).toEqual([])
 })
 
+it('a write that failed (a full disk) is still what get answers, not the older value left in localStorage', () => {
+  const held = new Map<string, string>([['gg-full', 'old']])
+  let full = false
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => held.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      if (full) throw new DOMException('quota', 'QuotaExceededError')
+      held.set(k, v)
+    },
+  })
+  storage.set('gg-full', 'fine')
+  expect(storage.get('gg-full')).toBe('fine')
+  full = true
+  storage.set('gg-full', 'new') // refused by the disk, kept by the page
+  expect(held.get('gg-full')).toBe('fine')
+  expect(storage.get('gg-full')).toBe('new')
+  full = false
+  storage.set('gg-full', 'newer') // the disk takes it again, and is the one to ask
+  expect(held.get('gg-full')).toBe('newer')
+  expect(storage.get('gg-full')).toBe('newer')
+})
+
 it('getJSON falls back on unparseable values', () => {
   vi.stubGlobal('localStorage', { getItem: () => '{nope', setItem: () => {} })
   expect(storage.getJSON('gg-bad', { a: 1 })).toEqual({ a: 1 })

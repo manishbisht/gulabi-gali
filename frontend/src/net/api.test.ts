@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { blockPosterOwner, fetchCity, getPosters, putProfile, sendMessage } from './api'
+import { blockPosterOwner, fallbackSnapshot, fetchCity, getPosters, putProfile, sendMessage } from './api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -21,9 +21,32 @@ it('fetchCity falls back on an unparseable body', async () => {
 })
 
 it('fetchCity returns the live snapshot when the API answers', async () => {
-  const live = { ...(await fetchCity()), stale: false, tempC: 31, condition: 'dust' }
+  // the stub goes in first: nothing here may reach a real network
+  vi.stubGlobal('fetch', () => Promise.resolve(Response.json({})))
+  const live = { ...fallbackSnapshot(new Date()), stale: false, tempC: 31, condition: 'dust' }
   vi.stubGlobal('fetch', () => Promise.resolve(Response.json(live)))
   expect(await fetchCity()).toEqual(live)
+})
+
+it('fetchCity gives up on an API that never answers, and still honours the caller’s own signal', async () => {
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort())
+  vi.stubGlobal(
+    'fetch',
+    (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        // a fetch that only ever ends by being aborted
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        if (init?.signal?.aborted) reject(new DOMException('aborted', 'AbortError'))
+      }),
+  )
+  expect((await fetchCity()).stale).toBe(true)
+  expect(timeout).toHaveBeenCalledWith(8000)
+  timeout.mockRestore()
+  // and the caller's signal alone ends it too
+  const own = new AbortController()
+  const pending = fetchCity(own.signal)
+  own.abort()
+  expect((await pending).stale).toBe(true)
 })
 
 it('strips trailing slashes from the API base', async () => {
@@ -33,7 +56,7 @@ it('strips trailing slashes from the API base', async () => {
   const fetchMock = vi.fn(() => Promise.reject(new TypeError('offline')))
   vi.stubGlobal('fetch', fetchMock)
   await fresh()
-  expect(fetchMock.mock.calls[0]).toEqual(['https://api.example.com/api/city', { signal: undefined }])
+  expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe('https://api.example.com/api/city')
   vi.unstubAllEnvs()
 })
 
