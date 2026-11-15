@@ -128,7 +128,6 @@ export const STRINGS = {
   rideSkip: { hi: 'Chhodo, tap karo', en: 'Tap to skip' },
   /** Amer has no metro: a bus runs there from every station (see `rideBy`). */
   bus: { hi: 'Bus', en: 'Bus' },
-  travelByBus: { hi: '{place} — bus se', en: '{place} — by bus' },
   mapBus: { hi: 'Bus stand', en: 'Bus stop' },
   busNext: { hi: 'Agla stop: {station}', en: 'Next stop: {station}' },
   busGhat: {

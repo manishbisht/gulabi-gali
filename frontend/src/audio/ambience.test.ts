@@ -13,11 +13,18 @@ it('reads the phase of the day from the sun', () => {
   expect([DAY, NIGHT, DAWN, DUSK].map(phaseOf)).toEqual(['day', 'night', 'dawn', 'dusk'])
 })
 
-it('puts the bazaar murmur in the Walled City and MI Road only', () => {
+it('puts the bazaar murmur in the Walled City and MI Road, not the campus or Malviya Nagar', () => {
   expect(mixFor('walled-city', DAY, null).murmur).toBeGreaterThan(0)
   expect(mixFor('mi-road', DAY, null).murmur).toBeGreaterThan(0)
   expect(mixFor('university', DAY, null).murmur).toBe(0)
   expect(mixFor('malviya-nagar', DAY, null).murmur).toBe(0)
+})
+
+it("Amer's stalls along the path up to the fort have a murmur of their own, under the hill's birds", () => {
+  const amer = mixFor('amer', DAY, null)
+  expect(amer.murmur).toBeGreaterThan(0)
+  expect(amer.murmur).toBeLessThan(mixFor('walled-city', DAY, null).murmur)
+  expect(amer.birds).toBeGreaterThan(mixFor('walled-city', DAY, null).birds)
 })
 
 it('has birds by day, crickets at night, and bells only at dawn and dusk', () => {
@@ -37,7 +44,7 @@ it('plays festival drums only on a festival', () => {
 })
 
 it('gives a district with no entry a quiet default, so a new one needs no code', () => {
-  const m = mixFor('amer', DAY, null)
+  const m = mixFor('nowhere-yet', DAY, null)
   expect(m.murmur).toBe(0)
   expect(m.birds).toBeGreaterThan(0)
 })

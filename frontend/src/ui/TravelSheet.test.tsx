@@ -31,7 +31,10 @@ it('lists the metro stops by name, and Amer last, by bus, looking different', as
     'Malviya Nagar–WTP',
   ])
   const amer = stops[3]!
-  expect(amer.getAttribute('aria-label')).toBe('Amer — bus se')
+  // its name is what it shows (label in name): the place, then "Bus", nothing hidden or added
+  expect(amer.getAttribute('aria-label')).toBeNull()
+  expect(amer.querySelector('[aria-hidden]')).toBeNull()
+  expect(amer.textContent).toBe('Amer Bus')
   expect(amer.querySelector('.travel-by')!.textContent).toBe('Bus')
   await act(async () => amer.click())
   expect(onPick).toHaveBeenCalledWith('amer')
@@ -41,5 +44,6 @@ it('from Amer, every stop is by bus', async () => {
   const { stops } = await mount('amer', 'en')
   expect(stops).toHaveLength(4)
   expect(stops.map((b) => b.getAttribute('data-by'))).toEqual(['bus', 'bus', 'bus', 'bus'])
-  expect(stops[0]!.getAttribute('aria-label')).toBe('Pink City — by bus')
+  expect(stops[0]!.textContent).toBe('Pink City Bus')
+  expect(stops[0]!.getAttribute('aria-label')).toBeNull()
 })

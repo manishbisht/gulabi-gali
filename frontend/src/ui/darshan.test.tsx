@@ -147,3 +147,18 @@ it('the stamps chip in the HUD opens the list', async () => {
   await act(async () => chip.click())
   expect(onStamps).toHaveBeenCalled()
 })
+
+it('at every stamp the chip says a short "✓ 10", so the top row keeps its room; its name still has 10/10', async () => {
+  const host = await mount(
+    <Hud place="x" snapshot={null} stamps="10/10" lang="hi" onLang={() => {}} onStamps={() => {}} />,
+  )
+  const chip = host.querySelector<HTMLButtonElement>('button.stamp-count')!
+  expect(chip.textContent).toBe('✓ 10')
+  expect(chip.getAttribute('aria-label')).toBe('Jaipur Darshan ki list kholo (10/10)')
+  expect(chip.getAttribute('data-done')).toBe('')
+  const nine = await mount(
+    <Hud place="x" snapshot={null} stamps="9/10" lang="hi" onLang={() => {}} onStamps={() => {}} />,
+  )
+  expect(nine.querySelector('button.stamp-count')!.textContent).toBe('9/10')
+  expect(nine.querySelector('button.stamp-count')!.hasAttribute('data-done')).toBe(false)
+})

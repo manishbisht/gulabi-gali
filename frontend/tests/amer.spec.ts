@@ -45,7 +45,7 @@ test('no metro goes to Amer: the bus does, from the metro station, and back agai
   await page.evaluate(() => window.__gg.teleport(-7.2, 11)) // the Walled City's station
   await page.getByRole('button', { name: 'Metro', exact: true }).tap()
   const sheet = page.getByRole('region', { name: 'Kahan chalein?' })
-  const bus = sheet.getByRole('button', { name: 'Amer — bus se' })
+  const bus = sheet.getByRole('button', { name: 'Amer Bus', exact: true })
   await expect(bus).toHaveAttribute('data-by', 'bus')
   await bus.tap()
   // the bus, not the metro coach
@@ -68,7 +68,7 @@ test('no metro goes to Amer: the bus does, from the metro station, and back agai
     await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
     await shot(page, 'amer-sheet')
   }
-  await sheet.getByRole('button', { name: 'Gulabi Shahar — bus se' }).tap()
+  await sheet.getByRole('button', { name: 'Gulabi Shahar Bus', exact: true }).tap()
   await expect(page.getByRole('button', { name: 'Bus safar — chhodne ke liye tap karo' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.__gg.district())).toBe('walled-city')
 })

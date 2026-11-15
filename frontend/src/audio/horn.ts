@@ -101,26 +101,34 @@ export function honk(now: number = performance.now()): boolean {
   return true
 }
 
+/** The arrival's two notes: the metro's soft falling chime, or the bus's two short, reedy horn toots. */
+const ARRIVAL = {
+  metro: { type: 'sine', notes: [659, 523], gap: 0.2, len: 0.4, end: 0.6 },
+  bus: { type: 'triangle', notes: [392, 392], gap: 0.16, len: 0.11, end: 0.32 },
+} as const
+
 /**
- * A soft two-note chime for arriving by metro. Only when sound is on and a context already exists (a honk
- * made it): this never creates one, so a ride stays silent for anyone who has not driven.
+ * A two-note chime for arriving: soft for the metro, two horn toots for the bus (to or from Amer). Only when
+ * sound is on and a context already exists (a honk made it): this never creates one, so a ride stays silent
+ * for anyone who has not driven.
  */
-export function chime(): boolean {
+export function chime(by: 'metro' | 'bus' = 'metro'): boolean {
   const c = ctx
   if (!c || !soundOn() || c.state !== 'running') return false
   const t = c.currentTime
   const gain = c.createGain()
   gain.gain.setValueAtTime(0.0001, t)
   gain.gain.linearRampToValueAtTime(0.08, t + 0.03)
-  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6)
+  const a = ARRIVAL[by]
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + a.end)
   gain.connect(c.destination)
-  ;[659, 523].forEach((hz, i) => {
+  a.notes.forEach((hz, i) => {
     const o = c.createOscillator()
-    o.type = 'sine'
+    o.type = a.type
     o.frequency.value = hz
     o.connect(gain)
-    o.start(t + i * 0.2)
-    o.stop(t + i * 0.2 + 0.4)
+    o.start(t + i * a.gap)
+    o.stop(t + i * a.gap + a.len)
   })
   return true
 }

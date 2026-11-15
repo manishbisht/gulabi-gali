@@ -14,7 +14,7 @@ interface Props {
   banner?: string
   /** A line under the banner while a procession is on the street, already in the current language. */
   procession?: string
-  /** Stamp progress as `N/10`. */
+  /** Stamp progress as `N/10`; with every stamp the chip shows a shorter `✓ 10`, its name the whole count. */
   stamps: string
   /** Opens the Jaipur Darshan list; the stamps chip is a button when present. */
   onStamps?: () => void
@@ -69,6 +69,10 @@ export function Hud({
 }: Props) {
   if (photo) return null
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
+  // every stamp: a short "✓ 10", two characters narrower than "10/10", so the row keeps its room on a phone
+  const [got, all] = stamps.split('/')
+  const done = !!got && got === all
+  const shown = done ? `✓ ${all}` : stamps
   return (
     <div className="hud">
       <div className="hud-head">
@@ -96,13 +100,14 @@ export function Hud({
                 className="hud-chip stamp-count"
                 title={t('stampCount', lang)}
                 aria-label={`${t('darshanOpen', lang)} (${stamps})`}
+                data-done={done ? '' : undefined}
                 onClick={onStamps}
               >
-                {stamps}
+                {shown}
               </button>
             ) : (
-              <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
-                {stamps}
+              <span className="hud-chip stamp-count" title={`${t('stampCount', lang)}: ${stamps}`}>
+                {shown}
               </span>
             )}
           </div>

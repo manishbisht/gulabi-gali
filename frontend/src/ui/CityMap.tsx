@@ -73,6 +73,8 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
     (i) => i.kind === 'landmark' || i.kind === 'metro' || nearSeats.includes(i),
   )
   const more = byDistance.filter((i) => !listed.includes(i))
+  /** The stop is a metro station, or (Amer) a bus stand in the bus's colour, as on the travel sheet. */
+  const by = (i: MapItem) => (i.kind === 'metro' ? (byBus(def.id) ? 'bus' : 'metro') : undefined)
   const row = (i: MapItem) => (
     <li key={i.id}>
       <button
@@ -142,15 +144,14 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
                   className="map-item"
                   data-id={i.id}
                   data-kind={i.kind}
+                  data-by={by(i)}
                   data-stamped={i.stamped || undefined}
                   data-target={i.id === target || undefined}
                   style={spot(i.at)}
                   aria-label={label(i)}
                   onClick={() => onPick(i)}
                 >
-                  <span aria-hidden="true">
-                    {i.stamped ? '✓' : i.kind === 'metro' && byBus(def.id) ? 'B' : GLYPH[i.kind]}
-                  </span>
+                  <span aria-hidden="true">{i.stamped ? '✓' : by(i) === 'bus' ? 'B' : GLYPH[i.kind]}</span>
                 </button>
               )),
           )}

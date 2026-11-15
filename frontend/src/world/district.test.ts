@@ -387,9 +387,30 @@ describe('Amer', () => {
     const fort = d.def.landmarks[0]!.footprint
     expect(w!.maxZ).toBeLessThan(d.def.spawn.z) // south of it, the road
     expect(w!.minZ).toBeGreaterThanOrEqual(fort.maxZ) // north of it, the hill
-    expect(d.def.paving.some((p) => p.color === 'glass' && intersects(p, w!))).toBe(true)
-    // nothing built in the water
-    for (const b of d.def.buildings) expect(intersects(footprint(b), w!)).toBe(false)
+    // the water drawn is inside the water you cannot walk into, and nothing is built on it
+    const water = d.def.paving.find((p) => p.color === 'glass')!
+    expect(
+      water.minX >= w!.minX && water.maxX <= w!.maxX && water.minZ >= w!.minZ && water.maxZ <= w!.maxZ,
+    ).toBe(true)
+    for (const b of d.def.buildings) expect(intersects(footprint(b), water), `${b.x},${b.z}`).toBe(false)
+  })
+
+  it('leaves no odd walkable strip round the lake: it meets the hill on the north and the rampart on the south', async () => {
+    const d = await load('amer')
+    const blocked = blockedBy(d.colliders)
+    const water = d.def.paving.find((p) => p.color === 'glass')!
+    const fort = d.def.landmarks[0]!.footprint
+    const rampart = Math.min(
+      ...d.def.buildings.filter((b) => b.style === 'wall').map((b) => footprint(b).minZ),
+    )
+    for (let x = water.minX + 0.5; x <= water.maxX - 0.5; x += 0.5) {
+      // the lane west of the lake runs on past the hill's corner
+      if (x > fort.minX + 0.5)
+        for (let z = fort.maxZ; z <= water.minZ; z += 0.25)
+          expect(blocked({ x, z }), `north of the water at ${x},${z}`).toBe(true)
+      for (let z = water.maxZ; z <= rampart + 1.2; z += 0.25)
+        expect(blocked({ x, z }), `south of the water at ${x},${z}`).toBe(true)
+    }
   })
 
   it('has no metro: a bus stand by the road, stalls along the way up, and benches', async () => {

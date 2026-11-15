@@ -52,13 +52,14 @@ type Layer = keyof Mix
 
 /**
  * Each district's bed: how busy its bazaar murmur is, and how much green there is for birds and crickets.
- * A district not listed (Amer, say) has no murmur and is fairly green: add one line here to tune it.
+ * A district not listed has no murmur and is fairly green: add one line here to tune it.
  */
 const BED: Record<string, { murmur: number; nature: number }> = {
   'walled-city': { murmur: 1, nature: 0.4 },
   'mi-road': { murmur: 0.8, nature: 0.5 },
   university: { murmur: 0, nature: 1 },
   'malviya-nagar': { murmur: 0, nature: 0.9 },
+  amer: { murmur: 0.5, nature: 0.7 }, // the stalls on the path up, under the hill
 }
 const DEFAULT_BED = { murmur: 0, nature: 0.8 }
 

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { benchesOf } from '../world/benches'
 import walledCity from '../world/districts/walledCity'
+import amer from '../world/districts/amer'
 import { wallsOf } from '../world/posters'
 import { CityMap, type MapView } from './CityMap'
 import { Compass } from './Compass'
@@ -168,4 +169,17 @@ it('every row in the list has "Bulao": the link to that place, without picking i
   } finally {
     vi.unstubAllGlobals()
   }
+})
+
+it("Amer's stop is the bus stand: a B in the bus's marigold, not the metro's M; the metro's stays as it was", async () => {
+  const bus = await mount({ def: amer, stamped: [], read: () => ({ ...VIEW, you: amer.spawn }) })
+  const stop = bus.host.querySelector<HTMLButtonElement>('.map-item[data-kind="metro"]')!
+  expect(stop.getAttribute('data-by')).toBe('bus')
+  expect(stop.textContent).toBe('B')
+  expect(stop.getAttribute('aria-label')).toBe('Bus stop')
+  document.body.innerHTML = ''
+  const metro = await mount()
+  const m = metro.host.querySelector<HTMLButtonElement>('.map-item[data-kind="metro"]')!
+  expect(m.getAttribute('data-by')).toBe('metro')
+  expect(m.textContent).toBe('M')
 })

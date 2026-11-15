@@ -12,8 +12,30 @@ const API = 'http://127.0.0.1:8787'
 test.afterEach(closePeople)
 
 /** The festival with a procession, the city line and the weather, all at once: the busiest the news gets. */
-async function busiest(page: Page, district?: string, lang?: 'hi' | 'en', festival = 'gangaur') {
+/** Every Jaipur Darshan stamp (stamps.json), for the widest stamps chip: the collector's. */
+const ALL_STAMPS = [
+  'hawa-mahal',
+  'jantar-mantar',
+  'tripolia-gate',
+  'badi-chaupar',
+  'albert-hall',
+  'ram-niwas-gate',
+  'university-gate',
+  'jkk',
+  'wtp',
+  'amer-fort',
+]
+
+async function busiest(
+  page: Page,
+  district?: string,
+  lang?: 'hi' | 'en',
+  festival = 'gangaur',
+  stamps: readonly string[] = [],
+) {
   if (district) await page.addInitScript((d) => localStorage.setItem('gg-district', d), district)
+  if (stamps.length)
+    await page.addInitScript((s) => localStorage.setItem('gg-stamps', JSON.stringify(s)), stamps)
   if (lang) await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
   // The city line's text sets how the HUD wraps. A live /api/city reply (the local Worker asks Open-Meteo, up
   // to 8 s) could land after the patch below and swap in today's real weather, so the reply is fixed too.
@@ -209,6 +231,49 @@ for (const lang of LANGS)
         await shot(page, `signed-${lang}-${id}-${festival}`)
       })
     }
+
+/** The stamps chip on the place's row, not wrapped onto one of its own. */
+async function oneRow(page: Page, place: Locator) {
+  const a = (await place.boundingBox())!
+  const b = (await page.locator('.stamp-count').boundingBox())!
+  expect(Math.abs(b.y + b.height / 2 - (a.y + a.height / 2)), 'stamps on the place chip row').toBeLessThan(4)
+}
+
+// The collector's chip, in the district with the longest short name: every stamp, guest and signed in.
+for (const lang of LANGS) {
+  const place = lang === 'en' ? 'Malviya Nagar & WTP' : 'Malviya Nagar–WTP'
+  test(`with every stamp the busiest HUD still fits in ${place} (${lang}), the chip on the place's row`, async ({
+    page,
+  }) => {
+    await busiest(page, 'malviya-nagar', lang, 'gangaur', ALL_STAMPS)
+    const items: Record<string, Locator> = {
+      ...common(page, place, lang),
+      ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+      signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+    }
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(10\/10\)$/)
+    await laidOut(items, NEWS)
+    await oneRow(page, items.place!)
+    await shot(page, `guest-${lang}-malviya-nagar-all-stamps`)
+  })
+
+  test(`signed in with every stamp, the identity row fits too in ${place} (${lang})`, async ({ browser }) => {
+    const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+    const asha = await resident(browser, 'Asha', phone)
+    const { page } = asha
+    await busiest(page, 'malviya-nagar', lang, 'gangaur', ALL_STAMPS)
+    const items: Record<string, Locator> = {
+      ...common(page, place, lang),
+      visibility: page.getByText(WORDS[lang].sees, { exact: true }),
+      profile: page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
+      invite: page.locator('.invite-button'),
+    }
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(10\/10\)$/)
+    await laidOut(items, NEWS)
+    await oneRow(page, items.place!)
+    await shot(page, `signed-${lang}-malviya-nagar-all-stamps`)
+  })
+}
 
 test('the HUD switches say what they do, and show their state only through aria-pressed', async ({
   page,

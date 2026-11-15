@@ -164,7 +164,6 @@ button {
 }
 
 .hud-top .hud-chip {
-  padding-inline: 9px; /* the place, the weather and "0/10" keep one row beside the toggles on a 360 px phone */
   white-space: nowrap;
 }
 
@@ -372,6 +371,12 @@ button {
 
 .map-item[data-kind='metro'] {
   background: #c2185b;
+}
+
+/* Amer's stop is a bus stand: the bus's marigold, as on the travel sheet and the shelter's roof */
+.map-item[data-by='bus'] {
+  background: var(--marigold);
+  color: var(--plum);
 }
 
 .map-item[data-stamped] {
@@ -688,6 +693,11 @@ button {
   .hud-chip {
     padding: 6px 10px;
     font-size: 0.85rem;
+  }
+
+  /* the place, the weather and the stamps keep one row beside the toggles on a 360 px phone */
+  .hud-top .hud-chip {
+    padding-inline: 9px;
   }
 }
 
@@ -2210,6 +2220,11 @@ button.stamp-count {
   pointer-events: auto;
 }
 
+/* every stamp collected: the short "✓ 10", ringed in marigold */
+button.stamp-count[data-done] {
+  border-color: var(--marigold);
+}
+
 .darshan-list {
   display: grid;
   gap: 8px;
@@ -2252,7 +2267,7 @@ button.stamp-count {
   font-weight: 700;
 }
 
-/* The close control stays in view at the top while the nine rows scroll (a phone has no Escape). */
+/* The close control stays in view at the top while the ten rows scroll (a phone has no Escape). */
 .darshan-head {
   position: sticky;
   top: -18px;

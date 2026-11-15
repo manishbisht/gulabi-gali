@@ -14,6 +14,7 @@ import {
 
 let made = 0
 let oscillators = 0
+const notes: { type: string; frequency: { value: number } }[] = []
 const contexts: FakeAudio[] = []
 class FakeAudio {
   currentTime = 0
@@ -29,7 +30,9 @@ class FakeAudio {
   close = vi.fn(async () => {})
   createOscillator = () => {
     oscillators++
-    return { type: '', frequency: { value: 0 }, connect() {}, start() {}, stop() {} }
+    const o = { type: '', frequency: { value: 0 }, connect() {}, start() {}, stop() {} }
+    notes.push(o)
+    return o
   }
   createGain = () => ({
     gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
@@ -40,6 +43,7 @@ class FakeAudio {
 beforeEach(() => {
   made = 0
   oscillators = 0
+  notes.length = 0
   contexts.length = 0
   storage.clear()
   resetHorn()
@@ -116,6 +120,20 @@ it('a chime never makes an audio context, and only sounds with sound on and a ru
   expect(made).toBe(1)
   setSoundOn(false)
   expect(chime()).toBe(false)
+})
+
+it('a bus pulls in with its own two short notes, not the metro chime', () => {
+  honk(1000)
+  notes.length = 0
+  expect(chime()).toBe(true)
+  const metro = notes.map((o) => `${o.type} ${o.frequency.value}`)
+  notes.length = 0
+  expect(chime('bus')).toBe(true)
+  const bus = notes.map((o) => `${o.type} ${o.frequency.value}`)
+  expect(bus).toHaveLength(2)
+  expect(bus).not.toEqual(metro)
+  setSoundOn(false)
+  expect(chime('bus')).toBe(false)
 })
 
 it('a wo-kaata chirp sounds only with sound on and a running context, and never makes one', () => {

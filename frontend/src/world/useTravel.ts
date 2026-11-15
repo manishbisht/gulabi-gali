@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DistrictId } from '../net/protocol'
 import { storage } from '../storage'
 import { DISTRICTS } from './district'
-import { playRide } from './metroRide'
+import { playRide, rideBy } from './metroRide'
 import { chime } from '../audio/horn'
 import type { Vec2 } from './types'
 
@@ -109,7 +109,7 @@ export function useTravel() {
             trip.signal.addEventListener('abort', () => no(new Error('cancelled')), { once: true }),
           ),
         ])
-        if (bound()) chime()
+        if (bound()) chime(rideBy(from, id))
       } catch {
         if (!bound()) return
         setFailed(id)

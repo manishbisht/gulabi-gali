@@ -26,6 +26,11 @@ const FORT_AT = { x: 3, z: -64 }
 const FORT = centred(FORT_AT, AMER_FORT)
 /** The lake below the fort: water, nobody walks in. */
 const LAKE = rect(-44, -38, 28, 14)
+/**
+ * Where nobody walks: the lake and its ghat, right up to the foot of the hill on the north and to the rampart
+ * and the bastion on the south, so no odd strip a metre wide is left to walk along between them.
+ */
+const WATER = rect(LAKE.minX, FORT.maxZ, LAKE.maxX, 16)
 /** The path up to the gate, along the lake's east shore; and the garden between the road and the lake. */
 const PATH = rect(30, FORT.maxZ, 50, NORTH)
 const GARDEN = rect(-44, 17, 28, NORTH)
@@ -209,7 +214,7 @@ const amer: DistrictDef = {
   ],
   /** The bastion on the rampart: its roof looks north across the lake at the palace. */
   roof: roofAt(buildings, BASTION, 1, { x: FORT_AT.x + PALACE.x, z: FORT_AT.z + PALACE.z }),
-  water: [LAKE],
+  water: [WATER],
 }
 
 export default amer
