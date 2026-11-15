@@ -34,7 +34,7 @@ export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
     en: "Where the bazaar's roads meet and the whole city catches its breath in one open square.",
   },
   'albert-hall': {
-    hi: 'Baagh ke beech purani shaan ka ghar, jahan shahar ka khazana kaanch ke peeche rehta hai.',
+    hi: 'Hariyali ke beech purani shaan ka ghar, jahan shahar ka khazana kaanch ke peeche rehta hai.',
     en: "An old-world museum in a garden, keeping the city's treasures behind glass.",
   },
   'ram-niwas-gate': {

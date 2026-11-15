@@ -54,7 +54,7 @@ it('no riddle gives its landmark away, even in part, and every one is bilingual'
   for (const s of STAMPS) {
     // every distinctive word (4+ letters) of the landmark's name, in either language
     const tokens = new Set(
-      [s.hi, s.en].flatMap((n) => n.split(/[^A-Za-z]+/).filter((w) => fold(w).length >= 4)).map(fold),
+      [s.hi, s.en].flatMap((n) => n.split(/[^A-Za-z]+/).filter((w) => w.length >= 4)).map(fold),
     )
     for (const lang of ['hi', 'en'] as const) {
       const riddle = STAMP_RIDDLE[s.id][lang]

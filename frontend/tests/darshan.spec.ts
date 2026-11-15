@@ -23,9 +23,10 @@ test('the stamps chip opens the Jaipur Darshan list: names for the collected, ri
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(360)
   }
-  // scrolled to the last row, the close control is still on the screen (a phone has no Escape)
+  // the header's close control is on the screen before any scrolling, and after it (a phone has no Escape)
+  const x = list.locator('.darshan-head .darshan-x')
+  await expect(x).toBeInViewport()
   await list.evaluate((el) => el.scrollTo(0, el.scrollHeight))
-  const x = list.getByRole('button', { name: 'Band karo' }).first()
   await expect(x).toBeInViewport()
   await page.screenshot({ path: process.env.DARSHAN_SHOT ?? info.outputPath('darshan.png') })
 
