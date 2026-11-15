@@ -275,7 +275,10 @@ it('travels round the city and leaves nothing behind', async () => {
     await ride(host, to)
     expect(window.__gg.district()).toBe(to)
     expect(localStorage.getItem('gg-district')).toBe(to)
-    expect(host.querySelector('.hud-top')!.textContent).toContain(DEFS[to].name.hi)
+    // the chip shows the short name; the map button's accessible name has the whole one
+    expect(host.querySelector('.hud-top .place-button')!.getAttribute('aria-label')).toContain(
+      DEFS[to].name.hi,
+    )
     const cast = DEFS[to].npcs.map((n) => n.id).sort()
     expect(
       window.__gg

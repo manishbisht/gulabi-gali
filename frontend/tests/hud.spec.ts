@@ -12,7 +12,8 @@ const API = 'http://127.0.0.1:8787'
 test.afterEach(closePeople)
 
 /** The festival with a procession, the city line and the weather, all at once: the busiest the news gets. */
-async function busiest(page: Page) {
+async function busiest(page: Page, district?: string) {
+  if (district) await page.addInitScript((d) => localStorage.setItem('gg-district', d), district)
   // The city line's text sets how the HUD wraps. A live /api/city reply (the local Worker asks Open-Meteo, up
   // to 8 s) could land after the patch below and swap in today's real weather, so the reply is fixed too.
   const now = new Date()
@@ -91,9 +92,12 @@ function common(page: Page, place = 'Gulabi Shahar'): Record<string, Locator> {
     stamps: page.getByTitle('Jaipur Darshan stamps'),
     lang: toggles.getByRole('button', { name: 'English: bhasha badlo' }),
     sound: toggles.getByRole('button', { name: 'Awaaz chalu ya band karo' }),
-    bandar: toggles.getByRole('button', { name: 'Bandar band karo' }),
+    // the monkey's switch is the Walled City's alone
+    ...(place === 'Gulabi Shahar' && {
+      bandar: toggles.getByRole('button', { name: 'Bandar band karo' }),
+    }),
     banner: page.getByText('Gangaur ki shubhkamnayein!'),
-    procession: page.getByText('Gangaur ki sawari Tripolia se nikal rahi hai'),
+    procession: page.locator('.procession-line'),
     line: page.locator('.city-line'),
   }
 }
@@ -110,75 +114,67 @@ test('on a small phone the HUD keeps to the top, with every chip whole and in re
   await expect(items.weather!).toContainText('AQI 162')
 })
 
-for (const [id, place] of [
-  ['malviya-nagar', 'Malviya Nagar–WTP'],
+/** Every district, with the full name its map button is labelled by. */
+const DISTRICTS = [
+  ['walled-city', 'Gulabi Shahar'],
   ['mi-road', 'MI Road–Raja Park'],
-] as const)
-  test(`the place chip (the map's button) fits with the longest district names: ${place}`, async ({
+  ['university', 'University–JKK'],
+  ['malviya-nagar', 'Malviya Nagar–WTP'],
+] as const
+
+/** A picture of the busiest HUD, when GG_HUD_SHOTS names a directory. */
+const shot = (page: Page, name: string) =>
+  process.env.GG_HUD_SHOTS ? page.screenshot({ path: `${process.env.GG_HUD_SHOTS}/${name}.png` }) : undefined
+
+for (const [id, place] of DISTRICTS)
+  test(`a guest's busiest HUD fits in ${place}: festival, procession, city line, sign-in nudge`, async ({
     page,
   }) => {
-    // No festival: with Gangaur's two lines on top, a long name already pushed the news past the top share before
-    // the chip became a button (287 px of 259 with the plain chip; see the T1 report).
-    await page.addInitScript((d) => localStorage.setItem('gg-district', d), id)
-    await page.goto('/?gg-test=1')
-    await page.getByRole('button', { name: 'Padharo!' }).click()
-    await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
-    await page.evaluate(() =>
-      window.__gg.setSnapshot({
-        stale: false,
-        tempC: 31,
-        aqi: 162,
-        aqiBand: 'unhealthy',
-        condition: 'clear',
-      }),
-    )
-    const { place: chip, weather, stamps, lang, sound, line } = common(page, place)
+    await busiest(page, id)
     await laidOut({
-      place: chip!,
-      weather: weather!,
-      stamps: stamps!,
-      lang: lang!,
-      sound: sound!,
-      line: line!,
+      ...common(page, place),
+      banner: page.getByText('Gangaur ki shubhkamnayein!'),
+      procession: page.locator('.procession-line'),
       ghost: page.getByText('Abhi koi tumhe dekh nahi sakta', { exact: true }),
       signIn: page.getByRole('button', { name: 'Dikhna hai? Login karo' }),
     })
-    if (process.env.GG_HUD_LONG_SHOT && id === 'malviya-nagar')
-      await page.screenshot({ path: process.env.GG_HUD_LONG_SHOT })
+    await shot(page, `guest-${id}`)
   })
 
-test('signed in on a small phone, the identity row fits too: visibility, profile, invite, connections and its badge', async ({
-  browser,
-}) => {
-  const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
-  const asha = await resident(browser, 'Asha', phone)
-  // someone verified asks to meet her, so Connections carries a badge
-  const ravi = await resident(browser, 'Ravi')
-  expect(
-    (await ravi.page.request.post(`${API}/api/dev/verify`, { data: { userId: ravi.id } })).status(),
-  ).toBe(200)
-  const token = await ravi.page.evaluate(() => sessionStorage.getItem('gg-dev-token')!)
-  const asked = await ravi.page.request.post(`${API}/api/requests`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { to: asha.id, reason: 'Mujhe bhi chai aur kitaabein pasand hain' },
-  })
-  expect(asked.status()).toBe(201)
+for (const [id, place] of DISTRICTS)
+  test(`signed in on a small phone, the identity row fits too in ${place}: visibility, profile, invite, connections and its badge`, async ({
+    browser,
+  }) => {
+    const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+    const asha = await resident(browser, 'Asha', phone)
+    // someone verified asks to meet her, so Connections carries a badge
+    const ravi = await resident(browser, 'Ravi')
+    expect(
+      (await ravi.page.request.post(`${API}/api/dev/verify`, { data: { userId: ravi.id } })).status(),
+    ).toBe(200)
+    const token = await ravi.page.evaluate(() => sessionStorage.getItem('gg-dev-token')!)
+    const asked = await ravi.page.request.post(`${API}/api/requests`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { to: asha.id, reason: 'Mujhe bhi chai aur kitaabein pasand hain' },
+    })
+    expect(asked.status()).toBe(201)
 
-  const { page } = asha
-  await busiest(page)
-  const conn = page.locator('.conn-button')
-  const items: Record<string, Locator> = {
-    ...common(page),
-    visibility: page.getByText('Jaipur tumhe dekh sakta hai', { exact: true }),
-    profile: page.getByRole('button', { name: 'Profile', exact: true }),
-    invite: page.getByRole('button', { name: 'Invite', exact: true }),
-    connections: conn,
-    badge: conn.locator('.conn-badge'),
-  }
-  await expect(items.badge!).toHaveText('1')
-  await laidOut(items, [['connections', 'badge']])
-  if (process.env.GG_HUD_SHOT) await page.screenshot({ path: process.env.GG_HUD_SHOT })
-})
+    const { page } = asha
+    await busiest(page, id)
+    const conn = page.locator('.conn-button')
+    const items: Record<string, Locator> = {
+      ...common(page, place),
+      procession: page.locator('.procession-line'),
+      visibility: page.getByText('Jaipur tumhe dekh sakta hai', { exact: true }),
+      profile: page.getByRole('button', { name: 'Profile', exact: true }),
+      invite: page.getByRole('button', { name: 'Invite', exact: true }),
+      connections: conn,
+      badge: conn.locator('.conn-badge'),
+    }
+    await expect(items.badge!).toHaveText('1')
+    await laidOut(items, [['connections', 'badge']])
+    await shot(page, `signed-${id}`)
+  })
 
 test('the HUD switches say what they do, and show their state only through aria-pressed', async ({
   page,

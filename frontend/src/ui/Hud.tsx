@@ -5,6 +5,8 @@ import type { CitySnapshot } from '../net/protocol'
 interface Props {
   /** The district's name, already in the current language. */
   place: string
+  /** What the place chip shows where the full name is too long for a small phone's row; the full name stays its accessible name. */
+  placeShort?: string
   snapshot: CitySnapshot | null
   /** One line of city small talk, shown under the chips (in one card with the festival's lines). */
   line?: string
@@ -43,6 +45,7 @@ interface Props {
 
 export function Hud({
   place,
+  placeShort,
   snapshot,
   line,
   banner,
@@ -81,7 +84,7 @@ export function Hud({
                 aria-label={t('mapOpenPlace', lang, { place })}
                 onClick={onMap}
               >
-                {place}
+                {placeShort ?? place}
               </button>
             ) : (
               <span className="hud-chip">{place}</span>
