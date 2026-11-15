@@ -46,6 +46,9 @@
     // Error reports from pages (POST /api/errors, no sign-in): checked before any D1 write, so a flood costs
     // nothing; the D1 per-address count and the city-wide hourly ceiling come after it (src/errors.ts).
     { "name": "ERRORS_LIMITER", "namespace_id": "51004", "simple": { "limit": 20, "period": 60 } },
+    // The welcome screen's count (GET /api/count, no sign-in): a page asks every 30 s, and carriers put many
+    // people behind one address, so it is roomy; the edge cache answers most of them anyway (src/count.ts).
+    { "name": "COUNT_LIMITER", "namespace_id": "51005", "simple": { "limit": 120, "period": 60 } },
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
   // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64; and the most

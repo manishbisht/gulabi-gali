@@ -10,6 +10,7 @@ import miRoad from './districts/miRoad'
 import walledCity from './districts/walledCity'
 import { benchesOf, seatPose } from './benches'
 import { ROOF_FADE_MS } from './rooftop'
+import { placeSpot } from './placeLink'
 import { createCitySession, type SessionHooks } from './session'
 import type { DistrictDef } from './types'
 
@@ -93,12 +94,20 @@ function hooks(): SessionHooks {
   }
 }
 
-function open(start: DistrictId = 'walled-city', extra: Partial<SessionHooks> = {}) {
+function open(start: DistrictId = 'walled-city', extra: Partial<SessionHooks> = {}, startAt?: string) {
   const s = fakeStage()
   const canvas = document.body.appendChild(document.createElement('canvas'))
   const bubbleHost = document.body.appendChild(document.createElement('div'))
   const h = { ...hooks(), ...extra }
-  const session = createCitySession({ stage: s.stage, controls, canvas, bubbleHost, start, hooks: h })
+  const session = createCitySession({
+    stage: s.stage,
+    controls,
+    canvas,
+    bubbleHost,
+    start,
+    startAt,
+    hooks: h,
+  })
   return { ...s, session, hooks: h }
 }
 
@@ -130,6 +139,35 @@ it('enter then travel disposes the first district before the second onEnter', as
   session.dispose()
   expect(log.at(-2)).toBe('leave mi-road')
   expect(second.dispose).toHaveBeenCalled()
+})
+
+describe('opened from a link to a place (`startAt`)', () => {
+  it('stands the player at the place in the first district, facing it; later trips arrive at the station', async () => {
+    const { session } = open('mi-road', {}, 'albert-hall')
+    const first = fakeDistrict(miRoad)
+    loads[0]!.resolve(first)
+    await settle()
+    const want = placeSpot(first, 'albert-hall')!
+    expect(session.player()!.position()).toEqual({ x: want.x, z: want.z })
+    expect(session.player()!.heading()).toBe(want.ry)
+    expect(want).not.toEqual({ ...miRoad.spawn, ry: want.ry })
+    // and the view looks the way they face (yaw 0 looks along -z, a heading of π)
+    const yaw = session.player()!.view().yaw
+    expect(Math.cos(yaw - (want.ry + Math.PI))).toBeCloseTo(1, 5)
+    const trip = session.travelTo('walled-city')
+    loads[1]!.resolve(fakeDistrict(walledCity))
+    await trip
+    expect(session.player()!.position()).toEqual(walledCity.station)
+    session.dispose()
+  })
+
+  it('a place the district does not have falls back to the normal spawn', async () => {
+    const { session } = open('walled-city', {}, 'nowhere-at-all')
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    expect(session.player()!.position()).toEqual(walledCity.spawn)
+    session.dispose()
+  })
 })
 
 it('a zoom lasts while the player stays, and the next district starts at the usual distance', async () => {

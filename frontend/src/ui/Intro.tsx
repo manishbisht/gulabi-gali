@@ -1,4 +1,11 @@
 import { t, type Lang } from '../i18n/strings'
+import { useCityCount } from '../live/useCityCount'
+
+/** The count as the welcome screen says it: 0 is quiet, ten and up was rounded down (so "n+"). */
+function countLine(n: number, lang: Lang): string {
+  if (n === 0) return t('introQuiet', lang)
+  return t(n >= 10 ? 'introCountMany' : 'introCount', lang, { n })
+}
 
 interface Props {
   lang: Lang
@@ -8,6 +15,7 @@ interface Props {
 }
 
 export function Intro({ lang, onLang, onEnter, onPrivacy }: Props) {
+  const count = useCityCount()
   return (
     <div className="intro">
       <button
@@ -20,6 +28,10 @@ export function Intro({ lang, onLang, onEnter, onPrivacy }: Props) {
       </button>
       <h1 className="intro-title">Gulabi Gali</h1>
       <p className="intro-tagline">{t('tagline', lang)}</p>
+      {/* its line is always there (empty until a count arrives), so nothing below it jumps */}
+      <p className="intro-count" aria-live="polite">
+        {count === null ? '' : countLine(count, lang)}
+      </p>
       <button type="button" className="enter" onClick={onEnter}>
         {t('enter', lang)}
       </button>

@@ -150,9 +150,9 @@ numbered files in `backend/migrations/`, applied with the same command.
   it with `clerk:`. Never a `dev:` id.
 - `MAX_LIVE` (var, default `"300"`): residents shown at once; the rest wait in line. `MAX_IP_SOCKETS` (var,
   default `"24"`): live sockets from one address. Both are in `backend/wrangler.jsonc`; change and deploy.
-- Rate limits: `SOCKETS_LIMITER`, `SIGNIN_LIMITER`, `WRITES_LIMITER` and `ERRORS_LIMITER` use namespace ids
-  `51001`, `51002`, `51003` and `51004`. They only have to be unique within the Cloudflare account; change them if
-  something else uses them.
+- Rate limits: `SOCKETS_LIMITER`, `SIGNIN_LIMITER`, `WRITES_LIMITER`, `ERRORS_LIMITER` and `COUNT_LIMITER` use
+  namespace ids `51001`, `51002`, `51003`, `51004` and `51005`. They only have to be unique within the Cloudflare
+  account; change them if something else uses them.
 
 **The first verified member.** Nobody can send requests until someone is verified, and an invite needs a
 verified member to give it. After the first deploy, sign in, open `#/admin`, look yourself up and press
@@ -315,6 +315,33 @@ and a sample stack (Refresh asks again). Nothing new to set: no secret, var or b
       `Promise.reject(new Error('launch check'))` in the browser console on the city page.
 - [ ] Open the site fresh (a private window) on a phone: the three-step hint shows once after Padharo! and
       not again after a reload.
+
+## 2d. Who's here and links to a place
+
+**The welcome screen's count.** `GET /api/count` (public, no sign-in) answers `{ "people": n }`: how many
+residents others can see in the city now. Only the gate's live slots count, so never a ghost, someone hidden or
+banned, someone waiting in line, or someone whose last socket just closed. Below 3 it says 0 (the page says
+"Abhi shaant hai — pehle aao"), 3 to 9 as they are, and from 10 a multiple of 5 rounded down (the page shows
+"10+"). One number for the city: no names, ids or districts. Each Cloudflare location keeps the answer in its
+edge cache for 30 s (one GateDO read per location per 30 s); browsers keep no copy. Per address it goes through
+the `COUNT_LIMITER` rate-limiting binding (namespace `51005` in `backend/wrangler.jsonc`, 120 a minute; nothing
+to create, it ships with the Worker). The page asks on the welcome screen and every 30 s while it shows; a
+failure just leaves the line empty. Deploy the Worker before the site, as always: until then the line stays
+empty.
+
+**Links to a place ("Bulao").** Landmark cards, the bench panel and every row of the map's place list have a
+"Bulao" button: the phone's share sheet (or, without one, the clipboard) with a short line and
+`https://gulabi-gali.manishbisht.me/?at=<district>:<place>`. The link names a place and nothing else, never who
+sent it. Opening it shows the welcome screen as usual; after Padharo! the city opens in that district with the
+visitor standing at the place, and the `at` part leaves the address bar. A place a district does not have opens
+at the usual spawn. Nothing to set.
+
+**Pre-launch checks**
+
+- [ ] Open the site with nobody on: the welcome screen says "Abhi shaant hai — pehle aao". With three phones in
+      the city (visible, not ghosts), it says "3 log abhi gali mein" within 30 s.
+- [ ] On a phone, open a landmark card, press Bulao and send the link to yourself on WhatsApp; open it, press
+      Padharo! and land by that landmark with its card up.
 
 ## 3. Budget alerts
 

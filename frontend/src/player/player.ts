@@ -98,6 +98,11 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       if (driving) vehicle.reset(x, z, avatar.rotation.y)
       sync(1) // dt of 1 s: the camera is effectively there too
     },
+    /** Turns the view to look the way a heading `ry` faces (as `teleport` takes it); a `teleport` after snaps it. */
+    lookAlong(ry: number) {
+      const by = ry + Math.PI - follow.yaw()
+      follow.turn(Math.atan2(Math.sin(by), Math.cos(by)), 0)
+    },
     driving: (): boolean => driving,
     /** The last frame moved the player at a jog (on foot, never at the wheel). */
     jogging: (): boolean => jogged,

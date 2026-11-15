@@ -4,6 +4,7 @@ import type {
   BlockListEntry,
   ChatError,
   ChatMessage,
+  CityCount,
   CitySnapshot,
   EndedChat,
   FullProfile,
@@ -64,6 +65,21 @@ export async function fetchCity(signal?: AbortSignal): Promise<CitySnapshot> {
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', forward)
+  }
+}
+
+/**
+ * How many people others can see in the city now, as `/api/count` rounds it (0: quiet, fewer than three), or
+ * null for any failure. Never rejects. Plain `fetch`: a refused read here is no reason for a "slow down" toast.
+ */
+export async function fetchCount(signal?: AbortSignal): Promise<number | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/count`, { signal })
+    if (!res.ok) return null
+    const { people } = (await res.json()) as Partial<CityCount>
+    return typeof people === 'number' && Number.isInteger(people) && people >= 0 ? people : null
+  } catch {
+    return null
   }
 }
 

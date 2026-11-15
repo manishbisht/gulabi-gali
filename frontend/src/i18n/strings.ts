@@ -3,6 +3,12 @@ export type Lang = 'hi' | 'en'
 export const STRINGS = {
   enter: { hi: 'Padharo!', en: 'Come in' },
   tagline: { hi: 'Jaipur ki gali, aapke phone mein', en: "Jaipur's lanes, on your phone" },
+  /** The welcome screen's count of people others can see now (see `useCityCount`): 3 to 9 as they are. */
+  introCount: { hi: '{n} log abhi gali mein', en: '{n} people in the lanes right now' },
+  /** Ten and up, rounded down to a multiple of five. */
+  introCountMany: { hi: '{n}+ log abhi gali mein', en: '{n}+ people in the lanes right now' },
+  /** Fewer than three (the count never tells one or two apart from none). */
+  introQuiet: { hi: 'Abhi shaant hai — pehle aao', en: "It's quiet right now — be the first in" },
   stampGot: { hi: 'Jaipur Darshan · stamp mila: {place}', en: 'Stamp collected: {place}' },
   stampButton: { hi: 'Stamp lo', en: 'Collect stamp' },
   stampHave: { hi: 'Stamp mil chuka hai', en: 'Stamp already collected' },
@@ -83,6 +89,18 @@ export const STRINGS = {
   },
   mapClose: { hi: 'Band karo', en: 'Close' },
   mapMetro: { hi: 'Metro station', en: 'Metro station' },
+  /** "Bulao": a link to a place, to send someone (see `PlaceInvite`). It says nothing about who sent it. */
+  placeInvite: { hi: 'Bulao', en: 'Invite' },
+  placeInviteLabel: { hi: 'Bulao: {place} ka link bhejo', en: 'Invite: send a link to {place}' },
+  placeShareText: {
+    hi: 'Gulabi Gali mein {place} pe aao — yahin milte hain!',
+    en: "Come to {place} in Gulabi Gali — let's meet there!",
+  },
+  placeCopied: { hi: 'Link copy ho gaya', en: 'Link copied' },
+  placeShareFailed: {
+    hi: 'Link bhej nahi paye. Phir se try karo.',
+    en: "Couldn't share the link. Try again.",
+  },
   mapBench: { hi: 'Bench {n}', en: 'Bench {n}' },
   mapTapri: { hi: 'Chai ki tapri {n}', en: 'Chai stall {n}' },
   mapPoster: { hi: 'Poster ki deewar {n}', en: 'Poster wall {n}' },

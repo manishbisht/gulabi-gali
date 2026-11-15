@@ -36,13 +36,16 @@ import { useStamps } from './world/useStamps'
 import { useCityMap } from './world/useCityMap'
 import { processionLine } from './live/procession'
 import { DISTRICT_NAMES } from './world/districtNames'
-import { savedDistrict, useTravel } from './world/useTravel'
+import { rememberDistrict, savedDistrict, useTravel } from './world/useTravel'
+import { dropPlaceLink, readPlaceLink } from './world/placeLink'
+import { mapItems } from './world/cityMap'
 import type { DistrictId, FestivalId } from './net/protocol'
 import type { DistrictDef, Vec2 } from './world/types'
 import { Hud } from './ui/Hud'
 import { PhotoMode } from './ui/PhotoMode'
 import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
+import { PlaceInvite } from './ui/PlaceInvite'
 import { DriveButtons } from './ui/DriveButtons'
 import { Joystick } from './ui/Joystick'
 import { Patang } from './ui/Patang'
@@ -98,6 +101,8 @@ export default function App() {
   const [lang, setLang] = useLang()
   const auth = useAuth()
   const [entered, setEntered] = useState(false)
+  /** A link to a place (`?at=`, see placeLink): the city opens there once "Padharo" is pressed. */
+  const [link] = useState(() => readPlaceLink(location.search))
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [here, setHere] = useState<DistrictId>('walled-city')
   // an error report says which district it happened in (none before the city opens)
@@ -287,7 +292,8 @@ export default function App() {
       controls,
       canvas,
       bubbleHost: bubbles,
-      start: savedDistrict(),
+      start: link?.district ?? savedDistrict(),
+      startAt: link?.place,
       hooks: {
         lang: () => langRef.current,
         track,
@@ -377,6 +383,7 @@ export default function App() {
     freeze,
     override,
     queued,
+    link,
   ])
 
   const viewer: Viewer = !auth.signedIn
@@ -509,6 +516,12 @@ export default function App() {
       />
     )
 
+  /** "Bulao" for a place in the district the player is in (its map's id), once it has loaded. */
+  const invite = (id: string) => {
+    const place = map.def && mapItems(map.def, []).find((i) => i.id === id)
+    return place && <PlaceInvite district={map.def!.id} place={place} lang={lang} />
+  }
+
   /** A banned account: a plain screen over everything (the city behind it stays a ghost's). */
   const closed = banned && <AccountClosed lang={lang} onSignOut={() => void auth.signOut()} />
   if (!webgl || stageFailed) return closed || <NoWebGL lang={lang} />
@@ -519,7 +532,14 @@ export default function App() {
           <Intro
             lang={lang}
             onLang={setLang}
-            onEnter={() => setEntered(true)}
+            onEnter={() => {
+              // followed: this district from now on, and the link out of the address bar
+              if (link) {
+                rememberDistrict(link.district)
+                dropPlaceLink()
+              }
+              setEntered(true)
+            }}
             onPrivacy={() => setPrivacyOpen(true)}
           />
           {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
@@ -756,6 +776,7 @@ export default function App() {
                         if (done) bench.forget(id)
                         return done
                       }}
+                      invite={invite(bench.seat.bench.id)}
                     />
                   )
                 ) : near ? (
@@ -764,6 +785,7 @@ export default function App() {
                     lang={lang}
                     stamped={have.includes(near.id)}
                     onCollect={collectHere}
+                    invite={invite(near.id)}
                   />
                 ) : sheetOpen ? (
                   <TravelSheet
