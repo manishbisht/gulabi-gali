@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createControls } from './controls'
-import { createPlayer } from './player'
+import { createPlayer, JOG_SPEED, WALK_SPEED } from './player'
 
 it('setLook swaps the avatar in place, leaving exactly one body in the scene', () => {
   const scene = new THREE.Scene()
@@ -138,4 +138,85 @@ it('at the wheel a thumb resting on the street holds the view where it was turne
   expect(Math.sin(player.view().yaw)).toBeCloseTo(-1, 2)
   player.dispose()
   controls.dispose()
+})
+
+describe('jogging', () => {
+  /** A player on open ground with keys of its own, and how far it gets in one second of 1/30 s frames. */
+  function open() {
+    const keys = new EventTarget() as unknown as Window
+    const press = (code: string, type: 'keydown' | 'keyup' = 'keydown') =>
+      keys.dispatchEvent(Object.assign(new Event(type), { code }))
+    const scene = new THREE.Scene()
+    const controls = createControls(keys)
+    const player = createPlayer({
+      scene,
+      camera: new THREE.PerspectiveCamera(),
+      controls,
+      look: { skin: 0, outfit: 'pink', head: 'none' },
+      colliders: [],
+    })
+    const second = () => {
+      player.teleport(0, 0)
+      for (let i = 0; i < 30; i++) player.update(1 / 30)
+      return Math.hypot(player.position().x, player.position().z)
+    }
+    return { controls, player, press, second }
+  }
+
+  it('Shift held jogs at 1.8x walking pace (7.2 m/s); let go, it walks again', () => {
+    const { controls, player, press, second } = open()
+    expect(JOG_SPEED).toBeCloseTo(1.8 * WALK_SPEED)
+    press('KeyW')
+    expect(second()).toBeCloseTo(WALK_SPEED)
+    press('ShiftLeft')
+    expect(second()).toBeCloseTo(JOG_SPEED)
+    press('ShiftLeft', 'keyup')
+    expect(second()).toBeCloseTo(WALK_SPEED)
+    player.dispose()
+    controls.dispose()
+  })
+
+  it('the stick pushed past 90% of its reach jogs; short of it, it walks at the push', () => {
+    const { controls, player, second } = open()
+    controls.setJoystick({ x: 0, z: 1 })
+    expect(second()).toBeCloseTo(JOG_SPEED)
+    controls.setJoystick({ x: 0.66, z: 0.66 }) // a diagonal at 93%
+    expect(second()).toBeCloseTo(0.66 * Math.SQRT2 * JOG_SPEED)
+    controls.setJoystick({ x: 0, z: 0.85 })
+    expect(second()).toBeCloseTo(0.85 * WALK_SPEED)
+    player.dispose()
+    controls.dispose()
+  })
+
+  it('at the wheel Shift does nothing: the auto keeps its own pace', () => {
+    const drove = (shift: boolean) => {
+      const { controls, player, press } = open()
+      player.mount(0, 0, 0)
+      press('KeyW')
+      if (shift) press('ShiftLeft')
+      for (let i = 0; i < 60; i++) player.update(1 / 30)
+      const z = player.position().z
+      player.dispose()
+      controls.dispose()
+      return z
+    }
+    expect(drove(true)).toBeCloseTo(drove(false))
+  })
+})
+
+it('a pinch or wheel zooms the camera, read once a frame, and a new player (a new district) starts unzoomed', () => {
+  const { controls, player } = drivable()
+  expect(player.view().zoom).toBe(1)
+  controls.addZoom(1.4)
+  for (let i = 0; i < 60; i++) player.update(1 / 30)
+  expect(player.view().zoom).toBeCloseTo(1.4, 3)
+  controls.addZoom(100)
+  for (let i = 0; i < 60; i++) player.update(1 / 30)
+  expect(player.view().zoom).toBeCloseTo(1.6, 3)
+  player.dispose()
+  controls.dispose()
+  const fresh = drivable()
+  expect(fresh.player.view().zoom).toBe(1)
+  fresh.player.dispose()
+  fresh.controls.dispose()
 })

@@ -11,8 +11,11 @@ export interface GgTestApi {
   framesSinceRestore(): number
   /** Where the player stands, in metres. */
   position(): Vec2
-  /** Where the camera looks: yaw (0 along -z, positive turned left) and pitch (positive up), in radians. */
-  view(): { yaw: number; pitch: number }
+  /**
+   * Where the camera looks: yaw (0 along -z, positive turned left) and pitch (positive up), in radians, and its
+   * zoom (distance as a multiple of the usual one, 0.6 to 1.6).
+   */
+  view(): { yaw: number; pitch: number; zoom: number }
   /** Puts the player at (x, z), skipping collision. */
   teleport(x: number, z: number): void
   /** The district the player is in. */

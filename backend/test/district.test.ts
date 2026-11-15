@@ -2,7 +2,17 @@ import { applyD1Migrations, env, evictDurableObject, runInDurableObject, SELF } 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { LIVE_CLOSE, type DistrictId, type ServerMsg } from '../src/protocol'
-import { BENCH_POSITIONS, BENCHES, DISTRICT_IDS, LANES, readWho, whoHeader, type Who } from '../src/district'
+import {
+  BENCH_POSITIONS,
+  BENCHES,
+  DISTRICT_IDS,
+  JOG_SPEED,
+  LANES,
+  MAX_SPEED,
+  readWho,
+  whoHeader,
+  type Who,
+} from '../src/district'
 import { closeAll, live, login, openLive, resident, WAIT } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -260,6 +270,65 @@ describe('DistrictDO', () => {
     // that was all the burst there is
     a.send({ t: 'move', x: 40, z: 0, ry: 0, v: 'auto' })
     expect((await a.next('error')).code).toBe('too-fast')
+  })
+
+  it('a jog (1.8x the 4 m/s walk: 7.2 m/s) is never refused, even after a 1 s stall; a teleport still is', async () => {
+    expect(JOG_SPEED).toBeCloseTo(7.2)
+    expect(MAX_SPEED).toBeGreaterThan(JOG_SPEED)
+    const district = stub('mi-road')
+    const a = await live('mi-road', { token: await resident('Jog Jaya') })
+    await a.next('welcome')
+    await runInDurableObject(district, async (instance, state) => {
+      const ws = state
+        .getWebSockets()
+        .find((s) => (s.deserializeAttachment() as { userId?: string } | null)?.userId === 'dev:jog-jaya')!
+      const at = (ms: number, x: number) => {
+        instance.clock = () => t + ms
+        return instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x, z: 0, ry: 0 }))
+      }
+      const t = Date.now()
+      try {
+        // ten seconds of jogging, a move every 100 ms as the client throttles them
+        for (let i = 0; i <= 100; i++) await at(i * 100, (i * JOG_SPEED) / 10)
+        // then a second with nothing heard, and its frames all at once
+        for (let i = 1; i <= 10; i++) await at(11_000, JOG_SPEED * 10 + (i * JOG_SPEED) / 10)
+        // and on at a jog
+        for (let i = 1; i <= 20; i++) await at(11_000 + i * 100, JOG_SPEED * 11 + (i * JOG_SPEED) / 10)
+        // a jump across the district is still a teleport
+        await at(13_100, JOG_SPEED * 13 + 50)
+      } finally {
+        instance.clock = Date.now
+      }
+    })
+    await a.sync()
+    // one refusal, the teleport's, back to where the jog had got to
+    const [refused, ...more] = a.all('error')
+    expect(more).toEqual([])
+    expect(refused).toMatchObject({ code: 'too-fast', z: 0 })
+    expect((refused as { x: number }).x).toBeCloseTo(JOG_SPEED * 13)
+  })
+
+  it('outrunning a jog for long is still refused: 10 m/s runs out of burst within a few seconds', async () => {
+    const district = stub('mi-road')
+    const a = await live('mi-road', { token: await resident('Dash Dinesh') })
+    await a.next('welcome')
+    await runInDurableObject(district, async (instance, state) => {
+      const ws = state
+        .getWebSockets()
+        .find((s) => (s.deserializeAttachment() as { userId?: string } | null)?.userId === 'dev:dash-dinesh')!
+      const t = Date.now()
+      try {
+        for (let i = 0; i <= 50; i++) {
+          instance.clock = () => t + i * 100
+          await instance.webSocketMessage(ws, JSON.stringify({ t: 'move', x: i, z: 0, ry: 0 }))
+        }
+      } finally {
+        instance.clock = Date.now
+      }
+    })
+    await a.sync()
+    expect(a.all('error').length).toBeGreaterThan(0)
+    expect(a.all('error').every((e) => e.code === 'too-fast')).toBe(true)
   })
 
   it('a ghost cannot status/sit/say', async () => {

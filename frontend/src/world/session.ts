@@ -26,6 +26,7 @@ import { createPeople, createPeopleLabels, type People } from './people'
 import { createPosters, type Posters } from './posters'
 import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
+import { createZoomGestures } from './zoomGestures'
 
 /** A hazy Jaipur blue, until the live sky (weather and time of day) paints it. */
 const SKY = '#BFD6DE'
@@ -326,6 +327,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         hooks,
       ),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
+      createZoomGestures(canvas, controls),
     ]
     if (posters)
       systems.push({
@@ -592,6 +594,8 @@ function createInteraction(
     touching.add(e.pointerId)
     // A second finger on the canvas (a pinch) or a right or middle click is not a tap, and spoils the one in progress.
     down = touching.size > 1 || (e.button ?? 0) > 0 ? null : { x: e.clientX, y: e.clientY, at: e.timeStamp }
+    // a pinch zooms (see zoomGestures): the finger that was looking stops turning the view
+    if (touching.size > 1) stopLook()
     // the first of them may look; a second finger never takes over
     if (down && look.id === -1) {
       look.id = e.pointerId

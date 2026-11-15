@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createFollowCamera } from './camera'
 
 it('sits about 7 m behind and 4.5 m above, easing toward a moving target', () => {
@@ -154,4 +154,67 @@ it('at the wheel, a look held still (a thumb resting on the street) keeps the vi
   expect(follow.yaw()).toBeCloseTo(Math.PI / 2)
   for (let i = 0; i < 150; i++) follow.update({ x: 0, y: 0, z: 0 }, 1 / 30, behind)
   expect(Math.abs(Math.cos(follow.yaw()) - Math.cos(behind))).toBeLessThan(0.01)
+})
+
+describe('zoom', () => {
+  const DIST = Math.hypot(7, 4.5)
+  const away = (cam: THREE.PerspectiveCamera) => cam.position.length() // from the player at the origin
+  /** Where the view crosses head height (1.6 m), on the ground plan. */
+  const aim = (cam: THREE.PerspectiveCamera) => {
+    const f = forward(cam)
+    const s = (1.6 - cam.position.y) / f.y
+    return { x: cam.position.x + f.x * s, z: cam.position.z + f.z * s }
+  }
+  function zoomed(
+    factor: number,
+    occluders: { minX: number; maxX: number; minZ: number; maxZ: number }[] = [],
+  ) {
+    const cam = new THREE.PerspectiveCamera()
+    const follow = createFollowCamera(cam, occluders, { reducedMotion: true })
+    follow.zoomBy(factor)
+    follow.update({ x: 0, y: 0, z: 0 }, 1 / 30)
+    return { cam, follow }
+  }
+
+  it("starts at today's distance, and is clamped between 0.6x and 1.6x of it", () => {
+    expect(zoomed(1).follow.zoom()).toBe(1)
+    expect(away(zoomed(1).cam)).toBeCloseTo(DIST)
+    const out = zoomed(100)
+    expect(out.follow.zoom()).toBeCloseTo(1.6)
+    expect(away(out.cam)).toBeCloseTo(1.6 * DIST)
+    const near = zoomed(0.001)
+    expect(near.follow.zoom()).toBeCloseTo(0.6)
+    expect(away(near.cam)).toBeCloseTo(0.6 * DIST)
+    // and a zoom back the other way leaves the limit at once (no wind-up past it)
+    out.follow.zoomBy(0.9)
+    out.follow.update({ x: 0, y: 0, z: 0 }, 1 / 30)
+    expect(out.follow.zoom()).toBeCloseTo(1.44)
+  })
+
+  it('keeps its angle above the ground, and still aims through head height 5 m beyond the player', () => {
+    for (const f of [0.6, 1.6]) {
+      const { cam } = zoomed(f)
+      expect(cam.position.y / cam.position.z).toBeCloseTo(4.5 / 7)
+      expect(aim(cam).x).toBeCloseTo(0)
+      expect(aim(cam).z).toBeCloseTo(-5)
+    }
+  })
+
+  it('zoomed out, a wall behind still pulls the camera in front of it', () => {
+    const { cam } = zoomed(1.6, [{ minX: -10, maxX: 10, minZ: 3, maxZ: 15 }])
+    expect(cam.position.z).toBeLessThan(3)
+    expect(cam.position.z).toBeGreaterThan(0)
+  })
+
+  it('eases into a zoom, unless reduced motion asks for none', () => {
+    const cam = new THREE.PerspectiveCamera()
+    const follow = createFollowCamera(cam, [], { reducedMotion: false })
+    follow.update({ x: 0, y: 0, z: 0 }, 1 / 30)
+    follow.zoomBy(1.5)
+    follow.update({ x: 0, y: 0, z: 0 }, 1 / 30)
+    expect(follow.zoom()).toBeGreaterThan(1.1)
+    expect(follow.zoom()).toBeLessThan(1.5)
+    for (let i = 0; i < 30; i++) follow.update({ x: 0, y: 0, z: 0 }, 1 / 30)
+    expect(follow.zoom()).toBeCloseTo(1.5, 3)
+  })
 })

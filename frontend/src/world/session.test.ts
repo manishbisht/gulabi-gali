@@ -72,6 +72,9 @@ const controls: Controls = {
   look: () => ({ yaw: 0, pitch: 0, held: false }),
   addLook: vi.fn(),
   holdLook: vi.fn(),
+  jog: () => false,
+  zoom: () => 1,
+  addZoom: vi.fn(),
   dispose() {},
 }
 
@@ -125,6 +128,22 @@ it('enter then travel disposes the first district before the second onEnter', as
   session.dispose()
   expect(log.at(-2)).toBe('leave mi-road')
   expect(second.dispose).toHaveBeenCalled()
+})
+
+it('a zoom lasts while the player stays, and the next district starts at the usual distance', async () => {
+  const { session, tick } = open()
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const zoom = vi.spyOn(controls, 'zoom').mockReturnValueOnce(1.5)
+  for (let i = 0; i < 60; i++) tick(1 / 30)
+  expect(session.player()!.view().zoom).toBeCloseTo(1.5, 3)
+  const trip = session.travelTo('mi-road')
+  loads[1]!.resolve(fakeDistrict(miRoad))
+  await trip
+  tick(1 / 30)
+  expect(session.player()!.view().zoom).toBe(1)
+  zoom.mockRestore()
+  session.dispose()
 })
 
 it('keeps the old district when the next one fails to load', async () => {
@@ -1137,5 +1156,35 @@ describe('drag to look', () => {
     fire('pointermove', 70)
     window.dispatchEvent(new Event('blur')) // a lost drag lets go too
     expect(controls.holdLook).toHaveBeenLastCalledWith(false)
+  })
+
+  it('a second finger landing mid-drag makes it a pinch: the view stops turning and the street zooms instead', async () => {
+    const { fire, canvas, tap } = await lookable()
+    vi.mocked(controls.addZoom).mockClear()
+    fire('pointerdown', 45)
+    fire('pointermove', 30) // past the slop: looking
+    expect(canvas.hasAttribute('data-looking')).toBe(true)
+    fire('pointerdown', 60, 50, { pointerId: 2 })
+    expect(canvas.hasAttribute('data-looking')).toBe(false)
+    expect(controls.holdLook).toHaveBeenLastCalledWith(false)
+    const [yaw] = turned()
+    fire('pointermove', 10) // fingers spread: 30 px apart to 50
+    fire('pointermove', 80, 50, { pointerId: 2 })
+    expect(turned()[0]).toBe(yaw) // no more turn
+    expect(controls.addZoom).toHaveBeenCalled()
+    const k = vi.mocked(controls.addZoom).mock.calls.reduce((m, [f]) => m * f, 1)
+    expect(k).toBeCloseTo(30 / 70)
+    fire('pointerup', 80, 50, { pointerId: 2 })
+    fire('pointerup', 10)
+    expect(tap).not.toHaveBeenCalled()
+  })
+
+  it('the mouse wheel over the street zooms', async () => {
+    const { canvas } = await lookable()
+    vi.mocked(controls.addZoom).mockClear()
+    canvas.dispatchEvent(
+      Object.assign(new Event('wheel', { cancelable: true }), { deltaY: 100, deltaMode: 0 }),
+    )
+    expect(vi.mocked(controls.addZoom).mock.calls[0]![0]).toBeGreaterThan(1)
   })
 })

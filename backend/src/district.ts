@@ -82,11 +82,22 @@ export const AWAKE_MS = 5_000
 export const MOVE_BATCH_MS = 100
 /** A socket hears the moves of people within this many metres of its own last point. */
 export const INTEREST_M = 60
-/** The fastest anyone may go, in m/s, measured against the last accepted point. */
+/**
+ * The fastest the client goes on foot, in m/s: its jog (Shift, or the stick pushed to its rim), 1.8x its 4 m/s
+ * walk. Not enforced itself: `MAX_SPEED` must stay above it, or every jogger is pulled back.
+ */
+export const JOG_SPEED = 7.2
+/**
+ * The fastest anyone may go on foot, in m/s, measured against the last accepted point: a jog (`JOG_SPEED`)
+ * with about 10% to spare, so a steady jog never drains the burst below.
+ */
 export const MAX_SPEED = 8
 /**
  * How far ahead of that pace a burst may run: one second's worth. This is a deliberate tolerance for network
  * jitter: frames bunch up after a stall, and without it a walker arriving all at once would be pulled back.
+ * It covers a stall of 2 s at a walk and of 1.1 s at a jog (8 m / 7.2 m/s); a jogger stalled longer is pulled
+ * back to the last point heard, an accepted cost (a burst big enough for 2 s of jogging would let anyone hop
+ * 14 m at once).
  * The average still never beats `MAX_SPEED`; the most anyone gains is one 8 m hop after standing still.
  */
 export const SPEED_BURST_M = MAX_SPEED
