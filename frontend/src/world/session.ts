@@ -21,7 +21,7 @@ import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
-import { createPeople, createPeopleLabels, type People } from './people'
+import { createPeople, createPeopleLabels, type People, type Remote } from './people'
 import { createPosters, type Posters } from './posters'
 import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
@@ -126,6 +126,8 @@ export interface CitySession {
   /** The district the player is in, once one has loaded. */
   district(): District | null
   player(): Player | null
+  /** The other people in the district, as the street draws them (none offline). See `mapPeople`. */
+  people(): readonly Remote[]
   /** Swaps the player's avatar now, in the district it is in; later districts use `hooks.look`. */
   setLook(look: AvatarLook): void
   /**
@@ -185,6 +187,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     player: Player
     systems: DistrictSystem[]
     presence: Presence | null
+    people: People | null
     sitting: Sitting | null
     posters: Posters | null
     driving: Driving
@@ -352,7 +355,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, sitting, posters, driving, animals }
+    here = { district, player, systems, presence, people, sitting, posters, driving, animals }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -430,6 +433,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
   return {
     district: () => here?.district ?? null,
     player: () => here?.player ?? null,
+    people: () => here?.people?.entries() ?? [],
     setLook: (look) => here?.player.setLook(look),
     travelTo(id, signal) {
       // the metro takes a standing walker: get up from a bench, and out of an auto (boxed in, where the auto

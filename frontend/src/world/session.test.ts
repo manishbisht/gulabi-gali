@@ -375,6 +375,20 @@ async function withAsha() {
   return { ...live, ws, drawn }
 }
 
+it("people() gives the map the street's people: none offline, those the socket lists, none once they leave", async () => {
+  const { session, ws } = await withAsha()
+  expect(session.people().map((r) => r.person.id)).toEqual(['dev:asha'])
+  ws.say({ t: 'leave', id: 'dev:asha' }) // hidden, blocked, or gone: the server says she left
+  expect(session.people()).toEqual([])
+  session.dispose()
+
+  const offline = open()
+  loads[1]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  expect(offline.session.people()).toEqual([])
+  offline.session.dispose()
+})
+
 it('clears the street when another tab takes over: nobody stays frozen in place', async () => {
   const { session, ws, drawn } = await withAsha()
   ws.onclose?.({ code: 4001 })

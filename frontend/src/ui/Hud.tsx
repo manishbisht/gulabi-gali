@@ -29,6 +29,8 @@ interface Props {
   /** Present only for a resident: opens Connections, with the count of unread things on its badge. */
   onConnections?: () => void
   connectionsBadge?: number
+  /** Opens (or closes) the city map; present once a district is in. */
+  onMap?: () => void
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
@@ -50,6 +52,7 @@ export function Hud({
   onInvite,
   onConnections,
   connectionsBadge = 0,
+  onMap,
   top,
   bottom,
 }: Props) {
@@ -148,6 +151,13 @@ export function Hud({
             </button>
           )}
         </div>
+        {onMap && (
+          // under the switches, in the right-hand column (see .hud-head)
+          <button type="button" className="hud-chip map-button" aria-keyshortcuts="M" onClick={onMap}>
+            <span aria-hidden="true">🧭</span>
+            {t('mapOpen', lang)}
+          </button>
+        )}
       </div>
       {top}
       <div className="hud-bottom">{bottom}</div>

@@ -57,7 +57,7 @@ async function laidOut(items: Record<string, Locator>, inside: [string, string][
   for (const k of ['place', 'weather', 'stamps'])
     expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
   // thumb-sized switches
-  for (const k of ['lang', 'sound', 'bandar']) {
+  for (const k of ['lang', 'sound', 'bandar', 'map']) {
     expect.soft(boxes[k]!.width, `${k} width`).toBeGreaterThanOrEqual(44)
     expect.soft(boxes[k]!.height, `${k} height`).toBeGreaterThanOrEqual(44)
   }
@@ -73,6 +73,7 @@ function common(page: Page): Record<string, Locator> {
     lang: toggles.getByRole('button', { name: 'English: bhasha badlo' }),
     sound: toggles.getByRole('button', { name: 'Awaaz chalu ya band karo' }),
     bandar: toggles.getByRole('button', { name: 'Bandar band karo' }),
+    map: page.getByRole('button', { name: 'Naksha', exact: true }),
     banner: page.getByText('Gangaur ki shubhkamnayein!'),
     procession: page.getByText('Gangaur ki sawari Tripolia se nikal rahi hai'),
     line: page.locator('.city-line'),
