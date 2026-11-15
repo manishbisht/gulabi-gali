@@ -29,6 +29,9 @@ interface Props {
   /** Present only for a resident: opens Connections, with the count of unread things on its badge. */
   onConnections?: () => void
   connectionsBadge?: number
+  /** Opens photo mode; while it is on (`photo`) the HUD draws nothing. */
+  onPhoto?: () => void
+  photo?: boolean
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
@@ -50,9 +53,12 @@ export function Hud({
   onInvite,
   onConnections,
   connectionsBadge = 0,
+  onPhoto,
+  photo = false,
   top,
   bottom,
 }: Props) {
+  if (photo) return null
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
   return (
     <div className="hud">
@@ -132,6 +138,17 @@ export function Hud({
               onClick={sound.onToggle}
             >
               <span aria-hidden="true">{sound.on ? '🔊' : '🔇'}</span>
+            </button>
+          )}
+          {onPhoto && (
+            <button
+              type="button"
+              className="hud-chip photo-button"
+              aria-label={t('photoOpenLabel', lang)}
+              title={t('photoOpen', lang)}
+              onClick={onPhoto}
+            >
+              <span aria-hidden="true">📷</span>
             </button>
           )}
           {bandar && (

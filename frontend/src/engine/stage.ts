@@ -13,6 +13,12 @@ export interface Stage {
   onFrame(cb: (dt: number) => void): () => void
   /** Runs when the quality tier steps down. */
   onQuality(cb: (q: QualityTier) => void): () => void
+  /**
+   * Draws one frame at the device's pixel ratio and runs `read` on the canvas straight away (it must copy or
+   * encode synchronously: the drawing buffer is only good until this task ends), then goes back to the tier's
+   * ratio. No `preserveDrawingBuffer`: that would cost every frame on a phone.
+   */
+  capture<T>(read: (canvas: HTMLCanvasElement) => T): T
   /** Frames drawn since the WebGL context was last restored (or since start). */
   framesSinceRestore(): number
   dispose(): void
@@ -32,6 +38,8 @@ const PORTRAIT_FOV = 70
 const RATIO_CAP: Record<QualityTier, number> = { 2: 2, 1: 1.25, 0: 1 }
 /** A test page's pixel ratio (see `testRenderLite`): a quarter of the CSS size each way, whatever the tier. */
 const LITE_RATIO = 0.25
+/** A photo's pixel ratio ceiling: enough for a phone's screen, and a canvas a phone can still hold. */
+const PHOTO_RATIO_CAP = 3
 
 /** A device that was slow once will be slow again this session; start where it ended up. */
 function readQuality(): QualityTier {
@@ -62,11 +70,18 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   let slow = 0
   let sampled = 0
 
+  /** The size last fitted, in CSS px: a capture draws at this and goes back to it. */
+  let fitW = 0
+  let fitH = 0
+  const tierRatio = () => (lite ? LITE_RATIO : Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
+
   function resize() {
     const width = window.innerWidth
     const height = window.innerHeight
     if (!width || !height) return
-    renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
+    fitW = width
+    fitH = height
+    renderer.setPixelRatio(tierRatio())
     renderer.setSize(width, height, false)
     camera.aspect = width / height
     // A phone held upright sees a narrow slice of street; open the lens a little so a lane fits.
@@ -178,6 +193,31 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     onQuality(cb) {
       qualityListeners.add(cb)
       return () => void qualityListeners.delete(cb)
+    },
+    capture(read) {
+      const gone = () => disposed || lost || !fitW || renderer.getContext().isContextLost()
+      if (gone()) throw new Error('capture: the WebGL context is lost')
+      renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, PHOTO_RATIO_CAP))
+      renderer.setSize(fitW, fitH, false)
+      // Poster sheets print people's names; whatever is marked noPhoto stays out of the picture.
+      const hidden: THREE.Object3D[] = []
+      scene.traverse((o) => {
+        if (o.userData.noPhoto && o.visible) {
+          o.visible = false
+          hidden.push(o)
+        }
+      })
+      try {
+        renderer.render(scene, camera)
+        // the bigger buffer can cost a low-end phone its context; a lost one draws nothing
+        if (gone()) throw new Error('capture: the WebGL context was lost while drawing')
+        return read(renderer.domElement)
+      } finally {
+        for (const o of hidden) o.visible = true
+        // directly, not resize(): that bails out when the window reports no size
+        renderer.setPixelRatio(tierRatio())
+        renderer.setSize(fitW, fitH, false)
+      }
     },
     framesSinceRestore: () => sinceRestore,
     dispose() {

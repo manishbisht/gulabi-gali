@@ -36,6 +36,7 @@ import { savedDistrict, useTravel } from './world/useTravel'
 import type { DistrictId, FestivalId } from './net/protocol'
 import type { DistrictDef, Vec2 } from './world/types'
 import { Hud } from './ui/Hud'
+import { PhotoMode } from './ui/PhotoMode'
 import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
 import { DriveButtons } from './ui/DriveButtons'
@@ -97,6 +98,14 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const controlsRef = useRef<Controls | null>(null)
   const stageRef = useRef<Stage | null>(null)
+  /** Photo mode: the stage it takes pictures with, while it is on. */
+  const [photo, setPhoto] = useState<Stage | null>(null)
+  const wasPhoto = useRef(false)
+  useEffect(() => {
+    // back from photo mode, focus returns to the camera chip that opened it
+    if (wasPhoto.current && !photo) document.querySelector<HTMLElement>('.photo-button')?.focus()
+    wasPhoto.current = !!photo
+  }, [photo])
   /** The kite fight, while one runs: where the player stood, and the stage and controls it borrows. */
   const [kiteFrom, setKiteFrom] = useState<{ at: Vec2; stage: Stage; controls: Controls } | null>(null)
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
@@ -481,7 +490,7 @@ export default function App() {
   return (
     <>
       <canvas ref={canvasRef} className="stage" />
-      <div ref={bubbleHost} className="npc-bubbles" aria-hidden="true" />
+      <div ref={bubbleHost} className="npc-bubbles" aria-hidden="true" hidden={!!photo} />
       <Hud
         place={
           typeof place === 'string' ? t(place === 'failed' ? 'loadFailed' : 'loading', lang) : place[lang]
@@ -506,6 +515,15 @@ export default function App() {
         onInvite={residentId ? () => setInviteOpen(true) : undefined}
         onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
         connectionsBadge={conn.badge}
+        photo={!!photo}
+        onPhoto={
+          kiteFrom || drive.driving
+            ? undefined
+            : () => {
+                controlsRef.current?.setJoystick({ x: 0, z: 0 }) // the joystick goes with the HUD
+                setPhoto(stageRef.current)
+              }
+        }
         top={
           <>
             {slowed && (
@@ -730,6 +748,7 @@ export default function App() {
           onClose={() => setConnOpen(false)}
         />
       )}
+      {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
       <div className="fade" data-on={fading || undefined} aria-hidden="true" />
       {kiteFrom && (
         <Patang

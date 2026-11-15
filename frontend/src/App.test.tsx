@@ -38,8 +38,19 @@ vi.mock('./engine/stage', () => ({
       onFrame: (f: (dt: number) => void) => (stage.frames.add(f), () => void stage.frames.delete(f)),
       onQuality: (f: (q: number) => void) => (stage.qualities.add(f), () => void stage.qualities.delete(f)),
       framesSinceRestore: () => 0,
+      capture: <T,>(read: (c: HTMLCanvasElement) => T) => read(document.createElement('canvas')),
       dispose: () => {},
     }
+  },
+}))
+/** Photo mode's two ends: the PNG and where it goes (the real ones are tested in ui/photo.test.ts). */
+const photo = vi.hoisted(() => ({ shared: [] as Blob[], outcome: 'downloaded' as string }))
+vi.mock('./ui/photo', () => ({
+  WORDMARK: 'Gulabi Gali · Jaipur',
+  capturePhoto: async () => new Blob(['png'], { type: 'image/png' }),
+  sharePhoto: async (blob: Blob) => {
+    photo.shared.push(blob)
+    return photo.outcome
   },
 }))
 /** District ids whose chunk "fails to arrive". */
@@ -111,6 +122,54 @@ it('shows the intro, then the HUD over a canvas after Padharo, and persists the 
   await act(async () => toggle.click())
   expect(localStorage.getItem('gg-lang')).toBe('en')
   expect(host.textContent).toContain('Pink City')
+  await act(async () => root.unmount())
+})
+
+it('photo mode hides the HUD, the joystick, the name labels and the toasts, takes a photo, and gives it all back', async () => {
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Padharo!')!.click(),
+  )
+  await vi.waitFor(() => expect(host.textContent).toContain('Gulabi Shahar'), { timeout: 10_000 })
+  const q = (sel: string) => host.querySelector<HTMLElement>(sel)
+  expect(q('.photo-frame')).toBeNull()
+  expect(q('.hud')).not.toBeNull()
+
+  await act(async () => q('.photo-button')!.click())
+  expect(q('.hud')).toBeNull() // chips, toasts, joystick and the street's buttons all live in it
+  expect(q('.npc-bubbles')!.hidden).toBe(true) // and the characters' bubbles and the people's names
+  expect(q('.photo-frame')!.textContent).toContain('Gulabi Gali · Jaipur')
+  expect(document.activeElement).toBe(q('.photo-shutter'))
+
+  await act(async () => q('.photo-shutter')!.click())
+  expect(photo.shared).toHaveLength(1)
+  expect(photo.shared[0]!.type).toBe('image/png')
+  expect(q('.photo-note')!.textContent).toContain('Photo aapke phone mein save')
+
+  await act(async () => q('.photo-exit')!.click())
+  expect(q('.photo-frame')).toBeNull()
+  expect(q('.hud')).not.toBeNull()
+  expect(document.activeElement).toBe(q('.photo-button')) // focus goes back to where it came from
+  expect(q('.npc-bubbles')!.hidden).toBe(false)
+  await act(async () => root.unmount())
+})
+
+it('Escape leaves photo mode too', async () => {
+  vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Padharo!')!.click(),
+  )
+  await vi.waitFor(() => expect(host.textContent).toContain('Gulabi Shahar'), { timeout: 10_000 })
+  await act(async () => host.querySelector<HTMLElement>('.photo-button')!.click())
+  await act(async () => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+  expect(host.querySelector('.photo-frame')).toBeNull()
+  expect(host.querySelector('.hud')).not.toBeNull()
   await act(async () => root.unmount())
 })
 
