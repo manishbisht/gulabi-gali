@@ -79,8 +79,9 @@ describe('GET /api/count', () => {
     // A fourth resident fills the cap, then leaves: a hold for HOLD_MS, still not someone on the street.
     const gone = await walker('Count Gone', 'university')
     gone.close()
-    await vi.waitFor(async () => expect(await gate().stats()).toEqual({ live: 4, queue: 0 }), WAIT)
-    expect(await gate().visible()).toBe(3)
+    // stats() counts the hold as live both before and after the close lands, so wait on visible() itself
+    await vi.waitFor(async () => expect(await gate().visible()).toBe(3), WAIT)
+    expect(await gate().stats()).toEqual({ live: 4, queue: 0 })
     // Over the cap: waits in line as a ghost.
     await gate().configure({ maxLive: 3 })
     const waiting = await walker('Count Wait', 'mi-road')
