@@ -275,6 +275,16 @@ describe('poster walls', () => {
     expect(papers.at(-1)).not.toBe(HIDDEN_PAPER)
   })
 
+  it('a poster prints how many are coming once anyone is, and is redrawn when that changes', async () => {
+    const { sheets, posters, land } = setup()
+    const texts = () => sheets[0]!.ctx.fillText.mock.calls.map((c) => String(c[0]))
+    posters.refresh()
+    await land([poster()])
+    expect(texts().some((s) => s.includes('🙋'))).toBe(false)
+    posters.upsert(poster({ going: 3, coming: true }))
+    expect(texts().at(-1)).toBe('— Asha · 🙋 3')
+  })
+
   it('a poster that moves (a replaced slot) is drawn once, where it now is', async () => {
     const { posters, land } = setup()
     posters.refresh()

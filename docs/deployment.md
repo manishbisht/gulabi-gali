@@ -404,6 +404,13 @@ minutes, a timer keeps its object from hibernating, so a report can still carry 
 every object, and the runtime may evict one anyway. Nothing about it needs backing up, and a deploy in the middle
 of an evening empties every bench's last ten minutes (and the memory of who sat where).
 
+**Migration `0007_rsvp.sql` (meet-ups).** It adds `rsvps` ("Main aaunga/aaungi" on a poster) and the triggers
+that delete them with their poster, on a hide, a ban or a block. Apply it before the Worker that needs it ships:
+the Worker's poster list reads `rsvps` for every poster, so a Worker deployed first answers every wall with an
+error. CI's deploy job does it in that order; by hand, `npx wrangler d1 migrations apply gulabi-gali --remote`
+from `backend/`, then `wrangler deploy`. Once deployed it is frozen: new schema goes in `0008` and later. The
+meet-up reminder rides on the push setup above (no new secret) and on the existing 15-minute cron.
+
 The deploy job applies D1 migrations (`wrangler d1 migrations apply gulabi-gali --remote`) before it deploys the
 Worker, and on `main` the Pages build waits for that job, so the frontend never ships ahead of the API it talks
 to. Keep every migration additive (new tables, new columns with defaults, new indexes), so the Worker still
@@ -422,6 +429,8 @@ running between the two steps works against the migrated database.
   command).
 - After pulling the launch-readiness work, run the migrations command once more: `0004` (the error beacon's
   table) is additive.
+- After pulling the meet-ups work, run the migrations command once more: `0007` (`rsvps` and its triggers) is
+  additive.
 - `npm run dev -w backend -- --var DEV_AUTH:1`: the Worker on `http://127.0.0.1:8787`, with name-only dev
   sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health`, the word list, the
   waitlist, each district's poster list (`/api/districts/:id/posters`, public by design) and the live sockets,

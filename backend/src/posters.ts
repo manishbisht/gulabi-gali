@@ -3,6 +3,7 @@ import type { Env } from './env'
 import { wordsOk } from './filter/server'
 import { floating, type Later } from './inbox'
 import { allow, DAY_MS, muteGate, rateLimited, refund } from './limits'
+import { COMING_OF, GOING_OF } from './going'
 import { firstName } from './names'
 import { VISIBLE, visibleRow } from './profiles'
 import {
@@ -279,7 +280,8 @@ export async function pinPoster(
  * list is theirs alone, so it is never cached; the signed-out one is, for `PUBLIC_WALLS_S` (see
  * `publicPosters`). The viewer's own hidden posters (auto-hidden by reports, or theirs while they are hidden)
  * are on their list too, marked `hidden`: they still count toward the two, so they must be able to take them
- * down. Nobody else is ever sent one.
+ * down. Nobody else is ever sent one. Each carries how many are coming (`going`, the same for everyone: see
+ * `GOING_OF`) and, on a signed-in list, whether the viewer is (`coming`).
  */
 export async function listPosters(
   env: Env,
@@ -290,7 +292,7 @@ export async function listPosters(
   if (!isDistrict(district)) return fail('not found', 404)
   const { results } = await env.DB.prepare(
     `SELECT po.id, po.owner, po.wall, po.slot, po.text, po.at_when, p.name,
-       (po.hidden = 0 AND ${VISIBLE}) AS shown FROM posters po
+       (po.hidden = 0 AND ${VISIBLE}) AS shown, ${GOING_OF} AS going, ${COMING_OF} AS coming FROM posters po
      JOIN users u ON u.id = po.owner JOIN profiles p ON p.user_id = po.owner
      WHERE po.district = ?1 AND po.expires_at > ?2 AND (po.owner = ?3 OR (po.hidden = 0 AND ${VISIBLE}))
        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.a = ?3 AND b.b = po.owner) OR (b.a = po.owner AND b.b = ?3))
@@ -306,6 +308,8 @@ export async function listPosters(
       at_when: number | null
       name: string
       shown: number
+      going: number
+      coming: number
     }>()
   const out: PosterView[] = results.map((r) => ({
     id: r.id,
@@ -316,6 +320,8 @@ export async function listPosters(
     name: firstName(r.name),
     ...(viewer !== null && r.owner === viewer ? { mine: true as const } : {}),
     ...(viewer !== null && r.owner === viewer && r.shown !== 1 ? { hidden: true as const } : {}),
+    ...(r.going > 0 ? { going: r.going } : {}),
+    ...(r.coming === 1 ? { coming: true as const } : {}),
   }))
   return Response.json(out, {
     headers: {

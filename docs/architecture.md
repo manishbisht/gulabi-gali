@@ -30,7 +30,7 @@ flowchart LR
   end
   subgraph Worker["backend (Cloudflare Worker)"]
     Fetch["fetch: /health, /api/city"]
-    Cron["scheduled: every 15 min"]
+    Cron["scheduled: every 15 min<br/>(also sweeps, meet-up reminders)"]
     KV[("KV: CITY / now")]
   end
   OM["Open-Meteo<br/>(forecast + air quality)"]
@@ -273,7 +273,8 @@ D1 (`backend/migrations/0001_people.sql`) is the system of record:
 Routes (all need a token except `/api/dev/login`, which exists only under `DEV_AUTH=1`): `GET /api/me`,
 `PUT /api/me/profile`, `GET /api/profiles/:id`, `POST /api/requests`, `GET /api/requests`,
 `POST /api/requests/:id/accept|ignore`, `GET /api/matches`, `DELETE /api/matches/:id` (unmatch),
-`GET|POST /api/matches/:id/messages`. Anything in a match is a 404 to someone who is not in it.
+`GET|POST /api/matches/:id/messages`, and (phase 4 and later) `POST /api/posters`, `DELETE /api/posters/:id`,
+`PUT|DELETE|GET /api/posters/:id/going`. Anything in a match is a 404 to someone who is not in it.
 `GET /api/profiles/:id` is for residents only (anyone else is 403 `ghost`). Unmatching leaves an `ignored`
 request from the other person to the one who unmatched, dated then, so the other cannot ask straight back for
 14 days; it is never listed.
@@ -403,9 +404,10 @@ banned, hidden or deleted.
 
 `DELETE /api/me`, open to a banned person too (the ban stays on the tombstone). Every match ends through
 `endMatch(..., 'delete')`, holding its last 30 messages as evidence, and the other person hears `unmatched`.
-Then one D1 batch deletes the profile and its stamps, every pending or accepted request in either direction (`ignored` ones
+Then one D1 batch deletes the profile and its stamps, its push subscriptions, every "Main aaunga/aaungi" it said
+(`rsvps`), every pending or accepted request in either direction (`ignored` ones
 stay with their reason blanked: they are the 14-day cooldowns, which the cron sweeps), the invites they own,
-their posters (and what `poster_owners` remembers of them), the blocks they made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is
+their posters (with every RSVP on them, and what `poster_owners` remembers of them), the blocks they made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is
 kept), and deletes the `users` row. Blocks others made against them stay (their saved name blanked), so they
 still protect their owners if the id returns; reports about them stay until closed. The `users` row stays as a
 tombstone (verified cleared) while a ban, a hide (or enough counted reports to hide them, which hides them
@@ -440,11 +442,14 @@ sky with its festival effects) and disposes them on leave, as for phase 2.
 flowchart LR
   B["Browser"] -->|"GET /api/districts/:id/posters"| W["Worker: posters.ts"]
   B -->|"POST /api/posters, DELETE /api/posters/:id"| W
-  W --> D1[("D1: posters, poster_owners, reports.poster_id")]
+  B -->|"PUT / DELETE / GET /api/posters/:id/going"| M["Worker: meetups.ts"]
+  W --> D1[("D1: posters, poster_owners, reports.poster_id, rsvps")]
+  M --> D1
   W -->|"RPC posterAdded / posterRemoved / posterHidden"| DD["DistrictDO"]
   DD -->|"WS: poster add / remove"| B
   A["Admin page"] -->|"DELETE /api/admin/posters/:id"| W
   C["Cron"] -->|"purgePosters"| D1
+  C -->|"remindMeetups: pushTo 'meetup'"| M
 ```
 
 Each district has a few `poster-wall` props with 6 slots each (`POSTER_WALLS`, `POSTER_SLOTS` in the protocol).
@@ -478,6 +483,35 @@ report (`DELETE /api/admin/posters/:id`), which also closes every open report on
 report on a hidden poster, when none was actioned, puts it back up and pushes it to its district as a fresh pin
 would (`unhidePoster`). A ban and an account deletion take the person's posters down; a hide takes them off
 everyone's walls but their own.
+
+### Meet-ups: "Main aaunga/aaungi" (`meetups.ts`, `going.ts`)
+
+A verified resident others can see, not muted, taps "Main aaunga/aaungi" on someone else's poster
+(`PUT /api/posters/:id/going`; `DELETE` takes it back; both share 20 an hour per account, 429 `rate`). It is
+refused on your own poster (400 `mine`), on a poster not up for you (gone, hidden, its owner hidden, a block
+either way: 404), and once the plan's `when` is more than 30 minutes gone (409 `past`). The write is one guarded
+`INSERT ... SELECT`, so a block, hide or take-down landing at the same time either refuses it or deletes it.
+D1 keeps `rsvps(poster_id, user_id, created_at, reminded)` (migration `0007`).
+
+Who sees what: every list (signed out too, and the same number for everyone) carries `going`, the count of
+attendees others can see and not blocked either way with the owner; a viewer's own list marks `coming`. The
+first names go to the poster's owner alone, from `GET /api/posters/:id/going` when their card opens, and only of
+attendees who are visible and not blocked either way with them. The wall prints the count; the card says, by
+the button, that everyone sees the count and only the owner the names.
+
+The word lives and dies with the poster. Triggers in `0007` delete RSVPs when the poster is deleted (taken
+down, replaced, expired, an admin, a ban, a deletion), when reports hide it, when its owner is hidden or banned,
+when either person blocks the other, and when the attendee is hidden or banned; an account deletion deletes the
+ones the person gave.
+
+Reminder: the 15-minute cron (`remindMeetups`) takes RSVPs on plans due within the hour, on posters still up for
+everyone, whose attendee is at that moment visible and verified, claims them (`reminded = 1`, one statement, so
+overlapping runs never push twice) and pushes each person once through `pushTo` with kind `meetup`: the payload
+is only `{t: 'meetup', lang}` and the service worker shows "Gulabi Gali: Tumhara plan ek ghante mein" / "Your
+plan is in an hour", and a tap opens the city. Its TTL is the time left until the plan (at least 60 s), and it
+counts against its own push limit (`push-meetup`, 5 an hour), never the inbox's one a minute. Someone with push
+off is marked and costs nothing. A run spends at most 300 subrequests, counted per device plus three D1 calls
+per person; whoever does not fit goes next run. Someone who says it inside the last hour gets no reminder.
 
 ### Jaipur Darshan stamps (`stamps.ts`, `frontend/src/world/useStamps.ts`)
 

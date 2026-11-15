@@ -16,6 +16,7 @@ import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLim
 import type { CitySnapshot } from './protocol'
 import { putPush, removePush } from './push'
 import { listPosters, pinPoster, publicPosters, purgePosters, removeOwnPoster } from './posters'
+import { deleteGoing, getGoing, putGoing, remindMeetups } from './meetups'
 import { fileReport, purgeReportEvidence } from './reports'
 import { putStamps } from './stamps'
 import { devVerify, listInvites, redeemInvite } from './trust'
@@ -236,6 +237,19 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     }
     return removeOwnPoster(env, user.id, id, later)
   }
+  // "Main aaunga/aaungi" on a poster (see meetups.ts).
+  const going = pathname.match(/^\/api\/posters\/([^/]+)\/going$/)
+  if (going) {
+    let id: string
+    try {
+      id = decodeURIComponent(going[1]!)
+    } catch {
+      return Response.json({ error: 'not found' }, { status: 404 })
+    }
+    if (method === 'GET') return (await readLimit(env, user.id, 'going')) ?? getGoing(env, user.id, id)
+    if (method === 'PUT') return putGoing(env, user.id, id)
+    if (method === 'DELETE') return deleteGoing(env, user.id, id)
+  }
   if (pathname === '/api/reports' && method === 'POST')
     return fileReport(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')
@@ -323,6 +337,7 @@ export default {
     ctx.waitUntil(purgeCounters(env).catch((err) => console.error('counter sweep failed', err)))
     ctx.waitUntil(purgeWaitlist(env).catch((err) => console.error('waitlist sweep failed', err)))
     ctx.waitUntil(purgePosters(env).catch((err) => console.error('poster sweep failed', err)))
+    ctx.waitUntil(remindMeetups(env).catch((err) => console.error('meet-up reminder failed', err)))
     ctx.waitUntil(purgeClientErrors(env).catch((err) => console.error('client error sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

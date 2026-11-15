@@ -189,8 +189,8 @@ export const STRINGS = {
   /** Push notifications, opted into per device in the profile sheet (see src/push). */
   pushToggle: { hi: 'Naye messages pe batao', en: 'Tell me about new messages' },
   pushHint: {
-    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega. Screen pe sirf "ek nayi request" ya "ek naya message" aayega: na kisi ka naam, na koi baat.',
-    en: 'Your phone lets you know about a new request or message even when Gulabi Gali is shut. The screen only ever says "a new request" or "a new message": never a name, never what was said.',
+    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega, aur jis plan mein "Main aaunga/aaungi" dabaya ho uske ek ghanta pehle bhi. Screen pe sirf "ek nayi request", "ek naya message" ya "tumhara plan ek ghante mein" aayega: na kisi ka naam, na koi baat.',
+    en: 'Your phone lets you know about a new request or message even when Gulabi Gali is shut, and an hour before a plan you said you\'d come to. The screen only ever says "a new request", "a new message" or "your plan is in an hour": never a name, never what was said.',
   },
   pushInApp: {
     hi: 'Instagram ke andar wale browser mein notifications nahi aa sakte. Gulabi Gali ko Chrome ya Safari mein kholo, wahan chalu karo.',
@@ -216,6 +216,7 @@ export const STRINGS = {
   pushTitle: { hi: 'Gulabi Gali', en: 'Gulabi Gali' },
   pushRequest: { hi: 'Ek nayi request', en: 'A new request' },
   pushMessage: { hi: 'Ek naya message', en: 'A new message' },
+  pushMeetup: { hi: 'Tumhara plan ek ghante mein', en: 'Your plan is in an hour' },
   profileLink: { hi: 'Apna link (zaroori nahi)', en: 'Your link (optional)' },
   profileLinkHint: {
     hi: 'https:// se shuru hone wala. Har verified member ise dekh sakta hai, isliye wahi link daalo jo un sab ko dikhana theek lage.',
@@ -588,6 +589,10 @@ export const STRINGS = {
     hi: 'Deewar pe chipkaya poster (text, time aur aapka pehla naam) sab dekh sakte hain, ghosts bhi. Woh apne time ke 6 ghante baad, ya bina time ke 7 din baad, mita diya jaata hai; aap use pehle bhi utaar sakte ho.',
     en: 'A poster you pin (its text, its time and your first name) is public, ghosts included. It is deleted 6 hours after its time, or 7 days after pinning without one; you can take it down sooner.',
   },
+  privacyStoredGoing: {
+    hi: 'Kisi poster pe "Main aaunga/aaungi" dabane par: kitne aa rahe hain, ye sab dekhte hain; pehle naam sirf poster lagane wala. Poster utarte ya chhupte hi, aap chhupaye jaate ho, ya aap dono mein se koi doosre ko block kare to ye mit jaata hai.',
+    en: 'When you tap "I\'ll come" on a poster: everyone sees how many are coming; only whoever pinned it sees first names. It is deleted when the poster comes down or is hidden, when you are hidden, or when either of you blocks the other.',
+  },
   privacyStoredTombstone: {
     hi: 'Account delete karne ke baad bhi, agar us par ban, hide, mute ya request ka 14 din ka intezaar laga ho, toh sirf account id aur woh rok ek chhote record mein rehti hai, taaki delete karke unse bacha na ja sake.',
     en: 'After an account is deleted, if a ban, hide, mute or a 14-day request wait was on it, a small record with only the account id and that state stays, so deleting is no way around them.',
@@ -597,8 +602,8 @@ export const STRINGS = {
     en: 'When something breaks on the page, a short report goes to our own server: what broke, phone or computer, whether it opened inside Instagram/Facebook, and which area. No names, ids or anything you typed. It is deleted within 14 days.',
   },
   privacyStoredPush: {
-    hi: 'Agar aap "Naye messages pe batao" chalu karte ho, toh us phone ka notification address (browser ki push service ka) save hota hai. Notification mein sirf "ek nayi request" ya "ek naya message" jaata hai, kabhi naam ya baat nahi. Band karne, logout karne ya account delete karne par ye mit jaata hai.',
-    en: 'If you turn on "Tell me about new messages", that phone\'s notification address (from the browser\'s push service) is kept. A notification only ever says "a new request" or "a new message", never a name or what was said. It is deleted when you turn it off, sign out or delete your account.',
+    hi: 'Agar aap "Naye messages pe batao" chalu karte ho, toh us phone ka notification address (browser ki push service ka) save hota hai. Notification mein sirf "ek nayi request", "ek naya message", ya jis plan mein aap jaa rahe ho uska ek ghanta pehle reminder jaata hai, kabhi naam ya baat nahi. Band karne, logout karne ya account delete karne par ye mit jaata hai.',
+    en: 'If you turn on "Tell me about new messages", that phone\'s notification address (from the browser\'s push service) is kept. A notification only ever says "a new request", "a new message" or "your plan is in an hour", never a name or what was said. It is deleted when you turn it off, sign out or delete your account.',
   },
   /** Only in a build with Web Analytics (`ANALYTICS_ON`). */
   privacyAnalytics: {
@@ -828,6 +833,30 @@ export const STRINGS = {
     hi: 'Ye poster abhi sirf tumhe dikh raha hai, jab tak hum ek nazar daal rahe hain. Ye tumhare 2 mein gina jaata hai; chaho to utaar do.',
     en: 'Only you can see this poster for now, while we take a look. It still counts toward your 2, and you can take it down.',
   },
+  /** Milte hain: "Main aaunga/aaungi" on a poster (see PosterCard). */
+  posterGoing: { hi: 'Aane wale: {n}', en: 'Coming: {n}' },
+  posterComing: { hi: 'Main aaunga/aaungi', en: "I'll come" },
+  posterNotComing: { hi: 'Nahi aa paunga/paungi', en: "Can't make it" },
+  posterGoingPrivacy: {
+    hi: 'Kitne aa rahe hain, ye sab dekhte hain; pehle naam sirf poster lagane wala.',
+    en: 'Everyone sees how many are coming; only whoever pinned it sees first names.',
+  },
+  posterComingNote: {
+    hi: 'Tum aa rahe ho. Notifications chalu hain to plan se ek ghanta pehle yaad dila denge.',
+    en: "You're coming. With notifications on, we'll remind you an hour before.",
+  },
+  posterComingVerifiedOnly: {
+    hi: '"Main aaunga/aaungi" sirf verified log daba sakte hain.',
+    en: "Only verified members can say they're coming.",
+  },
+  posterWho: { hi: 'Kaun aa raha hai: {names}', en: "Who's coming: {names}" },
+  posterWhoNone: {
+    hi: 'Abhi tak kisi ne "Main aaunga/aaungi" nahi dabaya.',
+    en: "Nobody has said they're coming yet.",
+  },
+  posterGoingFailed: { hi: 'Nahi ho paya. Dobara try karo.', en: "That didn't go through. Try again." },
+  posterGoingPast: { hi: 'Ye plan to ho chuka.', en: 'This plan has already happened.' },
+  posterGoingRate: { hi: 'Thoda ruko, phir dabana.', en: 'Hold on a bit, then try again.' },
   posterTakeDown: { hi: 'Utaaro', en: 'Take it down' },
   posterTakeDownFailed: {
     hi: 'Poster nahi utra. Dobara try karo.',

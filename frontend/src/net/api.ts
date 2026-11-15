@@ -8,6 +8,8 @@ import type {
   CitySnapshot,
   EndedChat,
   FullProfile,
+  GoingError,
+  GoingView,
   HereFor,
   HomeArea,
   InviteView,
@@ -531,6 +533,51 @@ export async function takeDownPoster(token: string, id: string): Promise<boolean
     return res.ok || res.status === 404
   } catch {
     return false
+  }
+}
+
+export type GoingOutcome = { ok: true; view: GoingView } | { ok: false; error: GoingError | 'failed' }
+
+const GOING_ERRORS: readonly string[] = [
+  'ghost',
+  'not-verified',
+  'muted',
+  'mine',
+  'not found',
+  'past',
+  'rate',
+]
+
+/**
+ * "Main aaunga/aaungi" (`coming`) on a poster, or taking it back. Never rejects: where the meet-up now stands, or the
+ * typed reason it did not go through. Plain `fetch`: the card has its own line for too many taps.
+ */
+export async function setGoing(token: string, id: string, coming: boolean): Promise<GoingOutcome> {
+  try {
+    const res = await fetch(`${API_BASE}/api/posters/${encodeURIComponent(id)}/going`, {
+      method: coming ? 'PUT' : 'DELETE',
+      headers: bearer(token),
+    })
+    if (res.ok) return { ok: true, view: (await res.json()) as GoingView }
+    const body = (await res.json().catch(() => null)) as { error?: string; scope?: string } | null
+    if (body?.error === 'rate' && body.scope === 'ip') return { ok: false, error: 'failed' }
+    const error = body?.error && GOING_ERRORS.includes(body.error) ? (body.error as GoingError) : 'failed'
+    return { ok: false, error }
+  } catch {
+    return { ok: false, error: 'failed' }
+  }
+}
+
+/** Where a poster's meet-up stands (with first names, for its owner), or null when it cannot be had. */
+export async function getGoing(token: string, id: string, signal?: AbortSignal): Promise<GoingView | null> {
+  try {
+    const res = await fetchNoting(`${API_BASE}/api/posters/${encodeURIComponent(id)}/going`, {
+      headers: bearer(token),
+      signal,
+    })
+    return res.ok ? ((await res.json()) as GoingView) : null
+  } catch {
+    return null
   }
 }
 

@@ -32,8 +32,10 @@ export function usePosters() {
   const [open, setOpen] = useState<{ poster: PosterView; gone: boolean } | null>(null)
   const [composing, setComposing] = useState(false)
   const shown = useRef(false)
+  const opened = useRef(open)
   useEffect(() => {
     shown.current = open !== null || composing
+    opened.current = open
   }, [open, composing])
   const actions = useRef<PosterActions | null>(null)
 
@@ -79,6 +81,29 @@ export function usePosters() {
   }, [])
   /** After blocking a poster's owner: every wall is fetched again, and theirs are gone. */
   const blocked = useCallback(() => actions.current?.refreshPosters(), [])
+  /**
+   * "Main aaunga/aaungi" said or taken back from the open card: the wall prints the new count. Never for a poster that
+   * came off the wall meanwhile (a block, a take-down): that must not go back up.
+   */
+  const changed = useCallback((p: PosterView) => {
+    const was = opened.current
+    if (!was || was.gone || was.poster.id !== p.id) return
+    actions.current?.pinned(p)
+    setOpen({ poster: p, gone: false })
+  }, [])
 
-  return { near, open, composing, hooks, bind, compose, closeComposer, close, pinned, takenDown, blocked }
+  return {
+    near,
+    open,
+    composing,
+    hooks,
+    bind,
+    compose,
+    closeComposer,
+    close,
+    pinned,
+    takenDown,
+    blocked,
+    changed,
+  }
 }

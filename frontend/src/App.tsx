@@ -482,6 +482,7 @@ export default function App() {
           return done
         }}
         onTakenDown={posters.takenDown}
+        onChanged={posters.changed}
         onClose={posters.close}
       />
     ))
