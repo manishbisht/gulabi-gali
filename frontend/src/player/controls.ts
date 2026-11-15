@@ -13,10 +13,18 @@ export interface Controls {
   interact(): boolean
   /** True once per press of Space (the horn); reading it consumes the press. */
   horn(): boolean
+  /**
+   * How far to turn the view this frame, in radians: `yaw` positive turns it left, `pitch` positive tilts it up.
+   * The drags added since the last read plus Q (left) or R (right) held for `dt` seconds. Reading consumes the
+   * drags, and the answer is one reused object.
+   */
+  look(dt: number): { yaw: number; pitch: number }
+  /** A drag on the stage turned the view by this much (radians, as `look`); summed until `look` reads it. */
+  addLook(yaw: number, pitch: number): void
   setJoystick(v: Vec2): void
   /**
-   * Holds the player still while a minigame has the keys and the stick: `move()` and `drive()` read zero (the stick is let go of), and
-   * E and Space (the horn) are not heard. Letting go (or `freeze(false)`) hands them back; a key held through
+   * Holds the player still while a minigame has the keys and the stick: `move()`, `drive()` and `look()` read
+   * zero (the stick is let go of, drags are dropped), and E and Space (the horn) are not heard. Letting go (or `freeze(false)`) hands them back; a key held through
    * it carries on being held.
    */
   freeze(on: boolean): void
@@ -34,6 +42,11 @@ const FORWARD = ['KeyW', 'ArrowUp']
 const BACK = ['KeyS', 'ArrowDown']
 const LEFT = ['KeyA', 'ArrowLeft']
 const RIGHT = ['KeyD', 'ArrowRight']
+/** Turning the view: Q and R sit either side of W and E, and nothing else here has them. */
+const TURN_LEFT = ['KeyQ']
+const TURN_RIGHT = ['KeyR']
+/** Radians a second while Q or R is held: a quarter turn in about 0.8 s. */
+const TURN_RATE = 2
 
 /** A text field, which keeps its keys to itself. */
 function typing(t: EventTarget | null): boolean {
@@ -50,6 +63,10 @@ export function createControls(target: Window): Controls {
   let spaceHeld = false
   /** What `drive()` hands back, reused: a frame of driving allocates nothing. */
   const drived: Vec2 = { x: 0, z: 0 }
+  /** Drags not read yet, and what `look()` hands back, reused. */
+  let dragYaw = 0
+  let dragPitch = 0
+  const looked = { yaw: 0, pitch: 0 }
 
   const axis = (positive: string[], negative: string[]) =>
     (positive.some((k) => down.has(k)) ? 1 : 0) - (negative.some((k) => down.has(k)) ? 1 : 0)
@@ -108,6 +125,18 @@ export function createControls(target: Window): Controls {
       drived.z = axis(FORWARD, BACK)
       return drived
     },
+    look(dt) {
+      looked.yaw = frozen ? 0 : dragYaw + axis(TURN_LEFT, TURN_RIGHT) * TURN_RATE * dt
+      looked.pitch = frozen ? 0 : dragPitch
+      dragYaw = 0
+      dragPitch = 0
+      return looked
+    },
+    addLook(yaw, pitch) {
+      if (frozen) return
+      dragYaw += yaw
+      dragPitch += pitch
+    },
     interact() {
       const fired = interactQueued
       interactQueued = false
@@ -122,6 +151,8 @@ export function createControls(target: Window): Controls {
       frozen = on
       // a stick still held when its widget goes away would never say it let go
       if (on) joystick = { x: 0, z: 0 }
+      dragYaw = 0
+      dragPitch = 0
       interactQueued = false
       hornQueued = false
     },
@@ -137,6 +168,8 @@ export function createControls(target: Window): Controls {
       target.removeEventListener('blur', onBlur)
       down.clear()
       joystick = { x: 0, z: 0 }
+      dragYaw = 0
+      dragPitch = 0
       spaceHeld = false
     },
   }

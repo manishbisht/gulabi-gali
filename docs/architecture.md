@@ -60,6 +60,31 @@ tier down, and never back up in that tab session (remembered in `sessionStorage[
 | 1    | 1.25            | none    |
 | 0    | 1               | none    |
 
+## Camera and looking around
+
+`src/player/camera.ts` is a chase camera that orbits the player. Its default (yaw 0, pitch 0) is the original
+view: 7 m behind (+z), 4.5 m up, aimed through head height 5 m beyond the player. Players turn it in two ways:
+
+- **Drag the street.** With a mouse's main button or one finger on the canvas, a drag past the 10 px tap slop
+  turns the view. Right turns right, and up tilts up. A drag across the full width turns 225° (`DRAG_TURN`), and
+  a vertical drag tilts half as fast. `createInteraction` in `src/world/session.ts` owns this alongside taps: a
+  drag is never a tap, a second finger never takes over the look, and the canvas carries `data-looking` while
+  turning (the CSS `grab`/`grabbing` cursor, for fine pointers only). The joystick, HUD, cards and sheets are
+  their own DOM elements, so the canvas never hears them. One thumb can hold the stick while the other looks.
+- **Q and R** turn left and right at 2 rad/s (`src/player/controls.ts`). E, WASD, the arrows and Space were
+  already taken.
+
+Both reach the camera through `controls.addLook` and `controls.look(dt)`, which `player.update` reads every
+frame. `controls.freeze` (the kite fight) drops both. Yaw goes all the way round. Pitch stays between
+about 14° above the horizon (camera ~2.2 m up) and about 46° down (camera ~6.6 m up), so the camera never
+dips under the ground and the view never flips. The view eases into a turn over a few frames, and snaps there
+with `prefers-reduced-motion`. Walking is camera-relative (W is into the screen) and never recentres. At the
+wheel of an auto the view comes back round behind it once nobody has turned it for 1.5 s. Mounting does not
+whip it round, because only real frames advance that. Only the camera's position lags the player. The view's
+heading comes from the yaw alone, so lag slides the camera but never turns the view. The wall pull-in (a ray
+from the head to the camera) works at any yaw. A new district starts at yaw 0. `__gg.view()` reads the yaw and
+pitch in e2e.
+
 ## How districts stream
 
 There are four districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`). Each one's definition is a
@@ -517,7 +542,8 @@ names a person.
 
 After Padharo!, a first-time visitor sees three short steps (walk, sit on a chai bench, meet someone), worded
 for their input: joystick on a touch screen, WASD or arrow keys with a keyboard and mouse
-(`matchMedia('(pointer: coarse)')`). It is a non-modal dialog in the HUD's flow, under its top block (so it
+(`matchMedia('(pointer: coarse)')`). The walk step also says how to look around: drag the street, or press Q
+and R. It is a non-modal dialog in the HUD's flow, under its top block (so it
 cannot sit on a chip or on the bottom row), and the street stays walkable under it; Escape or its button closes
 it, focus goes to the button when it opens and to the canvas when it closes. It slides in like the other cards,
 and not at all with reduced motion. Once closed, `gg-hinted` in `localStorage` keeps it from showing again. The e2e run seeds

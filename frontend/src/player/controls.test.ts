@@ -173,4 +173,51 @@ describe('createControls', () => {
     c.freeze(false)
     expect(c.move()).toEqual({ x: 0, z: 0 })
   })
+  it('a drag on the stage turns the view: summed until read, then consumed, in one reused answer', () => {
+    const c = (controls = createControls(fakeWindow()))
+    expect(c.look(1 / 30)).toEqual({ yaw: 0, pitch: 0 })
+    c.addLook(0.1, 0.02)
+    c.addLook(0.2, -0.01)
+    const a = c.look(1 / 30)
+    expect(a.yaw).toBeCloseTo(0.3)
+    expect(a.pitch).toBeCloseTo(0.01)
+    const b = c.look(1 / 30)
+    expect(b).toBe(a) // no allocation per frame
+    expect(b).toEqual({ yaw: 0, pitch: 0 })
+  })
+
+  it('Q turns the view left and R right, at a steady rate while held, and they are not walking keys', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    press(w, 'KeyQ')
+    expect(c.look(0.5).yaw).toBeGreaterThan(0.5) // a quarter turn takes under a second
+    expect(c.look(0.5).yaw).toBeLessThan(Math.PI / 2)
+    expect(c.move()).toEqual({ x: 0, z: 0 })
+    press(w, 'KeyQ', 'keyup')
+    press(w, 'KeyR')
+    expect(c.look(0.5).yaw).toBeLessThan(-0.5)
+    press(w, 'KeyR', 'keyup')
+    expect(c.look(0.5).yaw).toBe(0)
+  })
+
+  it('the stick walks and a drag looks at the same time: two thumbs', () => {
+    const c = (controls = createControls(fakeWindow()))
+    c.setJoystick({ x: 0, z: 1 })
+    c.addLook(0.4, 0)
+    expect(c.move()).toEqual({ x: 0, z: 1 })
+    expect(c.look(1 / 30).yaw).toBeCloseTo(0.4)
+    expect(c.move()).toEqual({ x: 0, z: 1 })
+  })
+
+  it('frozen for a minigame, the view does not turn: drags and Q/R are dropped, not saved up', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    c.addLook(0.5, 0)
+    c.freeze(true)
+    c.addLook(0.5, 0)
+    press(w, 'KeyQ')
+    expect(c.look(1).yaw).toBe(0)
+    c.freeze(false)
+    expect(c.look(1 / 30).yaw).toBe(0)
+  })
 })

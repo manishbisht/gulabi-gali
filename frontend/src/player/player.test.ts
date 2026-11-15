@@ -97,3 +97,31 @@ it('set down where a boxed-in auto stands, the walker leaves by the nearest face
   player.dispose()
   controls.dispose()
 })
+
+it('after the view turns 90° left, forward walks along the new forward (west), not north', () => {
+  const { controls, player } = drivable()
+  player.teleport(0, 0)
+  controls.addLook(Math.PI / 2, 0)
+  for (let i = 0; i < 30; i++) player.update(1 / 30) // the turn eases in
+  expect(player.view().yaw).toBeCloseTo(Math.PI / 2, 2)
+  controls.setJoystick({ x: 0, z: 1 })
+  for (let i = 0; i < 30; i++) player.update(1 / 30)
+  const at = player.position()
+  expect(at.x).toBeLessThan(-3) // a second at 4 m/s, westward
+  expect(Math.abs(at.z)).toBeLessThan(0.1)
+  // the avatar faces where it walks: west is -π/2 about y
+  expect(Math.cos(player.heading())).toBeCloseTo(0)
+  expect(Math.sin(player.heading())).toBeCloseTo(-1)
+  player.dispose()
+  controls.dispose()
+})
+
+it('at the wheel the view comes round behind the auto when left alone', () => {
+  const { controls, player } = drivable()
+  player.mount(0, 0, Math.PI / 2) // nose to +x
+  for (let i = 0; i < 120; i++) player.update(1 / 30)
+  // behind an auto heading +x the camera looks +x: yaw -π/2
+  expect(Math.sin(player.view().yaw)).toBeCloseTo(-1, 2)
+  player.dispose()
+  controls.dispose()
+})

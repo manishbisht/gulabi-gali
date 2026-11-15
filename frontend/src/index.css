@@ -49,6 +49,16 @@ button {
   touch-action: none;
 }
 
+/* Drag the street to look around: a hand to grab it with a mouse, closed while it turns. */
+@media (pointer: fine) {
+  .stage {
+    cursor: grab;
+  }
+  .stage[data-looking] {
+    cursor: grabbing;
+  }
+}
+
 .intro {
   height: 100%;
   box-sizing: border-box;

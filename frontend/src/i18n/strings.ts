@@ -730,10 +730,13 @@ export const STRINGS = {
     en: 'First time in the gali? Just three things',
   },
   hintWalkTouch: {
-    hi: 'Chalna: neeche wala joystick ungli se khiskao.',
-    en: 'Walk: drag the joystick at the bottom with a finger.',
+    hi: 'Chalna: neeche wala joystick khiskao. Aas-paas dekhna: gali pe kahin bhi ungli ghumao.',
+    en: 'Walk: drag the joystick at the bottom. Look around: drag anywhere on the street.',
   },
-  hintWalkKeys: { hi: 'Chalna: W A S D ya arrow keys dabao.', en: 'Walk: W A S D or the arrow keys.' },
+  hintWalkKeys: {
+    hi: 'Chalna: W A S D ya arrow keys. Aas-paas dekhna: gali ko mouse se kheencho, ya Q aur R.',
+    en: 'Walk: W A S D or the arrow keys. Look around: drag the street with the mouse, or Q and R.',
+  },
   hintSitTouch: {
     hi: 'Chai ki bench ke paas jao aur "Baitho" dabao: wahan baithe logon se baat hoti hai.',
     en: 'Go up to a chai bench and tap "Sit here" to chat with whoever is sitting there.',
