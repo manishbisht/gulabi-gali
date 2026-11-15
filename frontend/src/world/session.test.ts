@@ -1237,9 +1237,12 @@ describe('drag to look', () => {
 
 describe('the auto-taxi', () => {
   /** Johari Bazaar's auto, at its stand, and the player beside it; the socket welcomed, as a ghost. */
-  async function byStand() {
+  async function byStand({
+    open = true,
+    extra = {},
+  }: { open?: boolean; extra?: Partial<SessionHooks> } = {}) {
     const taxi = { near: vi.fn(), riding: vi.fn(), dark: vi.fn(), refused: vi.fn() }
-    const live = openLive(async () => null, { taxi })
+    const live = openLive(async () => null, { taxi, ...extra })
     const home = { x: -2.6, z: 30, ry: -Math.PI }
     let taken = false
     loads[0]!.resolve({
@@ -1255,8 +1258,10 @@ describe('the auto-taxi', () => {
     await settle()
     live.session.player()!.teleport(-0.6, 30)
     const ws = sockets()[0]!
-    ws.onopen?.()
-    ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [] })
+    if (open) {
+      ws.onopen?.()
+      ws.say({ t: 'welcome', you: { id: null, visible: false }, people: [] })
+    }
     live.tick(1 / 30)
     const sent = () => ws.sent.map((m) => JSON.parse(m) as { t: string })
     return { ...live, ws, taxi, sent }
@@ -1293,6 +1298,35 @@ describe('the auto-taxi', () => {
     }
   })
 
+  it('while the district socket is not open there is no ride: the driver says no, and nothing is sent', async () => {
+    const { session, taxi, sent } = await byStand({ open: false })
+    expect(session.taxi('hawa-mahal')).toBe(false)
+    expect(taxi.refused).toHaveBeenCalled()
+    expect(taxi.riding).not.toHaveBeenCalledWith(true)
+    expect(session.player()!.driving()).toBe(false)
+    expect(sent()).toEqual([])
+    session.dispose()
+  })
+
+  it('mid-ride E mounts no other auto ("Auto chalao" has no reach from the taxi)', async () => {
+    const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+    const { session, tick } = await byStand({ extra: { drive } })
+    const interact = vi.spyOn(controls, 'interact')
+    try {
+      expect(session.taxi('hawa-mahal')).toBe(true)
+      // the stand's auto is taken; another in reach (a second auto parked behind it) is what E would mount
+      session.district()!.autos.nearest = () => 0
+      tick(1 / 30)
+      expect(drive.near).not.toHaveBeenLastCalledWith(true)
+      interact.mockReturnValueOnce(true)
+      tick(1 / 30)
+      expect(drive.driving).not.toHaveBeenCalledWith(true)
+    } finally {
+      interact.mockRestore()
+      session.dispose()
+    }
+  })
+
   it("the server's no-ride ends the ride by the stand, and is no bench's business", async () => {
     const { session, ws, taxi, hooks: h } = await byStand()
     session.taxi('hawa-mahal')
@@ -1308,6 +1342,29 @@ describe('the auto-taxi', () => {
 
 describe('the rooftop viewpoint', () => {
   afterEach(() => vi.useRealTimers())
+
+  it('up on the roof there is no "Le chalo" for an auto at its stand below', async () => {
+    const taxi = { near: vi.fn(), riding: vi.fn(), dark: vi.fn(), refused: vi.fn() }
+    const live = open('walled-city', { roof: { near: vi.fn(), up: vi.fn(), fade: vi.fn() }, taxi })
+    loads[0]!.resolve({
+      ...fakeDistrict(walledCity),
+      // an auto at Johari Bazaar's stand, and (as far as the street can tell) in reach
+      autos: { nearest: () => 0, pose: () => ({ x: -2.6, z: 30, ry: -Math.PI }), take() {}, leave() {} },
+    })
+    await settle()
+    vi.useFakeTimers()
+    const roof = walledCity.roof!
+    live.session.player()!.teleport(roof.stair.x, roof.stair.z)
+    live.tick(1 / 30)
+    expect(taxi.near).toHaveBeenLastCalledWith(true)
+    live.session.climb()
+    vi.advanceTimersByTime(ROOF_FADE_MS * 2)
+    live.tick(1 / 30)
+    expect(live.session.player()!.elevation()).toBe(roof.y)
+    expect(taxi.near).toHaveBeenLastCalledWith(false)
+    expect(live.session.taxi('hawa-mahal')).toBe(false)
+    live.session.dispose()
+  })
 
   /** The Walled City offline, the player at its stair's foot, with the rooftop's hooks spied on. */
   async function atStair(extra: Partial<SessionHooks> = {}, nearestAuto = -1) {

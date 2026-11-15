@@ -1099,9 +1099,10 @@ export class DistrictDO extends DurableObject<Env> {
   /**
    * The auto-taxi. Given only from where the rider stands (a walk on from the last accepted point, as a move
    * would be) within `TAXI_RANGE_M` of one of this district's stands, to one of its landmarks, and not from a
-   * bench. The rider is then set down at the landmark's drop point, from `TAXI`, with a fresh walking burst:
-   * nothing the client says decides where they land. Seen, they leave the street now and come back with their
-   * next move, beside the landmark (`arriving` in `move`), so nobody watches them slide across the district.
+   * bench. The rider is then set down at the landmark's drop point, from `TAXI`, with what was left of their
+   * walking burst at the stand (a ride refills none): nothing the client says decides where they land. Seen,
+   * they leave the street now and come back with their next move, beside the landmark (`arriving` in `move`),
+   * so nobody watches them slide across the district.
    */
   private ride(ws: WebSocket, seat: Seat, m: Extract<ClientMsg, { t: 'ride' }>, now: number): void {
     seat.seen = now
@@ -1109,14 +1110,16 @@ export class DistrictDO extends DurableObject<Env> {
     const drop = Object.hasOwn(line.drops, m.to) ? line.drops[m.to] : undefined
     const last = seat.pos
     const at = { x: round(m.x, 100), z: round(m.z, 100) }
-    const walked =
-      last !== null &&
-      !far(at, last, Math.min(SPEED_BURST_M, last.budget + (MAX_SPEED * Math.max(0, now - last.at)) / 1000))
-    if (!drop || !walked || seat.bench || !line.stands.some((s) => !far(at, s, TAXI_RANGE_M))) {
+    // what is left of the walking burst once at the stand: the ride carries it over, never refills it
+    const left = last
+      ? Math.min(SPEED_BURST_M, last.budget + (MAX_SPEED * Math.max(0, now - last.at)) / 1000) -
+        Math.hypot(at.x - last.x, at.z - last.z)
+      : -1
+    if (!drop || left < 0 || seat.bench || !line.stands.some((s) => !far(at, s, TAXI_RANGE_M))) {
       this.keep(ws, seat, now)
       return this.send(ws, NO_RIDE)
     }
-    seat.pos = { x: drop.x, z: drop.z, ry: drop.ry, at: now, budget: SPEED_BURST_M }
+    seat.pos = { x: drop.x, z: drop.z, ry: drop.ry, at: now, budget: left }
     this.dirty.delete(ws)
     if (seat.shown) {
       seat.shown = false

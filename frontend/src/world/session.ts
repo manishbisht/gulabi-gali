@@ -306,8 +306,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       autos: district.autos,
       player,
       stand: () => sitting?.stand(),
-      // up on the roof the autos below are out of reach (the rooftop is made just after this)
-      away: () => roof?.up() ?? false,
+      // up on the roof the autos below are out of reach, and in the taxi the wheel is the taxi's (both are made
+      // just after this)
+      away: () => (roof?.up() ?? false) || taxi.riding(),
       hooks: {
         ...(hooks.drive ?? { near() {}, driving() {}, blocked() {}, rescued() {} }),
         driving(on) {
@@ -337,6 +338,10 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         hooks.npcCard.isOpen() ||
         hooks.personCard.isOpen() ||
         (hooks.posters?.isOpen() ?? false),
+      // up on the roof the autos below are out of reach, as they are for "Auto chalao"
+      away: () => roof?.up() ?? false,
+      // the server must hear of the ride, or the step out after it would be refused as a jump
+      online: () => presence?.open() ?? true,
       hooks: hooks.taxi ?? { near() {}, riding() {}, dark() {}, refused() {} },
     })
     const systems: DistrictSystem[] = [
@@ -859,7 +864,7 @@ function createBubbleSystem(
   }
 }
 
-type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void }
+type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void; open(): boolean }
 
 /**
  * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
@@ -962,6 +967,7 @@ function createPresence(
       conn = connect()
     },
     send: (m) => conn.send(m),
+    open: () => conn.state() === 'open',
     dispose() {
       conn.close() // its 'closed' stops the stale timer
       offQuality()

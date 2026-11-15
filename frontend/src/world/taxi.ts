@@ -85,6 +85,13 @@ export function createTaxi(opts: {
   send?: (m: ClientMsg) => void
   /** Something else holds the player (seated, a card is up): no ride now. */
   blocked?: () => boolean
+  /** Up on a rooftop: the autos below are out of reach, as they are for "Auto chalao". */
+  away?: () => boolean
+  /**
+   * Whether the server would hear the ride (the district socket is open); absent offline, where nobody need. Not
+   * open, a ride is refused at once, as the server would (`refused`): otherwise the next step after it would be.
+   */
+  online?: () => boolean
   hooks: TaxiHooks
   now?: () => number
   reducedMotion?: () => boolean
@@ -117,7 +124,12 @@ export function createTaxi(opts: {
   }
   const atStand = (i: number) => {
     const p = autos.pose(i)
-    return line.stands.some((s) => Math.hypot(s.x - p.x, s.z - p.z) <= AT_STAND_M)
+    // a plain loop: this runs every frame by an auto
+    for (let k = 0; k < line.stands.length; k++) {
+      const s = line.stands[k]!
+      if (Math.hypot(s.x - p.x, s.z - p.z) <= AT_STAND_M) return true
+    }
+    return false
   }
   const shade = (on: boolean) => {
     if (!trip || trip.dark === on) return
@@ -153,7 +165,7 @@ export function createTaxi(opts: {
     update(_dt, pos) {
       const t = trip
       if (!t) {
-        const i = player.driving() ? -1 : autos.nearest(pos, TAXI_RANGE)
+        const i = player.driving() || opts.away?.() ? -1 : autos.nearest(pos, TAXI_RANGE)
         return setNear(i >= 0 && atStand(i) ? i : -1)
       }
       const since = now() - t.start
@@ -173,7 +185,11 @@ export function createTaxi(opts: {
     riding: () => trip !== null,
     go(to) {
       const drop = Object.hasOwn(line.drops, to) ? line.drops[to] : undefined
-      if (trip || near < 0 || !drop || player.driving() || opts.blocked?.()) return false
+      if (trip || near < 0 || !drop || player.driving() || opts.away?.() || opts.blocked?.()) return false
+      if (opts.online && !opts.online()) {
+        hooks.refused()
+        return false
+      }
       const from = player.position()
       const auto = near
       const home = { ...autos.pose(auto) }

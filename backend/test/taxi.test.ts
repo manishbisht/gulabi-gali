@@ -1,8 +1,8 @@
 import { applyD1Migrations, env } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { Env } from '../src/env'
-import { BENCH_POSITIONS, DISTRICT_IDS, TAXI, TAXI_RANGE_M } from '../src/district'
-import { closeAll, live, resident } from './helpers'
+import { BENCH_POSITIONS, DISTRICT_IDS, SPEED_BURST_M, TAXI, TAXI_RANGE_M } from '../src/district'
+import { api, closeAll, devId, live, resident } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
 
@@ -54,16 +54,89 @@ describe('the auto-taxi', () => {
     expect(rider.all('error')).toEqual([])
   })
 
-  it('a ghost may ride too (nobody sees it go)', async () => {
+  it('every drop is further from every stand than a stand reach and a burst: a ride never chains into another', () => {
+    for (const id of DISTRICT_IDS)
+      for (const [landmark, drop] of Object.entries(TAXI[id].drops))
+        for (const s of TAXI[id].stands)
+          expect(Math.hypot(drop.x - s.x, drop.z - s.z), `${id} ${landmark}`).toBeGreaterThan(
+            TAXI_RANGE_M + SPEED_BURST_M,
+          )
+  })
+
+  it('a ghost may ride too, and nobody sees it go or arrive', async () => {
+    const jkk = TAXI.university.drops.jkk!
+    const [stand] = TAXI.university.stands
+    // a resident standing right at the drop point, and one at the stand
+    const there = await live('university', { token: await resident('Ghost Watcher Gita') })
+    const here = await live('university', { token: await resident('Ghost Watcher Girish') })
+    there.send({ t: 'move', x: jkk.x + 2, z: jkk.z, ry: 0 })
+    here.send({ t: 'move', x: stand!.x + 1, z: stand!.z, ry: 0 })
+    await there.sync()
+    await here.sync()
     const ghost = await live('university')
     await ghost.next('welcome')
-    const [stand] = TAXI.university.stands
-    const jkk = TAXI.university.drops.jkk!
+    const [fromThere, fromHere] = [there.mark(), here.mark()]
     ghost.send({ t: 'move', x: stand!.x, z: stand!.z + 2, ry: 0 })
     ghost.send({ t: 'ride', to: 'jkk', x: stand!.x, z: stand!.z + 2 })
     ghost.send({ t: 'move', x: jkk.x + 1, z: jkk.z, ry: 0 })
+    ghost.send({ t: 'move', x: jkk.x + 1.5, z: jkk.z, ry: 0 })
     await ghost.sync()
     expect(ghost.all('error')).toEqual([])
+    await new Promise((r) => setTimeout(r, 250)) // past a move batch
+    await there.sync()
+    await here.sync()
+    expect(there.messages.slice(fromThere)).toEqual([{ t: 'pong' }])
+    expect(here.messages.slice(fromHere)).toEqual([{ t: 'pong' }])
+  })
+
+  it('someone who blocked the rider hears neither the leave nor the rejoin; anyone else hears both', async () => {
+    const riderToken = await resident('Blocked Bharat')
+    const blockerToken = await resident('Blocker Bela')
+    const rider = await live('walled-city', { token: riderToken })
+    const blocker = await live('walled-city', { token: blockerToken })
+    const other = await live('walled-city', { token: await resident('Other Omkar') })
+    rider.send({ t: 'move', x: STAND.x + 1.5, z: STAND.z, ry: 0 })
+    blocker.send({ t: 'move', x: STAND.x + 3, z: STAND.z + 2, ry: 0 })
+    other.send({ t: 'move', x: HAWA.x, z: HAWA.z + 4, ry: 0 })
+    await blocker.next('join', (m) => m.p.id === devId('Blocked Bharat'))
+    await other.next('join', (m) => m.p.id === devId('Blocked Bharat'))
+    expect(
+      (
+        await api('/api/blocks', blockerToken, {
+          method: 'POST',
+          body: JSON.stringify({ id: devId('Blocked Bharat') }),
+        })
+      ).status,
+    ).toBeLessThan(300)
+    // the block itself takes the rider off the blocker's street
+    await blocker.next('leave', (m) => m.id === devId('Blocked Bharat'))
+    const [fromBlocker, fromOther] = [blocker.mark(), other.mark()]
+
+    rider.send({ t: 'ride', to: 'hawa-mahal', x: STAND.x + 1.5, z: STAND.z })
+    rider.send({ t: 'move', x: HAWA.x + 1, z: HAWA.z, ry: 0 })
+    await other.next('leave', (m) => m.id === devId('Blocked Bharat'), fromOther)
+    await other.next('join', (m) => m.p.id === devId('Blocked Bharat'), fromOther)
+    await rider.sync()
+    expect(rider.all('error')).toEqual([])
+    await blocker.sync()
+    expect(JSON.stringify(blocker.messages.slice(fromBlocker))).not.toContain(devId('Blocked Bharat'))
+  })
+
+  it('a ride refills no burst: one spent on the way to the stand is still spent at the drop', async () => {
+    const rider = await live('walled-city', { token: await resident('Spent Sapna') })
+    // 7.5 m in one hop to beside the stand: almost the whole 8 m burst gone
+    rider.send({ t: 'move', x: STAND.x + 9.5, z: STAND.z, ry: 0 })
+    rider.send({ t: 'move', x: STAND.x + 2, z: STAND.z, ry: 0 })
+    rider.send({ t: 'ride', to: 'hawa-mahal', x: STAND.x + 2, z: STAND.z })
+    // so a 3 m step at once off the drop point is more than is left
+    rider.send({ t: 'move', x: HAWA.x + 3, z: HAWA.z, ry: 0 })
+    expect(await rider.next('error')).toEqual({
+      t: 'error',
+      code: 'too-fast',
+      x: HAWA.x,
+      z: HAWA.z,
+      ry: HAWA.ry,
+    })
   })
 
   it('after a ride the speed check carries on from the drop point', async () => {

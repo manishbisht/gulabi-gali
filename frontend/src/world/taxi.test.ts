@@ -118,7 +118,16 @@ describe('a ride', () => {
     } satisfies ParkedAutos
   }
 
-  function setup(opts: { at?: typeof HOME; reduced?: boolean; blocked?: boolean; send?: boolean } = {}) {
+  function setup(
+    opts: {
+      at?: typeof HOME
+      reduced?: boolean
+      blocked?: boolean
+      send?: boolean
+      away?: () => boolean
+      online?: () => boolean
+    } = {},
+  ) {
     const scene = new THREE.Scene()
     const controls = createControls(new EventTarget() as unknown as Window)
     const player = createPlayer({
@@ -139,6 +148,8 @@ describe('a ride', () => {
       player,
       send: opts.send === false ? undefined : send,
       blocked: () => opts.blocked ?? false,
+      away: opts.away,
+      online: opts.online,
       hooks,
       now: () => clock,
       reducedMotion: () => opts.reduced ?? false,
@@ -255,6 +266,30 @@ describe('a ride', () => {
     expect(taxi.go('hawa-mahal')).toBe(true)
     expect(taxi.go('jantar-mantar')).toBe(false)
     expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('up on a rooftop the autos below are out of reach: no "Le chalo", and no ride', () => {
+    let up = false
+    const { taxi, hooks, run, send } = setup({ away: () => up })
+    expect(taxi.near()).toBe(true)
+    up = true
+    run(50)
+    expect(taxi.near()).toBe(false)
+    expect(hooks.near).toHaveBeenLastCalledWith(false)
+    expect(taxi.go('hawa-mahal')).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('with the district socket not open, a ride is refused at once and the driver says no', () => {
+    let open = false
+    const { player, taxi, hooks, send } = setup({ online: () => open })
+    expect(taxi.go('hawa-mahal')).toBe(false)
+    expect(hooks.refused).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+    expect(player.driving()).toBe(false)
+    expect(taxi.riding()).toBe(false)
+    open = true
+    expect(taxi.go('hawa-mahal')).toBe(true)
   })
 
   it('offline (no socket) it rides all the same', () => {
