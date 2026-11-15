@@ -55,8 +55,8 @@ export const STRINGS = {
     en: 'The Gangaur procession is on the road',
   },
   festivalTeejLine: {
-    hi: 'Teej ka jhoola gali-gali ghoom raha hai',
-    en: 'The Teej swing cart is out on the street',
+    hi: 'Teej Mata ki sawari sadak par nikli hai',
+    en: "Teej Mata's procession is on the road",
   },
   festivalDiwali: { hi: 'Diwali mubarak! Diye jagmagaye 🪔', en: 'Happy Diwali! The diyas are lit 🪔' },
   festivalJlf: { hi: 'Jaipur Literature Festival ki dhoom! 📚', en: 'Jaipur Literature Festival is on! 📚' },

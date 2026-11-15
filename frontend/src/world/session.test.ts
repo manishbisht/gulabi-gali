@@ -58,6 +58,7 @@ function fakeStage() {
     onQuality: (f: (q: 0 | 1 | 2) => void) => (qualities.add(f), () => void qualities.delete(f)),
     framesSinceRestore: () => 0,
     gameTime: () => 0,
+    settle: () => {},
     dispose: () => {},
   } as unknown as Stage
   return { stage, frames, qualities, tick: (dt: number) => frames.forEach((f) => f(dt)) }
