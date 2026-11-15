@@ -177,6 +177,17 @@ describe('invite codes', () => {
     expect(await invites(owner.token)).toHaveLength(2)
   })
 
+  it('two top-ups at once still end with exactly 2 unused codes', async () => {
+    await unverified('Topup Race')
+    const id = devId('Topup Race')
+    await testEnv.DB.prepare('UPDATE users SET verified = 1 WHERE id = ?').bind(id).run()
+    await Promise.all([issueCodes(testEnv, id, 2), issueCodes(testEnv, id, 2), issueCodes(testEnv, id, 2)])
+    const n = await testEnv.DB.prepare('SELECT COUNT(*) AS n FROM invites WHERE owner = ?')
+      .bind(id)
+      .first<{ n: number }>()
+    expect(n?.n).toBe(2)
+  })
+
   it('a non-verified member has no codes to see', async () => {
     const guest = await unverified('Codeless')
     expect(await invites(guest)).toEqual([])

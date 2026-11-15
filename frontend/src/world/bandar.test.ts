@@ -130,6 +130,16 @@ describe('the Galta bandar', () => {
     expect(s.scene.children.every((c) => !c.visible)).toBe(true)
   })
 
+  it('a raid switched off while it drops does not burn the 10 minute cooldown', () => {
+    const memory = createBandarMemory()
+    const s = setup({ memory })
+    s.run(FRAME)
+    expect(memory.last).not.toBeNull()
+    storage.set('gg-no-bandar', '1')
+    s.run(2)
+    expect(memory.last).toBeNull()
+  })
+
   it('rolls its chance before reading the switch or the look', () => {
     const look = vi.fn(() => LOOK)
     const get = vi.spyOn(storage, 'get')

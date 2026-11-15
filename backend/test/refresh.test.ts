@@ -328,6 +328,26 @@ describe('refreshUser', () => {
     await c.sync()
   })
 
+  it('a sweep skipped for a recent D1 failure is not counted as done', async () => {
+    const district: DistrictId = 'mi-road'
+    await walker('Skipped Sweeper', district, 75)
+    type Inner = { trustSweptAt: number; trustFailedAt: number; clock: () => number }
+    const now = Date.now()
+    const after = await runInDurableObject(stub(district), async (i) => {
+      const o = i as unknown as Inner
+      o.trustSweptAt = -Infinity
+      o.trustFailedAt = now - 1_000 // inside TRUST_RETRY_MS
+      o.clock = () => now
+      await i.alarm()
+      const skipped = o.trustSweptAt
+      o.trustFailedAt = -Infinity
+      o.clock = Date.now
+      return skipped
+    })
+    // Still due: the next alarm sweeps, rather than waiting out a minute.
+    expect(after).toBe(-Infinity)
+  })
+
   it('mute: say and status are refused with muted until it ends', async () => {
     const district: DistrictId = 'university'
     const bench = BENCH_POSITIONS[district][1]!

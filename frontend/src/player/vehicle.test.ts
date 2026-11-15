@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AABB } from '../world/types'
-import { AUTO_RADIUS, AUTO_SPEED, createVehicle } from './vehicle'
+import { AUTO_RADIUS, AUTO_SPEED, createVehicle, crosses } from './vehicle'
 
 const box = (x: number, z: number, h = 0.5): AABB => ({ minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h })
 const GAS = { x: 0, z: 1 }
@@ -76,6 +76,16 @@ describe('createVehicle', () => {
     v.commit(v.x, v.z) // all of it blocked
     expect(s.z).toBeGreaterThan(0)
     expect(v.speed).toBe(0)
+  })
+
+  describe('crosses', () => {
+    it("counts the walker's radius: a path grazing a wall end is a hit, a clear one is not", () => {
+      const wall: AABB = { minX: 1, maxX: 1.1, minZ: 0.2, maxZ: 8 }
+      // along z = 0 the line passes 0.2 m from the wall's end: no hit for a point, a hit for a 0.4 m walker
+      expect(crosses(0, 0, 3, 0, wall)).toBe(false)
+      expect(crosses(0, 0, 3, 0, wall, 0.4)).toBe(true)
+      expect(crosses(0, -1, 3, -1, wall, 0.4)).toBe(false)
+    })
   })
 
   describe('exitPoint', () => {

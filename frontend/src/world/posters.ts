@@ -253,6 +253,8 @@ export function createPosters(opts: {
   /** Socket news that came while a load was out: replayed once it lands. */
   let pending: ServerMsg[] = []
   let retry: ReturnType<typeof setTimeout> | null = null
+  /** A closed refresh (a block's nudge) has not landed yet: any refresh until one does counts as closed. */
+  let owing = false
   let disposed = false
 
   const repaint = (w: WallView) => {
@@ -316,7 +318,10 @@ export function createPosters(opts: {
    * failed fetch the walls go bare rather than keep showing what may now be someone they must not see, and
    * the fetch is tried once more (`retried`). Any other failed fetch leaves them as they are.
    */
-  function refresh(closed = false, retried = false) {
+  function refresh(asked = false, retried = false) {
+    // A welcome's refresh that supersedes a block's nudge does not forget that the nudge was owed.
+    owing ||= asked
+    const closed = owing
     loading?.abort()
     if (retry) clearTimeout(retry)
     retry = null
@@ -328,6 +333,7 @@ export function createPosters(opts: {
       .then((list) => {
         if (disposed || ctl.signal.aborted) return
         loading = null
+        owing = false
         show(list)
         const replay = pending
         pending = []

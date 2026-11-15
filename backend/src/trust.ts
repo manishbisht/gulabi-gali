@@ -38,19 +38,20 @@ export function normaliseCode(x: unknown): string | null {
  * (a 1 in 10^12 chance) just tries a fresh code.
  */
 export async function issueCodes(env: Env, userId: string, count: number = CODES_HELD): Promise<void> {
-  const held = await env.DB.prepare('SELECT COUNT(*) AS n FROM invites WHERE owner = ? AND used_by IS NULL')
-    .bind(userId)
-    .first<{ n: number }>()
+  const unused = 'SELECT COUNT(*) AS n FROM invites WHERE owner = ?1 AND used_by IS NULL'
   const now = Date.now()
-  for (let i = held?.n ?? 0; i < count; i++) {
-    for (let tries = 0; tries < 5; tries++) {
-      const done = await env.DB.prepare(
-        'INSERT OR IGNORE INTO invites (code, owner, created_at) VALUES (?, ?, ?)',
-      )
-        .bind(generateCode(), userId, now)
-        .run()
-      if (done.meta.changes === 1) break
-    }
+  // Each insert checks the hand itself, in the same statement, so two calls at once (a first list and a
+  // redeem's top-up) cannot both fill it: together they stop at `count`.
+  for (let attempts = 0; attempts < count * 5; attempts++) {
+    const done = await env.DB.prepare(
+      `INSERT OR IGNORE INTO invites (code, owner, created_at) SELECT ?2, ?1, ?3 WHERE (${unused}) < ?4`,
+    )
+      .bind(userId, generateCode(), now, count)
+      .run()
+    if (done.meta.changes === 1) continue
+    // Nothing added: the hand is full (done), or the new code collided (try another).
+    const held = await env.DB.prepare(unused).bind(userId).first<{ n: number }>()
+    if ((held?.n ?? 0) >= count) return
   }
 }
 
