@@ -14,6 +14,8 @@ interface Props {
   procession?: string
   /** Stamp progress as `N/9`. */
   stamps: string
+  /** Opens the Jaipur Darshan list; the stamps chip is a button when present. */
+  onStamps?: () => void
   lang: Lang
   onLang: (l: Lang) => void
   /** The sound switch (the horn, the metro's arrival chime and the "Wo kaata" chirp): whether it is on, and how to flip it. */
@@ -44,6 +46,7 @@ export function Hud({
   banner,
   procession,
   stamps,
+  onStamps,
   lang,
   onLang,
   sound,
@@ -67,9 +70,21 @@ export function Hud({
           <div className="hud-top">
             <span className="hud-chip">{place}</span>
             <span className="hud-chip">{weather}</span>
-            <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
-              {stamps}
-            </span>
+            {onStamps ? (
+              <button
+                type="button"
+                className="hud-chip stamp-count"
+                title={t('stampCount', lang)}
+                aria-label={`${t('darshanOpen', lang)} (${stamps})`}
+                onClick={onStamps}
+              >
+                {stamps}
+              </button>
+            ) : (
+              <span className="hud-chip stamp-count" title={t('stampCount', lang)}>
+                {stamps}
+              </span>
+            )}
           </div>
           {(visibility || onProfile || onInvite || onConnections) && (
             <div className="hud-identity">

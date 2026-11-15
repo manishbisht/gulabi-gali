@@ -1744,3 +1744,91 @@ small.words-hint {
   outline: 3px solid var(--cream);
   outline-offset: 3px;
 }
+
+/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
+button.stamp-count {
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  font-size: 0.95rem;
+  pointer-events: auto;
+}
+
+.darshan-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.darshan-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+}
+
+.darshan-list li[data-got='false'] {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.darshan-district {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.darshan-list em {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.darshan-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--sandstone);
+  color: #2a1d24;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* The close control stays in view at the top while the nine rows scroll (a phone has no Escape). */
+.darshan-head {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -18px -18px 8px;
+  padding: 10px 10px 8px 18px;
+  background: #2a1d24;
+}
+
+.darshan-head h2 {
+  margin: 0;
+}
+
+.darshan-x {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+/* the chip stays as slim as its neighbours; its tap area is still thumb-sized */
+button.stamp-count::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
