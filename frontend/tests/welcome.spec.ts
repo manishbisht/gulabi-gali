@@ -34,7 +34,10 @@ test('the welcome screen says how many are in the lanes now, and when it is quie
 
   await page.unrouteAll()
   await welcome(page, 0)
-  await expect(page.locator('.intro-count')).toHaveText('Abhi shaant hai — pehle aao')
+  // the language chosen above is kept across the reload
+  await expect(line).toHaveText("It's quiet right now — be the first in")
+  await page.getByRole('button', { name: 'हिन्दी: switch language' }).tap()
+  await expect(line).toHaveText('Abhi shaant hai — pehle aao')
 })
 
 test('a link to a landmark opens its district there, after Padharo, with its card up; the link leaves the address bar', async ({
