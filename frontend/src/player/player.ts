@@ -35,6 +35,15 @@ interface Options {
   occluders?: AABB[]
 }
 
+/** Where an auto stands and the way it faces (radians about y, 0 faces +z). */
+export interface Pose {
+  x: number
+  z: number
+  ry: number
+}
+/** Someone else at the wheel (the auto-taxi): writes where the auto is to be after `dt` seconds into `to`. */
+export type Pilot = (dt: number, to: Pose) => void
+
 /** Owns the avatar and the chase camera: input (the view's turn first), then collision, then avatar and camera. */
 export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
   let avatar = buildAvatar(look)
@@ -53,6 +62,9 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
   let jogged = false
   /** The auto under the driver, made on the first mount and kept for the player's life. */
   let ride: THREE.Mesh | null = null
+  /** At the wheel instead of the stick, while set (see `autopilot`). */
+  let pilot: Pilot | null = null
+  const steer: Pose = { x: 0, z: 0, ry: 0 }
 
   /**
    * `frame`: a real frame, not a snap (teleport, mount, dismount pass dt 1 s to put the camera there at once).
@@ -116,6 +128,23 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       scene.add(ride)
       sync(1)
     },
+    /**
+     * Hands the wheel to `next` (the auto-taxi), or back to the stick (null). While it has it, every frame puts
+     * the auto where `next` says, through anything, and the stick does nothing. Taking it puts the auto at its
+     * first pose (`dt` 0) at once, with the view turned to look over its back.
+     */
+    autopilot(next: Pilot | null) {
+      pilot = next
+      if (!next || !driving) return
+      next(0, steer)
+      pos = { x: steer.x, z: steer.z }
+      vehicle.reset(steer.x, steer.z, steer.ry)
+      avatar.rotation.y = vehicle.heading
+      // the shortest turn round to behind the auto (it faces `heading`, the view looks along -z at yaw 0)
+      const back = vehicle.heading + Math.PI - follow.yaw()
+      follow.turn(Math.atan2(Math.sin(back), Math.cos(back)), 0)
+      sync(1)
+    },
     /** Where the auto stands now, for leaving it there. */
     ridePose: () => ({ x: vehicle.x, z: vehicle.z, ry: vehicle.heading }),
     /** Somewhere clear to step out, or null when boxed in (see `Vehicle.exitPoint`). */
@@ -124,6 +153,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     dismount(to: Vec2) {
       if (!driving) return
       driving = false
+      pilot = null // the next auto is the stick's again
       ride?.removeFromParent()
       pos = { x: to.x, z: to.z }
       sync(1)
@@ -142,7 +172,13 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       follow.turn(turn.yaw, turn.pitch, turn.held)
       follow.zoomBy(controls.zoom())
       jogged = false
-      if (driving) {
+      if (driving && pilot) {
+        pilot(dt, steer)
+        pos.x = steer.x
+        pos.z = steer.z
+        vehicle.reset(steer.x, steer.z, steer.ry)
+        avatar.rotation.y = vehicle.heading
+      } else if (driving) {
         // the stick is the wheel and the pedal here, not a direction on the street
         const want = vehicle.update(controls.drive(), dt)
         moveWithCollision(pos, want, colliders, AUTO_RADIUS, pos)

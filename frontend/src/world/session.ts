@@ -25,6 +25,7 @@ import { createNpcs, type Npcs } from './npcs'
 import { createPeople, createPeopleLabels, type People, type Remote } from './people'
 import { createPosters, type Posters } from './posters'
 import { createRooftop, roofHeight, type RoofHooks, type Rooftop } from './rooftop'
+import { createTaxi, type Taxi, type TaxiHooks } from './taxi'
 import type { SessionPosterHooks } from './usePosters'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 import { createZoomGestures } from './zoomGestures'
@@ -110,6 +111,8 @@ export interface SessionHooks {
   posters?: SessionPosterHooks
   /** Driving a parked auto: what it tells React (see useDrive). */
   drive?: DriveHooks
+  /** The auto-taxi ("Le chalo"): what it tells React (see useTaxi). */
+  taxi?: TaxiHooks
   /** The street animals: the one in reach, the one following, and their passing lines (see useAnimals). */
   animals?: AnimalHooks
   /** The Galta bandar (Walled City): `blocked` while a card, sheet, bench, kite game or metro ride is up. */
@@ -169,6 +172,10 @@ export interface CitySession {
   exitAuto(): void
   /** The horn: only while driving, at most twice a second, and only heard here. */
   honk(): void
+  /** "Le chalo": the auto-taxi from the parked auto in reach to landmark `to`; false when it may not go now. */
+  taxi(to: string): boolean
+  /** Cuts the taxi ride short: on foot beside the landmark at once. */
+  skipTaxi(): void
   /** At the rooftop stair's foot, climbs ("Chhat pe chalo"); up there, comes down. Not seated or at the wheel. */
   climb(): void
   /** "Saath chalo": calls the animal in reach (the cow answers with a line instead). */
@@ -202,6 +209,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sitting: Sitting | null
     posters: Posters | null
     driving: Driving
+    taxi: Taxi
     animals: Animals
     roof: Rooftop | null
   } | null = null
@@ -298,8 +306,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       autos: district.autos,
       player,
       stand: () => sitting?.stand(),
-      // up on the roof the autos below are out of reach (the rooftop is made just after this)
-      away: () => roof?.up() ?? false,
+      // up on the roof the autos below are out of reach, and in the taxi the wheel is the taxi's (both are made
+      // just after this)
+      away: () => (roof?.up() ?? false) || taxi.riding(),
       hooks: {
         ...(hooks.drive ?? { near() {}, driving() {}, blocked() {}, rescued() {} }),
         driving(on) {
@@ -318,6 +327,23 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           face: (yaw) => controls.addLook(wrapAngle(yaw - player.view().yaw), 0),
         })
       : null
+    // a ride goes out on the live socket, which opens below
+    const taxi = createTaxi({
+      def: district.def,
+      autos: district.autos,
+      player,
+      send: (m) => presence?.send(m),
+      blocked: () =>
+        !!sitting?.seated() ||
+        hooks.npcCard.isOpen() ||
+        hooks.personCard.isOpen() ||
+        (hooks.posters?.isOpen() ?? false),
+      // up on the roof the autos below are out of reach, as they are for "Auto chalao"
+      away: () => roof?.up() ?? false,
+      // the server must hear of the ride, or the step out after it would be refused as a jump
+      online: () => presence?.open() ?? true,
+      hooks: hooks.taxi ?? { near() {}, riding() {}, dark() {}, refused() {} },
+    })
     const systems: DistrictSystem[] = [
       npcs,
       {
@@ -337,6 +363,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       sky,
       createLights(stage, district),
       { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
+      taxi,
       ...(roof ? [{ update: (_dt: number, pos: Vec2) => roof.update(pos), dispose: roof.dispose }] : []),
       createInteraction(
         canvas,
@@ -374,6 +401,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
             people,
             sitting,
             posters,
+            taxi,
             hooks.presence,
             opts.WebSocketImpl,
           )
@@ -383,7 +411,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, people, sitting, posters, driving, animals, roof }
+    here = { district, player, systems, presence, people, sitting, posters, driving, taxi, animals, roof }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -492,9 +520,13 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     sit: () => here?.sitting?.sit(),
     stand: () => here?.sitting?.stand(),
     say: (text) => here?.sitting?.say(text) ?? false,
-    mount: () => here?.driving.mount(),
+    mount() {
+      if (!here?.taxi.riding()) here?.driving.mount()
+    },
     exitAuto: () => here?.driving.exit(),
     honk: () => here?.driving.honk(),
+    taxi: (to) => here?.taxi.go(to) ?? false,
+    skipTaxi: () => here?.taxi.skip(),
     climb() {
       if (!here?.roof || here.player.driving() || here.sitting?.seated()) return
       here.roof.toggle()
@@ -833,7 +865,7 @@ function createBubbleSystem(
   }
 }
 
-type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void }
+type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void; open(): boolean }
 
 /**
  * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
@@ -850,6 +882,8 @@ function createPresence(
   people: People,
   sitting: Sitting | null,
   posters: Posters | null,
+  /** While it rides, nothing is said of where the player is: the server already set them down at the landmark. */
+  taxi: Pick<Taxi, 'riding' | 'refused'>,
   hooks: NonNullable<SessionHooks['presence']>,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
@@ -860,6 +894,7 @@ function createPresence(
   /** Reused for every frame's move: the socket copies what it sends. */
   const move: Extract<ClientMsg, { t: 'move' }> = { t: 'move', x: 0, z: 0, ry: 0 }
   const sendMove = (pos: Vec2) => {
+    if (taxi.riding()) return
     move.x = pos.x
     move.z = pos.z
     move.ry = player.heading()
@@ -871,6 +906,7 @@ function createPresence(
   }
   const onMsg = (m: ServerMsg) => {
     if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
+    if (m.t === 'error' && m.code === 'no-ride') return taxi.refused()
     if (m.t === 'queued') return hooks.queued?.(m.position, false)
     if (m.t === 'poster' || m.t === 'posters') return posters?.apply(m)
     people.apply(m)
@@ -932,6 +968,7 @@ function createPresence(
       conn = connect()
     },
     send: (m) => conn.send(m),
+    open: () => conn.state() === 'open',
     dispose() {
       conn.close() // its 'closed' stops the stale timer
       offQuality()

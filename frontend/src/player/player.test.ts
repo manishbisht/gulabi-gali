@@ -238,3 +238,31 @@ it('a pinch or wheel zooms the camera, read once a frame, and a new player (a ne
   fresh.player.dispose()
   fresh.controls.dispose()
 })
+
+it('on autopilot (the auto-taxi) the auto goes where the pilot says, not the stick, with the view behind it', () => {
+  const { controls, player } = drivable()
+  player.mount(0, 0, 0)
+  let z = 0
+  player.autopilot((dt, to) => {
+    z += 10 * dt
+    to.x = 5
+    to.z = z
+    to.ry = Math.PI / 2 // nose to +x
+  })
+  // taken over: at the pilot's first pose at once, and looking over the auto's back (yaw -π/2)
+  expect(player.position()).toEqual({ x: 5, z: 0 })
+  expect(Math.sin(player.view().yaw)).toBeCloseTo(-1, 2)
+  controls.setJoystick({ x: 1, z: -1 })
+  for (let i = 0; i < 30; i++) player.update(1 / 30)
+  expect(player.position().x).toBe(5)
+  expect(player.position().z).toBeCloseTo(10)
+  expect(player.heading()).toBeCloseTo(Math.PI / 2)
+  expect(player.ridePose()).toEqual({ x: 5, z: player.position().z, ry: Math.PI / 2 })
+  // handed back: the stick drives again
+  player.autopilot(null)
+  controls.setJoystick({ x: 0, z: 1 })
+  for (let i = 0; i < 30; i++) player.update(1 / 30)
+  expect(player.position().x).toBeGreaterThan(6)
+  player.dispose()
+  controls.dispose()
+})

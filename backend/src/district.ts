@@ -4,6 +4,7 @@ import { allowedOrigin } from './cors'
 import type { Env } from './env'
 import { ipKey } from './limits'
 import benches from './benches.json'
+import taxi from './taxi.json'
 import { wordsOk } from './filter/server'
 import { GATE_NAME, type Admit, type GateDO } from './gate'
 import { firstName } from './names'
@@ -42,6 +43,17 @@ export const BENCH_POSITIONS: Record<DistrictId, readonly { x: number; z: number
 export const SIT_RANGE_M = 3
 /** Walking further than this from the bench stands a sitter up: the client's own reach. */
 export const STAY_RANGE_M = 2.5
+/**
+ * The auto-taxi, by district: where its parked autos stand (as its `props` place them) and, per landmark, the
+ * point beside it where a ride sets the rider down, with the way the auto faces there. The same file is copied
+ * to the frontend, whose district defs are tested against it (scripts/check-protocol.mjs keeps the copies equal).
+ */
+export const TAXI: Record<
+  DistrictId,
+  { stands: { x: number; z: number }[]; drops: Record<string, { x: number; z: number; ry: number }> }
+> = taxi
+/** A ride is given this close to a stand, by where the rider says they get in: a little over the client's 2.5 m. */
+export const TAXI_RANGE_M = 3
 /** Each bench remembers what was said there for this long, and at most this many lines. */
 export const TRANSCRIPT_MS = 10 * 60_000
 export const TRANSCRIPT_LINES = 200
@@ -132,6 +144,7 @@ export const MAX_FLOOD_MS = 3000
 const MAX_COORD = 1000
 const MAX_TURN = 2 * Math.PI
 const MAX_BENCH_ID = 64
+const MAX_LANDMARK_ID = 64
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
 const PING = '{"t":"ping"}'
 const PONG = '{"t":"pong"}'
@@ -150,6 +163,7 @@ const FAR = { t: 'error', code: 'far' } as const
 const MUTED = { t: 'error', code: 'muted' } as const
 /** Not a bad frame, so never a strike: the line was fine to send, just not fit to show. */
 const WORDS = { t: 'error', code: 'words' } as const
+const NO_RIDE = { t: 'error', code: 'no-ride' } as const
 const STOOD: ServerMsg = { t: 'seated', bench: null, seat: null, with: [] }
 /** What the walls may show this person changed (a block made or lifted): they fetch them again. */
 const POSTERS: ServerMsg = { t: 'posters' }
@@ -213,6 +227,15 @@ export function parseClientMsg(text: string): ClientMsg | null {
       const move: ClientMsg = v === 'auto' ? { t: 'move', x, z, ry, v } : { t: 'move', x, z, ry }
       // a pace other than 'jog' is ignored, as any unknown field is: never a bad frame, just a walk
       return pace === 'jog' ? { ...move, pace } : move
+    }
+    case 'ride': {
+      const { to, x, z } = m
+      return typeof to === 'string' &&
+        to.length <= MAX_LANDMARK_ID &&
+        isNum(x, MAX_COORD) &&
+        isNum(z, MAX_COORD)
+        ? { t: 'ride', to, x, z }
+        : null
     }
     case 'sit': {
       const { bench } = m
@@ -957,6 +980,8 @@ export class DistrictDO extends DurableObject<Env> {
         return this.send(ws, { t: 'pong' })
       case 'move':
         return this.move(ws, seat, msg, now)
+      case 'ride':
+        return this.ride(ws, seat, msg, now)
       case 'status':
         if (!seat.person) return this.send(ws, GHOST)
         if (this.muted(seat.userId, now)) return this.send(ws, MUTED)
@@ -1069,6 +1094,38 @@ export class DistrictDO extends DurableObject<Env> {
       this.dirty.add(ws)
       this.batch ??= setTimeout(() => this.flush(), MOVE_BATCH_MS)
     }
+  }
+
+  /**
+   * The auto-taxi. Given only from where the rider stands (a walk on from the last accepted point, as a move
+   * would be) within `TAXI_RANGE_M` of one of this district's stands, to one of its landmarks, and not from a
+   * bench. The rider is then set down at the landmark's drop point, from `TAXI`, with what was left of their
+   * walking burst at the stand (a ride refills none): nothing the client says decides where they land. Seen,
+   * they leave the street now and come back with their next move, beside the landmark (`arriving` in `move`),
+   * so nobody watches them slide across the district.
+   */
+  private ride(ws: WebSocket, seat: Seat, m: Extract<ClientMsg, { t: 'ride' }>, now: number): void {
+    seat.seen = now
+    const line = TAXI[seat.district]
+    const drop = Object.hasOwn(line.drops, m.to) ? line.drops[m.to] : undefined
+    const last = seat.pos
+    const at = { x: round(m.x, 100), z: round(m.z, 100) }
+    // what is left of the walking burst once at the stand: the ride carries it over, never refills it
+    const left = last
+      ? Math.min(SPEED_BURST_M, last.budget + (MAX_SPEED * Math.max(0, now - last.at)) / 1000) -
+        Math.hypot(at.x - last.x, at.z - last.z)
+      : -1
+    if (!drop || left < 0 || seat.bench || !line.stands.some((s) => !far(at, s, TAXI_RANGE_M))) {
+      this.keep(ws, seat, now)
+      return this.send(ws, NO_RIDE)
+    }
+    seat.pos = { x: drop.x, z: drop.z, ry: drop.ry, at: now, budget: left }
+    this.dirty.delete(ws)
+    if (seat.shown) {
+      seat.shown = false
+      this.broadcast({ t: 'leave', id: seat.userId! }, seat.userId, ws)
+    }
+    this.write(ws, seat)
   }
 
   /**
