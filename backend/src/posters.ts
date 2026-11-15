@@ -23,8 +23,18 @@ import { isVerified } from './trust'
 export const POSTERS_PER_DAY = 5
 /** The counter `POSTERS_PER_DAY` is kept in (see `allow`). */
 export const POSTER_BUCKET = 'poster'
-/** Posters one person may have up at once (hidden ones included, until they expire or an admin acts). */
+/**
+ * Posters one person may have up at once (hidden ones included, until they expire, an admin acts or their owner
+ * takes them down: the owner's own list still shows them, marked `hidden`).
+ */
 export const MAX_LIVE_POSTERS = 2
+/**
+ * How long a poster's owner is remembered after it comes down (`poster_owners`, written by a trigger on every
+ * delete): a block made from a poster that went meanwhile still finds them. The cron forgets them after this.
+ */
+export const TOMBSTONE_MS = 7 * DAY_MS
+/** How long the edge keeps a district's signed-out poster list (its `max-age` too). */
+export const PUBLIC_WALLS_S = 30
 /**
  * Poster auto-hide: this many distinct reporters, each verified, not banned, with an account at least
  * `accountAge` old and not blocked by the poster's owner, take a poster off every wall until an admin acts.
@@ -79,12 +89,33 @@ function parse(raw: unknown, now: number): Parsed | { field: string } {
 const stub = (env: Env, district: DistrictId) => env.DISTRICT.get(env.DISTRICT.idFromName(district))
 
 /**
+ * A district's signed-out list in the edge cache: one entry per district, whatever the query string, so the
+ * public list cannot be used to hammer D1. The host is ours alone: nothing is ever fetched from it.
+ */
+const wallKey = (district: DistrictId) => new Request(`https://walls.gulabi-gali.internal/${district}`)
+
+/**
+ * Drops these districts' signed-out lists from this location's edge cache, after anything on their walls changed
+ * (other locations keep theirs for at most `PUBLIC_WALLS_S`). Never throws.
+ */
+export async function forgetWalls(districts: Iterable<DistrictId>): Promise<void> {
+  await Promise.all(
+    [...new Set(districts)].map((d) =>
+      caches.default
+        .delete(wallKey(d))
+        .catch((err: unknown) => console.error('posters: cache forget failed', err)),
+    ),
+  )
+}
+
+/**
  * Tells each district that these posters came down (its sockets drop them). Never throws: the poster is
  * already gone from D1, and a district that missed it shows it only until its people next fetch the walls.
  */
 export async function tellRemoved(env: Env, gone: readonly Placed[]): Promise<void> {
   const by = new Map<DistrictId, string[]>()
   for (const p of gone) by.set(p.district, [...(by.get(p.district) ?? []), p.id])
+  await forgetWalls(by.keys())
   await Promise.all(
     [...by].map(([district, ids]) =>
       stub(env, district)
@@ -103,6 +134,7 @@ async function tellAdded(
   gone: string[],
 ): Promise<void> {
   try {
+    await forgetWalls([district])
     await stub(env, district).posterAdded(poster, owner, gone)
   } catch (err) {
     console.error('posters: add notice failed', district, err)
@@ -111,13 +143,17 @@ async function tellAdded(
 
 /** How many posters `owner` has up at `now`, as SQL (`?1` the owner, `?2` now). */
 const LIVE_OF = 'SELECT COUNT(*) AS n FROM posters WHERE owner = ?1 AND expires_at > ?2'
+/** Whether `owner` (`?1`) may still pin, as SQL: verified and seen by others (a ban, hide or delete undoes it). */
+const MAY_PIN = `EXISTS (SELECT 1 FROM users u JOIN profiles p ON p.user_id = u.id
+  WHERE u.id = ?1 AND ${VISIBLE} AND u.verified = 1)`
 
 /**
  * Puts the poster up on its wall. Expired posters there are cleared first. A free slot is used if there is
  * one; on a full wall the oldest poster not the pinner's own goes (a hidden one before any other), and the new
  * one takes its slot. Taking it down and putting this up are one transaction, both guarded by the pinner still
- * having room for one more, so a lost race never removes a poster for nothing. Null when the slot was taken
- * meanwhile (the unique index refused it: try again); `limit` when the pinner no longer has room.
+ * having room for one more and still being allowed to pin (`MAY_PIN`: a ban, hide, unverify or delete that lands
+ * meanwhile), so a lost race never removes a poster for nothing, nor puts one up for someone it must not. Null
+ * when the slot was taken meanwhile (the unique index refused it: try again); `limit` when the guard refused.
  */
 async function place(
   env: Env,
@@ -150,7 +186,7 @@ async function place(
     victim = oldest.id
     slot = oldest.slot
   }
-  const room = `(${LIVE_OF}) < ${MAX_LIVE_POSTERS}`
+  const room = `(${LIVE_OF}) < ${MAX_LIVE_POSTERS} AND ${MAY_PIN}`
   let results: D1Result[]
   try {
     results = await env.DB.batch([
@@ -220,9 +256,13 @@ export async function pinPoster(
     if (placed === null) continue
     if (placed === 'limit') {
       await refund(env, userId, POSTER_BUCKET, DAY_MS, now)
+      // Refused by the guard: no room, or no longer someone who may pin at all.
+      if (!(await visibleRow(env, userId))) return fail('ghost', 403)
+      if (!(await isVerified(env, userId))) return fail('not-verified', 403)
       return fail('limit', 409)
     }
     const poster: PosterView = { ...view, slot: placed.slot }
+    await forgetWalls([p.district])
     later(tellAdded(env, p.district, poster, userId, placed.gone))
     return Response.json({ ...poster, mine: true } satisfies PosterView, { status: 201 })
   }
@@ -234,7 +274,10 @@ export async function pinPoster(
  * `GET /api/districts/:id/posters`: every poster up in the district, wall by wall: text, time, first name.
  * Public. Not the hidden or expired ones, nor those of anyone others may no longer see (banned, hidden). For a
  * signed-in `viewer`, not those of anyone blocked either way with them, and their own marked `mine`: such a
- * list is theirs alone, so it is never cached; the signed-out one is, for 30 s.
+ * list is theirs alone, so it is never cached; the signed-out one is, for `PUBLIC_WALLS_S` (see
+ * `publicPosters`). The viewer's own hidden posters (auto-hidden by reports, or theirs while they are hidden)
+ * are on their list too, marked `hidden`: they still count toward the two, so they must be able to take them
+ * down. Nobody else is ever sent one.
  */
 export async function listPosters(
   env: Env,
@@ -244,9 +287,10 @@ export async function listPosters(
 ): Promise<Response> {
   if (!isDistrict(district)) return fail('not found', 404)
   const { results } = await env.DB.prepare(
-    `SELECT po.id, po.owner, po.wall, po.slot, po.text, po.at_when, p.name FROM posters po
+    `SELECT po.id, po.owner, po.wall, po.slot, po.text, po.at_when, p.name,
+       (po.hidden = 0 AND ${VISIBLE}) AS shown FROM posters po
      JOIN users u ON u.id = po.owner JOIN profiles p ON p.user_id = po.owner
-     WHERE po.district = ?1 AND po.hidden = 0 AND po.expires_at > ?2 AND ${VISIBLE}
+     WHERE po.district = ?1 AND po.expires_at > ?2 AND (po.owner = ?3 OR (po.hidden = 0 AND ${VISIBLE}))
        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.a = ?3 AND b.b = po.owner) OR (b.a = po.owner AND b.b = ?3))
      ORDER BY po.wall, po.slot LIMIT ?4`,
   )
@@ -259,6 +303,7 @@ export async function listPosters(
       text: string
       at_when: number | null
       name: string
+      shown: number
     }>()
   const out: PosterView[] = results.map((r) => ({
     id: r.id,
@@ -268,13 +313,31 @@ export async function listPosters(
     when: r.at_when,
     name: firstName(r.name),
     ...(viewer !== null && r.owner === viewer ? { mine: true as const } : {}),
+    ...(viewer !== null && r.owner === viewer && r.shown !== 1 ? { hidden: true as const } : {}),
   }))
   return Response.json(out, {
     headers: {
-      'cache-control': viewer === null ? 'public, max-age=30' : 'private, no-store',
+      'cache-control': viewer === null ? `public, max-age=${PUBLIC_WALLS_S}` : 'private, no-store',
       vary: 'Authorization',
     },
   })
+}
+
+/**
+ * The signed-out `GET /api/districts/:id/posters`, through the edge cache (see `wallKey`): at most one D1 read
+ * per district per `PUBLIC_WALLS_S` at each location. A poster that is hidden or comes down drops out of it
+ * within that, and at once at the location that made the change (see `forgetWalls`).
+ */
+export async function publicPosters(env: Env, district: string): Promise<Response> {
+  if (!isDistrict(district)) return fail('not found', 404)
+  const key = wallKey(district)
+  const hit = await caches.default.match(key).catch(() => undefined)
+  if (hit) return hit
+  const res = await listPosters(env, district, null)
+  await caches.default
+    .put(key, res.clone())
+    .catch((err: unknown) => console.error('posters: cache put failed', err))
+  return res
 }
 
 /** `DELETE /api/posters/:id`: 204 once your own poster is down, 404 for one that is not (or no longer) yours. */
@@ -290,13 +353,21 @@ export async function removeOwnPoster(
     .bind(id, userId)
     .all<Placed>()
   if (!results.length) return fail('not found', 404)
+  await forgetWalls(results.map((r) => r.district))
   later(tellRemoved(env, results))
   return new Response(null, { status: 204 })
 }
 
-/** Takes every poster of `owner` down, wherever it hangs (a ban, a deletion), as one statement for a batch. */
+/**
+ * Takes every poster of `owner` down, wherever it hangs (a ban, a deletion), as one statement for a batch. The
+ * trigger remembers each one's owner (`poster_owners`); a deletion then forgets them (see `forgetOwner`).
+ */
 export const takeDownAllOf = (env: Env, owner: string) =>
   env.DB.prepare('DELETE FROM posters WHERE owner = ? RETURNING id, district').bind(owner)
+
+/** Forgets every poster `owner` ever had (a deletion, after `takeDownAllOf`), as one statement for a batch. */
+export const forgetOwner = (env: Env, owner: string) =>
+  env.DB.prepare('DELETE FROM poster_owners WHERE owner = ?').bind(owner)
 
 /**
  * `DELETE /api/admin/posters/:id` (the caller is an admin): the poster comes down off every wall, and every
@@ -333,7 +404,10 @@ export async function posterEvidence(
 
 /**
  * Hides poster `id` once `POSTER_HIDE.reporters` distinct reporters that count (see `POSTER_HIDE`) have open
- * reports on it. True only for the call that hid it; every district is then told, through `later`.
+ * reports on it. True only for the call that hid it; every district is then told, through `later`: everyone
+ * there drops it, but its owner, who keeps it marked `hidden` (see `posterHidden`). It stays hidden until it
+ * expires, its owner takes it down, an admin takes it down, or every report on it is dismissed (see
+ * `unhidePoster`).
  */
 export async function posterAutoHide(
   env: Env,
@@ -351,28 +425,114 @@ export async function posterAutoHide(
     .bind(id, now - POSTER_HIDE.accountAge, owner)
     .first<{ n: number }>()
   if ((row?.n ?? 0) < POSTER_HIDE.reporters) return false
-  const { results } = await env.DB.prepare(
-    'UPDATE posters SET hidden = 1 WHERE id = ? AND hidden = 0 RETURNING id, district',
+  const hidden = await env.DB.prepare(
+    `UPDATE posters SET hidden = 1 WHERE id = ? AND hidden = 0
+     RETURNING id, owner, district, wall, slot, text, at_when`,
   )
     .bind(id)
-    .all<Placed>()
-  if (!results.length) return false
-  later(tellRemoved(env, results))
+    .first<PosterRow>()
+  if (!hidden) return false
+  await forgetWalls([hidden.district])
+  later(tellHidden(env, hidden))
   return true
 }
 
-/** Who owns poster `id`, if it is still up anywhere (for blocking from a poster). */
+/** A poster's row, as the hide and unhide read it back. */
+interface PosterRow {
+  id: string
+  owner: string
+  district: DistrictId
+  wall: number
+  slot: number
+  text: string
+  at_when: number | null
+}
+
+/** The poster as anyone sees it, with its owner's first name as it is now (null without a profile). */
+async function viewOf(env: Env, row: PosterRow): Promise<PosterView | null> {
+  const profile = await env.DB.prepare('SELECT name FROM profiles WHERE user_id = ?')
+    .bind(row.owner)
+    .first<{ name: string }>()
+  if (!profile) return null
+  const { id, wall, slot, text, at_when: when } = row
+  return { id, wall, slot, text, when, name: firstName(profile.name) }
+}
+
+/** Tells the poster's district it was hidden (see `posterHidden`). Never throws, like `tellRemoved`. */
+async function tellHidden(env: Env, row: PosterRow): Promise<void> {
+  try {
+    const view = await viewOf(env, row)
+    if (view) await stub(env, row.district).posterHidden(view, row.owner)
+    else await stub(env, row.district).posterRemoved([row.id])
+  } catch (err) {
+    console.error('posters: hide notice failed', row.district, err)
+  }
+}
+
+/**
+ * After an admin dismissed a report on poster `id`: once no report on it is open, and none was actioned (an admin
+ * who agreed with one keeps it down), a hidden poster goes back up, on the walls and the lists, as a fresh pin
+ * would (only for whoever may see its owner). Nothing for a poster that is not hidden, or is gone.
+ */
+export async function unhidePoster(env: Env, id: string, now = Date.now()): Promise<void> {
+  const row = await env.DB.prepare(
+    `UPDATE posters SET hidden = 0 WHERE id = ?1 AND hidden = 1
+       AND NOT EXISTS (SELECT 1 FROM reports WHERE poster_id = ?1 AND state IN ('open', 'actioned'))
+     RETURNING id, owner, district, wall, slot, text, at_when, expires_at`,
+  )
+    .bind(id)
+    .first<PosterRow & { expires_at: number }>()
+  if (!row) return
+  await forgetWalls([row.district])
+  // Its owner may have been hidden or banned meanwhile: then it stays off every wall but theirs (see `listPosters`).
+  if (row.expires_at <= now || !(await visibleRow(env, row.owner))) return
+  const view = await viewOf(env, row)
+  if (view) await tellAdded(env, row.district, view, row.owner, [])
+}
+
+/** How each of these posters stands now, for the admin's report cards: up, hidden by reports, or gone. */
+export async function posterStates(
+  env: Env,
+  ids: readonly string[],
+  now = Date.now(),
+): Promise<Map<string, 'up' | 'hidden' | 'gone'>> {
+  const out = new Map<string, 'up' | 'hidden' | 'gone'>()
+  const unique = [...new Set(ids)]
+  if (!unique.length) return out
+  const { results } = await env.DB.prepare(
+    `SELECT id, hidden FROM posters WHERE id IN (SELECT value FROM json_each(?1)) AND expires_at > ?2`,
+  )
+    .bind(JSON.stringify(unique), now)
+    .all<{ id: string; hidden: number }>()
+  for (const id of unique) out.set(id, 'gone')
+  for (const r of results) out.set(r.id, r.hidden ? 'hidden' : 'up')
+  return out
+}
+
+/**
+ * Who owns poster `id` (for blocking from a poster): its owner while it is still in D1 (up, hidden or expired),
+ * else whoever it is remembered for (`poster_owners`, for `TOMBSTONE_MS` after it came down). Null for a poster
+ * nobody remembers.
+ */
 export async function posterOwner(env: Env, id: string): Promise<string | null> {
-  const row = await env.DB.prepare('SELECT owner FROM posters WHERE id = ?')
+  const row = await env.DB.prepare(
+    `SELECT owner FROM posters WHERE id = ?1
+     UNION ALL SELECT owner FROM poster_owners WHERE poster_id = ?1 LIMIT 1`,
+  )
     .bind(id)
     .first<{ owner: string }>()
   return row?.owner ?? null
 }
 
-/** The cron's sweep: expired posters are deleted (found by `posters_expires`), and their districts told. */
+/**
+ * The cron's sweep: expired posters are deleted (found by `posters_expires`), and their districts told; owners
+ * remembered for longer than `TOMBSTONE_MS` are forgotten (found by `poster_owners_removed`).
+ */
 export async function purgePosters(env: Env, now = Date.now()): Promise<void> {
-  const { results } = await env.DB.prepare('DELETE FROM posters WHERE expires_at <= ? RETURNING id, district')
-    .bind(now)
-    .all<Placed>()
-  if (results.length) await tellRemoved(env, results)
+  const [expired] = await env.DB.batch([
+    env.DB.prepare('DELETE FROM posters WHERE expires_at <= ? RETURNING id, district').bind(now),
+    env.DB.prepare('DELETE FROM poster_owners WHERE removed_at < ?').bind(now - TOMBSTONE_MS),
+  ])
+  const gone = expired!.results as Placed[]
+  if (gone.length) await tellRemoved(env, gone)
 }

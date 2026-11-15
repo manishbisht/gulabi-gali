@@ -91,6 +91,12 @@ export const posterWhen = (at: number) => WHEN.format(at)
 
 /** Paper colours, by slot, so neighbours never match. */
 const PAPERS = ['#FFF4D6', '#FFE0E6', '#E2F3EC', '#FFEBD2', '#E8EEF8', '#F6E6FF']
+/**
+ * Your own poster that reports have hidden (only you are ever sent one): on grey paper, its words faded, so it
+ * reads as off the wall for everyone else. Its card says why.
+ */
+export const HIDDEN_PAPER = '#D6D1C9'
+const HIDDEN_INK = '#8A847B'
 
 /** The 2D context calls the wall uses: a real canvas's, or a test's stand-in. */
 export type Ctx2D = Pick<
@@ -147,16 +153,16 @@ function draw(ctx: Ctx2D, posters: ReadonlyMap<number, PosterView>): void {
   for (const [slot, p] of posters) {
     const x = (slot % COLS) * sw
     const y = Math.floor(slot / COLS) * sh
-    ctx.fillStyle = PAPERS[slot % PAPERS.length]!
+    ctx.fillStyle = p.hidden ? HIDDEN_PAPER : PAPERS[slot % PAPERS.length]!
     ctx.fillRect(x + 8, y + 8, sw - 16, sh - 16)
     const pad = 16
     const width = sw - pad * 2
-    ctx.fillStyle = PALETTE.road
+    ctx.fillStyle = p.hidden ? HIDDEN_INK : PALETTE.road
     ctx.font = '600 15px system-ui, sans-serif'
     const lines = wrap(ctx, p.text, width).slice(0, 6)
     lines.forEach((l, i) => ctx.fillText(l, x + pad, y + pad + i * 18, width))
     ctx.font = '13px system-ui, sans-serif'
-    ctx.fillStyle = PALETTE.terracotta
+    ctx.fillStyle = p.hidden ? HIDDEN_INK : PALETTE.terracotta
     const foot = p.when === null ? `— ${p.name}` : `${posterWhen(p.when)} · ${p.name}`
     ctx.fillText(foot, x + pad, y + sh - pad - 18, width)
   }

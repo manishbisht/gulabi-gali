@@ -394,8 +394,8 @@ export default function App() {
         token={auth.token}
         onBlock={async (p, stay) => {
           const done = await blockPoster(p.id, p.name)
-          if (done) posters.blocked()
-          if (done && !stay) posters.close()
+          if (done === true) posters.blocked()
+          if (done === true && !stay) posters.close()
           return done
         }}
         onTakenDown={posters.takenDown}

@@ -22,3 +22,25 @@ CREATE INDEX posters_expires ON posters(expires_at);
 ALTER TABLE reports ADD COLUMN poster_id TEXT;
 -- Poster auto-hide counts the open reports on one poster.
 CREATE INDEX reports_poster ON reports(poster_id, state) WHERE poster_id IS NOT NULL;
+
+-- Who pinned a poster that has come down, for 7 days after (the cron then deletes the row): a block made from a
+-- poster that went in the meantime still finds whom it means. Written by the trigger below on every delete from
+-- `posters` (taken down, replaced on a full wall, expired, an admin, a ban), so no way a poster leaves can miss
+-- it. `removed_at` is ms. Deleting an account deletes its rows (after its posters, so the trigger's are too).
+CREATE TABLE poster_owners (poster_id TEXT PRIMARY KEY, owner TEXT NOT NULL, removed_at INTEGER NOT NULL);
+-- An account deletion wiping its own rows.
+CREATE INDEX poster_owners_owner ON poster_owners(owner);
+-- The cron's sweep of rows past 7 days.
+CREATE INDEX poster_owners_removed ON poster_owners(removed_at);
+CREATE TRIGGER posters_tombstone AFTER DELETE ON posters
+BEGIN
+  INSERT OR REPLACE INTO poster_owners (poster_id, owner, removed_at)
+  VALUES (old.id, old.owner, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER));
+END;
+
+-- The block list's handle for each block: random, per row, and all `GET /api/blocks` and `DELETE
+-- /api/blocks/:handle` ever use, so the list never carries the blocked person's id (a block made from a poster
+-- must never tell the blocker whose it was). Rows made before this get one here.
+ALTER TABLE blocks ADD COLUMN handle TEXT;
+UPDATE blocks SET handle = lower(hex(randomblob(16))) WHERE handle IS NULL;
+CREATE UNIQUE INDEX blocks_handle ON blocks(a, handle);

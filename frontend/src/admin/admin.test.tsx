@@ -288,6 +288,41 @@ it('a poster report shows the poster as text, and taking it down clears every re
   ])
 })
 
+it('a poster report says whether its poster is hidden by reports, up, or gone', async () => {
+  const report = (id: string, posterState: AdminReport['posterState']): AdminReport => ({
+    ...chatReport,
+    id,
+    kind: 'poster',
+    unconfirmed: false,
+    posterState,
+    evidence: {
+      kind: 'poster',
+      posterId: `p-${id}`,
+      district: 'mi-road',
+      wall: 0,
+      text: 'Plan text',
+      when: null,
+    },
+  })
+  stubApi(
+    ADMIN_ROUTES({
+      'GET /api/admin/reports': () =>
+        json({
+          reports: [report('r-h', 'hidden'), report('r-u', 'up'), report('r-g', 'gone'), chatReport],
+          next: null,
+        }),
+    }),
+  )
+  const host = await render()
+  const text = (id: string) => host.querySelector(`[data-report="${id}"]`)!.textContent
+  expect(text('r-h')).toContain(
+    'Hidden from every wall by reports. Dismissing its last open report puts it back up, unless one was actioned.',
+  )
+  expect(text('r-u')).toContain('Up on the wall now.')
+  expect(text('r-g')).toContain('No longer on the wall.')
+  expect(text('r-chat')).not.toContain('on the wall')
+})
+
 it('a failed ban keeps the report open and says so', async () => {
   stubApi(ADMIN_ROUTES({ 'POST /api/admin/users/dev%3Aravi/ban': () => json({}, 500) }))
   const host = await render()

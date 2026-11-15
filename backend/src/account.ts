@@ -2,7 +2,7 @@ import { endMatch } from './chat'
 import type { Env } from './env'
 import { GATE_NAME } from './gate'
 import { floating, notify, type Later } from './inbox'
-import { takeDownAllOf, tellRemoved, type Placed } from './posters'
+import { forgetOwner, takeDownAllOf, tellRemoved, type Placed } from './posters'
 import { refreshUser } from './refresh'
 import { AUTO_HIDE, COUNTED_REPORTS } from './reports'
 
@@ -18,7 +18,8 @@ const MATCH_PASSES = 3
  *   person hears `unmatched`. Matches are looked for again (at most `MATCH_PASSES` times), so one made while
  *   this ran is held too.
  * - Then one D1 batch deletes the profile, every pending or accepted request in either direction, any match
- *   left, the invites they own, their posters (off every wall at once), the blocks they made and their counters. `ignored` requests stay with their
+ *   left, the invites they own, their posters (off every wall at once) and what was remembered of them for
+ *   blocking from a poster that came down (`poster_owners`), the blocks they made and their counters. `ignored` requests stay with their
  *   reason blanked: they are the 14-day cooldowns (a decline, an unmatch), which a delete must not wipe, and
  *   the cron sweeps them. Blocks other people made against them stay (their saved name blanked): they keep the
  *   blocker safe if this id comes back.
@@ -72,6 +73,8 @@ export async function deleteAccount(
     env.DB.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM invites WHERE owner = ?').bind(userId),
     posters,
+    // After `posters`: its trigger has just remembered them, and they must not be.
+    forgetOwner(env, userId),
     env.DB.prepare('DELETE FROM blocks WHERE a = ?').bind(userId),
     env.DB.prepare("UPDATE blocks SET name = '' WHERE b = ?").bind(userId),
     env.DB.prepare('DELETE FROM counters WHERE user_id = ?').bind(userId),

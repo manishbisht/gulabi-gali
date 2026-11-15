@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang, type StringKey } from '../i18n/strings'
+import type { BlockOutcome } from '../connections/useBlock'
 import { sendReport, type ReportError } from '../net/api'
 import {
   MAX_REPORT_NOTE,
@@ -12,18 +13,21 @@ import {
 
 interface Props {
   kind: ReportKind
-  /** The person the report is about. */
+  /** The person the report is about (a poster's id, for `poster`; a block's handle, `fromBlockList`). */
   targetId: string
+  /** `targetId` is a handle from the block list, which never carries an id: the server finds the person. */
+  fromBlockList?: boolean
   /** For a bench report: which bench. */
   bench?: string
   name: string
   lang: Lang
   token(): Promise<string | null>
   /**
-   * The block flow, offered as "Also block?" and run once the report has gone; true once blocked. Left out when
-   * they are blocked already (the block question's "Also report?" blocks before this opens).
+   * The block flow, offered as "Also block?" and run once the report has gone; true once blocked, `gone` when a
+   * poster's owner can no longer be found. Left out when they are blocked already (the block question's "Also
+   * report?" blocks before this opens).
    */
-  onBlock?(): Promise<boolean>
+  onBlock?(): Promise<BlockOutcome>
   onClose(): void
 }
 
@@ -35,25 +39,36 @@ const REASON_TEXT: Record<ReportReason, StringKey> = {
   other: 'reportOther',
 }
 
-const ERROR_TEXT: Record<ReportError | 'block', StringKey> = {
+const ERROR_TEXT: Record<ReportError | 'block' | 'block-gone', StringKey> = {
   rate: 'reportRate',
   words: 'wordsHint',
   'not-there': 'reportNotThere',
   gone: 'reportGone',
   failed: 'reportFailed',
   block: 'blockFailed',
+  'block-gone': 'blockPosterGone',
 }
 
 /**
  * The in-sheet report form (never `window.confirm`): a reason, an optional note, and "Also block?". Only the
  * reason and note are sent; the server gathers what was said or shown itself.
  */
-export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock, onClose }: Props) {
+export function ReportSheet({
+  kind,
+  targetId,
+  fromBlockList,
+  bench,
+  name,
+  lang,
+  token,
+  onBlock,
+  onClose,
+}: Props) {
   const [reason, setReason] = useState<ReportReason | null>(null)
   const [note, setNote] = useState('')
   const [alsoBlock, setAlsoBlock] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<ReportError | 'block' | null>(null)
+  const [problem, setProblem] = useState<ReportError | 'block' | 'block-gone' | null>(null)
   /** Filed; `missing` when the server no longer had the bench's record to send with it. */
   const [sent, setSent] = useState<'ok' | 'missing' | null>(null)
   const alive = useRef(true)
@@ -73,6 +88,7 @@ export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock,
     const input: ReportInput = {
       kind,
       targetId,
+      ...(fromBlockList ? { blocked: true as const } : {}),
       ...(bench ? { bench } : {}),
       reason,
       ...(text ? { note: text } : {}),
@@ -89,7 +105,7 @@ export function ReportSheet({ kind, targetId, bench, name, lang, token, onBlock,
     if (!alive.current) return
     setBusy(false)
     setSent(out.evidence === 'missing' ? 'missing' : 'ok')
-    if (!blocked) setProblem('block')
+    if (blocked !== true) setProblem(blocked === 'gone' ? 'block-gone' : 'block')
   }
 
   const title = t('reportTitle', lang, { name })

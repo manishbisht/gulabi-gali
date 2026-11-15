@@ -1,6 +1,7 @@
 import { DISTRICT_IDS } from './district'
 import type { Env } from './env'
 import { inboxOf } from './inbox'
+import { forgetWalls } from './posters'
 
 /** Why someone's live state is looked at again: what changed for them in D1. */
 export type RefreshWhy = 'block' | 'ban' | 'mute' | 'hide' | 'profile' | 'delete'
@@ -20,6 +21,9 @@ export const REFRESH_RETRY_MS = 500
  * - `delete`: their account is gone. Their sockets (districts and inbox) close with `LIVE_CLOSE.deleted`, and the
  *   gate forgets them at once.
  *
+ * A change that can take posters off the walls or put them back, or rename them (a ban, a hide, a profile, a
+ * delete), also drops every district's signed-out poster list from this location's edge cache first.
+ *
  * A target that throws is tried once more after `retryMs`. It never throws itself: it answers the targets
  * (district ids, or `inbox`) that failed twice, and logs them. For those, the districts catch up on their own:
  * each district's alarm reloads everyone connected at least every minute (`TRUST_SWEEP_MS`), so a missed ban,
@@ -33,6 +37,7 @@ export async function refreshUser(
   why: RefreshWhy,
   retryMs = REFRESH_RETRY_MS,
 ): Promise<{ failed: string[] }> {
+  if (why !== 'block' && why !== 'mute') await forgetWalls(DISTRICT_IDS)
   const targets = new Map<string, () => Promise<void>>(
     DISTRICT_IDS.map((id) => [id, () => env.DISTRICT.get(env.DISTRICT.idFromName(id)).refresh(userId, why)]),
   )

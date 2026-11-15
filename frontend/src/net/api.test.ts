@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { fetchCity, putProfile, sendMessage } from './api'
+import { blockPosterOwner, fetchCity, getPosters, putProfile, sendMessage } from './api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -50,4 +50,18 @@ it('a profile the word filter refused names the field and says it was the words'
 it('a chat message the word filter refused is typed as words', async () => {
   answer({ error: 'words', field: 'body' }, 400)
   expect(await sendMessage('tok', 'm1', 'hi')).toEqual({ ok: false, error: 'words' })
+})
+
+it('blocking from a poster nobody remembers any more is gone, not something to try again', async () => {
+  answer({ error: 'gone' }, 404)
+  expect(await blockPosterOwner('tok', 'p1')).toBe('gone')
+  vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }))
+  expect(await blockPosterOwner('tok', 'p1')).toBe(true)
+  answer({ error: 'rate' }, 429)
+  expect(await blockPosterOwner('tok', 'p1')).toBe(false)
+})
+
+it('a walls fetch whose token is refused rejects (the walls keep what they show), never reads as empty', async () => {
+  answer({ error: 'unauthorized' }, 401)
+  await expect(getPosters('university', 'stale-token')).rejects.toThrow(/401/)
 })

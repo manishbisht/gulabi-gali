@@ -440,6 +440,10 @@ export const STRINGS = {
     en: 'Slow down a little. That was a lot at once, try again in a moment.',
   },
   blockDone: { hi: '{name} block ho gaye', en: '{name} is blocked' },
+  blockPosterGone: {
+    hi: 'Ye poster ab deewar pe nahi hai, isliye block nahi hua. Wo phir dikhein to wahin se block kar dena.',
+    en: "This poster isn't up any more, so the block didn't go through. If they turn up again, block them there.",
+  },
   blockedTitle: { hi: 'Block kiye hue log', en: 'People you blocked' },
   blockedNone: { hi: 'Abhi kisi ko block nahi kiya.', en: "You haven't blocked anyone." },
   blockedLoadFailed: { hi: 'Block list nahi khul payi.', en: "Couldn't load the block list." },
@@ -633,6 +637,12 @@ export const STRINGS = {
   adminPosterAt: { hi: '{place}, deewar {n}', en: '{place}, wall {n}' },
   adminPosterWhen: { hi: 'Kab: {when}', en: 'When: {when}' },
   adminPosterRemove: { hi: 'Poster hatao', en: 'Take the poster down' },
+  adminPosterHidden: {
+    hi: 'Reports ki wajah se har deewar se chhupa hai. Aakhri khula report dismiss karoge to wapas lag jaayega, jab tak koi report action na hua ho.',
+    en: 'Hidden from every wall by reports. Dismissing its last open report puts it back up, unless one was actioned.',
+  },
+  adminPosterUp: { hi: 'Abhi deewar pe laga hai.', en: 'Up on the wall now.' },
+  adminPosterGone: { hi: 'Ab deewar pe nahi hai.', en: 'No longer on the wall.' },
   posterPin: { hi: 'Deewar pe chipkao', en: 'Pin a plan here' },
   posterEmpty: {
     hi: 'Is deewar pe abhi koi plan nahi. Pehla tum chipkao?',
@@ -660,8 +670,8 @@ export const STRINGS = {
   posterSend: { hi: 'Chipkao', en: 'Pin it' },
   posterSending: { hi: 'Chipka rahe hain…', en: 'Pinning…' },
   posterLimit: {
-    hi: 'Tumhare 2 poster pehle se lage hain. Ek utaaro, phir naya chipkao.',
-    en: 'You already have 2 posters up. Take one down to pin another.',
+    hi: 'Tumhare 2 poster pehle se lage hain (chhupe hue bhi gine jaate hain). Ek utaaro, phir naya chipkao.',
+    en: 'You already have 2 posters up (hidden ones count too). Take one down to pin another.',
   },
   posterRate: {
     hi: 'Aaj ke 5 poster ho gaye. Kal phir chipkana.',
@@ -680,6 +690,10 @@ export const STRINGS = {
   posterWhenLine: { hi: 'Kab: {when}', en: 'When: {when}' },
   posterBy: { hi: 'Chipkaya: {name}', en: 'Pinned by {name}' },
   posterMine: { hi: 'Ye tumhara poster hai.', en: 'This one is yours.' },
+  posterHiddenNote: {
+    hi: 'Ye poster abhi sirf tumhe dikh raha hai, jab tak hum ek nazar daal rahe hain. Ye tumhare 2 mein gina jaata hai; chaho to utaar do.',
+    en: 'Only you can see this poster for now, while we take a look. It still counts toward your 2, and you can take it down.',
+  },
   posterTakeDown: { hi: 'Utaaro', en: 'Take it down' },
   posterTakeDownFailed: {
     hi: 'Poster nahi utra. Dobara try karo.',

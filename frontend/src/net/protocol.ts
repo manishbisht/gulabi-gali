@@ -180,7 +180,8 @@ export type ServerMsg =
   | { t: 'pong' }
   /**
    * A poster went up on one of this district's walls (never one whose owner is blocked either way with this
-   * socket's person), or came down (taken down, hidden, replaced, expired, or its owner banned or gone).
+   * socket's person), or came down (taken down, hidden, replaced, expired, or its owner banned or gone). Its
+   * owner's own sockets hear a hidden one as an `add` marked `hidden` instead of a `remove`.
    */
   | { t: 'poster'; op: 'add'; poster: PosterView }
   | { t: 'poster'; op: 'remove'; id: string }
@@ -288,6 +289,11 @@ export interface ReportInput {
   targetId: string
   /** For `bench` only: the bench's id. */
   bench?: string
+  /**
+   * For `person` only: `targetId` is a handle from your block list (see `BlockListEntry`), not an id: the report
+   * is about whomever that block is, and their id never reaches the page.
+   */
+  blocked?: true
   reason: ReportReason
   note?: string
 }
@@ -298,6 +304,16 @@ export interface ReportInput {
 export interface ReportResult {
   autoHidden: boolean
   evidence?: 'missing'
+}
+
+/**
+ * One entry of `GET /api/blocks`: an opaque handle for the block (random, per block, the only thing `DELETE
+ * /api/blocks/:handle` takes), and the first name saved when it was made (null: none was). Never the blocked
+ * person's id: a block made from a poster must not tell the blocker whose poster it was.
+ */
+export interface BlockListEntry {
+  handle: string
+  name: string | null
 }
 
 /*
@@ -324,7 +340,10 @@ export const POSTER_TTL_MS = 7 * 24 * 3600 * 1000
 
 /**
  * A poster as anyone sees it: the text, its time (ms) if it has one, where it hangs, and its owner's first
- * name. Never the owner's id. `mine`: the viewer pinned it (and may take it down).
+ * name. Never the owner's id: a poster owner's id is never sent to anyone, by any route (a block made from a
+ * poster names the poster, and the block list carries only an opaque handle). `mine`: the viewer pinned it (and
+ * may take it down). `hidden`: only ever on the viewer's own (`mine`): reports have it off every wall (or its
+ * owner is hidden) until an admin looks; it still counts toward their two, and they may still take it down.
  */
 export interface PosterView {
   id: string
@@ -334,6 +353,7 @@ export interface PosterView {
   when: number | null
   name: string
   mine?: true
+  hidden?: true
 }
 /** `POST /api/posters` body. */
 export interface PosterInput {
@@ -411,6 +431,11 @@ export interface AdminReport {
   reporter: AdminUser
   target: AdminUser
   evidence: AdminEvidence | null
+  /**
+   * For a poster report: how its poster stands now. `hidden`: off every wall by reports (dismissing the last
+   * open report on it, with none actioned, puts it back up); `gone`: taken down or expired.
+   */
+  posterState?: 'up' | 'hidden' | 'gone'
 }
 
 /** `GET /api/admin/reports`: 20 at a time; `next` is an opaque cursor for the page after, or null. */

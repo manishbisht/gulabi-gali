@@ -96,7 +96,7 @@ it('PersonCard: a failed block keeps the sheet and says so', async () => {
 })
 
 it('ProfileSheet lists the people you blocked by first name, and Unblock removes one', async () => {
-  const blocked = [{ id: 'p9', name: 'Meera' }]
+  const blocked = [{ handle: 'h9', name: 'Meera' }]
   const calls: string[] = []
   vi.stubGlobal(
     'fetch',
@@ -136,7 +136,7 @@ it('ProfileSheet lists the people you blocked by first name, and Unblock removes
   await settle()
   expect(host.querySelector('.blocked-list')?.textContent).toContain('Meera')
   await act(async () => button(host, 'Unblock').click())
-  expect(calls).toContain('DELETE /blocks/p9')
+  expect(calls).toContain('DELETE /blocks/h9')
   expect(host.querySelector('.blocked-list')?.textContent).toContain("You haven't blocked anyone")
 })
 
@@ -147,7 +147,7 @@ it('ProfileSheet: Report next to Unblock files a report about the person you blo
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = url.replace(/^.*\/api/, '')
       calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-      return path === '/reports' ? json({ autoHidden: false }, 201) : json([{ id: 'p9', name: 'Meera' }])
+      return path === '/reports' ? json({ autoHidden: false }, 201) : json([{ handle: 'h9', name: 'Meera' }])
     }),
   )
   const me: Me = {
@@ -186,9 +186,11 @@ it('ProfileSheet: Report next to Unblock files a report about the person you blo
   await act(async () => button(form as HTMLElement, 'Spam').click())
   await act(async () => button(form as HTMLElement, 'Send report').click())
   await settle()
+  // the list has only the block's handle, never their id: the report names the block
   expect(calls.find((c) => c.path === '/reports')?.body).toEqual({
     kind: 'person',
-    targetId: 'p9',
+    targetId: 'h9',
+    blocked: true,
     reason: 'spam',
   })
 })

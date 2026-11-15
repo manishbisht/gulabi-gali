@@ -12,7 +12,7 @@ import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
-import { listPosters, pinPoster, purgePosters, removeOwnPoster } from './posters'
+import { listPosters, pinPoster, publicPosters, purgePosters, removeOwnPoster } from './posters'
 import { fileReport, purgeReportEvidence } from './reports'
 import { devVerify, listInvites, redeemInvite } from './trust'
 import { activeRow, bannedGate, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
@@ -156,9 +156,16 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   const user = await resolveUser(request, env)
   // Before the 401: signed out, signed in or not an admin, the console is a plain 404 (see `handleAdmin`).
   if (pathname.startsWith('/api/admin/')) return handleAdmin(request, env, url, user, later)
-  // Public, ghosts included; with a token it is that person's own list (see `listPosters`).
+  // Public, ghosts included, through the edge cache (see `publicPosters`); with a token it is that person's own
+  // list (see `listPosters`). A token that does not verify is a 401, never the public list: the page keeps the
+  // walls it has rather than show someone they blocked.
   const posters = pathname.match(/^\/api\/districts\/([^/]+)\/posters$/)
-  if (posters && method === 'GET') return listPosters(env, posters[1]!, user?.id ?? null)
+  if (posters && method === 'GET') {
+    if (user) return listPosters(env, posters[1]!, user.id)
+    if (request.headers.has('Authorization') || url.searchParams.has('token'))
+      return Response.json({ error: 'unauthorized' }, { status: 401 })
+    return publicPosters(env, posters[1]!)
+  }
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
   if (pathname === '/api/me' && method === 'GET') {
     const slow = (await bootstrapLimit(env, request, user.id)) ?? (await bannedGate(env, user.id))

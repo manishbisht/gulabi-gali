@@ -245,12 +245,12 @@ describe('delete my account', () => {
       ).status,
     ).toBe(204)
     expect(await (await api('/api/blocks', blocker)).json()).toEqual([
-      { id: devId('Named Nita'), name: 'Named' },
+      { handle: expect.any(String), name: 'Named' },
     ])
     await del(gone)
     // No name left: the page says "Koi" / "Someone".
     expect(await (await api('/api/blocks', blocker)).json()).toEqual([
-      { id: devId('Named Nita'), name: null },
+      { handle: expect.any(String), name: null },
     ])
   })
 

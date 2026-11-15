@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { t, type Lang } from '../i18n/strings'
+import { t, type Lang, type StringKey } from '../i18n/strings'
 import type { AdminEvidence, AdminReport, AdminUser } from '../net/protocol'
 import { DISTRICT_NAMES } from '../world/districtNames'
 import { actOn, closeReport, getReports, KINDS, REASONS, removePoster, when, type Token } from './adminApi'
@@ -54,6 +54,13 @@ function Evidence({ evidence, lang }: { evidence: AdminEvidence | null; lang: La
     </>
   )
 }
+
+/** How a reported poster stands now: so the admin knows what dismissing (or taking it down) will do. */
+const POSTER_STATE = {
+  hidden: 'adminPosterHidden',
+  up: 'adminPosterUp',
+  gone: 'adminPosterGone',
+} as const satisfies Record<NonNullable<AdminReport['posterState']>, StringKey>
 
 /**
  * One report: who filed it, who it is about (as they are now), the note and the evidence, then its actions.
@@ -142,6 +149,11 @@ function ReportCard({
       )}
       <h3>{t('adminEvidence', lang)}</h3>
       <Evidence evidence={report.evidence} lang={lang} />
+      {report.posterState && (
+        <p className={report.posterState === 'hidden' ? 'admin-flag' : 'admin-empty'}>
+          {t(POSTER_STATE[report.posterState], lang)}
+        </p>
+      )}
       {asking ? (
         <ConfirmBan
           name={target.profile?.name ?? target.id}

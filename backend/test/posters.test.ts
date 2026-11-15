@@ -2,7 +2,16 @@ import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { DAY_MS } from '../src/limits'
-import { listPosters, pinPoster, POSTER_BUCKET, POSTERS_PER_DAY, purgePosters } from '../src/posters'
+import { DISTRICT_IDS } from '../src/district'
+import {
+  forgetWalls,
+  listPosters,
+  pinPoster,
+  POSTER_BUCKET,
+  POSTERS_PER_DAY,
+  purgePosters,
+  TOMBSTONE_MS,
+} from '../src/posters'
 import { refreshUser } from '../src/refresh'
 import { windowStart } from '../src/limits'
 import { POSTER_SLOTS, type PosterView } from '../src/protocol'
@@ -22,6 +31,8 @@ beforeAll(async () => {
 // Each test starts with bare walls: six slots go fast.
 beforeEach(async () => {
   await db.prepare('DELETE FROM posters').run()
+  // The signed-out list is cached at the edge: rows deleted behind its back must not linger in it.
+  await forgetWalls(DISTRICT_IDS)
 })
 afterEach(() => settle())
 
@@ -59,6 +70,16 @@ const report = (token: string, posterId: string) =>
     body: JSON.stringify({ kind: 'poster', targetId: posterId, reason: 'spam' }),
   })
 const asOwner = async (path: string, init: RequestInit = {}) => api(path, await login('Owner'), init)
+/** Three verified reporters, each a week old, report `posterId`: enough to hide it. */
+async function hideByReports(posterId: string, prefix: string) {
+  for (const n of [1, 2, 3]) {
+    const name = `${prefix} R${n}` // short: a dev login keeps 24 characters of a name
+    const token = await resident(name)
+    await ageAccount(devId(name), 8)
+    expect((await report(token, posterId)).status).toBe(201)
+  }
+  expect(await count('SELECT hidden AS n FROM posters WHERE id = ?', posterId)).toBe(1)
+}
 
 describe('posters', () => {
   it('verified can pin, residents cannot', async () => {
@@ -300,7 +321,11 @@ describe('posters', () => {
     await sockets.neutral!.next('posters', undefined, nina)
     await sockets.owner!.next('posters', undefined, om)
     expect(await ids(neutral)).not.toContain(poster.id)
-    await api(`/api/blocks/${encodeURIComponent(ownerId)}`, neutral, { method: 'DELETE' })
+    const { handle } = (await db
+      .prepare('SELECT handle FROM blocks WHERE a = ? AND b = ?')
+      .bind(devId('Block Poster Nina'), ownerId)
+      .first<{ handle: string }>())!
+    await api(`/api/blocks/${handle}`, neutral, { method: 'DELETE' })
     expect(await ids(neutral)).toContain(poster.id)
 
     // Blocking from a poster: the owner's id never leaves the server, the poster's is enough.
@@ -312,8 +337,10 @@ describe('posters', () => {
     })
     expect(by.status).toBe(204)
     expect(await ids(fresh)).not.toContain(poster.id)
-    const list = (await (await api('/api/blocks', fresh)).json()) as { id: string; name: string }[]
-    expect(list).toEqual([{ id: ownerId, name: 'Block' }])
+    // Nor does it come back by the block list: a handle and the first name, never their id.
+    const list = await (await api('/api/blocks', fresh)).text()
+    expect(list).not.toContain(ownerId)
+    expect(JSON.parse(list)).toEqual([{ handle: expect.any(String), name: 'Block' }])
   })
 
   it('auto-hide needs 3 verified reporters, a week old, whom the owner has not blocked', async () => {
@@ -491,5 +518,271 @@ describe('posters', () => {
     expect((await api('/api/me', token, { method: 'DELETE' })).status).toBe(204)
     expect(await count('SELECT COUNT(*) AS n FROM posters WHERE owner = ?', id)).toBe(0)
     await watcher.next('poster', (m) => m.op === 'remove' && m.id === poster.id)
+  })
+  it('an auto-hidden poster still counts, and only its owner sees it, marked hidden, and can take it down', async () => {
+    const owner = await resident('Hidden Poster Owner Om')
+    const ownerId = devId('Hidden Poster Owner Om')
+    const poster = (await (await pin(owner, { text: 'Weekend trek, all welcome' })).json()) as PosterView
+    const other = (await (await pin(owner, { text: 'Another weekend trek plan' })).json()) as PosterView
+    const ownSocket = await live('university', { token: owner })
+    ownSocket.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await ownSocket.sync()
+    const watcher = await live('university', { token: await resident('Hidden Poster Watcher') })
+    watcher.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await watcher.sync()
+    const [o, w] = [ownSocket.mark(), watcher.mark()]
+    await hideByReports(poster.id, 'Hidden Poster')
+
+    // Everyone else hears it go; the owner's own sockets hear it stay, marked hidden.
+    await watcher.next('poster', (m) => m.op === 'remove' && m.id === poster.id, w)
+    const own = await ownSocket.next('poster', (m) => m.op === 'add' && m.poster.id === poster.id, o)
+    expect(own).toEqual({ t: 'poster', op: 'add', poster: { ...poster, mine: true, hidden: true } })
+    expect(ownSocket.all('poster').some((m) => m.op === 'remove' && m.id === poster.id)).toBe(false)
+
+    // The owner's list has it, marked; nobody else's does, signed in or out, and nothing else is marked.
+    const mineNow = await listed('university', owner)
+    expect(mineNow.find((p) => p.id === poster.id)).toEqual({ ...poster, mine: true, hidden: true })
+    expect(mineNow.find((p) => p.id === other.id)).toEqual({ ...other, mine: true })
+    expect((await listed('university')).map((p) => p.id)).not.toContain(poster.id)
+    const theirs = await listed('university', await resident('Hidden Poster Stranger'))
+    expect(theirs.map((p) => p.id)).not.toContain(poster.id)
+    expect(JSON.stringify(theirs)).not.toContain('hidden')
+
+    // It still counts toward the two: no third.
+    expect(await (await pin(owner, { text: 'A third plan, too many' })).json()).toEqual({ error: 'limit' })
+    // Taken down by its owner, it makes room again.
+    expect((await api(`/api/posters/${poster.id}`, owner, { method: 'DELETE' })).status).toBe(204)
+    expect((await pin(owner, { text: 'A third plan, now there is room' })).status).toBe(201)
+    expect(await count('SELECT COUNT(*) AS n FROM posters WHERE owner = ?', ownerId)).toBe(2)
+  })
+
+  it('the admin sees a poster is hidden, and dismissing its last open report puts it back up', async () => {
+    const owner = await resident('Dismiss Poster Owner')
+    const ownerId = devId('Dismiss Poster Owner')
+    const poster = (await (await pin(owner, { text: 'Open mic at the cafe' })).json()) as PosterView
+    const watcher = await live('university', { token: await resident('Dismiss Poster Watcher') })
+    watcher.send({ t: 'move', x: 0, z: 0, ry: 0 })
+    await watcher.sync()
+    await hideByReports(poster.id, 'Dismiss Poster')
+
+    const open = async () =>
+      (
+        (await (await asOwner('/api/admin/reports?state=open')).json()) as {
+          reports: { id: string; kind: string; target: { id: string }; posterState?: string }[]
+        }
+      ).reports.filter((r) => r.kind === 'poster' && r.target.id === ownerId)
+    const reports = await open()
+    expect(reports).toHaveLength(3)
+    expect(reports.every((r) => r.posterState === 'hidden')).toBe(true)
+
+    // Two dismissed: one is still open, so it stays hidden.
+    for (const r of reports.slice(0, 2))
+      expect((await asOwner(`/api/admin/reports/${r.id}/dismiss`, { method: 'POST' })).status).toBe(200)
+    expect(await count('SELECT hidden AS n FROM posters WHERE id = ?', poster.id)).toBe(1)
+    expect((await listed('university')).map((p) => p.id)).not.toContain(poster.id)
+
+    // The last one: back up, on the list and on every wall in the district at once.
+    const from = watcher.mark()
+    expect((await asOwner(`/api/admin/reports/${reports[2]!.id}/dismiss`, { method: 'POST' })).status).toBe(
+      200,
+    )
+    expect(await count('SELECT hidden AS n FROM posters WHERE id = ?', poster.id)).toBe(0)
+    const back = await watcher.next('poster', (m) => m.op === 'add' && m.poster.id === poster.id, from)
+    expect(back).toEqual({ t: 'poster', op: 'add', poster: { ...poster, mine: undefined } })
+    expect((await listed('university')).map((p) => p.id)).toContain(poster.id)
+    expect((await listed('university', owner)).find((p) => p.id === poster.id)).toEqual({
+      ...poster,
+      mine: true,
+    })
+
+    // Once up, the admin view says so; once gone, that too.
+    const fresh = await resident('Dismiss Poster Late')
+    expect((await report(fresh, poster.id)).status).toBe(201)
+    expect((await open()).map((r) => r.posterState)).toEqual(['up'])
+    await api(`/api/posters/${poster.id}`, owner, { method: 'DELETE' })
+    expect((await open()).map((r) => r.posterState)).toEqual(['gone'])
+  })
+
+  it('a poster whose report an admin actioned stays hidden when the rest are dismissed', async () => {
+    const owner = await resident('Actioned Poster Owner')
+    const ownerId = devId('Actioned Poster Owner')
+    const poster = (await (await pin(owner, { text: 'Buy followers cheap here' })).json()) as PosterView
+    await hideByReports(poster.id, 'Actioned Poster')
+    const { results } = await db
+      .prepare("SELECT id FROM reports WHERE poster_id = ? AND state = 'open' ORDER BY id")
+      .bind(poster.id)
+      .all<{ id: string }>()
+    expect((await asOwner(`/api/admin/reports/${results[0]!.id}/action`, { method: 'POST' })).status).toBe(
+      200,
+    )
+    for (const r of results.slice(1))
+      expect((await asOwner(`/api/admin/reports/${r.id}/dismiss`, { method: 'POST' })).status).toBe(200)
+    expect(await count('SELECT hidden AS n FROM posters WHERE id = ?', poster.id)).toBe(1)
+    expect((await listed('university')).map((p) => p.id)).not.toContain(poster.id)
+    expect(await count('SELECT COUNT(*) AS n FROM posters WHERE owner = ?', ownerId)).toBe(1)
+  })
+
+  it('blocking from a poster that has come down still blocks its owner, however it came down', async () => {
+    const blocker = await resident('Gone Poster Blocker')
+    const blockerId = devId('Gone Poster Blocker')
+    const blockFrom = (posterId: string) =>
+      api('/api/blocks', blocker, { method: 'POST', body: JSON.stringify({ poster: posterId }) })
+    const blocks = (b: string) =>
+      count('SELECT COUNT(*) AS n FROM blocks WHERE a = ? AND b = ?', blockerId, b)
+    const tombstone = (id: string) =>
+      db.prepare('SELECT owner, removed_at FROM poster_owners WHERE poster_id = ?').bind(id).first<{
+        owner: string
+        removed_at: number
+      }>()
+    const now = Date.now()
+    const ways: Record<string, (id: string, token: string, owner: string) => Promise<unknown>> = {
+      'taken down': (id, token) => api(`/api/posters/${id}`, token, { method: 'DELETE' }),
+      'an admin': (id) => asOwner(`/api/admin/posters/${id}`, { method: 'DELETE' }),
+      expired: async (id) => {
+        await sql('UPDATE posters SET expires_at = ? WHERE id = ?', now - 1, id)
+        await purgePosters(testEnv, now)
+      },
+      banned: (_id, _token, owner) =>
+        asOwner(`/api/admin/users/${encodeURIComponent(owner)}/ban`, { method: 'POST' }),
+    }
+    for (const [how, takeDown] of Object.entries(ways)) {
+      const name = `Gone Poster ${how}`
+      const token = await resident(name)
+      const owner = devId(name)
+      const poster = (await (
+        await pin(token, { text: `A plan that comes down: ${how}` })
+      ).json()) as PosterView
+      await takeDown(poster.id, token, owner)
+      expect(await count('SELECT COUNT(*) AS n FROM posters WHERE id = ?', poster.id), how).toBe(0)
+      expect((await tombstone(poster.id))?.owner, how).toBe(owner)
+      expect((await tombstone(poster.id))!.removed_at, how).toBeGreaterThanOrEqual(now - 1000)
+      const res = await blockFrom(poster.id)
+      expect(res.status, how).toBe(204)
+      expect(await blocks(owner), how).toBe(1)
+    }
+
+    // Replaced on a full wall: the one that went is remembered too.
+    const here = { district: 'walled-city', wall: 2 }
+    const fill: PosterView[] = []
+    for (let i = 0; i < POSTER_SLOTS; i++) {
+      const n = `Gone Poster Fill ${i}`
+      await resident(n)
+      fill.push((await (await pinAt(devId(n), now + i, here)).json()) as PosterView)
+    }
+    await resident('Gone Poster Late')
+    expect((await pinAt(devId('Gone Poster Late'), now + 10, here)).status).toBe(201)
+    expect((await tombstone(fill[0]!.id))?.owner).toBe(devId('Gone Poster Fill 0'))
+    expect((await blockFrom(fill[0]!.id)).status).toBe(204)
+    expect(await blocks(devId('Gone Poster Fill 0'))).toBe(1)
+
+    // A poster nobody ever pinned (or whose memory has gone): 404, and the page says the block failed.
+    const unknown = await blockFrom('no-such-poster')
+    expect(unknown.status).toBe(404)
+    expect(await unknown.json()).toEqual({ error: 'gone' })
+
+    // The cron forgets them after 7 days, and then there is nobody left to block.
+    await sql(
+      'UPDATE poster_owners SET removed_at = ? WHERE poster_id = ?',
+      now - TOMBSTONE_MS - 1,
+      fill[0]!.id,
+    )
+    await purgePosters(testEnv, now)
+    expect(await tombstone(fill[0]!.id)).toBeNull()
+    expect(await tombstone(fill[1]!.id)).toBeNull() // still up: never a tombstone
+    expect(
+      await count('SELECT COUNT(*) AS n FROM poster_owners WHERE removed_at >= ?', now - 1000),
+    ).toBeGreaterThan(0)
+    const forgotten = await api('/api/blocks', await resident('Gone Poster Blocker 2'), {
+      method: 'POST',
+      body: JSON.stringify({ poster: fill[0]!.id }),
+    })
+    expect(forgotten.status).toBe(404)
+  })
+
+  it("deleting an account wipes what is remembered of its posters' owner", async () => {
+    const token = await resident('Wiped Poster Wanda')
+    const id = devId('Wiped Poster Wanda')
+    const old = (await (await pin(token, { text: 'An older plan, taken down' })).json()) as PosterView
+    await api(`/api/posters/${old.id}`, token, { method: 'DELETE' })
+    const up = (await (await pin(token, { text: 'A plan still up at the end' })).json()) as PosterView
+    expect(await count('SELECT COUNT(*) AS n FROM poster_owners WHERE owner = ?', id)).toBe(1)
+    expect((await api('/api/me', token, { method: 'DELETE' })).status).toBe(204)
+    expect(await count('SELECT COUNT(*) AS n FROM posters WHERE owner = ?', id)).toBe(0)
+    expect(await count('SELECT COUNT(*) AS n FROM poster_owners WHERE owner = ?', id)).toBe(0)
+    const blocker = await resident('Wiped Poster Blocker')
+    for (const p of [old, up])
+      expect(
+        (await api('/api/blocks', blocker, { method: 'POST', body: JSON.stringify({ poster: p.id }) }))
+          .status,
+      ).toBe(404)
+  })
+
+  it('a ban, hide or unverify that lands mid-pin never leaves the poster up', async () => {
+    const turns: Record<string, string> = {
+      banned: 'banned = 1',
+      hidden: 'hidden = 1',
+      unverified: 'verified = 0',
+    }
+    for (const [how, change] of Object.entries(turns)) {
+      const name = `Race Poster ${how}`
+      await resident(name)
+      const id = devId(name)
+      // Every check before the pin passes; the change lands just before the pin's own write.
+      const racing = new Proxy(db, {
+        get(target, key) {
+          if (key === 'batch')
+            return async (statements: D1PreparedStatement[]) => {
+              await target.prepare(`UPDATE users SET ${change} WHERE id = ?`).bind(id).run()
+              return target.batch(statements)
+            }
+          const value = Reflect.get(target, key) as unknown
+          return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value
+        },
+      })
+      const raced = new Proxy(testEnv, { get: (t, k) => (k === 'DB' ? racing : Reflect.get(t, k)) })
+      const res = await pinPoster(
+        raced,
+        id,
+        { district: 'mi-road', wall: 0, text: PLAN },
+        undefined,
+        Date.now(),
+      )
+      expect(res.status, how).toBe(403)
+      expect(await count('SELECT COUNT(*) AS n FROM posters WHERE owner = ?', id), how).toBe(0)
+    }
+  })
+
+  it('a token that does not verify gets a 401 for the walls, not the public list', async () => {
+    expect((await wall('university')).status).toBe(200)
+    const bad = await wall('university', 'dev.not-a-real-token')
+    expect(bad.status).toBe(401)
+    expect(await bad.json()).toEqual({ error: 'unauthorized' })
+  })
+
+  it('the signed-out list is cached at the edge for 30 s, by district alone', async () => {
+    const token = await resident('Cache Poster Chanda')
+    const first = (await (await pin(token, { text: 'Cached plan number one' })).json()) as PosterView
+    expect((await listed('university')).map((p) => p.id)).toEqual([first.id])
+    // Written behind the API's back (nothing tells the cache): the signed-out list keeps its copy, whatever
+    // the query string; a signed-in list is never cached.
+    const sneaky = crypto.randomUUID()
+    await sql(
+      `INSERT INTO posters (id, owner, district, wall, slot, text, at_when, created_at, expires_at)
+       VALUES (?, ?, 'university', 0, 5, 'Sneaked in behind the cache', NULL, ?, ?)`,
+      sneaky,
+      devId('Cache Poster Chanda'),
+      Date.now(),
+      Date.now() + DAY_MS,
+    )
+    expect((await listed('university')).map((p) => p.id)).toEqual([first.id])
+    const queried = await SELF.fetch(`${API}/api/districts/university/posters?bust=${Date.now()}`)
+    expect(queried.headers.get('cache-control')).toBe('public, max-age=30')
+    expect(((await queried.json()) as PosterView[]).map((p) => p.id)).toEqual([first.id])
+    expect((await listed('university', token)).map((p) => p.id)).toEqual([first.id, sneaky])
+    // Any other district is its own entry.
+    expect(await listed('mi-road')).toEqual([])
+    // A change made through the API is seen at once (here; other places within the 30 s).
+    await api(`/api/posters/${first.id}`, token, { method: 'DELETE' })
+    expect((await listed('university')).map((p) => p.id)).toEqual([sneaky])
   })
 })

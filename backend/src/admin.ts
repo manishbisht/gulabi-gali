@@ -3,7 +3,14 @@ import type { Env } from './env'
 import { GATE_NAME } from './gate'
 import { floating, type Later } from './inbox'
 import { firstName } from './names'
-import { adminRemovePoster, takeDownAllOf, tellRemoved, type Placed } from './posters'
+import {
+  adminRemovePoster,
+  posterStates,
+  takeDownAllOf,
+  tellRemoved,
+  unhidePoster,
+  type Placed,
+} from './posters'
 import type {
   AdminEvidence,
   AdminHidden,
@@ -175,6 +182,7 @@ interface ReportRow {
   state: ReportState
   closed_at: number | null
   unconfirmed: number
+  poster_id: string | null
 }
 
 /**
@@ -311,10 +319,16 @@ async function listReports(env: Env, params: URLSearchParams): Promise<Response>
     .bind(PAGE_SIZE + 1, ...(open ? [] : [state]), ...(after ?? []))
     .all<QueueRow>()
   const rows = results.slice(0, PAGE_SIZE)
-  const users = await loadUsers(
-    env,
-    rows.flatMap((r) => [r.reporter, r.target_id]),
-  )
+  const [users, posters] = await Promise.all([
+    loadUsers(
+      env,
+      rows.flatMap((r) => [r.reporter, r.target_id]),
+    ),
+    posterStates(
+      env,
+      rows.flatMap((r) => (r.poster_id ? [r.poster_id] : [])),
+    ),
+  ])
   const page: AdminReportPage = {
     reports: rows.map((r): AdminReport => ({
       id: r.id,
@@ -328,6 +342,7 @@ async function listReports(env: Env, params: URLSearchParams): Promise<Response>
       reporter: users.get(r.reporter)!,
       target: users.get(r.target_id)!,
       evidence: evidenceOf(r.evidence, users),
+      ...(r.poster_id ? { posterState: posters.get(r.poster_id) ?? 'gone' } : {}),
     })),
     next: results.length > PAGE_SIZE ? cursorOf(rows.at(-1)!, open) : null,
   }
@@ -337,16 +352,18 @@ async function listReports(env: Env, params: URLSearchParams): Promise<Response>
 /**
  * `POST /api/admin/reports/:id/{dismiss|action}`: closes an open report (the cron then clears its evidence).
  * Closing one already closed changes nothing and answers how it stands: a double tap, or the other button
- * after, is a 200. Actioning bans or mutes nobody: that is its own call.
+ * after, is a 200. Actioning bans or mutes nobody: that is its own call. Dismissing the last open report on a
+ * poster that reports hid puts it back up, unless one of its reports was actioned (see `unhidePoster`).
  */
 async function closeReport(env: Env, id: string, state: 'actioned' | 'dismissed'): Promise<Response> {
   await env.DB.prepare("UPDATE reports SET state = ?, closed_at = ? WHERE id = ? AND state = 'open'")
     .bind(state, Date.now(), id)
     .run()
-  const row = await env.DB.prepare('SELECT id, state, closed_at FROM reports WHERE id = ?')
+  const row = await env.DB.prepare('SELECT id, state, closed_at, poster_id FROM reports WHERE id = ?')
     .bind(id)
-    .first<{ id: string; state: ReportState; closed_at: number | null }>()
+    .first<{ id: string; state: ReportState; closed_at: number | null; poster_id: string | null }>()
   if (!row) return notFound()
+  if (row.state === 'dismissed' && row.poster_id) await unhidePoster(env, row.poster_id)
   const out: AdminReportClosed = { id: row.id, state: row.state, closedAt: row.closed_at }
   return Response.json(out)
 }

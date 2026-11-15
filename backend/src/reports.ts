@@ -42,6 +42,8 @@ interface Parsed {
   bench: string | null
   reason: ReportReason
   note: string
+  /** `person` only: `targetId` is a handle from the reporter's block list, not an id. */
+  blocked: boolean
 }
 
 /** The report as asked for, or null for anything malformed. Only these fields are read: never evidence. */
@@ -57,7 +59,9 @@ function parse(raw: unknown): Parsed | null {
     if (typeof b.bench !== 'string' || !benchDistrict(b.bench)) return null
     bench = b.bench
   }
-  return { kind: kind as ReportKind, targetId, bench, reason: reason as ReportReason, note }
+  const blocked = b.blocked === true
+  if (blocked && kind !== 'person') return null
+  return { kind: kind as ReportKind, targetId, bench, reason: reason as ReportReason, note, blocked }
 }
 
 /**
@@ -209,7 +213,9 @@ async function autoHide(env: Env, target: string, now: number, later: Later): Pr
  * the report that did.
  *
  * A poster report's `targetId` is the poster's id; it is filed about the poster's owner (`target_id`), so the
- * queue shows it with everything else about them, and names the poster in `poster_id`.
+ * queue shows it with everything else about them, and names the poster in `poster_id`. A `person` report with
+ * `blocked` names someone on the reporter's own block list by its handle (`GET /api/blocks` never carries an
+ * id): it is filed about whoever that block is, and a handle that is not one of theirs is 404 `not-found`.
  */
 export async function fileReport(
   env: Env,
@@ -226,6 +232,13 @@ export async function fileReport(
   let { targetId } = report
   let posterId: string | null = null
   let gathered: Gathered
+  if (report.blocked) {
+    const row = await env.DB.prepare('SELECT b FROM blocks WHERE a = ? AND handle = ?')
+      .bind(userId, targetId)
+      .first<{ b: string }>()
+    if (!row) return fail('not-found', 404)
+    targetId = row.b
+  }
   if (kind === 'poster') {
     const poster = await posterEvidence(env, targetId, now)
     if (poster?.owner === userId) return fail('invalid', 400)

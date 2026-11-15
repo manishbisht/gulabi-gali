@@ -3,7 +3,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BLOCKS_PER_HOUR } from '../src/blocks'
 import { BENCH_POSITIONS } from '../src/district'
 import type { Env } from '../src/env'
-import type { DistrictId, MatchView, PublicPerson, RequestLists } from '../src/protocol'
+import type { DistrictId, MatchView, RequestLists } from '../src/protocol'
 import { accept } from '../src/requests'
 import { api, closeAll, devId, inbox, live, login, pair, resident, type LiveClient } from './helpers'
 
@@ -16,8 +16,15 @@ afterEach(() => closeAll())
 
 const block = (token: string, id: string) =>
   api('/api/blocks', token, { method: 'POST', body: JSON.stringify({ id }) })
-const unblock = (token: string, id: string) =>
-  api(`/api/blocks/${encodeURIComponent(id)}`, token, { method: 'DELETE' })
+/** Unblocks by the list's handle (or, to show it does nothing, by anything else). */
+const unblock = (token: string, handle: string) =>
+  api(`/api/blocks/${encodeURIComponent(handle)}`, token, { method: 'DELETE' })
+/** The handle the block list gives `a`'s block of `b`, read straight from D1 (the list never says whose it is). */
+const handleOf = async (a: string, b: string) =>
+  (await testEnv.DB.prepare('SELECT handle FROM blocks WHERE a = ? AND b = ?')
+    .bind(a, b)
+    .first<{ handle: string }>())!.handle
+type Listed = { handle: string; name: string | null }
 
 async function walker(name: string, district: DistrictId, x: number): Promise<LiveClient> {
   const c = await live(district, { token: await resident(name) })
@@ -139,14 +146,41 @@ describe('block', () => {
     await block(a, bId)
     expect((await api(`/api/profiles/${encodeURIComponent(bId)}`, a)).status).toBe(404)
     expect((await api(`/api/profiles/${encodeURIComponent(aId)}`, b)).status).toBe(404)
-    const list = (await (await api('/api/blocks', a)).json()) as PublicPerson[]
-    expect(list.map((p) => p.id)).toEqual([bId])
-    expect(list[0]!.name).toBe('Prof')
+    const list = (await (await api('/api/blocks', a)).json()) as Listed[]
+    expect(list).toEqual([{ handle: await handleOf(aId, bId), name: 'Prof' }])
     expect(await (await api('/api/blocks', b)).json()).toEqual([])
-    expect((await unblock(a, bId)).status).toBe(204)
+    expect((await unblock(a, list[0]!.handle)).status).toBe(204)
     expect((await api(`/api/profiles/${encodeURIComponent(bId)}`, a)).status).toBe(200)
     expect(((await (await api('/api/matches', a)).json()) as MatchView[]).length).toBe(0)
     expect(await (await api('/api/blocks', a)).json()).toEqual([])
+  })
+
+  it('the list names each block by a handle of its own, never the person, and unblocking takes only that', async () => {
+    const { a, b, aId, bId } = await pair('Handle Anu', 'Handle Bina')
+    expect((await block(a, bId)).status).toBe(204)
+    const res = await api('/api/blocks', a)
+    const raw = await res.text()
+    expect(raw).not.toContain(bId)
+    const list = JSON.parse(raw) as Record<string, unknown>[]
+    expect(list).toHaveLength(1)
+    expect(Object.keys(list[0]!).sort()).toEqual(['handle', 'name'])
+    const handle = list[0]!.handle as string
+    expect(handle).toMatch(/^[0-9a-f-]{32,36}$/)
+    // Their id is no way to unblock (it names no row), nor is someone else's handle.
+    expect((await unblock(a, bId)).status).toBe(204)
+    expect((await unblock(b, handle)).status).toBe(204)
+    expect((await api(`/api/profiles/${encodeURIComponent(bId)}`, a)).status).toBe(404)
+    // A second block gets a handle of its own.
+    const c = await resident('Handle Chetan')
+    void c
+    await block(a, devId('Handle Chetan'))
+    const two = (await (await api('/api/blocks', a)).json()) as Listed[]
+    expect(new Set(two.map((p) => p.handle)).size).toBe(2)
+    expect((await unblock(a, handle)).status).toBe(204)
+    expect((await api(`/api/profiles/${encodeURIComponent(bId)}`, a)).status).toBe(200)
+    expect(((await (await api('/api/blocks', a)).json()) as Listed[]).map((p) => p.handle)).toEqual([
+      await handleOf(aId, devId('Handle Chetan')),
+    ])
   })
 
   it('idempotent, yourself is 400, an unknown id is 204 and stores nothing', async () => {
@@ -160,10 +194,11 @@ describe('block', () => {
     expect(rows!.n).toBe(1)
     expect((await block(a, devId('Idem Anu'))).status).toBe(400)
     expect((await block(a, 'dev:nobody-at-all')).status).toBe(204)
-    expect(((await (await api('/api/blocks', a)).json()) as PublicPerson[]).length).toBe(1)
-    expect((await unblock(a, devId('Idem Bina'))).status).toBe(204)
-    expect((await unblock(a, devId('Idem Bina'))).status).toBe(204)
-    expect((await unblock(a, 'dev:nobody-at-all')).status).toBe(204)
+    expect(((await (await api('/api/blocks', a)).json()) as Listed[]).length).toBe(1)
+    const handle = await handleOf(devId('Idem Anu'), devId('Idem Bina'))
+    expect((await unblock(a, handle)).status).toBe(204)
+    expect((await unblock(a, handle)).status).toBe(204)
+    expect((await unblock(a, 'no-such-handle')).status).toBe(204)
     expect((await api('/api/blocks', a, { method: 'POST', body: '{}' })).status).toBe(400)
   })
 
@@ -175,7 +210,7 @@ describe('block', () => {
     const { id } = (await sent.json()) as { id: string }
     expect((await api(`/api/requests/${id}/ignore`, a, { method: 'POST' })).status).toBe(204)
     await block(b, devId('Cool Anu'))
-    await unblock(b, devId('Cool Anu'))
+    await unblock(b, await handleOf(devId('Cool Bina'), devId('Cool Anu')))
     const again = await api('/api/requests', b, { method: 'POST', body })
     expect(again.status).toBe(409)
     expect(await again.json()).toEqual({ error: 'already' })
@@ -193,12 +228,13 @@ describe('block', () => {
     await testEnv.DB.prepare('UPDATE profiles SET name = ? WHERE user_id = ?')
       .bind('Renamed Later', devId('List Hidden Hari'))
       .run()
-    const list = (await (await api('/api/blocks', a)).json()) as Record<string, unknown>[]
-    const by = Object.fromEntries(list.map((p) => [p.id, p]))
-    expect(by[devId('List Hidden Hari')]).toEqual({ id: devId('List Hidden Hari'), name: 'List' })
-    expect(by[devId('List Banned Bela')]).toEqual({ id: devId('List Banned Bela'), name: 'List' })
-    expect(by[devId('List Ghost')]).toEqual({ id: devId('List Ghost'), name: null })
-    expect((await unblock(a, devId('List Ghost'))).status).toBe(204)
+    const list = (await (await api('/api/blocks', a)).json()) as Listed[]
+    const by = Object.fromEntries(list.map((p) => [p.handle, p]))
+    const of = async (n: string) => by[await handleOf(devId('List Anu'), devId(n))]
+    expect(await of('List Hidden Hari')).toEqual({ handle: expect.any(String), name: 'List' })
+    expect(await of('List Banned Bela')).toEqual({ handle: expect.any(String), name: 'List' })
+    expect(await of('List Ghost')).toEqual({ handle: expect.any(String), name: null })
+    expect((await unblock(a, (await of('List Ghost'))!.handle)).status).toBe(204)
     expect(((await (await api('/api/blocks', a)).json()) as unknown[]).length).toBe(2)
   })
 

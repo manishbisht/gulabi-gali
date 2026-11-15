@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
-import { getBlocks, unblockPerson, type BlockedPerson, type ProfileInput } from '../net/api'
-import { HERE_FOR, type HereFor, type HomeArea, type Me } from '../net/protocol'
+import { getBlocks, unblockPerson, type ProfileInput } from '../net/api'
+import { HERE_FOR, type BlockListEntry, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { ReportSheet } from '../ui/ReportSheet'
@@ -52,10 +52,10 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
   const [wordsRefused, setWordsRefused] = useState(false)
 
   /** Whom you blocked: null while loading or when it could not load. */
-  const [blocked, setBlocked] = useState<BlockedPerson[] | null>(null)
+  const [blocked, setBlocked] = useState<BlockListEntry[] | null>(null)
   const [blockedNote, setBlockedNote] = useState<'load' | 'unblock' | null>(null)
   /** Someone blocked, being reported: a block alone tells the moderator nothing. */
-  const [reporting, setReporting] = useState<BlockedPerson | null>(null)
+  const [reporting, setReporting] = useState<BlockListEntry | null>(null)
   useEffect(() => {
     if (!token || !me.complete) return
     const ctl = new AbortController()
@@ -69,10 +69,11 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
     })()
     return () => ctl.abort()
   }, [token, me.complete])
-  const unblock = async (id: string) => {
+  const unblock = async (handle: string) => {
     setBlockedNote(null)
     const tok = token ? await token().catch(() => null) : null
-    if (tok && (await unblockPerson(tok, id))) setBlocked((was) => was && was.filter((b) => b.id !== id))
+    if (tok && (await unblockPerson(tok, handle)))
+      setBlocked((was) => was && was.filter((b) => b.handle !== handle))
     else setBlockedNote('unblock')
   }
 
@@ -264,9 +265,10 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
             )}
             {reporting && (
               <ReportSheet
-                key={reporting.id}
+                key={reporting.handle}
                 kind="person"
-                targetId={reporting.id}
+                targetId={reporting.handle}
+                fromBlockList
                 name={reporting.name ?? t('blockedSomeone', lang)}
                 lang={lang}
                 token={token}
@@ -279,9 +281,9 @@ export function ProfileSheet({ me, lang, token, onSave, onClose, onSignOut, onPr
               ) : (
                 <ul>
                   {blocked.map((b) => (
-                    <li key={b.id}>
+                    <li key={b.handle}>
                       <span>{b.name ?? t('blockedSomeone', lang)}</span>
-                      <button type="button" onClick={() => void unblock(b.id)}>
+                      <button type="button" onClick={() => void unblock(b.handle)}>
                         {t('unblockButton', lang)}
                       </button>
                       <button type="button" disabled={reporting !== null} onClick={() => setReporting(b)}>

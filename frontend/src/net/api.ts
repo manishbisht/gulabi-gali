@@ -1,6 +1,7 @@
 import type {
   DistrictId,
   AvatarLookWire,
+  BlockListEntry,
   ChatError,
   ChatMessage,
   CitySnapshot,
@@ -308,10 +309,10 @@ export async function deleteMyAccount(token: string): Promise<boolean> {
   }
 }
 
-/** True once `id` is no longer blocked. Never rejects. */
-export async function unblockPerson(token: string, id: string): Promise<boolean> {
+/** True once the block the list calls `handle` is lifted (or was never one of yours). Never rejects. */
+export async function unblockPerson(token: string, handle: string): Promise<boolean> {
   try {
-    const res = await fetchNoting(`${API_BASE}/api/blocks/${encodeURIComponent(id)}`, {
+    const res = await fetchNoting(`${API_BASE}/api/blocks/${encodeURIComponent(handle)}`, {
       method: 'DELETE',
       headers: bearer(token),
     })
@@ -321,17 +322,14 @@ export async function unblockPerson(token: string, id: string): Promise<boolean>
   }
 }
 
-/** Someone the caller blocked: an id and the first name saved when they did (null: none was saved). */
-export interface BlockedPerson {
-  id: string
-  name: string | null
-}
-
-/** The people the caller has blocked, by first name. Rejects on failure. */
-export async function getBlocks(token: string, signal?: AbortSignal): Promise<BlockedPerson[]> {
+/**
+ * The blocks the caller made, by first name, each with an opaque handle (never the person's id: a block made
+ * from a poster must not say whose it was). Rejects on failure.
+ */
+export async function getBlocks(token: string, signal?: AbortSignal): Promise<BlockListEntry[]> {
   const res = await fetchNoting(`${API_BASE}/api/blocks`, { headers: bearer(token), signal })
   if (!res.ok) throw new Error(`blocks ${res.status}`)
-  return (await res.json()) as BlockedPerson[]
+  return (await res.json()) as BlockListEntry[]
 }
 
 /** The caller's chats that ended in the last 30 days, which they can still report. Rejects on failure. */
@@ -446,15 +444,19 @@ export async function takeDownPoster(token: string, id: string): Promise<boolean
   }
 }
 
-/** Blocks a poster's owner, whose id the page never has: true once done. Never rejects. */
-export async function blockPosterOwner(token: string, posterId: string): Promise<boolean> {
+/**
+ * Blocks a poster's owner, whose id the page never has: true once done; `gone` when the poster came down so long
+ * ago (or never was) that nobody is remembered for it, so there is nobody to block; false for anything else (try
+ * again). Never rejects.
+ */
+export async function blockPosterOwner(token: string, posterId: string): Promise<boolean | 'gone'> {
   try {
     const res = await fetchNoting(`${API_BASE}/api/blocks`, {
       method: 'POST',
       headers: json(token),
       body: JSON.stringify({ poster: posterId }),
     })
-    return res.ok
+    return res.ok ? true : res.status === 404 ? 'gone' : false
   } catch {
     return false
   }

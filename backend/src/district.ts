@@ -1239,9 +1239,26 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /**
+   * RPC, from the posters API: `poster`, owned by `owner` (an id that never leaves this object), was hidden.
+   * Everyone here hears it come down but its owner, whose own sockets keep it, marked `hidden` (it still counts
+   * toward their two, so they must be able to take it down). Nobody else is ever sent a hidden poster.
+   */
+  posterHidden(poster: PosterView, owner: string): void {
+    // Named field by field: nothing else that rode along on the RPC goes out.
+    const { id, wall, slot, text: words, when, name } = poster
+    const own = JSON.stringify({
+      t: 'poster',
+      op: 'add',
+      poster: { id, wall, slot, text: words, when, name, mine: true, hidden: true },
+    } satisfies ServerMsg)
+    const gone = JSON.stringify({ t: 'poster', op: 'remove', id } satisfies ServerMsg)
+    for (const ws of this.sockets()) this.sendRaw(ws, this.seat(ws).userId === owner ? own : gone)
+  }
+
+  /**
    * After `userId` was hidden or unhidden: their posters up on this district's walls come down for everyone
-   * here (hidden: their name and plans are no longer shown to anyone), or go back up (visible again, as
-   * `posterAdded` sends them). Nothing is asked of D1 when nobody is here. Throws when D1 cannot be reached,
+   * here but them (hidden: their name and plans are no longer shown to anyone else; see `posterHidden`), or go
+   * back up (visible again, as `posterAdded` sends them). Nothing is asked of D1 when nobody is here. Throws when D1 cannot be reached,
    * so `refreshUser` tries again.
    */
   private async refaceWalls(userId: string): Promise<void> {
@@ -1275,6 +1292,16 @@ export class DistrictDO extends DurableObject<Env> {
           name: firstName(r.name),
         }
         await this.posterAdded(poster, userId, [])
+      } else if (r.name !== null) {
+        const poster = {
+          id: r.id,
+          wall: r.wall,
+          slot: r.slot,
+          text: r.text,
+          when: r.at_when,
+          name: firstName(r.name),
+        }
+        this.posterHidden(poster, userId)
       } else this.posterRemoved([r.id])
     }
   }

@@ -116,7 +116,10 @@ describe('PosterComposer', () => {
 
   it('says why the server said no', async () => {
     for (const [answer, line] of [
-      [{ error: 'limit' }, 'You already have 2 posters up. Take one down to pin another.'],
+      [
+        { error: 'limit' },
+        'You already have 2 posters up (hidden ones count too). Take one down to pin another.',
+      ],
       [{ error: 'words', field: 'text' }, "Some of these words aren't okay here."],
       [{ error: 'rate' }, "That's 5 posters today. Pin again tomorrow."],
       [{ error: 'invalid', field: 'when' }, 'Pick a time that is still to come'],
@@ -227,6 +230,27 @@ describe('PosterCard', () => {
     await settle()
     expect(calls(fetchMock)).toEqual([{ method: 'DELETE', path: '/api/posters/poster-1', body: undefined }])
     expect(props.onTakenDown).toHaveBeenCalledWith('poster-1')
+  })
+
+  it('your own hidden poster says only you see it for now, and can still come down', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { host, props } = mount({ poster: { ...poster, mine: true, hidden: true } })
+    expect(host.textContent).toContain('Only you can see this poster for now, while we take a look.')
+    await act(async () => button(host, 'Take it down')!.click())
+    await settle()
+    expect(props.onTakenDown).toHaveBeenCalledWith('poster-1')
+  })
+
+  it('a block from a poster that has since come down says it did not happen, and why', async () => {
+    const onBlock = vi.fn(async () => 'gone' as const)
+    const { host, props } = mount({ onBlock })
+    await act(async () => button(host, 'Block')!.click())
+    await act(async () => button(host, 'Yes, block')!.click())
+    await settle()
+    expect(host.textContent).toContain("This poster isn't up any more, so the block didn't go through.")
+    expect(host.textContent).not.toContain("Couldn't block. Try again.")
+    expect(props.onClose).not.toHaveBeenCalled()
   })
 
   it('closes when its poster comes off the wall, but not under a report still being written', async () => {

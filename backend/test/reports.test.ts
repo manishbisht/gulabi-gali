@@ -307,6 +307,28 @@ describe('reports', () => {
     expect((await report(reporter, { kind: 'poster', targetId: target })).status).toBe(404)
   })
 
+  it("someone on your block list is reported by the block's handle, which nobody else can use", async () => {
+    const reporter = await resident('Handle Report Rani')
+    await resident('Handle Report Target')
+    const target = devId('Handle Report Target')
+    await api('/api/blocks', reporter, { method: 'POST', body: JSON.stringify({ id: target }) })
+    const [{ handle }] = (await (await api('/api/blocks', reporter)).json()) as { handle: string }[]
+    const res = await report(reporter, { kind: 'person', targetId: handle, blocked: true, reason: 'spam' })
+    expect(res.status).toBe(201)
+    const row = await lastAbout(target)
+    expect(row).toMatchObject({
+      reporter: devId('Handle Report Rani'),
+      target_kind: 'person',
+      reason: 'spam',
+    })
+    expect(evidenceOf(row)).toMatchObject({ profile: { id: target, name: 'Handle' } })
+    // Nobody else's handle, nor a handle as a plain id, nor a handle for any other kind.
+    const other = await resident('Handle Report Other')
+    expect((await report(other, { kind: 'person', targetId: handle, blocked: true })).status).toBe(404)
+    expect((await report(reporter, { kind: 'person', targetId: handle })).status).toBe(404)
+    expect((await report(reporter, { kind: 'chat', targetId: handle, blocked: true })).status).toBe(400)
+  })
+
   it('auto-hide counts only chat and bench reports, from distinct verified reporters', async () => {
     const watcherToken = await resident('Hide Watcher')
     const targetToken = await resident('Hide Target')

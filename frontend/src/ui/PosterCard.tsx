@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { BlockOutcome } from '../connections/useBlock'
 import { t, type Lang } from '../i18n/strings'
 import { takeDownPoster } from '../net/api'
 import type { PosterView } from '../net/protocol'
@@ -18,10 +19,11 @@ interface Props {
   lang: Lang
   token(): Promise<string | null>
   /**
-   * Blocks the poster's owner; true once done. The parent then closes the card, unless `stay`: they also want
-   * to report, and the card stays up for the form (it closes when the form does).
+   * Blocks the poster's owner; true once done (`gone`: the poster came down long enough ago that its owner is no
+   * longer known). The parent then closes the card, unless `stay`: they also want to report, and the card stays
+   * up for the form (it closes when the form does).
    */
-  onBlock(poster: PosterView, stay?: boolean): Promise<boolean>
+  onBlock(poster: PosterView, stay?: boolean): Promise<BlockOutcome>
   /** Your own poster came down. */
   onTakenDown(id: string): void
   onClose(): void
@@ -30,7 +32,7 @@ interface Props {
 /**
  * A tapped poster: its text (plain text, whatever was typed), its time in Jaipur, and who pinned it, by first
  * name. A resident can report it or block its owner (the block asked first, then the report if they want);
- * your own you can take down.
+ * your own you can take down, a hidden one too (only you see it, and it still counts toward your two).
  */
 export function PosterCard({ poster, gone, viewer, lang, token, onBlock, onTakenDown, onClose }: Props) {
   const [confirming, setConfirming] = useState(false)
@@ -62,6 +64,11 @@ export function PosterCard({ poster, gone, viewer, lang, token, onBlock, onTaken
       {poster.when !== null && <p>{t('posterWhenLine', lang, { when: posterWhen(poster.when) })}</p>}
       <p className="person-note">{t('posterBy', lang, { name: poster.name })}</p>
       {mine && <p className="person-note">{t('posterMine', lang)}</p>}
+      {mine && poster.hidden && (
+        <p className="person-note" role="status">
+          {t('posterHiddenNote', lang)}
+        </p>
+      )}
       {failed && (
         <p className="person-note" role="alert">
           {t('posterTakeDownFailed', lang)}

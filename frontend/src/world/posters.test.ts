@@ -7,6 +7,7 @@ import university from './districts/university'
 import malviyaNagar from './districts/malviyaNagar'
 import {
   createPosters,
+  HIDDEN_PAPER,
   nearestWall,
   NUDGE_RETRY_MS,
   slotAt,
@@ -212,6 +213,18 @@ describe('poster walls', () => {
     await land([poster({ id: 'p4', slot: 1 })])
     expect(hooks.gone).toHaveBeenLastCalledWith(['p3'])
     expect(hooks.gone).toHaveBeenCalledTimes(3)
+  })
+
+  it('your own hidden poster is drawn on grey paper; when it is back up, on its colour again', async () => {
+    const { sheets, posters, land } = setup()
+    const papers: string[] = []
+    sheets[0]!.ctx.fillRect.mockImplementation(() => void papers.push(sheets[0]!.ctx.fillStyle))
+    posters.refresh()
+    await land([poster({ mine: true, hidden: true })])
+    expect(papers.length).toBeGreaterThan(0)
+    expect(papers.at(-1)).toBe(HIDDEN_PAPER)
+    posters.apply({ t: 'poster', op: 'add', poster: poster({ mine: true }) })
+    expect(papers.at(-1)).not.toBe(HIDDEN_PAPER)
   })
 
   it('a poster that moves (a replaced slot) is drawn once, where it now is', async () => {
