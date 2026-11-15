@@ -629,16 +629,17 @@ describe('DistrictDO', () => {
         a.send({ t: 'status', text: `push ${step}b` })
         if (step < 6) await a.sync()
       }
+      // The last frames must land while the clock still says 3 s on: put back first, they would read as a minute
+      // earlier and never close anything.
+      await vi.waitFor(() => expect(a.closes).toEqual([LIVE_CLOSE.invalid]), WAIT)
     } finally {
       await runInDurableObject(district, (instance) => {
         instance.clock = Date.now
       })
     }
-    // the close lands after the flood; give it room when the whole suite runs at once
-    await vi.waitFor(() => expect(a.closes).toEqual([LIVE_CLOSE.invalid]), { ...WAIT, timeout: 10_000 })
     // One `rate` for the whole stretch, not one per frame.
     expect(a.all('error')).toEqual([{ t: 'error', code: 'rate' }])
-  }, 20_000) // the flood itself takes 3 s; the default 5 s left no room under a loaded machine
+  })
 
   it('a replaced socket stays gone after the object wakes', async () => {
     const district = stub('walled-city')
