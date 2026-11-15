@@ -433,6 +433,8 @@ message for autos. Everything else is local to the page.
 | Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                                                       |
 | Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                                                             |
 | Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                                                             |
+| Reactions      | `world/useReactions.ts`, `world/emotes.ts`, `ui/PersonCard.tsx`, `ui/ReactionToast.tsx`              | `react` / `react-no` frames, `DistrictDO.react` (memory only; see Launch and grow)               |
+| City sounds    | `audio/ambience.ts` (synthesised; follows the sound switch)                                          | none                                                                                             |
 
 `world/session.ts` builds each district's systems on enter (animals, the bandar, autos, the poster walls, the
 sky with its festival effects) and disposes them on leave, as for phase 2.
@@ -507,12 +509,20 @@ ones the person gave.
 
 Reminder: the 15-minute cron (`remindMeetups`) takes RSVPs on plans due within the hour, on posters still up for
 everyone, whose attendee is at that moment visible and verified, claims them (`reminded = 1`, one statement, so
-overlapping runs never push twice) and pushes each person once through `pushTo` with kind `meetup`: the payload
-is only `{t: 'meetup', lang}` and the service worker shows "Gulabi Gali: Tumhara plan ek ghante mein" / "Your
-plan is in an hour", and a tap opens the city. Its TTL is the time left until the plan (at least 60 s), and it
-counts against its own push limit (`push-meetup`, 5 an hour), never the inbox's one a minute. Someone with push
-off is marked and costs nothing. A run spends at most 300 subrequests, counted per device plus three D1 calls
-per person; whoever does not fit goes next run. Someone who says it inside the last hour gets no reminder.
+overlapping runs never push twice) and pushes each person once through `deliver` with kind `meetup`: the payload
+is `{t: 'meetup', lang, at}`, where `at` is the poster's place (`<district>:poster-<wall>`, no name, no words),
+and the service worker shows only "Gulabi Gali: Tumhara plan ek ghante mein" / "Your plan is in an hour"; `at`
+goes into the notification's click data alone, and a tap opens `?at=<district>:poster-<wall>` (a new window, or
+the open page brought forward and sent there), so the city opens in front of the poster after Padharo. Its TTL is
+the time left until the plan (at least 60 s), and it counts against its own push limit (`push-meetup`, 5 an
+hour), never the inbox's one a minute. Someone with push off is marked and costs nothing.
+
+The account is on the Workers Free plan (about 50 subrequests and 50 D1 queries per invocation, shared with the
+cron's other sweeps), so a run spends at most `REMIND_BUDGET` (a var, 24 by default; 300 suits Paid), counting
+its own three statements, three D1 calls per person and one fetch per device. It claims only the people it then
+pushes; whoever does not fit waits for the next run. A push that failed (no device took it, for a push-service
+error or a network failure, not for having nothing to send) is given back (`reminded = 0`) and tried again on
+the next run while the plan is still ahead. Someone who says it inside the last hour gets no reminder.
 
 ### Jaipur Darshan stamps (`stamps.ts`, `frontend/src/world/useStamps.ts`)
 
@@ -538,7 +548,8 @@ sync: two people standing together see different dogs wandering, the same proces
 point, and a monkey only on their own screen. The bandar's snatch changes only the player's own avatar on
 their own page (`setLook`), never the saved look or what others see. What these keep is in `localStorage`
 through `storage.ts`: `gg-no-bandar` (`'1'` switches the monkey off) and `gg-patang-best`; `gg-sound` is the
-horn's switch.
+one sound switch (the HUD's speaker): the horn, the metro chime and bus toot, the kite fight's call and the city
+sounds all follow it (`soundOn`, on until the visitor turns it off).
 
 Autos are the one exception, and only partly. The parked autos are props every page has; driving one is a
 vehicle mode of the player, and its moves carry `v: 'auto'`, which lets the district accept auto speed
@@ -654,7 +665,7 @@ someone else moves to them; at most 5 devices a person. Endpoints must be https 
 (FCM, `*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`; loopback http only under
 `DEV_AUTH`), so the Worker never posts to an address of a client's choosing. `PUT` is residents only, 409 `key`
 when the browser subscribed with another server key, 404 `off` without VAPID; both routes count against
-`push-sub` (30 an hour). `InboxDO.notify` sends a notice to the open sockets and, only when none is open, the
+`push-sub` (30 an hour). `InboxDO.notify` sends a notice to the live sockets and, only when none is live, the
 notice is a `request` or a `message`, and the caller vouched for the sender (`notify(..., { push })`: a
 request's sender has passed `visibleRow`; a message pushes only if its sender passes `visibleRow` now, so a
 hidden person's messages reach an open inbox but never a lock screen), calls `pushTo`: nothing for a banned person or past the per-person limit
@@ -662,7 +673,14 @@ hidden person's messages reach an open inbox but never a lock screen), calls `pu
 (so pending ones collapse at the push service). The payload is `{t, lang}` and nothing else, so the lock screen
 can never show a name or a message, and `sw.js` shows only its own words (`pushTitle`, `pushRequest`,
 `pushMessage`, checked against `strings.ts` by `sw.test.ts`), tagged per kind so a newer one replaces the last.
-A 404 or 410 from the push service deletes the row; account deletion deletes them all in its batch.
+A 404 or 410 from the push service deletes the row; account deletion deletes them all in its batch, and a ban
+by trigger (`0008_ban_push.sql`).
+
+A socket counts as live only if it was heard from in the last `INBOX_STALE_MS` (60 s, about two of the page's
+25 s pings): its last frame, or the ping the edge answered for it (`getWebSocketAutoResponseTimestamp`, so a
+hibernating object is not woken by pings). A locked phone or a frozen tab can keep a dead socket open for
+minutes; such a socket would otherwise swallow every push. `notify` closes a stale one (`LIVE_CLOSE.idle`: a
+page that wakes up reconnects and fetches its lists) and pushes as if none were open.
 
 `webpush.ts` is RFC 8291 (`aes128gcm`, one record) and RFC 8292 (an ES256 JWT for the endpoint's origin, 12
 hours) on WebCrypto alone; `test/webpush.test.ts` checks it byte for byte against RFC 8291's worked example and
@@ -671,3 +689,39 @@ key the site's `VITE_VAPID_PUBLIC_KEY`, both set by `scripts/vapid-setup.mjs`, w
 deployment.md); either missing turns the feature off. Tests make their own pair in memory (`backend/vitest.config.ts`,
 `frontend/playwright.config.ts`); the e2e spec (`tests/push.spec.ts`) stands in for the browser's push service
 with a stub `PushManager` and a fake push service on this machine, and decrypts what the Worker sends.
+
+### Reactions: a namaste, a wave (`DistrictDO.react`, `frontend/src/world/useReactions.ts`)
+
+A resident others can see greets another from their person card ("Door se hi salaam": Namaste or Haath hilao),
+without a word of chat. The page sends `{t: 'react', to, kind}` on the district socket; the district passes
+`{t: 'react', from, to, kind}` to both and to every socket within its interest range that is blocked either way
+with neither (ghosts watching included: they see the street), and both pages show the emote over the two
+avatars for a moment (`emotes.ts`). The one greeted gets a gentle toast ("Asha ne aapko namaste kiya").
+
+Rules, all on the server: only a visible, unmuted resident sends (`ghost`, `muted`); only to another listed,
+visible resident blocked neither way (anyone else is `gone`, all alike, so a block is never told); within
+`REACT_RANGE_M` (8 m) of the sender's last accepted point (`far`); at most one per `REACT_PAIR_MS` (30 s) to the
+same person and `REACT_PER_MINUTE` (10) in all (`wait`). Refusals go back to the sender alone as `react-no`. A
+target already shown `REACT_INBOUND_PER_MINUTE` (6) greetings this minute, from everyone together, is shown no
+more: the sender sees the usual success, so the cap tells nobody anything, and several accounts cannot pester
+one person.
+
+Nothing of a reaction is stored, in D1 or in an attachment. The district remembers only, in memory, what each
+sender spent of their allowance and what each target was shown, for a minute; while any of that is held it
+keeps itself awake (`stayAwake`, released 60 s after the last), and a wake or a deploy simply forgets it. The
+page keeps, in memory only, whom it greeted (so the card rests its buttons as the server would) and who greeted
+it in the last five minutes: the third greeting from the same person in that time turns the toast into a block
+offer ("Block karo"), which goes through the same `BlockConfirm` as anywhere else (with "also report") and
+stays up until it is used, dismissed or 10 s pass.
+
+### City sounds (`frontend/src/audio/ambience.ts`)
+
+A soft bed under the street, all synthesised in the page with Web Audio (filtered noise and a few oscillators):
+no recordings, no third-party audio, nothing downloaded. Each district has its own mix of bazaar murmur, birds
+by day, crickets at dusk and night, temple bells at dawn and dusk, and festival drums while a festival is on
+(`mixFor`, from the district, the live sky and the festival). It follows the HUD's one sound switch (`gg-sound`,
+`soundOn`) and starts only after a gesture (the page resumes its audio context on the first tap, click or key, as
+phones require). It goes quiet while the tab is hidden (the context is suspended and its timer stopped), at the
+lowest quality tier it plays one steady layer and no blips (`thinMix`), and photo mode and the taxi ride duck it
+to half (`setAmbienceDuck`; the city going resets the duck). Layers are built only while they are audible, and
+levels glide (a 1.5 s time constant) rather than jump.
