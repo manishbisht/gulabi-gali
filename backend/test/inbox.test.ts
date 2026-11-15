@@ -1,4 +1,5 @@
 import { applyD1Migrations, env, SELF } from 'cloudflare:test'
+import worker from '../src/index'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { INBOX_SOCKETS, notify } from '../src/inbox'
@@ -162,5 +163,35 @@ describe('notices', () => {
     await expect(work).resolves.toBeUndefined()
     expect(logged).toHaveBeenCalledWith('inbox: notify failed', expect.any(Error))
     logged.mockRestore()
+  })
+})
+
+describe('POST /api/dev/inbox', () => {
+  const call = (e: Env, userId: string) =>
+    worker.fetch(
+      new Request('https://api.test/api/dev/inbox', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      }),
+      e,
+    )
+  const sockets = async (userId: string) =>
+    ((await (await call(testEnv, userId)).json()) as { sockets: number }).sockets
+
+  it('is a 404 without DEV_AUTH', async () => {
+    const res = await call({ ...testEnv, DEV_AUTH: undefined } as unknown as Env, id('inbdevoff'))
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'not found' })
+  })
+
+  it('with DEV_AUTH, says how many inbox sockets a person has open: an e2e run waits on it', async () => {
+    const token = await resident('inbdevcount')
+    expect(await sockets(id('inbdevcount'))).toBe(0)
+    const box = await inbox(token)
+    expect(await sockets(id('inbdevcount'))).toBe(1)
+    box.close()
+    await vi.waitFor(async () => expect(await sockets(id('inbdevcount'))).toBe(0), WAIT)
+    expect((await call(testEnv, '')).status).toBe(400)
   })
 })

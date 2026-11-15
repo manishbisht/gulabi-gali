@@ -155,6 +155,11 @@ export class InboxDO extends DurableObject<Env> {
     return sent
   }
 
+  /** RPC, for the e2e run only (`POST /api/dev/inbox`): how many sockets are open, stale ones included. */
+  async openSockets(): Promise<number> {
+    return this.sockets().length
+  }
+
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const tab = this.tab(ws)
     if (tab.closed) return

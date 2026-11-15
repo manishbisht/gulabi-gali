@@ -80,15 +80,28 @@ async function flip(page: Page, on: boolean) {
   await expect(box).toBeEnabled()
 }
 
+/** How many inbox sockets the Worker's InboxDO holds open for `userId` (`/api/dev/inbox`, DEV_AUTH only). */
+async function inboxSockets(userId: string): Promise<number> {
+  const res = await fetch('http://127.0.0.1:8787/api/dev/inbox', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  })
+  expect(res.status).toBe(200)
+  return ((await res.json()) as { sockets: number }).sockets
+}
+
 /**
- * Shuts the app on `page` (the tab is gone): its inbox socket closes. Playwright may not report that close for
- * a page it is closing, so a moment is left for the close frame to reach the Worker before anyone asks.
+ * Shuts the app on `who`'s page (the tab is gone): its inbox socket closes. Playwright may not report that close
+ * for a page it is closing, so this waits until the Worker itself holds no inbox socket for them.
  */
-async function shut(page: Page, inbox: WebSocket) {
-  const closed = inbox.isClosed() ? null : inbox.waitForEvent('close', { timeout: 5000 }).catch(() => null)
-  await page.close()
+async function shut(who: { page: Page; id: string; inbox: WebSocket }) {
+  const closed = who.inbox.isClosed()
+    ? null
+    : who.inbox.waitForEvent('close', { timeout: 5000 }).catch(() => null)
+  await who.page.close()
   await closed
-  await new Promise((done) => setTimeout(done, 1000))
+  await expect.poll(() => inboxSockets(who.id)).toBe(0)
 }
 
 test('opted in from the profile: no push while the inbox is open; with it shut, a push that names nobody', async ({
@@ -112,7 +125,7 @@ test('opted in from the profile: no push while the inbox is open; with it shut, 
   expect(service.got(meera.name)).toEqual([])
 
   // Meera's app is shut; Ravi asks: one push, and all it says is "a request", in her language
-  await shut(meera.page, meera.inbox)
+  await shut(meera)
   const ravi = await resident(browser, 'Ravi')
   await verify(ravi.page)
   await ask(ravi, meera)

@@ -11,7 +11,7 @@ import { ERROR_IP_LIMIT, ERROR_MAX_BODY, purgeClientErrors, recordClientError } 
 import { listEnded, purgeEvidence } from './evidence'
 import { GATE_NAME, joinWaitlist, purgeWaitlist } from './gate'
 import { hashedList } from './filter/server'
-import { floating, openInbox, type Later } from './inbox'
+import { floating, inboxOf, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
 import { putPush, removePush } from './push'
@@ -133,6 +133,16 @@ async function devGate(env: Env, raw: unknown): Promise<Response> {
   return Response.json(await gate.configure({ maxLive, clear: clear === true }))
 }
 
+/**
+ * `POST /api/dev/inbox {userId}`, DEV_AUTH only: `{sockets}`, how many inbox sockets that person has open. For the
+ * e2e run, which waits for a shut tab's inbox to be gone before it asks whether a push follows.
+ */
+async function devInbox(env: Env, raw: unknown): Promise<Response> {
+  const { userId } = (raw ?? {}) as { userId?: unknown }
+  if (typeof userId !== 'string' || !userId) return Response.json({ error: 'invalid' }, { status: 400 })
+  return Response.json({ sockets: await inboxOf(env, userId).openSockets() })
+}
+
 async function handleApi(request: Request, env: Env, url: URL, later: Later): Promise<Response> {
   const { method } = request
   const { pathname } = url
@@ -169,6 +179,11 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     if (env.DEV_AUTH !== '1' || method !== 'POST')
       return Response.json({ error: 'not found' }, { status: 404 })
     return devGate(env, await readJson(request))
+  }
+  if (pathname === '/api/dev/inbox') {
+    if (env.DEV_AUTH !== '1' || method !== 'POST')
+      return Response.json({ error: 'not found' }, { status: 404 })
+    return devInbox(env, await readJson(request))
   }
   // No sign-in: someone the full city turned away may have no account (see `joinWaitlist`).
   if (pathname === '/api/waitlist' && method === 'POST')
