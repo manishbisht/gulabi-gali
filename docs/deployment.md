@@ -232,10 +232,11 @@ Expired posters, and the 7-day memory of who pinned posters that came down, are 
 cron as everything else.
 
 **The public poster list is edge-cached.** Signed out, `GET /api/districts/:id/posters` is served through the
-Cache API for 30 s per district (keyed by district on an internal host, whatever the query string), so it cannot
+Cache API for 30 s per district (keyed by district on the API's own origin, the `API_ORIGIN` var in `backend/wrangler.jsonc`, whatever the query string), so it cannot
 be used to hammer D1. A change drops the entry at once in the location that made it; elsewhere a hidden or removed
 poster drops out within the 30 s. On a `workers.dev` route the Cache API does nothing (every call reads D1); on the
-custom domain it works.
+custom domain it works. If you move the API to another domain, change `API_ORIGIN` with it (unset, the key
+falls back to the request's own origin).
 
 **The extras need nothing at deploy.** Autos, the metro ride, street animals, processions, the kite fight and
 the bandar run in the page only and are not sent to the Worker (an auto driver's moves carry a flag, so the

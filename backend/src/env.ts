@@ -13,6 +13,8 @@ export interface Env {
   SOCKETS_LIMITER?: RateLimit
   SIGNIN_LIMITER?: RateLimit
   WRITES_LIMITER?: RateLimit
+  /** The API's own origin: the edge-cache key of the posters' signed-out lists (see `wallKey`). */
+  API_ORIGIN?: string
   CLERK_SECRET_KEY?: string
   CLERK_JWT_KEY?: string
   /** '1' enables /api/dev/login and dev tokens. Set only in .dev.vars and tests, never in wrangler.jsonc. */

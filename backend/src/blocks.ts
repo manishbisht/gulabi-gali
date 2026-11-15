@@ -68,10 +68,12 @@ export async function blockUser(
 
 /**
  * `DELETE /api/blocks/:handle`: lifts the caller's block that the block list calls `handle`. 204 (also for a
- * handle that names none of theirs, an id included: nothing tells whether it did), or 429 `rate` past
+ * handle that names none of theirs, an id included: nothing tells whether it did), 404 for no handle (`null`), or 429 `rate` past
  * `BLOCKS_PER_HOUR`. Nothing comes back with it: no match, no request.
  */
 export async function unblockUser(env: Env, userId: string, handle: string): Promise<Response> {
+  // What a page sends when it lost the handle: the block did not come off, and it must not look as if it did.
+  if (!handle || handle === 'null' || handle === 'undefined') return fail('not found', 404)
   if (handle.length > MAX_ID) return noContent()
   const slow = await blockLimit(env, userId)
   if (slow) return slow
@@ -87,6 +89,10 @@ export async function unblockUser(env: Env, userId: string, handle: string): Pro
  * block time (or null). Never the blocked person's id (see `BlockListEntry`).
  */
 export async function listBlocks(env: Env, userId: string): Promise<Response> {
+  // A block that has no handle yet (made before handles) gets one now, so a null never reaches the page.
+  await env.DB.prepare('UPDATE blocks SET handle = lower(hex(randomblob(16))) WHERE a = ? AND handle IS NULL')
+    .bind(userId)
+    .run()
   const { results } = await env.DB.prepare(
     'SELECT handle, name FROM blocks WHERE a = ? ORDER BY created_at DESC LIMIT ?',
   )

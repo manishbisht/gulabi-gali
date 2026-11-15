@@ -202,6 +202,21 @@ describe('block', () => {
     expect((await api('/api/blocks', a, { method: 'POST', body: '{}' })).status).toBe(400)
   })
 
+  it('a block with no handle (an older row) never lists a null one, and unblocking "null" is a 404', async () => {
+    const a = await resident('Legacy Anu')
+    await resident('Legacy Bina')
+    await block(a, devId('Legacy Bina'))
+    await testEnv.DB.prepare('UPDATE blocks SET handle = NULL WHERE a = ?').bind(devId('Legacy Anu')).run()
+    const list = (await (await api('/api/blocks', a)).json()) as Listed[]
+    expect(list.length).toBe(1)
+    expect(list[0]!.handle).toMatch(/^[0-9a-f]{32}$/)
+    // Listing again gives the same handle: it was written back, not made up per read.
+    expect(((await (await api('/api/blocks', a)).json()) as Listed[])[0]!.handle).toBe(list[0]!.handle)
+    expect((await unblock(a, 'null')).status).toBe(404)
+    expect((await unblock(a, 'undefined')).status).toBe(404)
+    expect((await unblock(a, list[0]!.handle)).status).toBe(204)
+  })
+
   it('a decline or an unmatch cooldown survives block and unblock', async () => {
     const a = await resident('Cool Anu')
     const b = await resident('Cool Bina')

@@ -164,7 +164,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     if (user) return listPosters(env, posters[1]!, user.id)
     if (request.headers.has('Authorization') || url.searchParams.has('token'))
       return Response.json({ error: 'unauthorized' }, { status: 401 })
-    return publicPosters(env, posters[1]!)
+    return publicPosters(env, posters[1]!, url.origin, later)
   }
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 })
   if (pathname === '/api/me' && method === 'GET') {

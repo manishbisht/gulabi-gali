@@ -32,7 +32,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.prepare('DELETE FROM posters').run()
   // The signed-out list is cached at the edge: rows deleted behind its back must not linger in it.
-  await forgetWalls(DISTRICT_IDS)
+  await forgetWalls(testEnv, DISTRICT_IDS)
 })
 afterEach(() => settle())
 
@@ -780,7 +780,9 @@ describe('posters', () => {
     // A browser still keeps a signed-out copy apart from a signed-in one.
     expect(queried.headers.get('vary')).toBe('Authorization')
     // The edge's own copy carries no Vary (the edge cache may refuse or split on it); the answer adds it back.
-    const stored = await caches.default.match(new Request('https://walls.gulabi-gali.internal/university'))
+    const stored = await caches.default.match(
+      new Request('https://api.gulabi-gali.manishbisht.me/api/districts/university/posters'),
+    )
     expect(stored?.headers.get('vary')).toBeNull()
     expect(((await queried.json()) as PosterView[]).map((p) => p.id)).toEqual([first.id])
     expect((await listed('university', token)).map((p) => p.id)).toEqual([first.id, sneaky])

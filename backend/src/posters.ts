@@ -90,19 +90,21 @@ const stub = (env: Env, district: DistrictId) => env.DISTRICT.get(env.DISTRICT.i
 
 /**
  * A district's signed-out list in the edge cache: one entry per district, whatever the query string, so the
- * public list cannot be used to hammer D1. The host is ours alone: nothing is ever fetched from it.
+ * public list cannot be used to hammer D1. It is keyed on the API's own origin (`API_ORIGIN`, else the request's), a zone the Cache API accepts; nothing is
+ * ever fetched from it.
  */
-const wallKey = (district: DistrictId) => new Request(`https://walls.gulabi-gali.internal/${district}`)
+const wallKey = (env: Env, district: DistrictId, fallbackOrigin = 'https://api.gulabi-gali.manishbisht.me') =>
+  new Request(`${env.API_ORIGIN || fallbackOrigin}/api/districts/${district}/posters`)
 
 /**
  * Drops these districts' signed-out lists from this location's edge cache, after anything on their walls changed
  * (other locations keep theirs for at most `PUBLIC_WALLS_S`). Never throws.
  */
-export async function forgetWalls(districts: Iterable<DistrictId>): Promise<void> {
+export async function forgetWalls(env: Env, districts: Iterable<DistrictId>): Promise<void> {
   await Promise.all(
     [...new Set(districts)].map((d) =>
       caches.default
-        .delete(wallKey(d))
+        .delete(wallKey(env, d))
         .catch((err: unknown) => console.error('posters: cache forget failed', err)),
     ),
   )
@@ -115,7 +117,7 @@ export async function forgetWalls(districts: Iterable<DistrictId>): Promise<void
 export async function tellRemoved(env: Env, gone: readonly Placed[]): Promise<void> {
   const by = new Map<DistrictId, string[]>()
   for (const p of gone) by.set(p.district, [...(by.get(p.district) ?? []), p.id])
-  await forgetWalls(by.keys())
+  await forgetWalls(env, by.keys())
   await Promise.all(
     [...by].map(([district, ids]) =>
       stub(env, district)
@@ -134,7 +136,7 @@ async function tellAdded(
   gone: string[],
 ): Promise<void> {
   try {
-    await forgetWalls([district])
+    await forgetWalls(env, [district])
     await stub(env, district).posterAdded(poster, owner, gone)
   } catch (err) {
     console.error('posters: add notice failed', district, err)
@@ -262,7 +264,7 @@ export async function pinPoster(
       return fail('limit', 409)
     }
     const poster: PosterView = { ...view, slot: placed.slot }
-    await forgetWalls([p.district])
+    await forgetWalls(env, [p.district])
     later(tellAdded(env, p.district, poster, userId, placed.gone))
     return Response.json({ ...poster, mine: true } satisfies PosterView, { status: 201 })
   }
@@ -328,9 +330,14 @@ export async function listPosters(
  * per district per `PUBLIC_WALLS_S` at each location. A poster that is hidden or comes down drops out of it
  * within that, and at once at the location that made the change (see `forgetWalls`).
  */
-export async function publicPosters(env: Env, district: string): Promise<Response> {
+export async function publicPosters(
+  env: Env,
+  district: string,
+  origin?: string,
+  later: Later = floating,
+): Promise<Response> {
   if (!isDistrict(district)) return fail('not found', 404)
-  const key = wallKey(district)
+  const key = wallKey(env, district, origin)
   const hit = await caches.default.match(key).catch(() => undefined)
   if (hit) {
     // The browser still needs it, to keep a signed-out copy apart from a signed-in one.
@@ -342,9 +349,9 @@ export async function publicPosters(env: Env, district: string): Promise<Respons
   // The edge's copy without `Vary`: the edge cache may refuse, or split, an entry that has one.
   const stored = new Response(res.clone().body, res)
   stored.headers.delete('vary')
-  await caches.default
-    .put(key, stored)
-    .catch((err: unknown) => console.error('posters: cache put failed', err))
+  later(
+    caches.default.put(key, stored).catch((err: unknown) => console.error('posters: cache put failed', err)),
+  )
   return res
 }
 
@@ -361,7 +368,10 @@ export async function removeOwnPoster(
     .bind(id, userId)
     .all<Placed>()
   if (!results.length) return fail('not found', 404)
-  await forgetWalls(results.map((r) => r.district))
+  await forgetWalls(
+    env,
+    results.map((r) => r.district),
+  )
   later(tellRemoved(env, results))
   return new Response(null, { status: 204 })
 }
@@ -440,7 +450,7 @@ export async function posterAutoHide(
     .bind(id)
     .first<PosterRow>()
   if (!hidden) return false
-  await forgetWalls([hidden.district])
+  await forgetWalls(env, [hidden.district])
   later(tellHidden(env, hidden))
   return true
 }
@@ -491,7 +501,7 @@ export async function unhidePoster(env: Env, id: string, now = Date.now()): Prom
     .bind(id)
     .first<PosterRow & { expires_at: number }>()
   if (!row) return
-  await forgetWalls([row.district])
+  await forgetWalls(env, [row.district])
   // Its owner may have been hidden or banned meanwhile: then it stays off every wall but theirs (see `listPosters`).
   if (row.expires_at <= now || !(await visibleRow(env, row.owner))) return
   const view = await viewOf(env, row)

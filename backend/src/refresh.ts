@@ -37,7 +37,7 @@ export async function refreshUser(
   why: RefreshWhy,
   retryMs = REFRESH_RETRY_MS,
 ): Promise<{ failed: string[] }> {
-  if (why !== 'block' && why !== 'mute') await forgetWalls(DISTRICT_IDS)
+  if (why !== 'block' && why !== 'mute') await forgetWalls(env, DISTRICT_IDS)
   const targets = new Map<string, () => Promise<void>>(
     DISTRICT_IDS.map((id) => [id, () => env.DISTRICT.get(env.DISTRICT.idFromName(id)).refresh(userId, why)]),
   )

@@ -47,5 +47,10 @@
   "triggers": { "crons": ["*/15 * * * *"] },
   // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64; and the most
   // residents seen at once across the city (anyone more waits in line as a ghost, see src/gate.ts).
-  "vars": { "MAX_DISTRICT_SOCKETS": "400", "MAX_IP_SOCKETS": "24", "MAX_LIVE": "300" },
+  "vars": {
+    "API_ORIGIN": "https://api.gulabi-gali.manishbisht.me",
+    "MAX_DISTRICT_SOCKETS": "400",
+    "MAX_IP_SOCKETS": "24",
+    "MAX_LIVE": "300",
+  },
 }
