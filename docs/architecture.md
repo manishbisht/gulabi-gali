@@ -115,6 +115,10 @@ backend file, then copy it over.
 - `VITE_DEV_AUTH=1` (a sign-in that needs only a name) makes a production build fail unless
   `GG_ALLOW_LOCAL_API=1` is also set, so it cannot ship by accident. It is for e2e and local builds only.
 - The Worker's CORS list (`backend/src/cors.ts`) is the site's origin plus the local dev origins.
+- Cloudflare Web Analytics is opt-in at build time: only when `VITE_CF_BEACON_TOKEN` is set does the build
+  put its beacon in `index.html` and add `static.cloudflareinsights.com` (script-src) and
+  `cloudflareinsights.com` (connect-src) to the policy (`src/analytics.ts`). Without it the policy is as above.
+- `__GG_BUILD__` (the git short sha, `GG_BUILD_SHA` overrides) is defined at build time for the error beacon.
 
 ## Phase 2: meeting people
 
@@ -443,3 +447,43 @@ heard only on the page that honked.
 All extras follow the quality tiers: animals, procession members and the kite fight's kites are instanced
 (a few draw calls each) and fewer at tier 0, and nothing in their frame updates allocates. The numbers with
 everything on at once are in [device-performance.md](./device-performance.md).
+
+## Launch readiness
+
+### The error pipeline (`frontend/src/net/errorBeacon.ts`, `backend/src/errors.ts`)
+
+Errors on people's phones come to our own Worker and D1, never a third-party service, and carry nothing that
+names a person.
+
+1. **Caught.** `main.tsx` starts listening for window `error` and `unhandledrejection` before React renders;
+   the React `ErrorBoundary` reports from `componentDidCatch` (`react`); the stage reports a lost WebGL
+   context (`webgl-lost`; its own `dispose` removes the listener before forcing the loss, so a remount is not
+   reported).
+2. **Shaped on the page.** A report is exactly `{msg, stack, where, ua, build, district}`
+   (`ClientErrorReport` in the protocol): the message (300 characters), the first 1 kB of the stack, where it
+   was caught, `ua` as `mobile|desktop` and `instagram|facebook|other` (never the user agent string), the
+   bundle's git short sha and the district (null before the city opens; `App` notes it). URLs lose their query
+   string and fragment and email-shaped text becomes `[email]`. One page sends each distinct error (`where` +
+   message) once and at most 5 in all. It goes by `navigator.sendBeacon` as `text/plain` (a simple request: no
+   preflight, and it survives the page closing), falling back to a `keepalive` fetch; it never throws.
+3. **Taken in.** `POST /api/errors` needs no sign-in. It is handled before the writes limiter (a failing page
+   must not use up the writes of everyone behind its address) with its own D1-counted allowance of 20 a minute
+   per address (`ipWindowLimit`, bucket `errors-ip`), reads at most 4 kB, takes only the known fields and
+   values, scrubs URLs and emails again, cuts each field to size and answers an empty 204 (400 for anything
+   that is not a report, 429 over the limit): nothing from the body is ever sent back.
+4. **Kept.** One row per report in `client_errors` (migration `0004`), with a `fingerprint`: 16 hex characters
+   of SHA-256 over `where` and the message with its digits taken out, so the same error from different chunks
+   or timings groups together. The 15-minute cron deletes rows older than 14 days.
+5. **Read.** `GET /api/admin/errors` (admins only, the same plain 404 for anyone else) lists the 20 most
+   frequent fingerprints: count, last seen, the latest report as the sample (stack, build, district) and a count
+   per `device/app`. The admin page's **Errors** section shows them as text, asked for once and on Refresh.
+
+### First-visit hint (`frontend/src/ui/FirstHint.tsx`)
+
+After Padharo!, a first-time visitor sees three short steps (walk, sit on a chai bench, meet someone), worded
+for their input: joystick on a touch screen, WASD or arrow keys with a keyboard and mouse
+(`matchMedia('(pointer: coarse)')`). It is a non-modal dialog in the HUD's flow, under its top block (so it
+cannot sit on a chip or on the bottom row), and the street stays walkable under it; Escape or its button closes
+it, focus goes to the button when it opens and to the canvas when it closes. It slides in like the other cards,
+and not at all with reduced motion. Once closed, `gg-hinted` in `localStorage` keeps it from showing again. The e2e run seeds
+`gg-hinted` for every page (`playwright.config.ts`, `storageState`), so only `hint.spec.ts` sees it.

@@ -17,11 +17,12 @@ database and two Durable Objects; the Durable Object classes are created by the 
 ## Owner checklist, in order
 
 1. Cloudflare account, token and KV namespace (section 1, steps 1 and 2).
-2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0003`).
+2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0004`).
 3. **Clerk** (section 1b): create the app, then set the Worker secrets.
 4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); the first push to `main` deploys.
 5. GitHub Pages and the `github-pages` secrets, including `VITE_CLERK_PUBLISHABLE_KEY` (section 2).
-6. Budget alerts (section 3).
+6. Optional: Cloudflare Web Analytics, the `VITE_CF_BEACON_TOKEN` secret (section 2c).
+7. Budget alerts (section 3).
 
 ## 1. Cloudflare Worker (`backend/`)
 
@@ -61,7 +62,8 @@ npx wrangler d1 create gulabi-gali
 
 Paste the `database_id` it prints over `REPLACE_WITH_D1_ID` in `backend/wrangler.jsonc`, commit it, then create
 the tables in the real database (`migrations/0001_people.sql`: users, profiles, requests, matches, messages;
-`0002_trust.sql`: trust and reports; `0003_posters.sql`: posters):
+`0002_trust.sql`: trust and reports; `0003_posters.sql`: posters; `0004_client_errors.sql`: the error beacon's
+reports):
 
 ```sh
 npx wrangler d1 migrations apply gulabi-gali --remote
@@ -257,6 +259,51 @@ already send.
       been checked in tests), and switch it off with the 🐒 chip.
 - [ ] Drive an auto with two accounts in the district: the other sees the driver sitting in an auto.
 
+## 2c. Launch readiness: link preview, analytics and errors
+
+**Link preview.** `frontend/index.html` carries the description, Open Graph and Twitter tags that Instagram,
+WhatsApp and X read when someone shares the link, with `og:url` and `og:image` as absolute URLs on
+`https://gulabi-gali.manishbisht.me/`. The image is `frontend/public/og.png` (1200x630, a real render of the
+Walled City). To make it again after the city changes: `npm run og-image -w frontend` (it builds the site with
+test hooks, renders the street at 1200x630 at golden hour with the HUD hidden and a small wordmark, cuts it to
+a 256-colour palette with `sharp` (installed with the backend's test tools; without it the raw shot is written,
+which may be bigger than the 300 kB scrapers like), and writes it with `apple-touch-icon.png`; look at it before
+committing). If the domain changes, change the URLs in `index.html` with it. After deploying, paste the link into
+a WhatsApp chat to yourself, or Facebook's Sharing Debugger (Instagram uses the same scraper), to see the card;
+both cache a card for a while, so a changed image can take a day to show.
+
+**Cloudflare Web Analytics (optional, cookieless).** Page views and visitors, with no cookie and nothing stored
+on the phone. In the Cloudflare dashboard: Analytics & Logs, Web Analytics, Add a site, enter
+`gulabi-gali.manishbisht.me`, and choose the JavaScript snippet (not automatic setup: the site is on GitHub
+Pages, not proxied by Cloudflare). Copy the `token` value out of the snippet (a 32-character hex string) and add
+it to the `github-pages` environment as the secret `VITE_CF_BEACON_TOKEN`. The next build puts the beacon
+(`https://static.cloudflareinsights.com/beacon.min.js`) in the page and adds exactly two hosts to the CSP:
+`static.cloudflareinsights.com` to `script-src` and `cloudflareinsights.com` to `connect-src`. Without the
+secret (and always in dev and e2e) there is no beacon and the CSP is unchanged. Numbers show in the same Web
+Analytics page, usually within minutes.
+
+**Where errors show.** The page reports what breaks on people's phones to the Worker's own
+`POST /api/errors` (window errors, unhandled promise rejections, a lost WebGL context, and the React
+crash screen): never a third-party service. A report holds the error message and the first 1 kB of its stack,
+where it was caught, mobile or desktop and whether it was inside Instagram or Facebook, the build's git short
+sha and the district: no account id, name, email or typed text, and URLs lose their query strings (the
+Worker scrubs them again). A page sends at most 5, each distinct error once. The Worker takes 20 a minute per
+address and bodies of at most 4 kB, keeps them in D1 (`client_errors`, migration `0004`) and the 15-minute cron
+deletes them after 14 days. Read them on the admin page (`#/admin`), section **Errors**: the 20 most frequent
+errors, each with its count, when it was last seen, the browser kinds it came from, the build, the district
+and a sample stack (Refresh asks again). Nothing new to set: no secret, var or binding.
+
+**Pre-launch checks for launch readiness**
+
+- [ ] Share the live link in a WhatsApp chat and an Instagram DM to yourself: the card shows the street image,
+      the title and the description.
+- [ ] With `VITE_CF_BEACON_TOKEN` set, open the site and see a visit in Web Analytics; the browser console shows
+      no CSP error.
+- [ ] Open the admin page and see the Errors section (empty is fine). To see one arrive, run
+      `Promise.reject(new Error('launch check'))` in the browser console on the city page.
+- [ ] Open the site fresh (a private window) on a phone: the three-step hint shows once after Padharo! and
+      not again after a reload.
+
 ## 3. Budget alerts
 
 Cloudflare dashboard, Notifications, Add:
@@ -290,6 +337,8 @@ running between the two steps works against the migrated database.
   it was ever deployed (the poster tombstones and block handles): a local database that applied an earlier
   `0003` will not apply it again, so reset it once (`rm -rf backend/.wrangler/state`, then the migrations
   command).
+- After pulling the launch-readiness work, run the migrations command once more: `0004` (the error beacon's
+  table) is additive.
 - `npm run dev -w backend -- --var DEV_AUTH:1`: the Worker on `http://127.0.0.1:8787`, with name-only dev
   sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health`, the word list, the
   waitlist, each district's poster list (`/api/districts/:id/posters`, public by design) and the live sockets,
