@@ -211,6 +211,214 @@ button {
   text-align: center;
 }
 
+/* The compass to the place picked on the map: a pill under the HUD's head; a tap clears it. */
+.compass {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 16px 0 10px;
+  border: 2px solid #f2a81d;
+  border-radius: 999px;
+  background: rgb(42 29 36 / 0.88);
+  color: var(--cream);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compass > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compass-arrow {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f2a81d;
+  color: var(--plum);
+  font-size: 1.1rem;
+  font-weight: 800;
+  transition: transform 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compass-arrow {
+    transition: none;
+  }
+}
+
+/* The city map: a sheet with the district from above, every place on it a button, and a list of places. */
+.map-sheet h2 {
+  margin-bottom: 4px;
+}
+
+.map-help,
+.map-legend {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.map-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-over {
+  position: absolute;
+  inset: 0;
+  z-index: 4; /* over every place: you and the people are never hidden under a dot */
+  pointer-events: none;
+}
+
+.map-block {
+  opacity: 0.75;
+}
+
+.map-landmark {
+  fill: #b85c45;
+  stroke: var(--cream);
+  stroke-width: 1;
+}
+
+.map-person {
+  fill: #2f7f86;
+  stroke: var(--cream);
+  stroke-width: 0.6;
+}
+
+.map-you path,
+.map-legend-you {
+  fill: #f2a81d;
+  color: #f2a81d;
+  stroke: var(--plum);
+  stroke-width: 1.2;
+}
+
+.map-legend-people {
+  color: #2f7f86;
+}
+
+.map-item {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid var(--cream);
+  border-radius: 50%;
+  background: var(--plum);
+  color: var(--cream);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.map-item[data-kind='bench'],
+.map-item[data-kind='tapri'] {
+  z-index: 1;
+}
+
+.map-item[data-kind='metro'] {
+  z-index: 2;
+}
+
+.map-item[data-kind='landmark'] {
+  z-index: 3;
+}
+
+.map-item[data-kind='landmark'],
+.map-item[data-kind='metro'] {
+  width: 30px;
+  height: 30px;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.map-item[data-kind='landmark'] {
+  background: var(--pink);
+  color: var(--plum);
+}
+
+.map-item[data-kind='metro'] {
+  background: #c2185b;
+}
+
+.map-item[data-stamped] {
+  background: #2f7f86;
+  color: var(--cream);
+}
+
+.map-item[data-target] {
+  box-shadow: 0 0 0 3px #f2a81d;
+}
+
+.map-places {
+  margin: 4px 0 6px;
+  font-size: 1rem;
+}
+
+.map-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-list button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  text-align: left;
+}
+
+.map-more {
+  margin-top: 6px;
+}
+
+.map-more summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  cursor: pointer;
+}
+
+.map-more[open] summary {
+  margin-bottom: 6px;
+}
+
+.map-list button[data-target] {
+  border-color: #f2a81d;
+  border-width: 2px;
+}
+
 .landmark-card {
   flex: 1 1 0;
   min-width: 0;
@@ -1746,6 +1954,22 @@ small.words-hint {
 }
 
 /* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
+/* The place chip opens the city map (M): as slim as the chip it was, with a thumb-sized tap area. */
+button.place-button {
+  position: relative;
+  gap: 4px;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  font-size: 0.95rem;
+  pointer-events: auto;
+}
+
+button.place-button::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+
 button.stamp-count {
   position: relative;
   min-height: 0;

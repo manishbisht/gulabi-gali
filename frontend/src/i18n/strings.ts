@@ -74,6 +74,28 @@ export const STRINGS = {
     hi: '{place} tak nahi pahunch paaye. Dobara try karo.',
     en: "Couldn't get to {place}. Try again.",
   },
+  /** The city map (M) and the compass it sets. */
+  mapOpenPlace: { hi: 'Naksha · {place}', en: 'Map · {place}' },
+  mapTitle: { hi: 'Naksha · {place}', en: 'Map · {place}' },
+  mapHelp: {
+    hi: 'Kisi jagah pe tap karo, compass tumhe wahan tak le chalega.',
+    en: 'Tap a place and the compass will point you there.',
+  },
+  mapClose: { hi: 'Band karo', en: 'Close' },
+  mapMetro: { hi: 'Metro station', en: 'Metro station' },
+  mapBench: { hi: 'Bench {n}', en: 'Bench {n}' },
+  mapTapri: { hi: 'Chai ki tapri {n}', en: 'Chai stall {n}' },
+  mapPoster: { hi: 'Poster ki deewar {n}', en: 'Poster wall {n}' },
+  mapStamped: { hi: '{name} (stamp mil chuka)', en: '{name} (stamp collected)' },
+  mapYou: { hi: 'Tum', en: 'You' },
+  mapPeople: { hi: 'Gali pe dikhte log: {n}', en: 'People on the street: {n}' },
+  mapPlaces: { hi: 'Jagahein', en: 'Places' },
+  mapMore: {
+    hi: 'Aur jagahein: bench, tapri, deewarein ({n})',
+    en: 'More places: benches, stalls, walls ({n})',
+  },
+  mapAway: { hi: '{name} · {m} m', en: '{name} · {m} m' },
+  compassClear: { hi: 'Tap karo to compass hat jaayega', en: 'Tap to clear the compass' },
   rideNext: { hi: 'Agla station: {station}', en: 'Next station: {station}' },
   rideDoors: {
     hi: 'Darwaze seedhi taraf khulenge. Utarte waqt zara dhyaan se.',

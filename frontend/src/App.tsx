@@ -30,6 +30,7 @@ import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
+import { useCityMap } from './world/useCityMap'
 import { processionLine } from './live/procession'
 import { DISTRICT_NAMES } from './world/districtNames'
 import { savedDistrict, useTravel } from './world/useTravel'
@@ -58,6 +59,8 @@ import { DarshanList } from './ui/DarshanList'
 import { AccountClosed } from './ui/AccountClosed'
 import { FullScreen } from './ui/FullScreen'
 import { FirstHint } from './ui/FirstHint'
+import { CityMap } from './ui/CityMap'
+import { Compass } from './ui/Compass'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -245,6 +248,11 @@ export default function App() {
   const [override] = useState(festivalOverride)
   const festival = override ?? snapshot?.festival ?? null
   const processionKey = processionLine(festival, here)
+  /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
+  const map = useCityMap(entered && !ride && !kiteFrom && !photo)
+  const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
+  // in photo mode the pillar keeps out of the view (and out of every capture, see `Stage.capture`)
+  useEffect(() => hideMapPillar(!!photo), [photo, hideMapPillar])
   // the kite fight is Sankranti's: if the festival goes (the snapshot changes mid-round), so does it
   if (kiteFrom && festival !== 'sankranti') setKiteFrom(null)
 
@@ -300,8 +308,10 @@ export default function App() {
     bindPosters(city)
     bindDrive(city)
     bindAnimals(city)
+    bindMap({ session: city, stage })
 
     return () => {
+      bindMap(null)
       bindAnimals(null)
       bindDrive(null)
       bindPosters(null)
@@ -337,6 +347,7 @@ export default function App() {
     bindDrive,
     animalHooks,
     bindAnimals,
+    bindMap,
     bandarHooks,
     current,
     now,
@@ -422,20 +433,21 @@ export default function App() {
         onClose={posters.close}
       />
     ))
-  // the monkey keeps off the street while anything is over it
-  const bandarBlocked =
+  /** A card, sheet or dialog is up: M does not open the map over it. */
+  const sheetUp =
     !!card ||
-    !!near ||
     sheetOpen ||
-    !!ride ||
-    !!kiteFrom ||
-    !!bench.seat ||
     profileShown ||
     connShown ||
     inviteOpen ||
     privacyOpen ||
     darshanOpen ||
     !!queue.card
+  useEffect(() => {
+    mapBlockedRef.current = sheetUp
+  }, [sheetUp, mapBlockedRef])
+  // the monkey keeps off the street while anything is over it
+  const bandarBlocked = sheetUp || !!near || !!ride || !!kiteFrom || !!bench.seat || map.open
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked
@@ -519,6 +531,7 @@ export default function App() {
         onInvite={residentId ? () => setInviteOpen(true) : undefined}
         onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
         connectionsBadge={conn.badge}
+        onMap={map.def ? map.toggle : undefined}
         photo={!!photo}
         onPhoto={
           kiteFrom || drive.driving
@@ -588,6 +601,9 @@ export default function App() {
                   </div>
                 )}
               </>
+            )}
+            {map.target && (
+              <Compass name={map.target.name[lang]} watch={map.watch} lang={lang} onClear={map.clear} />
             )}
             {/* a first visit's three steps, once the street is there to try them on */}
             {typeof place !== 'string' && <FirstHint lang={lang} />}
@@ -734,6 +750,17 @@ export default function App() {
         />
       )}
       {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
+      {map.open && map.def && (
+        <CityMap
+          def={map.def}
+          stamped={have}
+          read={map.read}
+          target={map.target?.id}
+          lang={lang}
+          onPick={map.pick}
+          onClose={map.close}
+        />
+      )}
       {darshanOpen && <DarshanList ids={have} lang={lang} onClose={() => setDarshanOpen(false)} />}
       {inviteOpen && me && residentId && (
         <InviteSheet
