@@ -3,7 +3,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { STAMPS } from '../world/stamps'
-import { STAMP_RIDDLE } from '../world/darshan'
+import { STAMP_DISTRICT, STAMP_RIDDLE } from '../world/darshan'
+import { DISTRICT_NAMES } from '../world/districtNames'
 import type { FullProfile, LivePerson } from '../net/protocol'
 import { DarshanList } from './DarshanList'
 import { Hud } from './Hud'
@@ -42,15 +43,49 @@ it('the list has all 9 landmarks: the collected with name and district, the rest
   expect(host.querySelector('.darshan-badge')).toBeNull()
 })
 
-it('no riddle gives its landmark away, and every one is bilingual', () => {
+/** Letters only, doubled letters folded: "baagh" and "bagh" are the same word to a reader. */
+const fold = (w: string) =>
+  w
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+    .replace(/(.)\1+/g, '$1')
+
+it('no riddle gives its landmark away, even in part, and every one is bilingual', () => {
   for (const s of STAMPS) {
+    // every distinctive word (4+ letters) of the landmark's name, in either language
+    const tokens = new Set(
+      [s.hi, s.en].flatMap((n) => n.split(/[^A-Za-z]+/).filter((w) => fold(w).length >= 4)).map(fold),
+    )
     for (const lang of ['hi', 'en'] as const) {
       const riddle = STAMP_RIDDLE[s.id][lang]
       expect(riddle.length).toBeGreaterThan(10)
       expect(riddle.length).toBeLessThan(110)
-      expect(riddle.toLowerCase()).not.toContain(s[lang].toLowerCase())
+      const words = riddle.split(/[^A-Za-z]+/).map(fold)
+      for (const token of tokens) {
+        expect(
+          words.some((w) => w.includes(token)),
+          `${s.id} ${lang} riddle uses "${token}"`,
+        ).toBe(false)
+      }
     }
   }
+})
+
+it('every stamp has a district and a riddle in both languages', () => {
+  for (const s of STAMPS) {
+    expect(STAMP_DISTRICT[s.id], s.id).toBeTruthy()
+    expect(Object.keys(DISTRICT_NAMES)).toContain(STAMP_DISTRICT[s.id])
+    expect(STAMP_RIDDLE[s.id]?.hi.trim(), `${s.id} hi`).toBeTruthy()
+    expect(STAMP_RIDDLE[s.id]?.en.trim(), `${s.id} en`).toBeTruthy()
+  }
+})
+
+it('the close control is in the header, so a phone needs no scrolling to reach it', async () => {
+  const onClose = vi.fn()
+  const host = await mount(<DarshanList ids={[]} lang="en" onClose={onClose} />)
+  const x = host.querySelector<HTMLButtonElement>('.darshan-head .darshan-x')!
+  await act(async () => x.click())
+  expect(onClose).toHaveBeenCalled()
 })
 
 it('the list speaks Hinglish and closes', async () => {

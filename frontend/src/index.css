@@ -1701,3 +1701,32 @@ button.stamp-count {
   font-size: 0.85rem;
   font-weight: 700;
 }
+
+/* The close control stays in view at the top while the nine rows scroll (a phone has no Escape). */
+.darshan-head {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -18px -18px 8px;
+  padding: 10px 10px 8px 18px;
+  background: #2a1d24;
+}
+
+.darshan-head h2 {
+  margin: 0;
+}
+
+.darshan-x {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+}

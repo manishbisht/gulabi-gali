@@ -18,7 +18,7 @@ export const STAMP_DISTRICT: Record<string, DistrictId> = {
 /** A one-line riddle per landmark, for the stamps not collected yet: it never says the name. */
 export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
   'hawa-mahal': {
-    hi: 'Gulabi deewar, hazaar ke kareeb khidkiyan: hawa andar aati hai, nazar bahar jaati hai.',
+    hi: 'Gulabi deewar, hazaar ke kareeb jharokhe: andar thandak aati hai, nazar bahar jaati hai.',
     en: 'A pink wall of nearly a thousand tiny windows: the breeze walks in, a gaze walks out.',
   },
   'jantar-mantar': {
@@ -35,10 +35,10 @@ export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
   },
   'albert-hall': {
     hi: 'Baagh ke beech purani shaan ka ghar, jahan shahar ka khazana kaanch ke peeche rehta hai.',
-    en: "An old-world hall in a garden, keeping the city's treasures behind glass.",
+    en: "An old-world museum in a garden, keeping the city's treasures behind glass.",
   },
   'ram-niwas-gate': {
-    hi: 'Shahar ke bade hare baagh ka darwaza: chhaanv, sair aur subah ki daud.',
+    hi: 'Shahar ke sabse bade hare maidan ka darwaza: chhaanv, sair aur subah ki daud.',
     en: "The gate to the city's big green garden: shade, strolls and morning jogs.",
   },
   'university-gate': {
@@ -46,7 +46,7 @@ export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
     en: 'A gate of books and hurried bikes, where dreams set off for class.',
   },
   jkk: {
-    hi: 'Kala aur rang ka ghar, nau khaanon ke naksha mein bana.',
+    hi: 'Rangon aur hunar ka ghar, nau khaanon ke naksha mein bana.',
     en: 'A house of art and colour, laid out in nine squares.',
   },
   wtp: {

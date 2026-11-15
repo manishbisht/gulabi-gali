@@ -27,7 +27,12 @@ export function DarshanList({ ids, lang, onClose }: Props) {
         aria-modal="true"
         aria-label={t('darshanTitle', lang)}
       >
-        <h2>{t('stampsLine', lang, { n: ids.length, total: TOTAL_STAMPS })}</h2>
+        <div className="darshan-head">
+          <h2>{t('stampsLine', lang, { n: ids.length, total: TOTAL_STAMPS })}</h2>
+          <button type="button" className="darshan-x" aria-label={t('darshanClose', lang)} onClick={onClose}>
+            ×
+          </button>
+        </div>
         {darshanComplete(ids) && <DarshanBadge lang={lang} />}
         <ul className="darshan-list" aria-label={t('darshanListLabel', lang)}>
           {darshanEntries(ids, lang).map((e) => (
