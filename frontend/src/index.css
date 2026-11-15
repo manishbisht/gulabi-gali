@@ -1568,3 +1568,21 @@ small.words-hint {
   color: var(--plum);
   font-weight: 700;
 }
+
+/*
+ * The street's action buttons (drive, kite, metro, sit, pin, call or send home an animal), beside the joystick.
+ * On a small phone two of them and the joystick do not fit in one row: the box shrinks to what is left and they
+ * stack upward instead of running off the screen. Empty, it takes no room.
+ */
+.hud-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.hud-actions:empty {
+  display: none;
+}

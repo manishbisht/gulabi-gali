@@ -575,60 +575,68 @@ export default function App() {
               <DriveButtons lang={lang} onHorn={drive.honk} onExit={drive.exit} />
             ) : (
               <>
-                {drive.near && !near && !sheetOpen && !card && (bench.seat || !bench.near) && (
-                  <button type="button" className="metro-button drive-button" onClick={drive.mount}>
-                    {t('driveMount', lang)}
-                  </button>
-                )}
-                {patangAvailable({ festival, driving: drive.driving, seated: !!bench.seat, card: !!card }) &&
-                  !near &&
-                  !sheetOpen && (
-                    <button
-                      type="button"
-                      className="metro-button patang-button"
-                      onClick={() => {
-                        const at = session.current?.player()?.position()
-                        const stage = stageRef.current
-                        const controls = controlsRef.current
-                        if (at && stage && controls) setKiteFrom({ at, stage, controls })
-                      }}
-                    >
-                      {t('patangStart', lang)}
+                {/* the street's actions: beside the joystick, they stack upward when a small phone has no room */}
+                <div className="hud-actions">
+                  {drive.near && !near && !sheetOpen && !card && (bench.seat || !bench.near) && (
+                    <button type="button" className="metro-button drive-button" onClick={drive.mount}>
+                      {t('driveMount', lang)}
                     </button>
                   )}
-                {nearStation && !near && !sheetOpen && !bench.seat && (
-                  <button type="button" className="metro-button" onClick={openSheet}>
-                    {t('metro', lang)}
-                  </button>
-                )}
-                {bench.near && !bench.seat && !near && !sheetOpen && (
-                  <button type="button" className="metro-button bench-button" onClick={bench.sit}>
-                    {t('benchSit', lang)}
-                  </button>
-                )}
-                {posters.near && !bench.near && !bench.seat && !near && !sheetOpen && !card && (
-                  <button type="button" className="metro-button poster-button" onClick={posters.compose}>
-                    {t('posterPin', lang)}
-                  </button>
-                )}
-                {animals.near &&
-                  !drive.near &&
-                  !nearStation &&
-                  !bench.near &&
-                  !bench.seat &&
-                  !posters.near &&
-                  !near &&
-                  !sheetOpen &&
-                  !card && (
-                    <button type="button" className="metro-button animal-button" onClick={animals.call}>
-                      {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                  {patangAvailable({
+                    festival,
+                    driving: drive.driving,
+                    seated: !!bench.seat,
+                    card: !!card,
+                  }) &&
+                    !near &&
+                    !sheetOpen && (
+                      <button
+                        type="button"
+                        className="metro-button patang-button"
+                        onClick={() => {
+                          const at = session.current?.player()?.position()
+                          const stage = stageRef.current
+                          const controls = controlsRef.current
+                          if (at && stage && controls) setKiteFrom({ at, stage, controls })
+                        }}
+                      >
+                        {t('patangStart', lang)}
+                      </button>
+                    )}
+                  {nearStation && !near && !sheetOpen && !bench.seat && (
+                    <button type="button" className="metro-button" onClick={openSheet}>
+                      {t('metro', lang)}
                     </button>
                   )}
-                {animals.following && !bench.seat && !near && !sheetOpen && !card && (
-                  <button type="button" className="metro-button animal-button" onClick={animals.home}>
-                    {t('animalHome', lang)}
-                  </button>
-                )}
+                  {bench.near && !bench.seat && !near && !sheetOpen && (
+                    <button type="button" className="metro-button bench-button" onClick={bench.sit}>
+                      {t('benchSit', lang)}
+                    </button>
+                  )}
+                  {posters.near && !bench.near && !bench.seat && !near && !sheetOpen && !card && (
+                    <button type="button" className="metro-button poster-button" onClick={posters.compose}>
+                      {t('posterPin', lang)}
+                    </button>
+                  )}
+                  {animals.near &&
+                    !drive.near &&
+                    !nearStation &&
+                    !bench.near &&
+                    !bench.seat &&
+                    !posters.near &&
+                    !near &&
+                    !sheetOpen &&
+                    !card && (
+                      <button type="button" className="metro-button animal-button" onClick={animals.call}>
+                        {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                      </button>
+                    )}
+                  {animals.following && !bench.seat && !near && !sheetOpen && !card && (
+                    <button type="button" className="metro-button animal-button" onClick={animals.home}>
+                      {t('animalHome', lang)}
+                    </button>
+                  )}
+                </div>
                 {bench.seat ? (
                   // seated, the bench panel holds the bottom; a tapped character or person shows over it
                   card || (

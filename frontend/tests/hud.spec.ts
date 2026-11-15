@@ -140,3 +140,66 @@ test('the HUD switches say what they do, and show their state only through aria-
   await page.keyboard.press('Enter')
   await expect(bandar).toHaveAttribute('aria-pressed', 'false')
 })
+
+/** Each item whole on the screen, and none on another. */
+async function sideBySide(items: Record<string, Locator>) {
+  const boxes = Object.entries(
+    Object.fromEntries(
+      await Promise.all(Object.entries(items).map(async ([k, l]) => [k, (await l.boundingBox())!] as const)),
+    ),
+  )
+  for (const [k, b] of boxes) {
+    expect.soft(b.x, `${k} left`).toBeGreaterThanOrEqual(0)
+    expect.soft(b.x + b.width, `${k} right`).toBeLessThanOrEqual(PHONE.width)
+    expect.soft(b.y + b.height, `${k} bottom`).toBeLessThanOrEqual(PHONE.height)
+  }
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const [ka, a] = boxes[i]!
+      const [kb, b] = boxes[j]!
+      const apart =
+        a.x + a.width <= b.x + 0.5 ||
+        b.x + b.width <= a.x + 0.5 ||
+        a.y + a.height <= b.y + 0.5 ||
+        b.y + b.height <= a.y + 0.5
+      expect.soft(apart, `${ka} overlaps ${kb}`).toBe(true)
+    }
+}
+
+test('on a small phone with a dog in tow, the bottom row fits: on foot by an auto, and at its wheel', async ({
+  page,
+}) => {
+  // the city offline, as in city.spec.ts: a live district would pull a teleported player back
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+  await page.goto('/?gg-test=1')
+  await page.getByRole('button', { name: 'Padharo!' }).click()
+  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  // the street dog by the start (see animals.spec.ts) comes along
+  await page.evaluate(() => window.__gg.freezeAnimals(true))
+  const dog = await page.evaluate(() => window.__gg.animals().find((a) => a.id === 'walled-city-dog-0')!)
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 1.6), dog)
+  await page.getByRole('button', { name: 'Saath chalo' }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__gg.animals().find((a) => a.id === 'walled-city-dog-0')!.following),
+    )
+    .toBe(true)
+
+  // on foot beside the walled city's auto: the joystick, "Auto chalao" and "Ghar jao"
+  await page.evaluate(() => window.__gg.teleport(24, -2.5))
+  const joystick = page.locator('.joystick')
+  const mount = page.getByRole('button', { name: 'Auto chalao' })
+  const home = page.getByRole('button', { name: 'Ghar jao' })
+  await sideBySide({ joystick, mount, home })
+  await page.screenshot({ path: '../.superpowers/sdd/2026-11-14-phase-4-extras/launch-b-onfoot-360.png' })
+
+  // at the wheel: the joystick, the horn and the way out ("Ghar jao" waits until the player is out again)
+  await mount.tap()
+  const horn = page.getByRole('button', { name: 'Horn bajao' })
+  const exit = page.getByRole('button', { name: 'Utro' })
+  await expect(exit).toBeVisible()
+  await expect(home).toBeHidden()
+  await sideBySide({ joystick, horn, exit })
+  await page.waitForTimeout(600) // the camera settles behind the auto, for the picture
+  await page.screenshot({ path: '../.superpowers/sdd/2026-11-14-phase-4-extras/launch-b-driving-360.png' })
+})
