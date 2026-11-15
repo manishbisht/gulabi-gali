@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { beaconError } from '../net/errorBeacon'
+import { testRenderLite } from '../testHooks'
 
 export type QualityTier = 0 | 1 | 2
 
@@ -29,6 +30,8 @@ const FOV = 60
 const PORTRAIT_FOV = 70
 /** Pixel ratio ceiling per tier. */
 const RATIO_CAP: Record<QualityTier, number> = { 2: 2, 1: 1.25, 0: 1 }
+/** A test page's pixel ratio (see `testRenderLite`): a quarter of the CSS size each way, whatever the tier. */
+const LITE_RATIO = 0.25
 
 /** A device that was slow once will be slow again this session; start where it ended up. */
 function readQuality(): QualityTier {
@@ -42,7 +45,8 @@ function readQuality(): QualityTier {
 }
 
 export function createStage(canvas: HTMLCanvasElement): Stage {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
+  const lite = testRenderLite()
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lite, powerPreference: 'high-performance' })
   renderer.shadowMap.type = THREE.PCFShadowMap
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400)
@@ -62,7 +66,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     const width = window.innerWidth
     const height = window.innerHeight
     if (!width || !height) return
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
+    renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, RATIO_CAP[quality]))
     renderer.setSize(width, height, false)
     camera.aspect = width / height
     // A phone held upright sees a narrow slice of street; open the lens a little so a lane fits.

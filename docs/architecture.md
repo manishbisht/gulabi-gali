@@ -97,6 +97,8 @@ Opening the site with `?gg-test=1` installs `window.__gg` (`src/testHooks.ts`), 
 kites), `patang` and `renderInfo` (the renderer's draw calls and memory). `?gg-festival=<id>` stands in for the
 live festival, in test mode only. Both are needed: the hooks exist only in a build made with `VITE_TEST_HOOKS=1` (the e2e build; the shipped one
 drops them) and only on a page opened with `gg-test=1`. The Playwright specs in `frontend/tests` and `tests/device-perf.spec.ts` use these.
+Such a page also draws lite (`testRenderLite`): a pixel ratio of 0.25 and no antialiasing, so CI's
+software WebGL keeps up with Playwright; `&gg-full=1` draws in full, and the device perf run passes it.
 
 ## The protocol-copy rule
 

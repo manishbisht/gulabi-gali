@@ -221,8 +221,9 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
   const cdn = clerkMode ? await standInForClerk(page, clerkMode) : []
   const cdp = await throttle(page)
 
-  // Load: a cold visit, past the intro, to the first walkable frame.
-  await page.goto(EXTRAS ? '/?gg-test=1&gg-festival=sankranti' : '/?gg-test=1', {
+  // Load: a cold visit, past the intro, to the first walkable frame. gg-full: drawn in full, as a phone
+  // draws it (other test pages draw lite, see testRenderLite).
+  await page.goto(EXTRAS ? '/?gg-test=1&gg-full=1&gg-festival=sankranti' : '/?gg-test=1&gg-full=1', {
     waitUntil: 'load',
     timeout: 120000,
   })

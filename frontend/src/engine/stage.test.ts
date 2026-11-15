@@ -1,17 +1,24 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 
-const renderer = vi.hoisted(() => ({ calls: [] as string[] }))
+const renderer = vi.hoisted(() => ({
+  calls: [] as string[],
+  antialias: [] as boolean[],
+  ratios: [] as number[],
+}))
 vi.mock('three', async (orig) => {
   const real = await orig<typeof import('three')>()
   class FakeRenderer {
     shadowMap = {}
     domElement: HTMLCanvasElement
-    constructor(o: { canvas: HTMLCanvasElement }) {
+    constructor(o: { canvas: HTMLCanvasElement; antialias: boolean }) {
       this.domElement = o.canvas
+      renderer.antialias.push(o.antialias)
     }
-    setPixelRatio() {}
+    setPixelRatio(r: number) {
+      renderer.ratios.push(r)
+    }
     setSize() {}
     render() {}
     dispose() {
@@ -56,6 +63,36 @@ it('a lost WebGL context goes to the error beacon, and our own dispose does not'
   stage.dispose()
   canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
   expect(beaconError).toHaveBeenCalledTimes(1)
+})
+
+describe('a test page', () => {
+  beforeEach(() => {
+    renderer.antialias.length = renderer.ratios.length = 0
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    history.replaceState(null, '', '/')
+  })
+
+  it('draws a sixteenth of the pixels, without antialiasing, so software WebGL keeps up', () => {
+    vi.stubEnv('VITE_TEST_HOOKS', '1')
+    history.replaceState(null, '', '/?gg-test=1')
+    const stage = createStage(document.createElement('canvas'))
+    expect(renderer.antialias).toEqual([false])
+    expect(renderer.ratios.at(-1)).toBe(0.25)
+    stage.dispose()
+  })
+
+  it('draws in full anywhere else', () => {
+    vi.stubEnv('VITE_TEST_HOOKS', '')
+    history.replaceState(null, '', '/?gg-test=1')
+    vi.stubGlobal('devicePixelRatio', 2)
+    const stage = createStage(document.createElement('canvas'))
+    expect(renderer.antialias).toEqual([true])
+    expect(renderer.ratios.at(-1)).toBe(2)
+    stage.dispose()
+  })
 })
 
 describe('adaptive quality', () => {

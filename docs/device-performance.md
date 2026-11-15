@@ -51,7 +51,7 @@ Paste results into a copy of the table below with the device in the heading.
 `npm run test:device` from the repo root (it starts the Worker and a production build of the site through
 `playwright.config.ts`). In a fresh context: Playwright's _Pixel 7_ descriptor (412 x 915, DPR 2.625, touch,
 mobile UA), CPU slowed 6x (`Emulation.setCPUThrottlingRate`), DevTools' _Fast 4G_ (9 Mbps x 0.9 down,
-1.5 Mbps x 0.9 up, 165 ms RTT) with the cache disabled. It loads `/?gg-test=1`, taps _Padharo!_, and waits for
+1.5 Mbps x 0.9 up, 165 ms RTT) with the cache disabled. It loads `/?gg-test=1&gg-full=1` (drawn in full, not lite), taps _Padharo!_, and waits for
 the first walkable frame: `window.__gg.position` exists (the hooks install once the district is in) and one
 frame has drawn after that. Then it walks the bazaar for 8 s (holding W and S in turn so the player never
 stands at a wall) recording main-thread `requestAnimationFrame` intervals, and reads the tier and

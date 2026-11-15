@@ -78,3 +78,17 @@ export function installTestHooks(api: Partial<GgTestApi>): void {
   if (new URLSearchParams(location.search).get('gg-test') !== '1') return
   window.__gg = { ...window.__gg, ...api }
 }
+
+/**
+ * True on a test page (the e2e build, `?gg-test=1`) unless `gg-full=1` asks for the real thing: the stage
+ * then draws a sixteenth of the pixels, without antialiasing. CI's browser has no GPU, and software WebGL at
+ * full size draws ~3 frames a second (two pages at once: ~1.4), too few for Playwright's actions to finish in
+ * a test's minute. Only the picture is coarser; sizes on the page, hit tests and the frame loop are unchanged.
+ * The device perf run passes `gg-full=1`: it measures what a phone pays. Like `installTestHooks`, a production
+ * build drops the body.
+ */
+export function testRenderLite(): boolean {
+  if (import.meta.env.VITE_TEST_HOOKS !== '1') return false
+  const query = new URLSearchParams(location.search)
+  return query.get('gg-test') === '1' && query.get('gg-full') !== '1'
+}

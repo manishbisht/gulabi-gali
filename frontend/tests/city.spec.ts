@@ -250,11 +250,30 @@ test('mounts a parked auto, drives it, and gets out', async ({ page }) => {
   const out = await page.evaluate(() => window.__gg.position())
   expect(Math.hypot(out.x - to.x, out.z - to.z)).toBeGreaterThan(1)
   expect(Math.hypot(out.x - to.x, out.z - to.z)).toBeLessThan(3.5)
+  // Walking pace, not the auto's 12 m/s carried on: no farther than WALK_SPEED (4 m/s, player.ts) for as long
+  // as the page heard D held, plus one frame's dt (clamped to 0.1 s, stage.ts) reaching back before the press.
+  // The hold is timed in the page, not by the 500 ms wait below: a starved CI page took that wait's keys late
+  // and walked 3.2 m, 0.8 s at walking pace.
+  await page.evaluate(() => {
+    const held = { down: 0, up: 0 }
+    Object.assign(window, { held })
+    addEventListener('keydown', (e) => {
+      if (e.code === 'KeyD' && !held.down) held.down = performance.now()
+    })
+    addEventListener('keyup', (e) => {
+      if (e.code === 'KeyD') held.up = performance.now()
+    })
+  })
   await page.keyboard.down('d')
   await page.waitForTimeout(500)
   await page.keyboard.up('d')
   const walked = await page.evaluate(() => window.__gg.position())
-  expect(Math.hypot(walked.x - out.x, walked.z - out.z)).toBeLessThan(3)
+  const heldFor = await page.evaluate(() => {
+    const { held } = window as unknown as { held: { down: number; up: number } }
+    return (held.up - held.down) / 1000
+  })
+  expect(heldFor).toBeGreaterThan(0)
+  expect(Math.hypot(walked.x - out.x, walked.z - out.z)).toBeLessThan(4 * (heldFor + 0.1))
 })
 
 test('the sound switch is remembered', async ({ page }) => {
