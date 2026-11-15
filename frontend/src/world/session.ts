@@ -553,7 +553,8 @@ function createLights(stage: Stage, district: District): DistrictSystem {
  * A drag is the look: the first pointer down on the canvas (a mouse's main button, or one finger) that moves past
  * TAP_SLOP turns the view (`controls.addLook`) until it lifts, and is never a tap. Right turns right, up tilts up,
  * and the stage's full width is DRAG_TURN. The joystick's thumb is on its own element, so the other thumb can look
- * while it walks. While dragging the canvas has `data-looking` (the grabbing cursor).
+ * while it walks. While dragging the canvas has `data-looking` (the grabbing cursor) and `controls.holdLook` is on.
+ * A mouse let go of off the canvas is noticed at its next hover there (no main button held).
  */
 function createInteraction(
   canvas: HTMLCanvasElement,
@@ -582,6 +583,7 @@ function createInteraction(
    */
   const look = { id: -1, x: 0, y: 0, perPx: 0, dragging: false }
   const stopLook = () => {
+    if (look.dragging) controls.holdLook(false)
     look.id = -1
     look.dragging = false
     canvas.removeAttribute('data-looking')
@@ -601,9 +603,12 @@ function createInteraction(
   }
   const onMove = (e: PointerEvent) => {
     if (e.pointerId !== look.id) return
+    // a mouse let go of over a chip or a card: the canvas never heard the up, and this is a hover
+    if (e.pointerType === 'mouse' && (e.buttons & 1) === 0) return stopLook()
     if (!look.dragging) {
       if (Math.hypot(e.clientX - look.x, e.clientY - look.y) <= TAP_SLOP) return
       look.dragging = true
+      controls.holdLook(true) // held still at the wheel, it keeps the view where it is put
       canvas.setAttribute('data-looking', '')
       // a mouse dragged out over the HUD keeps turning, and its release is heard here
       try {

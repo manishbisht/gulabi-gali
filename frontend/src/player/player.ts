@@ -103,7 +103,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     },
     update(dt: number) {
       const turn = controls.look(dt)
-      follow.turn(turn.yaw, turn.pitch)
+      follow.turn(turn.yaw, turn.pitch, turn.held)
       if (driving) {
         // the stick is the wheel and the pedal here, not a direction on the street
         const want = vehicle.update(controls.drive(), dt)

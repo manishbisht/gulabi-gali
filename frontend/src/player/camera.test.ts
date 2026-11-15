@@ -141,3 +141,17 @@ it('at the wheel, comes round behind the auto once nobody has turned it for 1.5 
   for (let i = 0; i < 300; i++) walking.update({ x: 0, y: 0, z: 0 }, 1 / 30)
   expect(walking.yaw()).toBeCloseTo(Math.PI / 2)
 })
+
+it('at the wheel, a look held still (a thumb resting on the street) keeps the view; the 1.5 s count starts when it lifts', () => {
+  const { follow } = settled(Math.PI / 2)
+  const behind = Math.PI
+  for (let i = 0; i < 90; i++) {
+    follow.turn(0, 0, true) // held, not moving
+    follow.update({ x: 0, y: 0, z: 0 }, 1 / 30, behind)
+  }
+  expect(follow.yaw()).toBeCloseTo(Math.PI / 2) // 3 s held: not recentred
+  for (let i = 0; i < 30; i++) follow.update({ x: 0, y: 0, z: 0 }, 1 / 30, behind) // 1 s after lifting
+  expect(follow.yaw()).toBeCloseTo(Math.PI / 2)
+  for (let i = 0; i < 150; i++) follow.update({ x: 0, y: 0, z: 0 }, 1 / 30, behind)
+  expect(Math.abs(Math.cos(follow.yaw()) - Math.cos(behind))).toBeLessThan(0.01)
+})

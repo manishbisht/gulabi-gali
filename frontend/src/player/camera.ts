@@ -75,7 +75,7 @@ function firstHit(x0: number, z0: number, x1: number, z1: number, boxes: AABB[])
  * turns it. A drag on the stage or Q/R (`turn`) swings it all the way round (yaw, positive turns the view
  * left, as three's rotation.y does) and tilts it within limits (pitch, positive looks up), easing into the turn
  * unless the browser asks for reduced motion. At the wheel (`behind` given to `update`) it comes back round
- * behind the auto once nobody has turned it for RECENTRE_AFTER; on foot it stays where it was left.
+ * behind the auto once nobody has turned it (or held a drag down) for RECENTRE_AFTER; on foot it stays where it was left.
  * Only the position lags (the player's position, eased); the view's heading is the yaw alone, so lag slides
  * the camera but never yaws the view. When a building stands between it and the player it slides in over the
  * player's head at any yaw, so it never looks out from inside a wall; it eases back out once the way is clear.
@@ -103,8 +103,12 @@ export function createFollowCamera(
   /** How far out along its arm the camera stands (1: all the way; less: pulled in by a wall). */
   let reach = 1
   return {
-    /** Turns the view by `dYaw` (positive: left) and tilts it by `dPitch` (positive: up), in radians. */
-    turn(dYaw: number, dPitch: number) {
+    /**
+     * Turns the view by `dYaw` (positive: left) and tilts it by `dPitch` (positive: up), in radians. `held`: a
+     * drag is still down, however still; like a turn, it holds off coming round behind the auto.
+     */
+    turn(dYaw: number, dPitch: number, held = false) {
+      if (held) idle = 0
       if (dYaw === 0 && dPitch === 0) return
       goalYaw = wrap(goalYaw + dYaw)
       goalPitch = Math.min(PITCH_UP, Math.max(PITCH_DOWN, goalPitch + dPitch))

@@ -28,7 +28,7 @@ test('dragging the street turns the view, W walks the new forward, and a click o
   await page.evaluate(() => window.__gg.freezeNpcs(true))
   expect((await view(page)).yaw).toBe(0) // today's view until someone drags
   const canvas = page.locator('canvas')
-  await expect(canvas).toHaveCSS('cursor', 'grab')
+  await expect(canvas).toHaveCSS('cursor', 'auto') // the usual arrow: no open hand suggesting which way to pull
 
   // drag right a fifth of the screen: the view turns right (a negative yaw), about 45°
   const { width, height } = page.viewportSize()!
@@ -38,7 +38,7 @@ test('dragging the street turns the view, W walks the new forward, and a click o
   await expect(canvas).toHaveCSS('cursor', 'grabbing')
   await page.mouse.move(width / 2 + width / 5, height / 2, { steps: 4 })
   await page.mouse.up()
-  await expect(canvas).toHaveCSS('cursor', 'grab')
+  await expect(canvas).toHaveCSS('cursor', 'auto')
   const yaw = await settledYaw(page)
   expect(yaw).toBeLessThan(-0.5)
   expect(yaw).toBeGreaterThan(-1.2)

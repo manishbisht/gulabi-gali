@@ -125,3 +125,17 @@ it('at the wheel the view comes round behind the auto when left alone', () => {
   player.dispose()
   controls.dispose()
 })
+
+it('at the wheel a thumb resting on the street holds the view where it was turned', () => {
+  const { controls, player } = drivable()
+  player.mount(0, 0, Math.PI / 2) // nose to +x: behind it is yaw -π/2
+  controls.addLook(Math.PI / 2, 0) // from yaw 0 (mounting never swings it) to +π/2: the auto's other side
+  controls.holdLook(true)
+  for (let i = 0; i < 120; i++) player.update(1 / 30) // 4 s held still
+  expect(Math.sin(player.view().yaw)).toBeCloseTo(1, 2) // still looking the other way (+π/2)
+  controls.holdLook(false)
+  for (let i = 0; i < 180; i++) player.update(1 / 30)
+  expect(Math.sin(player.view().yaw)).toBeCloseTo(-1, 2)
+  player.dispose()
+  controls.dispose()
+})

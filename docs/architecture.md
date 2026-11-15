@@ -69,7 +69,9 @@ view: 7 m behind (+z), 4.5 m up, aimed through head height 5 m beyond the player
   turns the view. Right turns right, and up tilts up. A drag across the full width turns 225° (`DRAG_TURN`), and
   a vertical drag tilts half as fast. `createInteraction` in `src/world/session.ts` owns this alongside taps: a
   drag is never a tap, a second finger never takes over the look, and the canvas carries `data-looking` while
-  turning (the CSS `grab`/`grabbing` cursor, for fine pointers only). The joystick, HUD, cards and sheets are
+  turning. Fine pointers then show the `grabbing` cursor; otherwise the canvas keeps the default cursor, because an
+  open hand would suggest pulling the other way. A mouse released over a chip or card is never heard letting go.
+  Its next hover over the canvas, with no button held, ends the drag. The joystick, HUD, cards and sheets are
   their own DOM elements, so the canvas never hears them. One thumb can hold the stick while the other looks.
 - **Q and R** turn left and right at 2 rad/s (`src/player/controls.ts`). E, WASD, the arrows and Space were
   already taken.
@@ -79,7 +81,8 @@ frame. `controls.freeze` (the kite fight) drops both. Yaw goes all the way round
 about 14° above the horizon (camera ~2.2 m up) and about 46° down (camera ~6.6 m up), so the camera never
 dips under the ground and the view never flips. The view eases into a turn over a few frames, and snaps there
 with `prefers-reduced-motion`. Walking is camera-relative (W is into the screen) and never recentres. At the
-wheel of an auto the view comes back round behind it once nobody has turned it for 1.5 s. Mounting does not
+wheel of an auto the view comes back round behind it once nobody has turned it for 1.5 s. A drag still held
+down counts as turning, even a thumb resting still (`controls.holdLook`), so the count starts when it lifts. Mounting does not
 whip it round, because only real frames advance that. Only the camera's position lags the player. The view's
 heading comes from the yaw alone, so lag slides the camera but never turns the view. The wall pull-in (a ray
 from the head to the camera) works at any yaw. A new district starts at yaw 0. `__gg.view()` reads the yaw and

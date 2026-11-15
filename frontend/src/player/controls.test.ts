@@ -175,7 +175,7 @@ describe('createControls', () => {
   })
   it('a drag on the stage turns the view: summed until read, then consumed, in one reused answer', () => {
     const c = (controls = createControls(fakeWindow()))
-    expect(c.look(1 / 30)).toEqual({ yaw: 0, pitch: 0 })
+    expect(c.look(1 / 30)).toEqual({ yaw: 0, pitch: 0, held: false })
     c.addLook(0.1, 0.02)
     c.addLook(0.2, -0.01)
     const a = c.look(1 / 30)
@@ -183,7 +183,7 @@ describe('createControls', () => {
     expect(a.pitch).toBeCloseTo(0.01)
     const b = c.look(1 / 30)
     expect(b).toBe(a) // no allocation per frame
-    expect(b).toEqual({ yaw: 0, pitch: 0 })
+    expect(b).toEqual({ yaw: 0, pitch: 0, held: false })
   })
 
   it('Q turns the view left and R right, at a steady rate while held, and they are not walking keys', () => {
@@ -219,5 +219,17 @@ describe('createControls', () => {
     expect(c.look(1).yaw).toBe(0)
     c.freeze(false)
     expect(c.look(1 / 30).yaw).toBe(0)
+  })
+  it('reports a look held (a finger down on the street) until it lets go, and never while frozen', () => {
+    const c = (controls = createControls(fakeWindow()))
+    expect(c.look(1 / 30).held).toBe(false)
+    c.holdLook(true)
+    expect(c.look(1 / 30)).toEqual({ yaw: 0, pitch: 0, held: true })
+    expect(c.look(1 / 30).held).toBe(true) // held is a state, not consumed
+    c.freeze(true)
+    expect(c.look(1 / 30).held).toBe(false)
+    c.freeze(false)
+    c.holdLook(false)
+    expect(c.look(1 / 30).held).toBe(false)
   })
 })

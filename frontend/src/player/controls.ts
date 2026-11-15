@@ -16,11 +16,13 @@ export interface Controls {
   /**
    * How far to turn the view this frame, in radians: `yaw` positive turns it left, `pitch` positive tilts it up.
    * The drags added since the last read plus Q (left) or R (right) held for `dt` seconds. Reading consumes the
-   * drags, and the answer is one reused object.
+   * drags, and the answer is one reused object. `held`: a drag on the stage is still down (see `holdLook`).
    */
-  look(dt: number): { yaw: number; pitch: number }
+  look(dt: number): { yaw: number; pitch: number; held: boolean }
   /** A drag on the stage turned the view by this much (radians, as `look`); summed until `look` reads it. */
   addLook(yaw: number, pitch: number): void
+  /** A drag on the stage began (true) or let go (false): held still, it keeps the view where it is put. */
+  holdLook(on: boolean): void
   setJoystick(v: Vec2): void
   /**
    * Holds the player still while a minigame has the keys and the stick: `move()`, `drive()` and `look()` read
@@ -66,7 +68,8 @@ export function createControls(target: Window): Controls {
   /** Drags not read yet, and what `look()` hands back, reused. */
   let dragYaw = 0
   let dragPitch = 0
-  const looked = { yaw: 0, pitch: 0 }
+  let lookHeld = false
+  const looked = { yaw: 0, pitch: 0, held: false }
 
   const axis = (positive: string[], negative: string[]) =>
     (positive.some((k) => down.has(k)) ? 1 : 0) - (negative.some((k) => down.has(k)) ? 1 : 0)
@@ -128,6 +131,7 @@ export function createControls(target: Window): Controls {
     look(dt) {
       looked.yaw = frozen ? 0 : dragYaw + axis(TURN_LEFT, TURN_RIGHT) * TURN_RATE * dt
       looked.pitch = frozen ? 0 : dragPitch
+      looked.held = !frozen && lookHeld
       dragYaw = 0
       dragPitch = 0
       return looked
@@ -136,6 +140,9 @@ export function createControls(target: Window): Controls {
       if (frozen) return
       dragYaw += yaw
       dragPitch += pitch
+    },
+    holdLook(on) {
+      lookHeld = on
     },
     interact() {
       const fired = interactQueued
@@ -170,6 +177,7 @@ export function createControls(target: Window): Controls {
       joystick = { x: 0, z: 0 }
       dragYaw = 0
       dragPitch = 0
+      lookHeld = false
       spaceHeld = false
     },
   }

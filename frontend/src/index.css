@@ -49,11 +49,8 @@ button {
   touch-action: none;
 }
 
-/* Drag the street to look around: a hand to grab it with a mouse, closed while it turns. */
+/* Drag the street to look around: the usual arrow over it, a closed hand only while a drag turns it. */
 @media (pointer: fine) {
-  .stage {
-    cursor: grab;
-  }
   .stage[data-looking] {
     cursor: grabbing;
   }
