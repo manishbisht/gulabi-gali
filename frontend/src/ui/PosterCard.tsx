@@ -26,7 +26,7 @@ interface Props {
   onBlock(poster: PosterView, stay?: boolean): Promise<BlockOutcome>
   /** Your own poster came down. */
   onTakenDown(id: string): void
-  /** "Main aaunga" said or taken back: the poster as it now stands, for the wall. */
+  /** "Main aaunga/aaungi" said or taken back: the poster as it now stands, for the wall. */
   onChanged?(poster: PosterView): void
   onClose(): void
 }
@@ -36,7 +36,7 @@ interface Props {
  * name. A resident can report it or block its owner (the block asked first, then the report if they want);
  * your own you can take down, a hidden one too (only you see it, and it still counts toward your two).
  *
- * Milte hain: everyone sees how many are coming; a verified member taps "Main aaunga" (or takes it back); the
+ * Milte hain: everyone sees how many are coming; a verified member taps "Main aaunga/aaungi" (or takes it back); the
  * owner alone is sent the first names of those coming, asked for when their card opens.
  */
 export function PosterCard({
@@ -66,7 +66,7 @@ export function PosterCard({
   const going: GoingView =
     said?.id === poster.id ? said.view : { going: poster.going ?? 0, coming: poster.coming === true }
   const [goingBusy, setGoingBusy] = useState(false)
-  const [goingError, setGoingError] = useState<'rate' | 'failed' | null>(null)
+  const [goingError, setGoingError] = useState<'rate' | 'past' | 'failed' | null>(null)
   const canGo = viewer === 'verified' && !mine && !poster.hidden
   const asked = mine && !poster.hidden
 
@@ -88,7 +88,8 @@ export function PosterCard({
     const out = tok ? await setGoing(tok, poster.id, !going.coming) : null
     setGoingBusy(false)
     if (!out?.ok) {
-      setGoingError(out?.ok === false && out.error === 'rate' ? 'rate' : 'failed')
+      const error = out?.ok === false ? out.error : 'failed'
+      setGoingError(error === 'rate' || error === 'past' ? error : 'failed')
       return
     }
     setSaid({ id: poster.id, view: out.view })
@@ -129,10 +130,18 @@ export function PosterCard({
           {t('posterComingNote', lang)}
         </p>
       )}
+      {canGo && <p className="person-note">{t('posterGoingPrivacy', lang)}</p>}
       {viewer === 'resident' && !mine && <p className="person-note">{t('posterComingVerifiedOnly', lang)}</p>}
       {goingError && (
         <p className="person-note" role="alert">
-          {t(goingError === 'rate' ? 'posterGoingRate' : 'posterGoingFailed', lang)}
+          {t(
+            goingError === 'rate'
+              ? 'posterGoingRate'
+              : goingError === 'past'
+                ? 'posterGoingPast'
+                : 'posterGoingFailed',
+            lang,
+          )}
         </p>
       )}
       {mine && <p className="person-note">{t('posterMine', lang)}</p>}

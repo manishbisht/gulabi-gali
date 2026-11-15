@@ -7,7 +7,7 @@
 -- an hour before the plan's time went (or was not due: said inside that hour). A row lives and dies with its
 -- poster: the triggers below take it when the poster goes (taken down, replaced, expired, an admin, a ban, a
 -- deletion), when reports hide the poster or its owner, when either of the two blocks the other, and when the
--- person is banned. Deleting an account deletes its own rows.
+-- person is hidden or banned. Deleting an account deletes its own rows.
 CREATE TABLE rsvps (
   poster_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL,
   reminded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (poster_id, user_id));
@@ -31,10 +31,10 @@ BEGIN
   DELETE FROM rsvps WHERE user_id = new.a AND poster_id IN (SELECT id FROM posters WHERE owner = new.b);
 END;
 
--- A hidden or banned owner's posters are off every wall: nobody is held to them. A banned person's own word goes
--- too; a hidden one's stays, uncounted and unnamed, until they are seen again.
+-- A hidden or banned owner's posters are off every wall: nobody is held to them. A hidden or banned person's own
+-- word goes too: they are no longer counted, named or reminded.
 CREATE TRIGGER rsvps_user_out AFTER UPDATE OF hidden, banned ON users WHEN new.hidden = 1 OR new.banned = 1
 BEGIN
   DELETE FROM rsvps WHERE poster_id IN (SELECT id FROM posters WHERE owner = new.id);
-  DELETE FROM rsvps WHERE user_id = new.id AND new.banned = 1;
+  DELETE FROM rsvps WHERE user_id = new.id;
 END;

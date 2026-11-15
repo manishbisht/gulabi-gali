@@ -538,10 +538,18 @@ export async function takeDownPoster(token: string, id: string): Promise<boolean
 
 export type GoingOutcome = { ok: true; view: GoingView } | { ok: false; error: GoingError | 'failed' }
 
-const GOING_ERRORS: readonly string[] = ['ghost', 'not-verified', 'muted', 'mine', 'not found', 'rate']
+const GOING_ERRORS: readonly string[] = [
+  'ghost',
+  'not-verified',
+  'muted',
+  'mine',
+  'not found',
+  'past',
+  'rate',
+]
 
 /**
- * "Main aaunga" (`coming`) on a poster, or taking it back. Never rejects: where the meet-up now stands, or the
+ * "Main aaunga/aaungi" (`coming`) on a poster, or taking it back. Never rejects: where the meet-up now stands, or the
  * typed reason it did not go through. Plain `fetch`: the card has its own line for too many taps.
  */
 export async function setGoing(token: string, id: string, coming: boolean): Promise<GoingOutcome> {

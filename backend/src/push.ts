@@ -34,6 +34,11 @@ export type PushLang = (typeof PUSH_LANGS)[number]
 export const PUSH_LIMIT = {
   minute: { perWindow: 1, windowMs: 60_000, bucket: 'push-minute' },
   hour: { perWindow: 10, windowMs: 3600_000, bucket: 'push-hour' },
+  /**
+   * Meet-up reminders have their own count, so a message push in the same minute never drops one: a few an
+   * hour (one per plan), whatever the inbox sent.
+   */
+  meetup: { perWindow: 5, windowMs: 3600_000, bucket: 'push-meetup' },
 } as const
 
 /** `PUT` and `DELETE /api/me/push` per account: a page sends one on each open and on each switch. */
@@ -44,6 +49,8 @@ export const PUSH_DEVICES = 5
 
 /** How long a push service holds a push for a phone that is off: a day, then it is old news. */
 const PUSH_TTL_S = 24 * 3600
+/** The shortest hold a caller may ask for (`pushTo`'s `ttlS`). */
+export const MIN_PUSH_TTL_S = 60
 
 /** The longest endpoint taken. The real ones are a few hundred characters. */
 const MAX_ENDPOINT = 1024
@@ -205,8 +212,9 @@ export const forgetPushOf = (env: Env, userId: string): D1PreparedStatement =>
 /**
  * Tells `userId`'s subscribed devices that something of `kind` arrived, when they have no inbox open (the
  * inbox decides; see `InboxDO.notify`), or that a plan they are going to is an hour away (`meetup`). Nothing when push is off, they are no resident now (a ban), they have
- * no device, or they are past `PUSH_LIMIT`. A device whose push service answers 404 or 410 has gone and is
- * forgotten. Never throws; answers how many devices took it.
+ * no device, or they are past `PUSH_LIMIT` (`meetup` counts against its own limit only). The push service
+ * holds it for `ttlS` seconds (at least `MIN_PUSH_TTL_S`) while the phone is off. A device whose push service
+ * answers 404 or 410 has gone and is forgotten. Never throws; answers how many devices took it.
  */
 export async function pushTo(
   env: Env,
@@ -214,6 +222,7 @@ export async function pushTo(
   kind: PushTopic,
   fetcher: typeof fetch = fetch,
   now = Date.now(),
+  ttlS = PUSH_TTL_S,
 ): Promise<number> {
   try {
     const vapid = await vapidOf(env)
@@ -224,15 +233,23 @@ export async function pushTo(
       .bind(userId, PUSH_DEVICES)
       .all<{ endpoint: string; p256dh: string; auth: string; lang: PushLang }>()
     if (!results.length) return 0
-    const { minute, hour } = PUSH_LIMIT
-    if (!(await allow(env, userId, minute.bucket, minute.perWindow, minute.windowMs, now))) return 0
-    if (!(await allow(env, userId, hour.bucket, hour.perWindow, hour.windowMs, now))) return 0
+    const { minute, hour, meetup } = PUSH_LIMIT
+    if (kind === 'meetup') {
+      if (!(await allow(env, userId, meetup.bucket, meetup.perWindow, meetup.windowMs, now))) return 0
+    } else {
+      if (!(await allow(env, userId, minute.bucket, minute.perWindow, minute.windowMs, now))) return 0
+      if (!(await allow(env, userId, hour.bucket, hour.perWindow, hour.windowMs, now))) return 0
+    }
     const took = await Promise.all(
       results.map(async (sub) => {
         try {
           // The whole payload: what kind of thing, and the language to say it in. No name, no text, no id.
           const payload = JSON.stringify({ t: kind, lang: sub.lang })
-          const opts = { ttl: PUSH_TTL_S, topic: kind, urgency: 'normal' } as const
+          const opts = {
+            ttl: Math.max(MIN_PUSH_TTL_S, Math.round(ttlS)),
+            topic: kind,
+            urgency: 'normal',
+          } as const
           const status = await sendPush(sub, payload, vapid, opts, fetcher, now)
           if (status === 404 || status === 410) {
             await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?')

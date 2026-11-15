@@ -2,7 +2,15 @@ import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
 import { DISTRICT_IDS } from '../src/district'
-import { remindMeetups, REMIND_BEFORE_MS, RSVP_LIMIT } from '../src/meetups'
+import {
+  LATE_MS,
+  putGoing,
+  remindMeetups,
+  REMIND_BEFORE_MS,
+  REMIND_PER_PERSON,
+  RSVP_LIMIT,
+} from '../src/meetups'
+import { pushTo } from '../src/push'
 import { forgetWalls, pinPoster, purgePosters } from '../src/posters'
 import type { GoingView, PosterView } from '../src/protocol'
 import { api, devId, login, resident, settle } from './helpers'
@@ -125,19 +133,21 @@ describe('Main aaunga', () => {
     expect(await rsvps(poster.id)).toEqual([devId('Ravi Count')])
   })
 
-  it('someone hidden or banned is neither counted nor named, to anyone', async () => {
+  it('someone hidden or banned has their word taken back: neither counted nor named, to anyone', async () => {
     const owner = await resident('Seen Owner')
     const poster = await pinned(owner)
     const hema = await resident('Hema Seen')
     const bina = await resident('Bina Seen')
     await view(hema, poster.id, 'PUT')
     await view(bina, poster.id, 'PUT')
+    // Hidden: their word goes (and no reminder can reach them through it).
     await sql('UPDATE users SET hidden = 1 WHERE id = ?', devId('Hema Seen'))
+    expect(await rsvps(poster.id)).toEqual([devId('Bina Seen')])
     expect(await view(owner, poster.id)).toEqual({ going: 1, coming: false, names: ['Bina'] })
     expect((await listed()).find((p) => p.id === poster.id)!.going).toBe(1)
-    // A ban takes their word back altogether.
+    // A ban too.
     expect((await asAdmin(`/api/admin/users/${devId('Bina Seen')}/ban`, { method: 'POST' })).status).toBe(200)
-    expect(await rsvps(poster.id)).toEqual([devId('Hema Seen')])
+    expect(await rsvps(poster.id)).toEqual([])
     const none = (await listed()).find((p) => p.id === poster.id)!
     expect(none.going).toBeUndefined()
     expect(await view(owner, poster.id)).toEqual({ going: 0, coming: false, names: [] })
@@ -231,6 +241,25 @@ describe('Main aaunga', () => {
     ).toBe(0)
   })
 
+  it(`is refused once the plan's time is more than ${LATE_MS / 60_000} minutes gone`, async () => {
+    const now = Date.now()
+    await resident('Late Owner')
+    const when = now + 2 * HOUR
+    const poster = (await pinPoster(
+      testEnv,
+      devId('Late Owner'),
+      { district: 'university', wall: 0, text: PLAN, when },
+      undefined,
+      now,
+    ).then((r) => r.json())) as PosterView
+    await resident('Late Comer')
+    await resident('Later Comer')
+    expect((await putGoing(testEnv, devId('Late Comer'), poster.id, when + LATE_MS)).status).toBe(200)
+    const late = await putGoing(testEnv, devId('Later Comer'), poster.id, when + LATE_MS + 1)
+    expect(late.status).toBe(409)
+    expect(await late.json()).toEqual({ error: 'past' })
+  })
+
   it(`is rate-limited: ${RSVP_LIMIT.perWindow} an hour, saying and taking back together`, async () => {
     const owner = await resident('Rate Owner')
     const poster = await pinned(owner)
@@ -256,16 +285,83 @@ describe('the reminder an hour before', () => {
     expect(res.status).toBe(204)
     return { ua, endpoint }
   }
-  /** A fake push service: every push it took, by endpoint. */
+  /** A fake push service: every push it took, by endpoint, and its headers. */
   function service() {
     const got = new Map<string, Uint8Array>()
+    const headers = new Map<string, Headers>()
     const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : String(input)
       got.set(url, new Uint8Array(await new Response(init?.body).arrayBuffer()))
+      headers.set(url, new Headers(init?.headers))
       return new Response(null, { status: 201 })
     }) as typeof fetch
-    return { got, fetcher }
+    return { got, headers, fetcher }
   }
+  /** A poster of `owner`'s (a dev name), its plan at `when`, pinned at `now`. */
+  const pinAt = async (owner: string, when: number, now: number) =>
+    (await pinPoster(
+      testEnv,
+      devId(owner),
+      { district: 'university', wall: 0, text: PLAN, when },
+      undefined,
+      now,
+    ).then((r) => r.json())) as PosterView
+
+  it('lasts at the push service only until the plan, and a message push the same minute does not stop it', async () => {
+    const now = Date.now()
+    await resident('Ttl Owner')
+    const when = now + 3 * HOUR
+    const poster = await pinAt('Ttl Owner', when, now)
+    const ira = await resident('Ira Ttl')
+    const phone = await device(ira, 'en')
+    await view(ira, poster.id, 'PUT')
+    const at = when - 40 * 60_000
+    // A message push just went: the inbox's one-a-minute is used up.
+    const inbox = service()
+    expect(await pushTo(testEnv, devId('Ira Ttl'), 'message', inbox.fetcher, at - 1_000)).toBe(1)
+    const svc = service()
+    expect(await remindMeetups(testEnv, at, svc.fetcher)).toBe(1)
+    expect(svc.headers.get(phone.endpoint)!.get('TTL')).toBe(String(40 * 60))
+    expect(svc.headers.get(phone.endpoint)!.get('Topic')).toBe('meetup')
+  })
+
+  it('checks each person when it sends: someone no longer verified gets nothing', async () => {
+    const now = Date.now()
+    await resident('Check Owner')
+    const when = now + 3 * HOUR
+    const poster = await pinAt('Check Owner', when, now)
+    const uma = await resident('Uma Check')
+    await device(uma, 'en')
+    await view(uma, poster.id, 'PUT')
+    await sql('UPDATE users SET verified = 0 WHERE id = ?', devId('Uma Check'))
+    const svc = service()
+    expect(await remindMeetups(testEnv, when - 30 * 60_000, svc.fetcher)).toBe(0)
+    expect(svc.got.size).toBe(0)
+  })
+
+  it('a run sends only as many as its budget of subrequests holds, counted by device; the rest go next run', async () => {
+    const now = Date.now()
+    await resident('Batch Owner')
+    const when = now + 3 * HOUR
+    const poster = await pinAt('Batch Owner', when, now)
+    const phones: string[] = []
+    for (const name of ['Asha Batch', 'Bela Batch']) {
+      const t = await resident(name)
+      phones.push((await device(t, 'en')).endpoint, (await device(t, 'en')).endpoint)
+      await view(t, poster.id, 'PUT')
+    }
+    const at = when - 30 * 60_000
+    // Room for one person with two devices, not two.
+    const first = service()
+    expect(await remindMeetups(testEnv, at, first.fetcher, { budget: 2 + REMIND_PER_PERSON })).toBe(1)
+    expect(first.got.size).toBe(2)
+    const second = service()
+    expect(await remindMeetups(testEnv, at + 60_000, second.fetcher, { budget: 2 + REMIND_PER_PERSON })).toBe(
+      1,
+    )
+    expect(second.got.size).toBe(2)
+    expect(new Set([...first.got.keys(), ...second.got.keys()])).toEqual(new Set(phones))
+  })
 
   it('pushes once to those coming who have push on, naming nobody; not the owner, not inside the hour', async () => {
     const now = Date.now()

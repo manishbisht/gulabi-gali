@@ -234,8 +234,11 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
  *   requests, and as someone a new request or match can reach. A match that already exists outlives a hide
  *   (see `listMatches`).
  */
-export const ACTIVE = 'u.banned = 0 AND p.adult = 1 AND p.pledge = 1'
-export const VISIBLE = `${ACTIVE} AND u.hidden = 0`
+export const activeAs = (u = 'u', p = 'p') => `${u}.banned = 0 AND ${p}.adult = 1 AND ${p}.pledge = 1`
+/** `VISIBLE` over other aliases: `u` for `users`, `p` for `profiles` (a second person in the same query). */
+export const visibleAs = (u = 'u', p = 'p') => `${activeAs(u, p)} AND ${u}.hidden = 0`
+export const ACTIVE = activeAs()
+export const VISIBLE = visibleAs()
 
 const rowWhere = (env: Env, id: string, rule: string) =>
   env.DB.prepare(

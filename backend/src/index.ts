@@ -237,7 +237,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     }
     return removeOwnPoster(env, user.id, id, later)
   }
-  // "Main aaunga" on a poster (see meetups.ts).
+  // "Main aaunga/aaungi" on a poster (see meetups.ts).
   const going = pathname.match(/^\/api\/posters\/([^/]+)\/going$/)
   if (going) {
     let id: string

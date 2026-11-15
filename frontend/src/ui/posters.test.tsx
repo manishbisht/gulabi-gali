@@ -293,7 +293,7 @@ describe('PosterCard', () => {
   })
 })
 
-describe('PosterCard: Main aaunga', () => {
+describe('PosterCard: Main aaunga/aaungi', () => {
   const poster: PosterView = {
     id: 'poster-1',
     wall: 0,
@@ -356,7 +356,36 @@ describe('PosterCard: Main aaunga', () => {
     await act(async () => button(host, "I'll come")!.click())
     await settle()
     expect(host.textContent).toContain("That didn't go through. Try again.")
+    status = 409
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: 'past' }, 409)),
+    )
+    await act(async () => button(host, "I'll come")!.click())
+    await settle()
+    expect(host.textContent).toContain('This plan has already happened.')
     expect(props.onChanged).not.toHaveBeenCalled()
+  })
+
+  it('says, by the button, who sees what: the count to everyone, first names to the owner alone', () => {
+    const { host } = mount()
+    expect(host.textContent).toContain(
+      'Everyone sees how many are coming; only whoever pinned it sees first names.',
+    )
+  })
+
+  it('in Hinglish the button speaks for everyone: aaunga/aaungi, paunga/paungi', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ going: 1, coming: true })),
+    )
+    const { host } = mount({ lang: 'hi' })
+    expect(host.textContent).toContain(
+      'Kitne aa rahe hain, ye sab dekhte hain; pehle naam sirf poster lagane wala.',
+    )
+    await act(async () => button(host, 'Main aaunga/aaungi')!.click())
+    await settle()
+    expect(button(host, 'Nahi aa paunga/paungi')).toBeDefined()
   })
 
   it('a member not yet verified, and a ghost, see only the count', () => {

@@ -382,7 +382,7 @@ export const POSTER_TTL_MS = 7 * 24 * 3600 * 1000
  * poster names the poster, and the block list carries only an opaque handle). `mine`: the viewer pinned it (and
  * may take it down). `hidden`: only ever on the viewer's own (`mine`): reports have it off every wall (or its
  * owner is hidden) until an admin looks; it still counts toward their two, and they may still take it down.
- * `going`: how many said "Main aaunga" (see `GoingView`), left out at none. `coming`: the viewer is one of them.
+ * `going`: how many said "Main aaunga/aaungi" (see `GoingView`), left out at none. `coming`: the viewer is one of them.
  */
 export interface PosterView {
   id: string
@@ -411,7 +411,7 @@ export interface PosterInput {
 export type PosterError = 'invalid' | 'words' | 'ghost' | 'not-verified' | 'muted' | 'limit' | 'rate'
 
 /*
- * Milte hain: "Main aaunga" on a poster (`PUT`, `DELETE` and `GET /api/posters/:id/going`). Only a verified
+ * Milte hain: "Main aaunga/aaungi" on a poster (`PUT`, `DELETE` and `GET /api/posters/:id/going`). Only a verified
  * resident others can see may say it, never on their own poster nor across a block either way.
  */
 
@@ -427,10 +427,11 @@ export interface GoingView {
   names?: string[]
 }
 /**
- * Why "Main aaunga" was refused. `ghost`: not a resident others can see; `not-verified`: residents cannot;
- * `mine`: your own poster; `not found`: the poster is not up for you (gone, hidden, or across a block).
+ * Why "Main aaunga/aaungi" was refused. `ghost`: not a resident others can see; `not-verified`: residents cannot;
+ * `mine`: your own poster; `not found`: the poster is not up for you (gone, hidden, or across a block); `past`:
+ * its plan's time is more than half an hour gone.
  */
-export type GoingError = 'ghost' | 'not-verified' | 'muted' | 'mine' | 'not found' | 'rate'
+export type GoingError = 'ghost' | 'not-verified' | 'muted' | 'mine' | 'not found' | 'past' | 'rate'
 /** The most first names the owner is sent: the first who said they are coming. */
 export const MAX_GOING_NAMES = 50
 

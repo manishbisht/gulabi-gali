@@ -176,7 +176,7 @@ export const STRINGS = {
   /** Push notifications, opted into per device in the profile sheet (see src/push). */
   pushToggle: { hi: 'Naye messages pe batao', en: 'Tell me about new messages' },
   pushHint: {
-    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega, aur jis plan mein "Main aaunga" dabaya ho uske ek ghanta pehle bhi. Screen pe sirf "ek nayi request", "ek naya message" ya "tumhara plan ek ghante mein" aayega: na kisi ka naam, na koi baat.',
+    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega, aur jis plan mein "Main aaunga/aaungi" dabaya ho uske ek ghanta pehle bhi. Screen pe sirf "ek nayi request", "ek naya message" ya "tumhara plan ek ghante mein" aayega: na kisi ka naam, na koi baat.',
     en: 'Your phone lets you know about a new request or message even when Gulabi Gali is shut, and an hour before a plan you said you\'d come to. The screen only ever says "a new request", "a new message" or "your plan is in an hour": never a name, never what was said.',
   },
   pushInApp: {
@@ -577,8 +577,8 @@ export const STRINGS = {
     en: 'A poster you pin (its text, its time and your first name) is public, ghosts included. It is deleted 6 hours after its time, or 7 days after pinning without one; you can take it down sooner.',
   },
   privacyStoredGoing: {
-    hi: 'Kisi poster pe "Main aaunga" dabane par sab ko sirf ginti dikhti hai; aapka pehla naam sirf poster lagane wale ko. Poster utarte ya chhupte hi, ya aap dono mein se koi doosre ko block kare to ye mit jaata hai.',
-    en: 'When you tap "I\'ll come" on a poster, everyone sees only the count; your first name is shown only to whoever pinned it. It is deleted when the poster comes down or is hidden, or when either of you blocks the other.',
+    hi: 'Kisi poster pe "Main aaunga/aaungi" dabane par: kitne aa rahe hain, ye sab dekhte hain; pehle naam sirf poster lagane wala. Poster utarte ya chhupte hi, aap chhupaye jaate ho, ya aap dono mein se koi doosre ko block kare to ye mit jaata hai.',
+    en: 'When you tap "I\'ll come" on a poster: everyone sees how many are coming; only whoever pinned it sees first names. It is deleted when the poster comes down or is hidden, when you are hidden, or when either of you blocks the other.',
   },
   privacyStoredTombstone: {
     hi: 'Account delete karne ke baad bhi, agar us par ban, hide, mute ya request ka 14 din ka intezaar laga ho, toh sirf account id aur woh rok ek chhote record mein rehti hai, taaki delete karke unse bacha na ja sake.',
@@ -820,24 +820,29 @@ export const STRINGS = {
     hi: 'Ye poster abhi sirf tumhe dikh raha hai, jab tak hum ek nazar daal rahe hain. Ye tumhare 2 mein gina jaata hai; chaho to utaar do.',
     en: 'Only you can see this poster for now, while we take a look. It still counts toward your 2, and you can take it down.',
   },
-  /** Milte hain: "Main aaunga" on a poster (see PosterCard). */
+  /** Milte hain: "Main aaunga/aaungi" on a poster (see PosterCard). */
   posterGoing: { hi: 'Aane wale: {n}', en: 'Coming: {n}' },
-  posterComing: { hi: 'Main aaunga', en: "I'll come" },
-  posterNotComing: { hi: 'Nahi aa paunga', en: "Can't make it" },
+  posterComing: { hi: 'Main aaunga/aaungi', en: "I'll come" },
+  posterNotComing: { hi: 'Nahi aa paunga/paungi', en: "Can't make it" },
+  posterGoingPrivacy: {
+    hi: 'Kitne aa rahe hain, ye sab dekhte hain; pehle naam sirf poster lagane wala.',
+    en: 'Everyone sees how many are coming; only whoever pinned it sees first names.',
+  },
   posterComingNote: {
     hi: 'Tum aa rahe ho. Notifications chalu hain to plan se ek ghanta pehle yaad dila denge.',
     en: "You're coming. With notifications on, we'll remind you an hour before.",
   },
   posterComingVerifiedOnly: {
-    hi: '"Main aaunga" sirf verified log daba sakte hain.',
+    hi: '"Main aaunga/aaungi" sirf verified log daba sakte hain.',
     en: "Only verified members can say they're coming.",
   },
   posterWho: { hi: 'Kaun aa raha hai: {names}', en: "Who's coming: {names}" },
   posterWhoNone: {
-    hi: 'Abhi tak kisi ne "Main aaunga" nahi dabaya.',
+    hi: 'Abhi tak kisi ne "Main aaunga/aaungi" nahi dabaya.',
     en: "Nobody has said they're coming yet.",
   },
   posterGoingFailed: { hi: 'Nahi ho paya. Dobara try karo.', en: "That didn't go through. Try again." },
+  posterGoingPast: { hi: 'Ye plan to ho chuka.', en: 'This plan has already happened.' },
   posterGoingRate: { hi: 'Thoda ruko, phir dabana.', en: 'Hold on a bit, then try again.' },
   posterTakeDown: { hi: 'Utaaro', en: 'Take it down' },
   posterTakeDownFailed: {

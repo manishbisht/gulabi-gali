@@ -82,7 +82,7 @@ export function usePosters() {
   /** After blocking a poster's owner: every wall is fetched again, and theirs are gone. */
   const blocked = useCallback(() => actions.current?.refreshPosters(), [])
   /**
-   * "Main aaunga" said or taken back from the open card: the wall prints the new count. Never for a poster that
+   * "Main aaunga/aaungi" said or taken back from the open card: the wall prints the new count. Never for a poster that
    * came off the wall meanwhile (a block, a take-down): that must not go back up.
    */
   const changed = useCallback((p: PosterView) => {

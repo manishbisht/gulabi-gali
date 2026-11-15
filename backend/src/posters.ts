@@ -3,7 +3,7 @@ import type { Env } from './env'
 import { wordsOk } from './filter/server'
 import { floating, type Later } from './inbox'
 import { allow, DAY_MS, muteGate, rateLimited, refund } from './limits'
-import { COMING_OF, GOING_OF } from './meetups'
+import { COMING_OF, GOING_OF } from './going'
 import { firstName } from './names'
 import { VISIBLE, visibleRow } from './profiles'
 import {

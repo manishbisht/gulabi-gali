@@ -1,14 +1,15 @@
 import type { Env } from './env'
+import { GOING_OF, SEEN } from './going'
 import { allow, muteGate, rateLimited } from './limits'
 import { firstName } from './names'
 import { forgetWalls } from './posters'
 import { VISIBLE, visibleRow } from './profiles'
 import { MAX_GOING_NAMES, type DistrictId, type GoingView } from './protocol'
-import { pushTo } from './push'
+import { PUSH_DEVICES, pushTo } from './push'
 import { isVerified } from './trust'
 
 /**
- * Milte hain: "Main aaunga" on a poster (table `rsvps`, migration 0007).
+ * Milte hain: "Main aaunga/aaungi" on a poster (table `rsvps`, migration 0007).
  *
  * Privacy: the count is the same number for everyone (signed out too) and counts only people others can see now,
  * so it never tells a viewer about anyone hidden, banned or blocked. First names go to the poster's owner alone,
@@ -20,25 +21,20 @@ import { isVerified } from './trust'
 export const RSVP_LIMIT = { perWindow: 20, windowMs: 3600_000, bucket: 'rsvp' } as const
 /** The reminder goes this long before the plan's time (the cron runs every 15 minutes, so up to 15 later). */
 export const REMIND_BEFORE_MS = 3600_000
-/** The most reminders one cron run sends; any left go on the next run, while the plan is still ahead. */
-const REMIND_PER_RUN = 100
+/** "Main aaunga/aaungi" is refused once the plan's time is more than this far gone (the poster stays up 6 h after). */
+export const LATE_MS = 30 * 60_000
+/**
+ * What one cron run may spend on reminders, in subrequests: each device pushed is one `fetch`, and each person
+ * pushed costs `REMIND_PER_PERSON` D1 calls besides (see `pushTo`). Well inside the Workers cap of 1000 with the
+ * rest of the cron. Whoever does not fit goes on the next run, while the plan is still ahead.
+ */
+export const REMIND_BUDGET = 300
+/** The D1 calls `pushTo` makes for one person before any device: the resident check, their devices, the limit. */
+export const REMIND_PER_PERSON = 3
+/** Rows one run looks at: far more than a budget's worth. */
+const REMIND_CANDIDATES = 500
 
 const fail = (error: string, status: number) => Response.json({ error }, { status })
-
-/** Someone others can see, as SQL over `users ru` and `profiles rp` (see `VISIBLE`). */
-const SEEN = 'ru.banned = 0 AND rp.adult = 1 AND rp.pledge = 1 AND ru.hidden = 0'
-
-/**
- * How many are coming to poster `po`, as SQL: only people others can see, and none blocked either way with its
- * owner (a block deletes those rows anyway). The same number for every viewer.
- */
-export const GOING_OF = `(SELECT COUNT(*) FROM rsvps r JOIN users ru ON ru.id = r.user_id
-  JOIN profiles rp ON rp.user_id = r.user_id WHERE r.poster_id = po.id AND ${SEEN}
-    AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.a = po.owner AND b.b = r.user_id)
-      OR (b.a = r.user_id AND b.b = po.owner)))`
-
-/** Whether the viewer (`?3`) is coming to poster `po`, as SQL. */
-export const COMING_OF = 'EXISTS (SELECT 1 FROM rsvps r WHERE r.poster_id = po.id AND r.user_id = ?3)'
 
 /**
  * Poster `?1` as `?2` may see it at `?3`, as SQL: up, and theirs, or not hidden, its owner seen by others and
@@ -95,10 +91,11 @@ export async function getGoing(env: Env, userId: string, id: string, now = Date.
 }
 
 /**
- * `PUT /api/posters/:id/going`: "Main aaunga". 200 `GoingView`, also when already said. Only a verified resident
+ * `PUT /api/posters/:id/going`: "Main aaunga/aaungi". 200 `GoingView`, also when already said. Only a verified resident
  * others can see (403 `ghost`, `not-verified`), not muted (403 `muted`); never on your own poster (400 `mine`);
- * 404 `not found` for a poster not up for you (gone, hidden, its owner hidden, or a block either way); 429 `rate`
- * past `RSVP_LIMIT`. Said inside the hour before the plan, no reminder will come (they know).
+ * 404 `not found` for a poster not up for you (gone, hidden, its owner hidden, or a block either way); 409 `past`
+ * once its plan is more than `LATE_MS` gone; 429 `rate` past `RSVP_LIMIT`. Said inside the hour before the plan,
+ * no reminder will come (they know).
  */
 export async function putGoing(env: Env, userId: string, id: string, now = Date.now()): Promise<Response> {
   if (!(await visibleRow(env, userId))) return fail('ghost', 403)
@@ -112,20 +109,22 @@ export async function putGoing(env: Env, userId: string, id: string, now = Date.
   await env.DB.prepare(
     `INSERT INTO rsvps (poster_id, user_id, created_at, reminded)
      SELECT po.id, ?2, ?3, CASE WHEN po.at_when IS NOT NULL AND po.at_when - ?3 <= ?4 THEN 1 ELSE 0 END
-     ${SHOWN_TO} AND po.owner != ?2 AND po.hidden = 0
+     ${SHOWN_TO} AND po.owner != ?2 AND po.hidden = 0 AND (po.at_when IS NULL OR po.at_when + ?5 >= ?3)
        AND EXISTS (SELECT 1 FROM users ru JOIN profiles rp ON rp.user_id = ru.id
          WHERE ru.id = ?2 AND ru.verified = 1 AND ${SEEN})
      ON CONFLICT (poster_id, user_id) DO NOTHING`,
   )
-    .bind(id, userId, now, REMIND_BEFORE_MS)
+    .bind(id, userId, now, REMIND_BEFORE_MS, LATE_MS)
     .run()
   const out = await goingView(env, userId, id, now)
   if (!out) return fail('not found', 404)
   if (!out.coming) {
-    const own = await env.DB.prepare('SELECT 1 AS x FROM posters WHERE id = ? AND owner = ?')
-      .bind(id, userId)
-      .first()
-    return own ? fail('mine', 400) : fail('not found', 404)
+    const row = await env.DB.prepare('SELECT owner, at_when FROM posters WHERE id = ?')
+      .bind(id)
+      .first<{ owner: string; at_when: number | null }>()
+    if (row?.owner === userId) return fail('mine', 400)
+    if (row?.at_when != null && row.at_when + LATE_MS < now) return fail('past', 409)
+    return fail('not found', 404)
   }
   await forgetWallOf(env, id)
   return Response.json({ going: out.going, coming: true } satisfies GoingView)
@@ -152,27 +151,60 @@ export const forgetRsvpsOf = (env: Env, userId: string): D1PreparedStatement =>
 
 /**
  * The cron's reminder: for every plan due within `REMIND_BEFORE_MS` of `now` on a poster still up for everyone
- * (not hidden, its owner seen by others), each person coming who was not reminded yet is marked reminded and
- * pushed once (`pushTo`, which sends only to someone with push on, and names nobody: "your plan is in an hour").
- * Answers how many people's devices took it. Throws only when D1 cannot be reached.
+ * (not hidden, its owner seen by others), each person coming who is, as it sends, seen by others and verified,
+ * and was not reminded yet, is marked reminded and pushed once (`pushTo`, which names nobody: "your plan is in an
+ * hour", held by the push service only until the plan). Someone with push off is marked and costs nothing. A run
+ * spends at most `budget` subrequests, counted by device (see `REMIND_BUDGET`), always taking at least one
+ * person. Answers how many people's devices took it. Throws only when D1 cannot be reached.
  */
 export async function remindMeetups(
   env: Env,
   now = Date.now(),
   fetcher: typeof fetch = fetch,
+  { budget = REMIND_BUDGET }: { budget?: number } = {},
 ): Promise<number> {
   const { results } = await env.DB.prepare(
-    `UPDATE rsvps SET reminded = 1 WHERE rowid IN (
-       SELECT r.rowid FROM posters po JOIN rsvps r ON r.poster_id = po.id
-         JOIN users u ON u.id = po.owner JOIN profiles p ON p.user_id = po.owner
-       WHERE po.at_when > ?1 AND po.at_when <= ?2 AND po.expires_at > ?1 AND po.hidden = 0 AND r.reminded = 0
-         AND ${VISIBLE}
-       LIMIT ?3)
+    `SELECT r.rowid AS rid, r.user_id, po.at_when,
+       (SELECT COUNT(*) FROM push_subs s WHERE s.user_id = r.user_id) AS devices
+     FROM posters po JOIN rsvps r ON r.poster_id = po.id
+       JOIN users u ON u.id = po.owner JOIN profiles p ON p.user_id = po.owner
+       JOIN users ru ON ru.id = r.user_id JOIN profiles rp ON rp.user_id = r.user_id
+     WHERE po.at_when > ?1 AND po.at_when <= ?2 AND po.expires_at > ?1 AND po.hidden = 0 AND r.reminded = 0
+       AND ${VISIBLE} AND ${SEEN} AND ru.verified = 1
+     ORDER BY po.at_when, r.rowid LIMIT ?3`,
+  )
+    .bind(now, now + REMIND_BEFORE_MS, REMIND_CANDIDATES)
+    .all<{ rid: number; user_id: string; at_when: number; devices: number }>()
+  // One push per person, however many of their plans are due: held until the soonest.
+  const people = new Map<string, { rids: number[]; at: number; devices: number }>()
+  for (const r of results) {
+    const p = people.get(r.user_id)
+    if (p) p.rids.push(r.rid)
+    else people.set(r.user_id, { rids: [r.rid], at: r.at_when, devices: Math.min(r.devices, PUSH_DEVICES) })
+  }
+  const rids: number[] = []
+  const due = new Map<string, number>()
+  let spent = 0
+  for (const [id, p] of people) {
+    const cost = p.devices ? p.devices + REMIND_PER_PERSON : 0
+    if (cost && due.size && spent + cost > budget) continue
+    spent += cost
+    rids.push(...p.rids)
+    if (p.devices) due.set(id, p.at)
+  }
+  if (!rids.length) return 0
+  // Claimed in one statement: a run overlapping this one cannot push the same person again.
+  const claimed = await env.DB.prepare(
+    `UPDATE rsvps SET reminded = 1 WHERE rowid IN (SELECT value FROM json_each(?1)) AND reminded = 0
      RETURNING user_id`,
   )
-    .bind(now, now + REMIND_BEFORE_MS, REMIND_PER_RUN)
+    .bind(JSON.stringify(rids))
     .all<{ user_id: string }>()
-  const people = [...new Set(results.map((r) => r.user_id))]
-  const took = await Promise.all(people.map((id) => pushTo(env, id, 'meetup', fetcher, now)))
+  const mine = new Set(claimed.results.map((r) => r.user_id))
+  const took = await Promise.all(
+    [...due]
+      .filter(([id]) => mine.has(id))
+      .map(([id, at]) => pushTo(env, id, 'meetup', fetcher, now, (at - now) / 1000)),
+  )
   return took.filter((n) => n > 0).length
 }

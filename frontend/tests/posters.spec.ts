@@ -35,7 +35,7 @@ test('a verified member pins a plan, and another page sees it on the wall', asyn
   await expect.poll(() => onWalls(c)).toContain(plan)
 })
 
-test('Milte hain: a verified member says "Main aaunga"; everyone sees the count, only the owner the name', async ({
+test('Milte hain: a verified member says "Main aaunga/aaungi"; everyone sees the count, only the owner the name', async ({
   browser,
 }) => {
   const a = await resident(browser, 'Asha')
@@ -63,9 +63,9 @@ test('Milte hain: a verified member says "Main aaunga"; everyone sees the count,
   }
 
   const card = await tapPlan(b.page)
-  await card.getByRole('button', { name: 'Main aaunga' }).click()
+  await card.getByRole('button', { name: 'Main aaunga/aaungi' }).click()
   await expect(card.getByText('Aane wale: 1')).toBeVisible()
-  await expect(card.getByRole('button', { name: 'Nahi aa paunga' })).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Nahi aa paunga/paungi' })).toBeVisible()
   await expect(card).not.toContainText('Kaun aa raha hai')
 
   // A fresh signed-out page gets the count with the walls, never a name.
@@ -84,5 +84,5 @@ test('Milte hain: a verified member says "Main aaunga"; everyone sees the count,
   const own = await tapPlan(a.page)
   await expect(own.getByText(`Kaun aa raha hai: ${b.name}`)).toBeVisible()
   await expect(own.getByText('Aane wale: 1')).toBeVisible()
-  await expect(own.getByRole('button', { name: 'Main aaunga' })).toBeHidden()
+  await expect(own.getByRole('button', { name: 'Main aaunga/aaungi' })).toBeHidden()
 })
