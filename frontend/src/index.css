@@ -1484,3 +1484,9 @@ small.words-hint {
 .hud[inert] {
   visibility: hidden;
 }
+
+/* the monkey's switch: one small emoji chip, only in the Walled City */
+.hud-top .bandar-toggle {
+  padding: 6px 8px;
+  line-height: 1;
+}

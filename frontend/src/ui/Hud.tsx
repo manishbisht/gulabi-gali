@@ -18,6 +18,8 @@ interface Props {
   onLang: (l: Lang) => void
   /** The sound switch (the horn is the only sound so far): whether it is on, and how to flip it. */
   sound?: { on: boolean; onToggle: () => void }
+  /** The monkey's switch, a small chip for the Walled City only: whether the monkey is off, and how to flip it. */
+  bandar?: { off: boolean; onToggle: () => void }
   /** The visibility chip; present only when sign-in exists. */
   visibility?: ReactNode
   /** Present only when a user is signed in. */
@@ -42,6 +44,7 @@ export function Hud({
   lang,
   onLang,
   sound,
+  bandar,
   visibility,
   onProfile,
   onInvite,
@@ -77,6 +80,18 @@ export function Hud({
             onClick={sound.onToggle}
           >
             {sound.on ? '🔊' : '🔇'}
+          </button>
+        )}
+        {bandar && (
+          <button
+            type="button"
+            className="hud-chip bandar-toggle"
+            aria-label={t(bandar.off ? 'bandarStart' : 'bandarStop', lang)}
+            aria-pressed={bandar.off}
+            title={t(bandar.off ? 'bandarStart' : 'bandarStop', lang)}
+            onClick={bandar.onToggle}
+          >
+            {bandar.off ? '🙈' : '🐒'}
           </button>
         )}
       </div>

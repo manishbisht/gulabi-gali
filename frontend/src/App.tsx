@@ -23,6 +23,7 @@ import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
+import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
@@ -110,6 +111,9 @@ export default function App() {
   /** The street animals: the one in reach, the one following, and their passing lines. */
   const animals = useAnimals()
   const { hooks: animalHooks, bind: bindAnimals } = animals
+  /** The Galta bandar: its passing line and its switch. */
+  const bandar = useBandar()
+  const { hooks: bandarHooks } = bandar
   const [sound, setSound] = useState(soundOn)
   /** The line for room when the city is full (`MAX_LIVE`): this resident waits in it as a ghost. */
   const queue = useQueue()
@@ -263,6 +267,7 @@ export default function App() {
         posters: posterHooks,
         drive: driveHooks,
         animals: animalHooks,
+        bandar: bandarHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -312,6 +317,7 @@ export default function App() {
     bindDrive,
     animalHooks,
     bindAnimals,
+    bandarHooks,
     current,
     now,
     patch,
@@ -396,6 +402,23 @@ export default function App() {
         onClose={posters.close}
       />
     ))
+  // the monkey keeps off the street while anything is over it
+  const bandarBlocked =
+    !!card ||
+    !!near ||
+    sheetOpen ||
+    !!ride ||
+    !!kiteFrom ||
+    !!bench.seat ||
+    profileShown ||
+    connShown ||
+    inviteOpen ||
+    privacyOpen ||
+    !!queue.card
+  const { blockedRef: bandarBlockedRef } = bandar
+  useEffect(() => {
+    bandarBlockedRef.current = bandarBlocked
+  }, [bandarBlocked, bandarBlockedRef])
   const visibility =
     auth.mode === 'none' || !auth.ready ? undefined : !auth.signedIn ? (
       <VisibilityChip
@@ -461,6 +484,7 @@ export default function App() {
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}
+        bandar={here === 'walled-city' ? { off: bandar.off, onToggle: bandar.toggle } : undefined}
         sound={{
           on: sound,
           onToggle: () => {
@@ -515,6 +539,11 @@ export default function App() {
                 {animals.notice && (
                   <div className="toast" role="status">
                     {t(animals.notice.key, lang, animals.notice.vars)}
+                  </div>
+                )}
+                {bandar.notice && (
+                  <div className="toast" role="status">
+                    {bandarText(bandar.notice, lang)}
                   </div>
                 )}
                 {benchToast && (

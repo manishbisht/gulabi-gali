@@ -13,6 +13,7 @@ import { closeAudio } from '../audio/horn'
 import type { Controls } from '../player/controls'
 import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
+import { createBandar, createBandarMemory, type BandarEvent } from './bandar'
 import { createAnimals, createStationMemory, type AnimalHooks, type Animals } from './animals'
 import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
@@ -103,6 +104,8 @@ export interface SessionHooks {
   drive?: DriveHooks
   /** The street animals: the one in reach, the one following, and their passing lines (see useAnimals). */
   animals?: AnimalHooks
+  /** The Galta bandar (Walled City): `blocked` while a card, sheet, bench, kite game or metro ride is up. */
+  bandar?: { blocked(): boolean; event(e: BandarEvent): void }
 }
 
 export interface CitySessionOptions {
@@ -188,6 +191,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
   } | null = null
   /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
   const stationMemory = createStationMemory()
+  /** The monkey's last raid, so leaving and coming back does not reset its 10 minutes. */
+  const bandarMemory = createBandarMemory()
   let repaint = () => {}
   let disposed = false
 
@@ -246,6 +251,12 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       quality: stage.quality,
     })
     const offAnimalQuality = stage.onQuality(animals.setQuality)
+    const bandar = createBandar(district.def, stage.scene, Math.random, {
+      look: () => hooks.look?.() ?? loadOrCreateLook(),
+      colliders: district.colliders,
+      blocked: () => (hooks.bandar?.blocked() ?? false) || !!here?.sitting?.seated(),
+      memory: bandarMemory,
+    })
     const sky = createSky(stage, district, hooks)
     // made here, not in the presence, so taps and E can reach the people too
     const people = hooks.presence ? createPeople(stage.scene) : null
@@ -279,6 +290,13 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           offAnimalQuality()
           animals.dispose()
         },
+      },
+      {
+        update: (dt) => {
+          const e = bandar.update(dt, player)
+          if (e) hooks.bandar?.event(e)
+        },
+        dispose: bandar.dispose,
       },
       sky,
       createLights(stage, district),
