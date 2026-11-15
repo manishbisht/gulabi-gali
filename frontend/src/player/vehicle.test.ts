@@ -98,6 +98,26 @@ describe('createVehicle', () => {
       expect(d).toBeLessThanOrEqual(3)
     })
 
+    it('never sets the walker down through a thin wall into a pocket behind it', () => {
+      const v = createVehicle('auto')
+      v.reset(0, 0, 0)
+      // a thin wall on each side, 1.5 m out: the points just beyond them are clear, but only through the wall
+      const walls: AABB[] = [
+        { minX: 1.45, maxX: 1.55, minZ: -8, maxZ: 8 },
+        { minX: -1.55, maxX: -1.45, minZ: -8, maxZ: 8 },
+      ]
+      const out = v.exitPoint(walls)!
+      expect(out).not.toBeNull()
+      expect(Math.abs(out.x)).toBeLessThan(1.45)
+      // and when the way out is walled in all round (an auto-sized box in a pocket), there is no point at all
+      const pocket: AABB[] = [
+        ...walls,
+        { minX: -1.55, maxX: 1.55, minZ: 1.9, maxZ: 2.0 },
+        { minX: -1.55, maxX: 1.55, minZ: -2.0, maxZ: -1.9 },
+      ]
+      expect(v.exitPoint(pocket)).toBeNull()
+    })
+
     it('searches outward until it finds room, and gives up when there is none', () => {
       const v = createVehicle('auto')
       v.reset(0, 0, 0)

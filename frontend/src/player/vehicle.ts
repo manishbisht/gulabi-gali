@@ -55,6 +55,34 @@ const approach = (v: number, to: number, by: number) => (v < to ? Math.min(to, v
 const hits = (x: number, z: number, r: number, c: AABB) =>
   x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r
 
+/**
+ * Whether the straight line from (x0, z0) to (x1, z1) crosses the box (slab test). Used to refuse an exit point
+ * only reachable through a thin wall, which `hits` alone cannot see: the point itself is clear.
+ */
+function crosses(x0: number, z0: number, x1: number, z1: number, c: AABB): boolean {
+  let lo = 0
+  let hi = 1
+  const dx = x1 - x0
+  const dz = z1 - z0
+  const slabs = [
+    [dx, x0, c.minX, c.maxX],
+    [dz, z0, c.minZ, c.maxZ],
+  ] as const
+  for (const [d, p, min, max] of slabs) {
+    if (Math.abs(d) < 1e-9) {
+      if (p < min || p > max) return false
+      continue
+    }
+    let a = (min - p) / d
+    let b = (max - p) / d
+    if (a > b) [a, b] = [b, a]
+    lo = Math.max(lo, a)
+    hi = Math.min(hi, b)
+    if (lo > hi) return false
+  }
+  return true
+}
+
 export function createVehicle(kind: 'auto'): Vehicle {
   void kind // one kind so far; the argument keeps the call sites ready for more
   let x = 0
@@ -125,6 +153,14 @@ export function createVehicle(kind: 'auto'): Vehicle {
           const pz = z + Math.cos(heading + way) * r
           if (hits(px, pz, walkerRadius, own)) continue
           if (colliders.some((k) => hits(px, pz, walkerRadius, k))) continue
+          // Not through a wall: the walker steps there from the auto's middle. A box the auto already sits
+          // inside (a loose box round a prop) is no wall to cross.
+          if (
+            colliders.some(
+              (k) => !(x > k.minX && x < k.maxX && z > k.minZ && z < k.maxZ) && crosses(x, z, px, pz, k),
+            )
+          )
+            continue
           return { x: px, z: pz }
         }
       }
