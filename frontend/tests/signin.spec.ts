@@ -11,6 +11,21 @@ test('signs in by name against the dev login and keeps the token for the tab', a
   expect(await page.evaluate(() => sessionStorage.getItem('gg-dev-token'))).toBeTruthy()
 })
 
+test('signing out from the profile sheet drops the token and brings the sign-in chip back', async ({
+  page,
+}) => {
+  await enterCity(page)
+  await page.getByRole('button', { name: 'Dikhna hai? Login karo' }).click()
+  await page.getByLabel('Aapka naam').fill('Asha')
+  await page.getByRole('button', { name: 'Andar aao' }).click()
+  await page
+    .getByRole('dialog', { name: 'Apni pehchaan banao' })
+    .getByRole('button', { name: 'Logout karo' })
+    .click()
+  await expect(page.getByRole('button', { name: 'Dikhna hai? Login karo' })).toBeVisible()
+  expect(await page.evaluate(() => sessionStorage.getItem('gg-dev-token'))).toBeNull()
+})
+
 test('the sign-in sheet keeps Tab inside, closes on Escape, and returns focus to the button that opened it', async ({
   page,
 }) => {
