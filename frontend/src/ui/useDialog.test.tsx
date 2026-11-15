@@ -80,3 +80,46 @@ it('with two stacked, only the top one answers Escape and holds Tab', () => {
   key('Tab')
   expect(document.activeElement).toBe(el('up-a'))
 })
+
+function Mixed() {
+  const ref = useDialog<HTMLElement>(() => {})
+  return (
+    <section ref={ref} role="dialog" aria-modal="true" aria-label="s">
+      <button id="h-a">a</button>
+      <button id="h-b" hidden>
+        b
+      </button>
+      <div inert>
+        <button id="h-c">c</button>
+      </div>
+      <button id="h-d" style={{ display: 'none' }}>
+        d
+      </button>
+      <button id="h-e">e</button>
+      <button id="h-last" style={{ display: 'none' }}>
+        z
+      </button>
+    </section>
+  )
+}
+
+it('Tab skips controls that are hidden or inert', () => {
+  act(() => root.render(<Mixed />))
+  el('h-e').focus()
+  expect(key('Tab').defaultPrevented).toBe(true) // e is the last reachable one: wraps to a
+  expect(document.activeElement).toBe(el('h-a'))
+  expect(key('Tab', true).defaultPrevented).toBe(true) // and back from a to e, not to a hidden one
+  expect(document.activeElement).toBe(el('h-e'))
+})
+
+it('focus goes to the HUD, not <body>, when the opener is gone', () => {
+  act(() => root.unmount())
+  document.body.innerHTML =
+    '<div class="hud"><button id="hud-b">chip</button></div><button id="opener">o</button><div id="app"></div>'
+  root = createRoot(document.getElementById('app')!)
+  el('opener').focus()
+  act(() => root.render(<Sheet name="s" onClose={() => {}} />))
+  el('opener').remove()
+  act(() => root.render(null))
+  expect(document.activeElement).toBe(el('hud-b'))
+})

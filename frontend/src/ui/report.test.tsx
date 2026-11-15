@@ -9,6 +9,7 @@ import { BenchChat } from './BenchChat'
 import { ChatView } from './ChatView'
 import { PersonCard } from './PersonCard'
 import { ReportSheet } from './ReportSheet'
+import { useDialog } from './useDialog'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -333,4 +334,39 @@ it('ProfileSheet: the privacy line sits by the pledge, and a block with no saved
     'Agar koi baat-cheet report hoti hai, toh moderator uske haal ke messages padh sakta hai.',
   )
   expect(host.querySelector('.blocked-list li span')?.textContent).toBe('Koi')
+})
+
+function SheetHost({ onSheet, onReport }: { onSheet: () => void; onReport: () => void }) {
+  const ref = useDialog<HTMLElement>(onSheet)
+  return (
+    <section ref={ref} role="dialog" aria-modal="true">
+      <ReportSheet
+        kind="person"
+        targetId="h"
+        name="Ravi"
+        lang="en"
+        token={async () => 'tok'}
+        onClose={onReport}
+      />
+    </section>
+  )
+}
+
+it('Escape inside a report sheet closes the report, not the sheet it sits in', async () => {
+  const onSheet = vi.fn()
+  const onReport = vi.fn()
+  const host = await render(<SheetHost onSheet={onSheet} onReport={onReport} />)
+  const inside = host.querySelector<HTMLElement>('.report-sheet button')!
+  inside.focus()
+  await act(
+    async () => void inside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+  )
+  expect(onReport).toHaveBeenCalledTimes(1)
+  expect(onSheet).not.toHaveBeenCalled()
+  // and with focus on the sheet itself the sheet still answers its own Escape
+  const sheet = host.querySelector<HTMLElement>('section')!
+  await act(
+    async () => void sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+  )
+  expect(onSheet).toHaveBeenCalledTimes(1)
 })

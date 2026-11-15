@@ -38,7 +38,17 @@ export function DeleteAccount({ lang, onDelete }: Props) {
     }
   }
   return (
-    <form className="auth-form delete-confirm" onSubmit={submit}>
+    <form
+      className="auth-form delete-confirm"
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        // Escape backs out of this step only, not out of the whole profile sheet
+        if (e.key !== 'Escape' || busy) return
+        e.stopPropagation()
+        e.preventDefault()
+        setOpen(false)
+      }}
+    >
       <h3>{t('deleteTitle', lang)}</h3>
       <p>{t('deleteWhat', lang)}</p>
       <label>

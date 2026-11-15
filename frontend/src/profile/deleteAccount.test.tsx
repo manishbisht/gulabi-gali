@@ -172,3 +172,47 @@ it('the link field warns that every verified member can see it', () => {
   expect(STRINGS.profileLinkHint.en).toContain('Every verified member can see it')
   expect(STRINGS.profileLinkHint.hi).toContain('Har verified member')
 })
+
+it('Escape in the delete step backs out of it, and only then closes the profile sheet', async () => {
+  const onClose = vi.fn()
+  const me = {
+    id: 'u',
+    complete: true,
+    verified: false,
+    profile: {
+      id: 'u',
+      name: 'Asha',
+      look: { skin: 1, outfit: 'sandstone', head: 'none' },
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+      stamps: [] as string[],
+    },
+  } as Parameters<typeof ProfileSheet>[0]['me']
+  await act(async () =>
+    root.render(
+      <ProfileSheet
+        me={me}
+        lang="en"
+        onSave={vi.fn()}
+        onClose={onClose}
+        onSignOut={() => {}}
+        onPrivacy={() => {}}
+        onDelete={async () => true}
+      />,
+    ),
+  )
+  await click(button('Delete my account'))
+  const field = host.querySelector<HTMLInputElement>('[data-field="deleteConfirm"]')!
+  const escape = () =>
+    act(async () => void field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  await escape()
+  expect(onClose).not.toHaveBeenCalled()
+  expect(host.querySelector('[data-field="deleteConfirm"]')).toBeNull() // the step is closed
+  await act(
+    async () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+  )
+  expect(onClose).toHaveBeenCalledTimes(1)
+})

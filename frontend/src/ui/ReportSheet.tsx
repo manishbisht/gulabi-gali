@@ -110,7 +110,18 @@ export function ReportSheet({
 
   const title = t('reportTitle', lang, { name })
   return (
-    <div className="chat-confirm report-sheet" role="dialog" aria-label={title}>
+    <div
+      className="chat-confirm report-sheet"
+      role="dialog"
+      aria-label={title}
+      onKeyDown={(e) => {
+        // Escape closes this sheet only, not the sheet it sits in (and loses what was typed there)
+        if (e.key !== 'Escape' || busy) return
+        e.stopPropagation()
+        e.preventDefault()
+        onClose()
+      }}
+    >
       <h3>{title}</h3>
       {sent ? (
         <>

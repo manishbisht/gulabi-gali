@@ -3,6 +3,18 @@ import { useEffect, useRef, type RefObject } from 'react'
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+/** Tab can land on it: not hidden, not inert, not display:none or visibility:hidden (itself or an ancestor). */
+function reachable(el: HTMLElement): boolean {
+  if (el.closest('[inert], [hidden]')) return false
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) {
+    if (getComputedStyle(n).display === 'none') return false
+  }
+  return getComputedStyle(el).visibility !== 'hidden'
+}
+
+/** Where focus goes when the control that opened a dialog is gone: the first button of the HUD, if any. */
+const fallbackHome = () => document.querySelector<HTMLElement>('.hud button:not([disabled])')
+
 /** The dialogs open now, oldest first: only the last answers the keyboard (a sheet can open over a sheet). */
 const open: object[] = []
 
@@ -31,7 +43,7 @@ export function useDialog<T extends HTMLElement>(onClose: () => void): RefObject
         return onCloseRef.current()
       }
       if (e.key !== 'Tab') return
-      const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)]
+      const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(reachable)
       const first = items[0]
       const last = items[items.length - 1]
       if (!first || !last) return e.preventDefault()
@@ -52,6 +64,7 @@ export function useDialog<T extends HTMLElement>(onClose: () => void): RefObject
       document.removeEventListener('keydown', onKey)
       open.splice(open.indexOf(me), 1)
       if (before?.isConnected && before !== document.body) before.focus()
+      else fallbackHome()?.focus() // the opener went away (a chip that re-rendered): never fall to <body>
     }
   }, [])
   return ref
