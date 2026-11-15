@@ -52,7 +52,7 @@ export const STRINGS = {
   },
   festivalGangaurLineStreet: {
     hi: 'Gangaur ki sawari sadak par nikli hai',
-    en: 'The Gangaur procession is out on the main road',
+    en: 'The Gangaur procession is on the road',
   },
   festivalTeejLine: {
     hi: 'Hari lehariya mein Teej ka jhoola gali-gali ghoom raha hai',

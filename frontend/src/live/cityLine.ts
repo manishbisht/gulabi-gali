@@ -11,16 +11,16 @@ const LINES = {
 
 const AIR: Record<AqiBand, Record<Lang, string>> = {
   good: {
-    hi: 'Aaj hawa saaf hai — Nahargarh tak dikh raha hai.',
-    en: 'Clear air today. You can see all the way to Nahargarh.',
+    hi: 'Hawa saaf hai — Nahargarh tak dikh raha hai.',
+    en: 'Clear air — you can see Nahargarh.',
   },
   moderate: { hi: 'Hawa theek-thaak hai. Chai pe chalo?', en: "The air's okay. Chai?" },
   poor: { hi: 'Thodi dhundh hai aaj. Mask rakh lo.', en: 'A bit hazy today. Keep a mask handy.' },
   unhealthy: {
-    hi: 'Hawa kharab hai, Hukum — aaj andar hi raho.',
+    hi: 'Hawa kharab hai, Hukum — ghar pe raho.',
     en: 'The air is bad today. Best to stay in.',
   },
-  severe: { hi: 'Hawa kharab hai, Hukum — aaj andar hi raho.', en: 'The air is bad today. Best to stay in.' },
+  severe: { hi: 'Hawa kharab hai, Hukum — ghar pe raho.', en: 'The air is bad today. Best to stay in.' },
 }
 
 /** One line of Jaipur small talk about today: storm/rain, then dust, then heat, then the air. */
