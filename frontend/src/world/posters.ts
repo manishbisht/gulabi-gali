@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { POSTER_SLOTS, type PosterView, type ServerMsg } from '../net/protocol'
+import { POSTER_AFTER_MS, POSTER_SLOTS, type PosterView, type ServerMsg } from '../net/protocol'
 import { PALETTE } from './palette'
 import type { DistrictDef, Vec2 } from './types'
 
@@ -180,6 +180,8 @@ export interface PosterHooks {
 
 /** After a nudge's fetch fails, it is tried once more after this long (meanwhile the walls stay bare). */
 export const NUDGE_RETRY_MS = 2000
+/** How often the walls look for a poster whose time has passed: once a minute, never per frame. */
+export const EXPIRY_CHECK_MS = 60_000
 
 export interface Posters {
   /** Every frame: which wall is in reach. Allocates nothing. */
@@ -341,6 +343,22 @@ export function createPosters(opts: {
       })
   }
 
+  // The server drops a poster `POSTER_AFTER_MS` after its `when`; a page does not wait for its next fetch (a
+  // poster without a `when` runs from its pinning, which only the server knows, so it waits for the fetch).
+  const expiry = setInterval(() => {
+    const now = Date.now()
+    const over: string[] = []
+    for (const w of walls)
+      for (const [slot, p] of w.posters)
+        if (p.when !== null && p.when + POSTER_AFTER_MS <= now) {
+          w.posters.delete(slot)
+          over.push(p.id)
+        }
+    if (!over.length) return
+    for (const w of walls) repaint(w)
+    hooks.gone(over)
+  }, EXPIRY_CHECK_MS)
+
   return {
     update(pos) {
       const w = nearestWall(pos, plain)
@@ -381,6 +399,7 @@ export function createPosters(opts: {
     },
     dispose() {
       disposed = true
+      clearInterval(expiry)
       loading?.abort()
       if (retry) clearTimeout(retry)
       for (const w of walls) {

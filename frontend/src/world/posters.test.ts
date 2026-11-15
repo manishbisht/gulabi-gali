@@ -97,6 +97,28 @@ function setup(first: PosterView[] = []) {
 }
 
 describe('poster walls', () => {
+  it('drops a poster whose time has passed (6 h after its when) within a minute, without a refetch', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000_000)
+      const soon = poster({ id: 'soon', slot: 0, when: 1_000_000 + 60_000 })
+      const none = poster({ id: 'none', slot: 1, when: null })
+      const t = setup([soon, none])
+      t.posters.refresh()
+      await t.land()
+      expect(t.posters.all().map((a) => a.poster.id)).toEqual(['soon', 'none'])
+      await vi.advanceTimersByTimeAsync(5 * 3600_000)
+      expect(t.posters.all().map((a) => a.poster.id)).toEqual(['soon', 'none'])
+      await vi.advanceTimersByTimeAsync(2 * 3600_000)
+      expect(t.posters.all().map((a) => a.poster.id)).toEqual(['none'])
+      expect(t.hooks.gone).toHaveBeenCalledWith(['soon'])
+      expect(t.load).toHaveBeenCalledTimes(1)
+      t.posters.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('numbers each district’s walls as the server does', () => {
     for (const [id, def] of Object.entries(DEFS))
       expect(wallsOf(def), id).toHaveLength(POSTER_WALLS[id as DistrictId])
