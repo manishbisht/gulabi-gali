@@ -1236,8 +1236,8 @@ small.words-hint {
 
 .horn-button {
   min-width: 52px;
-  padding: 0;
-  font-size: 1.5rem;
+  padding: 0 16px;
+  font-size: 1.1rem;
   background: var(--cream);
 }
 
@@ -1528,6 +1528,14 @@ small.words-hint {
 /* The kite fight has the screen: the HUD is inert beneath it, and is not drawn over the sky. */
 .hud[inert] {
   visibility: hidden;
+}
+
+/* A switch that is on its "off" side (sound muted, monkey stopped) also looks it: dimmer, with a dashed edge. */
+.hud-toggles .sound-toggle[aria-pressed='false'],
+.hud-toggles .bandar-toggle[aria-pressed='true'] {
+  opacity: 0.6;
+  outline: 2px dashed var(--cream);
+  outline-offset: -3px;
 }
 
 /* the monkey's switch: one small emoji chip, only in the Walled City */

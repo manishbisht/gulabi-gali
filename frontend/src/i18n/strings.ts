@@ -275,6 +275,7 @@ export const STRINGS = {
   driveMount: { hi: 'Auto chalao', en: 'Drive the auto' },
   driveExit: { hi: 'Utro', en: 'Get out' },
   driveHorn: { hi: 'Horn bajao', en: 'Honk the horn' },
+  driveHornShort: { hi: 'Horn', en: 'Honk' },
   driveStuck: {
     hi: 'Yahan utarne ki jagah nahi — auto thoda hata ke utro.',
     en: 'No room to get out here — move the auto a little first.',

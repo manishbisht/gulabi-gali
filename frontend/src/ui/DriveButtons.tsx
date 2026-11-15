@@ -17,7 +17,7 @@ export function DriveButtons({ lang, onHorn, onExit }: Props) {
         aria-keyshortcuts="Space"
         onClick={onHorn}
       >
-        ⤒
+        <span aria-hidden="true">📣 {t('driveHornShort', lang)}</span>
       </button>
       <button type="button" className="metro-button exit-button" aria-keyshortcuts="E" onClick={onExit}>
         {t('driveExit', lang)}
