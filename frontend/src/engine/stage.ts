@@ -32,6 +32,10 @@ export function clampDelta(ms: number): number {
   return Math.min(Math.max(ms / 1000, 0), 0.1)
 }
 
+/** The most one frame can add to the quality window: a longer one is a hitch, and still counts as this much. */
+const HITCH_MS = 600
+/** Slow frames a window needs before it can step down; two hitches alone are not a slow device. */
+const MIN_SLOW_FRAMES = 4
 const QUALITY_KEY = 'gg-quality'
 /** Vertical field of view, in degrees: landscape screens, and phones held upright. */
 const FOV = 60
@@ -71,6 +75,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   let sinceRestore = 0
   let gameClock = 0
   let slow = 0
+  let slowFrames = 0
   let sampled = 0
 
   /** The size last fitted, in CSS px: a capture draws at this and goes back to it. */
@@ -97,14 +102,22 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
    * if over 60% of ~2.5 s of frames took longer than 22 ms (under ~45 fps) it
    * steps one tier down. It never steps back up within a tab session; flapping
    * between tiers looks worse than either one.
+   * A very long frame is clamped (to HITCH_MS), not skipped: a phone at 2 to 4 fps
+   * must still step down. One hitch (a tab switch, a GC pause, a district load)
+   * cannot, because it is at most HITCH_MS of the ~2.5 s window and the window
+   * also needs MIN_SLOW_FRAMES slow frames.
    */
   function measure(delta: number) {
-    if (quality === 0 || delta > 250) return // 250+: a stall or a tab coming back, not sustained slowness
-    sampled += delta
-    if (delta > 22) slow += delta
+    if (quality === 0) return
+    const ms = Math.min(delta, HITCH_MS)
+    sampled += ms
+    if (ms > 22) {
+      slow += ms
+      slowFrames++
+    }
     if (sampled < 2500) return
-    const tooSlow = slow / sampled > 0.6
-    slow = sampled = 0
+    const tooSlow = slow / sampled > 0.6 && slowFrames >= MIN_SLOW_FRAMES
+    slow = sampled = slowFrames = 0
     if (tooSlow) applyQuality((quality - 1) as QualityTier)
   }
 
@@ -145,7 +158,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   function start() {
     cancelAnimationFrame(frame)
     last = performance.now()
-    slow = sampled = 0
+    slow = sampled = slowFrames = 0
     frame = requestAnimationFrame(tick)
   }
 
@@ -164,7 +177,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     // three.js re-creates its GL state and re-uploads resources itself; we re-fit and start counting again.
     lost = false
     sinceRestore = 0
-    slow = sampled = 0
+    slow = sampled = slowFrames = 0
     resize()
   }
   canvas.addEventListener('webglcontextlost', onLost)

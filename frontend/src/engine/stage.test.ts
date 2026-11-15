@@ -235,7 +235,47 @@ describe('adaptive quality', () => {
 
   it('keeps its tier when frames are fast, or the slowness is only a stall', () => {
     expect(run(16, 400).tiers).toEqual([])
-    expect(run(300, 40).tiers).toEqual([]) // 250 ms+ frames are a tab coming back, not a slow device
+  })
+
+  it('steps down on a phone that really crawls: 300 to 600 ms frames, within a few seconds', () => {
+    for (const ms of [300, 450, 600, 2000]) {
+      const { stage, tiers } = run(ms, Math.ceil(2500 / Math.min(ms, 600))) // one window, no more
+      expect(tiers, `${ms} ms frames`).toEqual([1])
+      expect(sessionStorage.getItem('gg-quality')).toBe('1')
+      stage.dispose()
+    }
+  })
+
+  it('does not step down for one hitch: a tab switch, a GC pause, a district load', () => {
+    const queue: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => queue.push(cb))
+    vi.stubGlobal('cancelAnimationFrame', () => undefined)
+    vi.spyOn(performance, 'now').mockReturnValue(0)
+    sessionStorage.clear()
+    const stage = createStage(document.createElement('canvas'))
+    let now = 0
+    const frame = (ms: number) => queue.shift()!((now += ms))
+    for (let i = 0; i < 400; i++) {
+      // a hitch of 2 s, then 30 s, then a hitch right at the start of a fresh window
+      frame(i === 50 ? 2000 : i === 150 ? 30_000 : i % 100 === 0 ? 700 : 16)
+    }
+    expect(stage.quality).toBe(2)
+    expect(sessionStorage.getItem('gg-quality')).not.toBe('1')
+    stage.dispose()
+  })
+
+  it('does not step down for a few hitches in a row either', () => {
+    const queue: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => queue.push(cb))
+    vi.stubGlobal('cancelAnimationFrame', () => undefined)
+    vi.spyOn(performance, 'now').mockReturnValue(0)
+    sessionStorage.clear()
+    const stage = createStage(document.createElement('canvas'))
+    let now = 0
+    // two long frames and nothing else for a window's length: not enough slow frames to call it sustained
+    for (const ms of [2000, 2000, 16, 16]) queue.shift()!((now += ms))
+    expect(stage.quality).toBe(2)
+    stage.dispose()
   })
 
   it('counts game time as the clamped dts, so slow frames run behind the wall clock', () => {

@@ -41,7 +41,10 @@ median.
 
 **How the tier moves.** The stage measures every frame (the city draws continuously). Once it has about 2.5 s
 of frames, if more than 60% of that time was spent in frames slower than 22 ms it steps one tier down
-(`frontend/src/engine/stage.ts`, `measure` and `applyQuality`). It never steps back up within a tab session, so
+(`frontend/src/engine/stage.ts`, `measure` and `applyQuality`). A very long frame is clamped to 600 ms, not
+ignored, so a phone running at 2 to 4 fps steps down within a few seconds. One hitch (a tab switch, a GC pause, a
+district load, the first shader compile) cannot step it down: it adds at most 600 ms to the window, and a window
+also needs at least 4 slow frames. It never steps back up within a tab session, so
 to measure full quality again open a new tab or run `sessionStorage.removeItem('gg-quality')` and reload.
 
 Paste results into a copy of the table below with the device in the heading.
