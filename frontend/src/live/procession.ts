@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import type { StringKey } from '../i18n/strings'
+import type { FestivalId, DistrictId } from '../net/protocol'
 import { bakeHex, merge } from '../world/kit/parts'
 import type { District } from '../world/district'
 import type { Vec2 } from '../world/types'
@@ -21,6 +23,13 @@ const FESTIVALS: readonly string[] = ['gangaur', 'teej']
 
 export function processionCount(id: string, quality: Tier): number {
   return FESTIVALS.includes(id) ? MEMBERS[quality] : 0
+}
+
+/** The HUD line while a procession is out: the Tripolia one only where Tripolia is. */
+export function processionLine(festival: FestivalId | null, district: DistrictId): StringKey | undefined {
+  if (festival === 'gangaur')
+    return district === 'walled-city' ? 'festivalGangaurLine' : 'festivalGangaurLineStreet'
+  return festival === 'teej' ? 'festivalTeejLine' : undefined
 }
 
 const SPEED = 1 // m/s
@@ -92,6 +101,24 @@ function loop(route: Vec2[]) {
   }
 }
 
+// ---- the dress colour --------------------------------------------------------------------------
+
+const INSTANCE_COLOUR = 'vColor.rgb *= instanceColor.rgb;'
+/** Only a pure-white vertex (the dress) takes the instance colour; skin, kalash and coconut keep their own. */
+const DRESS_ONLY =
+  'float dress = step(0.999, min(vColor.r, min(vColor.g, vColor.b))); ' +
+  'vColor.rgb *= mix(vec3(1.0), instanceColor.rgb, dress);'
+
+/** `onBeforeCompile` for the shared material: swaps the instance-colour multiply in `color_vertex` for `DRESS_ONLY`. */
+export function dressOnly(shader: { vertexShader: string }): void {
+  const chunk = THREE.ShaderChunk.color_vertex
+  if (!chunk.includes(INSTANCE_COLOUR)) throw new Error('procession: three changed color_vertex')
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <color_vertex>',
+    chunk.replace(INSTANCE_COLOUR, DRESS_ONLY),
+  )
+}
+
 // ---- the figures -------------------------------------------------------------------------------
 
 const SKIN = '#B9825A'
@@ -119,7 +146,7 @@ const ball = (r: number, x: number, y: number, z: number, hex: string) =>
   piece(new THREE.SphereGeometry(r, 6, 4), x, y, z, hex)
 
 /** A woman in lehariya with a kalash on her head. The dress is white, so the instance colour is the dress. */
-function womanGeometry() {
+export function womanGeometry() {
   return merge([
     cyl(0.2, 0.34, 0.8, 6, 0, 0, 0, '#ffffff'), // skirt
     cyl(0.17, 0.2, 0.4, 6, 0, 0.8, 0, '#ffffff'), // blouse
@@ -241,6 +268,7 @@ export function createProcession(district: District, kind: ProcessionKind, quali
   const colours = kind === 'teej' ? HARIYALI : LEHARIYA
 
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
+  material.onBeforeCompile = dressOnly
   const geometries = [
     womanGeometry(),
     drummerGeometry(),

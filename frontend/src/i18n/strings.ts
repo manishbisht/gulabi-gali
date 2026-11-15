@@ -35,6 +35,10 @@ export const STRINGS = {
     hi: 'Gangaur ki sawari Tripolia se nikal rahi hai',
     en: 'The Gangaur procession is leaving Tripolia',
   },
+  festivalGangaurLineStreet: {
+    hi: 'Gangaur ki sawari sadak par nikli hai',
+    en: 'The Gangaur procession is out on the main road',
+  },
   festivalTeejLine: {
     hi: 'Hari lehariya mein Teej ka jhoola gali-gali ghoom raha hai',
     en: 'The Teej swing cart is out, with a train of green lehariya behind it',

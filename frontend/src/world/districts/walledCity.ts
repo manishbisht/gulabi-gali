@@ -287,14 +287,14 @@ const walledCity: DistrictDef = {
   centre: CHAUPAR_AT,
   /** Out along Tripolia Bazaar's two lanes, round the Badi Chaupar and back. */
   processionRoute: [
-    { x: -84, z: -2.3 },
-    { x: -84, z: 2.3 },
-    { x: -7.5, z: 2.3 },
+    { x: -84, z: -2 },
+    { x: -84, z: 2 },
+    { x: -7.5, z: 2 },
     { x: -7.5, z: 7.5 },
     { x: 7.5, z: 7.5 },
     { x: 7.5, z: -7.5 },
     { x: -7.5, z: -7.5 },
-    { x: -7.5, z: -2.3 },
+    { x: -7.5, z: -2 },
   ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {

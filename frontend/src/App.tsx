@@ -27,6 +27,7 @@ import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
+import { processionLine } from './live/procession'
 import { DISTRICT_NAMES } from './world/districtNames'
 import { savedDistrict, useTravel } from './world/useTravel'
 import type { DistrictId, FestivalId } from './net/protocol'
@@ -68,12 +69,6 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
   teej: 'festivalTeej',
   diwali: 'festivalDiwali',
   jlf: 'festivalJlf',
-}
-
-/** The line under the banner while a procession is out. */
-const PROCESSIONS: Partial<Record<FestivalId, StringKey>> = {
-  gangaur: 'festivalGangaurLine',
-  teej: 'festivalTeejLine',
 }
 
 /** `?gg-festival=<id>` stands in for the live festival, in test mode only. */
@@ -452,7 +447,7 @@ export default function App() {
         snapshot={snapshot}
         line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
         banner={festival ? t(FESTIVALS[festival], lang) : undefined}
-        procession={festival && PROCESSIONS[festival] ? t(PROCESSIONS[festival], lang) : undefined}
+        procession={processionLine(festival, here) && t(processionLine(festival, here)!, lang)}
         stamps={`${have.length}/${TOTAL_STAMPS}`}
         lang={lang}
         onLang={setLang}

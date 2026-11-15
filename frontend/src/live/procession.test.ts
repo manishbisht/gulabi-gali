@@ -3,12 +3,20 @@ import { describe, expect, it } from 'vitest'
 import { DISTRICTS, loadDistrict } from '../world/district'
 import { clearAt } from '../world/animals'
 import type { Vec2 } from '../world/types'
-import { createProcession, processionCount, processionPath } from './procession'
+import { t } from '../i18n/strings'
+import {
+  createProcession,
+  dressOnly,
+  processionCount,
+  processionLine,
+  processionPath,
+  womanGeometry,
+} from './procession'
 
 const TIERS = [0, 1, 2] as const
 
-/** Half the width of the widest thing in the line: the palanquin with its bearers. */
-const BODY = 1.3
+/** The rows of women stand 0.8 m off the middle and the palanquin with its bearers is about 1.3 m wide each side; the palanquin is 2.7 m long. */
+const BODY = 1.6
 
 describe('processionCount', () => {
   it('is 40, 20 and 8 members for a Gangaur or Teej procession, and none for other festivals', () => {
@@ -115,5 +123,56 @@ describe('processionRoute', () => {
     expect(Math.min(...zs)).toBeLessThan(-5) // it goes right round the Chaupar
     expect(Math.max(...zs)).toBeGreaterThan(5)
     d.dispose()
+  })
+})
+
+describe('the HUD line', () => {
+  it('names Tripolia only in the Walled City', () => {
+    expect(t(processionLine('gangaur', 'walled-city')!, 'en')).toBe(
+      'The Gangaur procession is leaving Tripolia',
+    )
+    for (const d of ['mi-road', 'university', 'malviya-nagar'] as const) {
+      const key = processionLine('gangaur', d)!
+      expect(t(key, 'en')).toBe('The Gangaur procession is out on the main road')
+      expect(t(key, 'hi')).toBe('Gangaur ki sawari sadak par nikli hai')
+    }
+    expect(processionLine('teej', 'mi-road')).toBe('festivalTeejLine')
+    expect(processionLine('holi', 'walled-city')).toBeUndefined()
+    expect(processionLine(null, 'walled-city')).toBeUndefined()
+  })
+})
+
+describe('the dress colour', () => {
+  it('patches the instance colour so that only pure-white vertices take it', () => {
+    const shader = { vertexShader: 'void main() {\n#include <color_vertex>\n}' }
+    dressOnly(shader)
+    expect(shader.vertexShader).not.toContain('#include <color_vertex>')
+    expect(shader.vertexShader).not.toContain('vColor.rgb *= instanceColor.rgb;')
+    expect(shader.vertexShader).toContain('USE_INSTANCING_COLOR')
+    expect(shader.vertexShader).toContain(
+      'float dress = step(0.999, min(vColor.r, min(vColor.g, vColor.b))); vColor.rgb *= mix(vec3(1.0), instanceColor.rgb, dress);',
+    )
+  })
+
+  it("keeps the woman's skin and kalash off white, and has white dress to tint", () => {
+    const g = womanGeometry()
+    const c = g.getAttribute('color')
+    const pos = g.getAttribute('position')
+    let white = 0
+    let faces = 0
+    let kalash = 0
+    for (let i = 0; i < c.count; i++) {
+      const isWhite = Math.min(c.getX(i), c.getY(i), c.getZ(i)) >= 0.999
+      if (isWhite) white++
+      const y = pos.getY(i)
+      // the head sits at 1.33 m (radius 0.11), the kalash at 1.5 to 1.82 m: none of it may be white
+      if (y > 1.22 && y < 1.44 && Math.abs(pos.getX(i)) < 0.12 && !isWhite) faces++
+      if (y > 1.5 && !isWhite) kalash++
+      if (y > 1.5) expect(isWhite).toBe(false)
+    }
+    expect(white).toBeGreaterThan(0)
+    expect(faces).toBeGreaterThan(0)
+    expect(kalash).toBeGreaterThan(0)
+    g.dispose()
   })
 })
