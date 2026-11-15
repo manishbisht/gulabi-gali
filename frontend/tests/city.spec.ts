@@ -207,7 +207,7 @@ test.describe('by metro', () => {
     ])
     await sheet.getByRole('button', { name: 'MI Road–Raja Park' }).tap()
     await expect.poll(() => page.evaluate(() => window.__gg.district())).toBe('mi-road')
-    await expect(page.locator('.hud-top')).toContainText('MI Road–Raja Park')
+    await expect(page.locator('.hud-top')).toContainText('MI Road') // the chip's short name
     // the coach is up (focused, tap to skip) until the ride is skipped
     const coach = page.getByRole('button', { name: 'Metro safar — chhodne ke liye tap karo' })
     await expect(coach).toBeFocused()
@@ -218,7 +218,7 @@ test.describe('by metro', () => {
     await page.reload()
     await page.getByRole('button', { name: 'Padharo!' }).click()
     await expect.poll(() => page.evaluate(() => window.__gg?.district())).toBe('mi-road')
-    await expect(page.locator('.hud-top')).toContainText('MI Road–Raja Park')
+    await expect(page.getByRole('button', { name: /Naksha · MI Road–Raja Park/ })).toBeVisible()
   })
 })
 
