@@ -2,7 +2,7 @@
 import { act } from 'react'
 import * as THREE from 'three'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { storage } from './storage'
 import { AuthContext, SIGNED_OUT, type AuthState } from './auth/useAuth'
@@ -758,4 +758,97 @@ it('says so when the first district cannot be loaded, and unmounting while it lo
   await new Promise((r) => setTimeout(r, 50))
   expect(scene.getObjectByName('walled-city')).toBeUndefined()
   expect(stage.frames.size).toBe(0)
+})
+
+describe('a block offered on the reaction toast', () => {
+  /**
+   * A resident on the street, with Asha beside them having greeted them three times: the toast offers a block.
+   * `blocks` answers the block call.
+   */
+  async function offered(blocks: () => Response) {
+    const me = {
+      id: 'u',
+      complete: true,
+      verified: false,
+      profile: {
+        id: 'u',
+        name: 'Ravi',
+        look: PROFILE_LOOK,
+        status: '',
+        homeArea: 'Raja Park',
+        hereFor: null,
+        about: '',
+        pauseRequests: false,
+        stamps: [],
+      },
+    }
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      const path = new URL(String(url)).pathname
+      if (path === '/api/me') return Response.json(me)
+      if (path === '/api/blocks' && init?.method === 'POST') return blocks()
+      return Promise.reject(new TypeError('offline'))
+    })
+    vi.stubEnv('VITE_TEST_HOOKS', '1')
+    history.replaceState(null, '', '/?gg-test=1')
+    localStorage.setItem('gg-lang', 'hi')
+    localStorage.setItem('gg-district', 'walled-city')
+    delete (window as { __gg?: unknown }).__gg
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    await act(async () =>
+      root.render(
+        <AuthContext.Provider value={signedIn()}>
+          <App />
+        </AuthContext.Provider>,
+      ),
+    )
+    await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+    await vi.waitFor(() => expect(window.__gg?.district()).toBe('walled-city'), { timeout: 10_000 })
+    await vi.waitFor(async () => expect(await liveNow()[0]?.opts.token()).toBe('tok'))
+    const at = window.__gg.position()
+    const asha = { id: 'dev:asha', name: 'Asha', look: GHOST_LOOK, status: '', x: at.x + 2, z: at.z, ry: 0 }
+    await server({ t: 'welcome', you: { id: 'u', visible: true }, people: [asha] })
+    await tick()
+    for (let i = 0; i < 3; i++) await server({ t: 'react', from: 'dev:asha', to: 'u', kind: 'wave' })
+    const offer = host.querySelector<HTMLButtonElement>('button[aria-label="Asha ko block karo"]')!
+    expect(offer).not.toBeNull()
+    return { host, root, offer }
+  }
+  const card = (host: HTMLElement) =>
+    host.querySelector<HTMLElement>('section.person-card[aria-label="Asha"]')
+
+  it('asks first, in her card, and a block that fails says so and keeps the card up', async () => {
+    const { host, root, offer } = await offered(() => new Response(null, { status: 500 }))
+    await act(async () => offer.click())
+    const ask = card(host)!.querySelector('[role="alertdialog"]')!
+    expect(ask.textContent).toContain('Asha ko block karein?')
+    await act(async () => button(host, 'Haan, block karo')!.click())
+    await vi.waitFor(() => expect(card(host)?.textContent).toContain('Block nahi ho paya. Dobara try karo.'))
+    expect(card(host)).not.toBeNull()
+    // while her card asks, the toast keeps out of the way (a small phone has room for one of them)
+    const offerUp = () => host.querySelector<HTMLButtonElement>('button[aria-label="Asha ko block karo"]')
+    expect(offerUp()).toBeNull()
+    // "never mind" and the card closed with nothing blocked: the offer is back, and asks afresh
+    await act(async () => button(host, 'Rehne do')!.click())
+    expect(card(host)!.querySelector('[role="alertdialog"]')).toBeNull()
+    await act(async () => button(host, 'Band karo')!.click())
+    expect(card(host)).toBeNull()
+    expect(offerUp()).not.toBeNull()
+    await act(async () => offerUp()!.click())
+    expect(card(host)!.querySelector('[role="alertdialog"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('"also report" blocks first, then opens the report form for her', async () => {
+    const { host, root, offer } = await offered(() => new Response(null, { status: 204 }))
+    await act(async () => offer.click())
+    const also = [...card(host)!.querySelectorAll('label')].find((l) =>
+      l.textContent?.includes('Report bhi'),
+    )!
+    await act(async () => also.querySelector('input')!.click())
+    await act(async () => button(host, 'Haan, block karo')!.click())
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Asha ki report"]')).not.toBeNull())
+    expect(host.textContent).toContain('Asha block ho gaye')
+    await act(async () => root.unmount())
+  })
 })

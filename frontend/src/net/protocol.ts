@@ -181,6 +181,8 @@ export type ClientMsg =
   | { t: 'sit'; bench: string | null }
   | { t: 'say'; text: string }
   | { t: 'status'; text: string }
+  /** A greeting to the resident `to`, with no chat (see `REACTIONS`). Any other `kind` is a bad frame. */
+  | { t: 'react'; to: string; kind: Reaction }
   | { t: 'ping' }
 
 export type ServerMsg =
@@ -222,6 +224,14 @@ export type ServerMsg =
   | { t: 'poster'; op: 'remove'; id: string }
   /** This person's blocks changed: what the walls may show them did too, so fetch them again. */
   | { t: 'posters' }
+  /**
+   * `from` greeted `to` (see `REACTIONS`): sent to both, and to everyone else here who stands within 60 m
+   * of `from` and is blocked either way with neither. Draw it over both; never stored. Past six a minute to one
+   * person (from everyone together) it goes to its sender alone, so a crowd cannot flood anyone.
+   */
+  | { t: 'react'; from: string; to: string; kind: Reaction }
+  /** A `react` this socket sent was not passed on, and why (see `ReactRefusal`). */
+  | { t: 'react-no'; to: string; why: ReactRefusal }
 
 /** A line said at a bench, as each sitter hears it (and as the district keeps it, in memory only). */
 export type BenchLine = Omit<Extract<ServerMsg, { t: 'bench' }>, 't' | 'bench'>
@@ -229,6 +239,25 @@ export type BenchLine = Omit<Extract<ServerMsg, { t: 'bench' }>, 't' | 'bench'>
 export const MAX_BENCH_LINE = 200
 /** Seats at a bench or tapri: any more sitters are told `full`. */
 export const BENCH_SEATS = 4
+
+/**
+ * Reactions: a namaste or a wave from one resident to another standing near them, with no chat. Nothing of one
+ * is ever stored. Only a resident others can see sends one (not a muted one), only to another listed resident
+ * within `REACT_RANGE_M` of the sender's last accepted point and blocked neither way, at most once per
+ * `REACT_PAIR_MS` to the same person and `REACT_PER_MINUTE` a minute in all.
+ */
+export const REACTIONS = ['namaste', 'wave'] as const
+export type Reaction = (typeof REACTIONS)[number]
+export const REACT_RANGE_M = 8
+export const REACT_PAIR_MS = 30_000
+export const REACT_PER_MINUTE = 10
+/**
+ * Why a reaction was not passed on. `far`: further than `REACT_RANGE_M`, or the sender not on the street yet;
+ * `wait`: too soon after the last one to them, or too many this minute; `gone`: nobody by that id the sender
+ * may greet here now (left, a ghost, hidden or blocked either way, never told apart); `ghost`, `muted`: as for a
+ * bench line.
+ */
+export type ReactRefusal = 'far' | 'wait' | 'gone' | 'ghost' | 'muted'
 
 /**
  * How the server may end a district socket. A replaced socket lost to a newer one for the same person (another

@@ -526,6 +526,78 @@ it('a quick reconnect keeps the street as it is', async () => {
   }
 })
 
+describe('reactions', () => {
+  /** A resident on a live street, with Asha 3 m away, Ravi 20 m away and Door 70 m away (not drawn). */
+  async function greeting() {
+    const reactions = { got: vi.fn(), sent: vi.fn(), refused: vi.fn() }
+    const live = openLive(async () => 'tok', { reactions })
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    const ws = sockets()[0]!
+    const { x, z } = live.session.player()!.position()
+    // not open yet: nothing can go
+    expect(live.session.react('dev:asha', 'wave')).toBe('offline')
+    ws.onopen?.()
+    ws.say({
+      t: 'welcome',
+      you: { id: 'dev:me', visible: true },
+      people: [
+        { ...asha, x: x + 3, z },
+        { ...asha, id: 'dev:ravi', name: 'Ravi', x: x - 20, z },
+        // past the draw range: listed, but not drawn
+        { ...asha, id: 'dev:door', name: 'Door', x, z: z + 70 },
+      ],
+    })
+    live.tick(1 / 30)
+    const emotes = () =>
+      [...document.querySelectorAll<HTMLElement>('.emote')]
+        .filter((el) => !el.hidden)
+        .map((el) => el.textContent)
+    return { ...live, ws, reactions, emotes }
+  }
+
+  it('a greeting goes out only to someone drawn within 8 m; anyone else is refused here, unsent', async () => {
+    const { session, ws } = await greeting()
+    const reacts = () => ws.sent.filter((s) => s.includes('"react"'))
+    expect(session.react('dev:asha', 'namaste')).toBeNull()
+    expect(reacts().map((s) => JSON.parse(s))).toEqual([{ t: 'react', to: 'dev:asha', kind: 'namaste' }])
+    expect(session.react('dev:ravi', 'wave')).toBe('far')
+    // still on the street, only too far to be drawn (their card may still be open): far, not gone
+    expect(session.react('dev:door', 'wave')).toBe('far')
+    expect(session.react('dev:nobody', 'wave')).toBe('gone')
+    expect(reacts()).toHaveLength(1)
+    session.dispose()
+    expect(session.react('dev:asha', 'wave')).toBe('offline')
+  })
+
+  it("the server's word draws the emote over both and tells the page who greeted whom", async () => {
+    const { session, ws, reactions, emotes, tick } = await greeting()
+    // Asha greets the player: a toast with her name, and a namaste over each of them
+    ws.say({ t: 'react', from: 'dev:asha', to: 'dev:me', kind: 'namaste' })
+    tick(1 / 30)
+    expect(reactions.got).toHaveBeenCalledWith({ id: 'dev:asha', name: 'Asha' }, 'namaste')
+    expect(emotes()).toEqual(['🙏', '🙏'])
+    // the player's own greeting reached Ravi; then one was refused
+    ws.say({ t: 'react', from: 'dev:me', to: 'dev:ravi', kind: 'wave' })
+    expect(reactions.sent).toHaveBeenCalledWith('dev:ravi', 'wave')
+    ws.say({ t: 'react-no', to: 'dev:asha', why: 'wait' })
+    expect(reactions.refused).toHaveBeenCalledWith('dev:asha', 'wait')
+    // between two others: drawn, nothing to tell
+    ws.say({ t: 'react', from: 'dev:asha', to: 'dev:ravi', kind: 'wave' })
+    expect(reactions.got).toHaveBeenCalledTimes(1)
+    expect(reactions.sent).toHaveBeenCalledTimes(1)
+    // from someone the street does not show: no toast, nothing drawn
+    tick(5)
+    expect(emotes()).toEqual([])
+    ws.say({ t: 'react', from: 'dev:stranger', to: 'dev:me', kind: 'wave' })
+    tick(1 / 30)
+    expect(reactions.got).toHaveBeenCalledTimes(1)
+    expect(emotes()).toEqual([])
+    session.dispose()
+    expect(document.querySelectorAll('.emote')).toHaveLength(0)
+  })
+})
+
 /** Opens a live district with one person dead ahead of the camera, and gives back the pieces to tap with. */
 async function withPersonAhead() {
   const live = openLive()

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FullProfile, LivePerson } from '../net/protocol'
 import { PersonCard, type Viewer } from '../ui/PersonCard'
 import type { People } from './people'
@@ -207,4 +207,51 @@ it('when the person has left, the card stays and "Milna hai" is disabled', async
   expect(host.textContent).toContain('left this street')
   const meet = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Say hello')!
   expect(meet.disabled).toBe(true)
+})
+
+describe('reactions on the card', () => {
+  const buttons = (host: HTMLElement) => {
+    const group = host.querySelector('[role="group"][aria-label="Greet them from here"]')
+    return group ? [...group.querySelectorAll('button')] : []
+  }
+
+  it('a resident greets from the card with a namaste or a wave, without opening any chat', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(full)),
+    )
+    const onReact = vi.fn()
+    const { host, props, render } = show('resident', { onReact })
+    await render()
+    const [namaste, wave] = buttons(host)
+    expect([namaste!.textContent, wave!.textContent]).toEqual(['Namaste 🙏', 'Wave 👋'])
+    act(() => wave!.click())
+    expect(onReact).toHaveBeenCalledWith(asha, 'wave')
+    act(() => namaste!.click())
+    expect(onReact).toHaveBeenLastCalledWith(asha, 'namaste')
+    expect(props.onRequest).not.toHaveBeenCalled()
+  })
+
+  it('once it reached them the buttons rest and the card says so; gone, they rest too', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(full)),
+    )
+    const { host, props, render } = show('verified', { onReact: vi.fn() })
+    await render({ ...props, reacted: 'namaste' })
+    expect(buttons(host)).toHaveLength(2)
+    expect(buttons(host).every((b) => b.disabled)).toBe(true)
+    expect(host.textContent).toContain('Your namaste reached Asha Sharma')
+    await render({ ...props, gone: true })
+    expect(buttons(host).every((b) => b.disabled)).toBe(true)
+  })
+
+  it('a ghost or someone without a finished profile gets no greeting buttons', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    for (const viewer of ['ghost', 'incomplete'] as const) {
+      const { host, render } = show(viewer, { onReact: vi.fn() })
+      await render()
+      expect(buttons(host)).toEqual([])
+    }
+  })
 })

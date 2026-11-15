@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getProfile } from '../net/api'
-import type { FullProfile, LivePerson } from '../net/protocol'
+import type { FullProfile, LivePerson, Reaction } from '../net/protocol'
 import { t, type Lang } from '../i18n/strings'
 import { BlockConfirm } from './BlockConfirm'
 import { ReportSheet } from './ReportSheet'
@@ -33,6 +33,12 @@ interface Props {
    * report, and the card stays up for the form (it closes when the form does).
    */
   onBlock?(person: LivePerson, stay?: boolean): Promise<boolean>
+  /** A resident's greeting from the card ("Namaste", "Haath hilao"): no chat, no request. */
+  onReact?(person: LivePerson, kind: Reaction): void
+  /** A greeting of theirs that reached this person within the pair's wait: the buttons rest, and the card says so. */
+  reacted?: Reaction
+  /** Opens with "Block them?" already asked (a block offered elsewhere, such as on a reaction toast). */
+  askBlock?: boolean
   onClose(): void
 }
 
@@ -53,9 +59,12 @@ export function PersonCard({
   onGetVerified,
   onRequest,
   onBlock,
+  onReact,
+  reacted,
+  askBlock = false,
   onClose,
 }: Props) {
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState(askBlock)
   const [reporting, setReporting] = useState(false)
   /** Blocked from this card with "Also report?": the form offers no block, and closing it closes the card. */
   const [blocked, setBlocked] = useState(false)
@@ -136,6 +145,26 @@ export function PersonCard({
           onBlock={blocked ? undefined : onBlock && (() => onBlock(person))}
           onClose={blocked ? onClose : () => setReporting(false)}
         />
+      )}
+      {resident && onReact && !confirming && !reporting && (
+        <div className="person-react" role="group" aria-label={t('reactGroup', lang)}>
+          {(['namaste', 'wave'] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className="person-react-button"
+              disabled={gone || !!reacted}
+              onClick={() => onReact(person, kind)}
+            >
+              {t(kind === 'namaste' ? 'reactNamaste' : 'reactWave', lang)}
+            </button>
+          ))}
+        </div>
+      )}
+      {reacted && (
+        <p className="person-note">
+          {t(reacted === 'namaste' ? 'reactSentNamaste' : 'reactSentWave', lang, { name })}
+        </p>
       )}
       <div className="person-actions">
         {resident ? (

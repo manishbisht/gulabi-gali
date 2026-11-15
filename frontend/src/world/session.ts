@@ -8,7 +8,16 @@ import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
 import { getPosters } from '../net/api'
 import { connectLive, type LiveConn, type LiveState } from '../net/live'
-import type { ClientMsg, DistrictId, FestivalId, LivePerson, PosterView, ServerMsg } from '../net/protocol'
+import {
+  REACT_RANGE_M,
+  type ClientMsg,
+  type DistrictId,
+  type FestivalId,
+  type LivePerson,
+  type PosterView,
+  type Reaction,
+  type ServerMsg,
+} from '../net/protocol'
 import { loadOrCreateLook } from '../player/avatar'
 import { createAmbience } from '../audio/ambience'
 import { closeAudio } from '../audio/horn'
@@ -21,6 +30,7 @@ import { createAnimals, createStationMemory, type AnimalHooks, type Animals } fr
 import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
+import { createEmotes } from './emotes'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
 import { placeSpot } from './placeLink'
@@ -29,6 +39,7 @@ import { createPosters, type Posters } from './posters'
 import { createRooftop, roofHeight, type RoofHooks, type Rooftop } from './rooftop'
 import { createTaxi, type Taxi, type TaxiHooks } from './taxi'
 import type { SessionPosterHooks } from './usePosters'
+import type { ReactionHooks, ReactionRefusal } from './useReactions'
 import type { AvatarLook, DistrictDef, LandmarkDef, NpcDef, Vec2 } from './types'
 import { createZoomGestures } from './zoomGestures'
 
@@ -121,6 +132,8 @@ export interface SessionHooks {
   bandar?: { blocked(): boolean; event(e: BandarEvent): void }
   /** The rooftop viewpoint: its stair in reach, being up there, and the fade between (see useRooftop). */
   roof?: RoofHooks
+  /** Greetings: one that reached the player, one of theirs that went, or one refused (see useReactions). Needs `presence`. */
+  reactions?: ReactionHooks
 }
 
 export interface CitySessionOptions {
@@ -195,6 +208,12 @@ export interface CitySession {
   unpinned(id: string): void
   /** Fetches the walls again (after a block, whose effect on them only the server knows). */
   refreshPosters(): void
+  /**
+   * Greets `to` ("Namaste", "Haath hilao"): null once it went out on the socket (the server's answer follows,
+   * see `hooks.reactions`), or why it could not go: no open socket, they are not on the street (`gone`), or
+   * more than `REACT_RANGE_M` away, drawn or not (`far`).
+   */
+  react(to: string, kind: Reaction): ReactionRefusal | null
   /** Leaves the district and stops; a district still loading is disposed when it arrives. */
   dispose(): void
 }
@@ -427,6 +446,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
             posters,
             taxi,
             hooks.presence,
+            hooks.reactions,
             opts.WebSocketImpl,
           )
         : null
@@ -562,6 +582,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     pinned: (p) => here?.posters?.upsert(p),
     unpinned: (id) => here?.posters?.remove(id),
     refreshPosters: () => here?.posters?.refresh(),
+    // null is "it went": only a missing socket is offline
+    react: (to, kind) => (here?.presence ? here.presence.react(to, kind) : 'offline'),
     dispose() {
       if (disposed) return
       disposed = true
@@ -889,7 +911,12 @@ function createBubbleSystem(
   }
 }
 
-type Presence = DistrictSystem & { reconnect(): void; send(m: ClientMsg): void; open(): boolean }
+type Presence = DistrictSystem & {
+  reconnect(): void
+  send(m: ClientMsg): void
+  open(): boolean
+  react(to: string, kind: Reaction): ReactionRefusal | null
+}
 
 /**
  * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
@@ -909,9 +936,35 @@ function createPresence(
   /** While it rides, nothing is said of where the player is: the server already set them down at the landmark. */
   taxi: Pick<Taxi, 'riding' | 'refused'>,
   hooks: NonNullable<SessionHooks['presence']>,
+  reactions: ReactionHooks | undefined,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
   const labels = createPeopleLabels(host)
+  const emotes = createEmotes(host)
+  /** Who this socket is, as its welcome said: the player's own emotes go over the player. */
+  let self: string | null = null
+  /** Where the player stands this frame, for an emote over their own head. */
+  const here = { x: 0, z: 0 }
+  /** Where `id` is drawn now, for an emote over their head: the player, or someone on the street in view. */
+  const emoteAt = (id: string, out: THREE.Vector3) => {
+    if (id === self) {
+      out.set(here.x, player.elevation(), here.z)
+      return true
+    }
+    const r = people.get(id)
+    if (!r || !r.body.visible) return false
+    out.copy(r.body.position)
+    return true
+  }
+  /** Someone the player can see (or the player): only between them is a greeting drawn or told. */
+  const known = (id: string) => id === self || people.get(id) !== undefined
+  const onReact = (m: Extract<ServerMsg, { t: 'react' }>) => {
+    if (!known(m.from) || !known(m.to)) return
+    emotes.show(m.from, m.kind)
+    emotes.show(m.to, m.kind)
+    if (m.from === self) reactions?.sent(m.to, m.kind)
+    else if (m.to === self) reactions?.got({ id: m.from, name: people.get(m.from)!.person.name }, m.kind)
+  }
   const shadows = (q: QualityTier) => people.setShadows(q === 2)
   shadows(stage.quality)
   const offQuality = stage.onQuality(shadows)
@@ -933,9 +986,12 @@ function createPresence(
     if (m.t === 'error' && m.code === 'no-ride') return taxi.refused()
     if (m.t === 'queued') return hooks.queued?.(m.position, false)
     if (m.t === 'poster' || m.t === 'posters') return posters?.apply(m)
+    if (m.t === 'react') return onReact(m)
+    if (m.t === 'react-no') return reactions?.refused(m.to, m.why)
     people.apply(m)
     sitting?.apply(m)
     if (m.t === 'welcome') {
+      self = m.you.id
       hooks.queued?.(m.you.queued ?? null, m.you.visible)
       hooks.replaced(false)
       sitting?.reset() // a new socket: the server stood the old one up
@@ -947,7 +1003,13 @@ function createPresence(
   let stale: ReturnType<typeof setTimeout> | null = null
   const onState = (s: LiveState) => {
     if (stale) clearTimeout(stale)
-    stale = s === 'connecting' ? setTimeout(() => people.clear(), STALE_MS) : null
+    stale =
+      s === 'connecting'
+        ? setTimeout(() => {
+            people.clear()
+            emotes.clear()
+          }, STALE_MS)
+        : null
   }
   const connect = (): LiveConn => {
     const c = connectLive({
@@ -956,6 +1018,7 @@ function createPresence(
       onMsg,
       onReplaced: () => {
         people.clear()
+        emotes.clear()
         hooks.replaced(true)
       },
       onBanned: () => hooks.banned?.(),
@@ -985,6 +1048,9 @@ function createPresence(
       sendMove(pos)
       people.update(dt, pos)
       labels.update(stage.camera, people, pos)
+      here.x = pos.x
+      here.z = pos.z
+      emotes.update(dt, stage.camera, emoteAt)
     },
     reconnect() {
       conn.close()
@@ -993,9 +1059,21 @@ function createPresence(
     },
     send: (m) => conn.send(m),
     open: () => conn.state() === 'open',
+    react(to, kind) {
+      if (conn.state() !== 'open') return 'offline'
+      const r = people.get(to)
+      // not listed at all: gone; listed but past the draw range (their card still up): too far
+      if (!r) return 'gone'
+      const { x, z } = player.position()
+      if (!r.body.visible || Math.hypot(r.body.position.x - x, r.body.position.z - z) > REACT_RANGE_M)
+        return 'far'
+      conn.send({ t: 'react', to, kind })
+      return null
+    },
     dispose() {
       conn.close() // its 'closed' stops the stale timer
       offQuality()
+      emotes.dispose()
       labels.dispose()
       people.dispose()
     },

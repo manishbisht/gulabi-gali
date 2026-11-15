@@ -24,6 +24,7 @@ import { disposeAvatarCache } from './player/avatar'
 import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
+import { useReactions } from './world/useReactions'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
 import { bandarText, useBandar } from './world/useBandar'
@@ -73,6 +74,7 @@ import { FirstHint } from './ui/FirstHint'
 import { CityMap } from './ui/CityMap'
 import { Compass } from './ui/Compass'
 import { RoofButton, RoofNotice } from './ui/RoofButton'
+import { ReactionToast } from './ui/ReactionToast'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -83,6 +85,9 @@ const BENCH_TOASTS: Partial<Record<BenchNotice, StringKey>> = {
   far: 'benchFar',
   failed: 'benchFailed',
 }
+
+/** The look a card is opened with for someone no longer drawn: the card shows their name, never their body. */
+const UNSEEN_LOOK = { skin: 2, outfit: 'sandstone', head: 'none' } as const
 
 const FESTIVALS: Record<FestivalId, StringKey> = {
   sankranti: 'festivalSankranti',
@@ -154,6 +159,9 @@ export default function App() {
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
+  /** Reactions: a namaste or a wave from the person card, and the toast when one reaches the player. */
+  const reactions = useReactions()
+  const { hooks: reactionHooks, bind: bindReactions } = reactions
   const [sound, setSound] = useState(soundOn)
   /** The line for room when the city is full (`MAX_LIVE`): this resident waits in it as a ghost. */
   const queue = useQueue()
@@ -168,6 +176,12 @@ export default function App() {
   // however the card closes (its button, E, a landmark), the note does not wait for the next time
   const meetingId = meeting?.person.id ?? null
   if (!meetingId && composing) setComposing(null)
+  /**
+   * Whose card opened straight to "Block them?" (from a reaction toast), and how many times it was asked (each
+   * ask is a fresh question, even after a "never mind"); forgotten once the card is not theirs.
+   */
+  const [blockAsk, setBlockAsk] = useState<{ id: string; n: number } | null>(null)
+  if (blockAsk && meetingId !== blockAsk.id) setBlockAsk(null)
   const {
     fading,
     failed: travelFailed,
@@ -338,6 +352,7 @@ export default function App() {
         animals: animalHooks,
         bandar: bandarHooks,
         roof: roofHooks,
+        reactions: reactionHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -353,10 +368,12 @@ export default function App() {
     bindTaxi(city)
     bindAnimals(city)
     bindRoof(city)
+    bindReactions(city)
     bindMap({ session: city, stage })
 
     return () => {
       bindMap(null)
+      bindReactions(null)
       bindRoof(null)
       bindAnimals(null)
       bindTaxi(null)
@@ -399,6 +416,8 @@ export default function App() {
     bindMap,
     roofHooks,
     bindRoof,
+    reactionHooks,
+    bindReactions,
     bandarHooks,
     current,
     now,
@@ -436,6 +455,9 @@ export default function App() {
     )) ||
     (meeting && (
       <PersonCard
+        // asked to block from elsewhere: a fresh card, with the question already up
+        key={blockAsk ? `${blockAsk.id}:block:${blockAsk.n}` : meeting.person.id}
+        askBlock={!!blockAsk}
         person={meeting.person}
         gone={meeting.gone}
         viewer={viewer}
@@ -447,10 +469,14 @@ export default function App() {
         onRequest={(person) => setComposing(person.id)}
         onBlock={async (person, stay) => {
           const done = await block(person.id, person.name)
+          // a block offered on their reaction toast is done with: the toast goes too
+          if (done && reactions.notice?.t === 'got' && reactions.notice.id === person.id) reactions.dismiss()
           // `stay`: they also want to report; the card closes when the report form does
           if (done && !stay) closePerson()
           return done
         }}
+        reacted={reactions.sent[meeting.person.id]}
+        onReact={(person, kind) => reactions.react(person.id, kind)}
         onClose={closePerson}
       />
     )) ||
@@ -669,6 +695,27 @@ export default function App() {
                   <div className="toast" role="status">
                     {t(benchToast, lang)}
                   </div>
+                )}
+                {/* while the card it opened asks "Block them?", the toast keeps out of the way (a small phone
+                    has room for one); closed with nothing blocked, the offer is back while its time lasts */}
+                {reactions.notice && !(blockAsk && meetingId === blockAsk.id) && (
+                  <ReactionToast
+                    notice={reactions.notice}
+                    lang={lang}
+                    onBlock={(id, name) => {
+                      // the same "Block them?" as anywhere else (a failure said, "also report" offered), in
+                      // their card: as drawn, or (gone off the street) by name, which the card notes
+                      const drawn = session.current?.people().find((r) => r.person.id === id)?.person
+                      closeNpc()
+                      setComposing(null)
+                      tapPerson(
+                        drawn ?? { id, name, look: UNSEEN_LOOK, status: '', x: 0, z: 0, ry: 0 },
+                        false,
+                      )
+                      setBlockAsk((was) => ({ id, n: (was?.n ?? 0) + 1 }))
+                      // the toast is only hidden, not dismissed, until the block is done (see above)
+                    }}
+                  />
                 )}
                 {travelFailed && (
                   <div className="toast" role="status">

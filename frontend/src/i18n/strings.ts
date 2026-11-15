@@ -274,6 +274,40 @@ export const STRINGS = {
     hi: 'Milne ke liye pehle dikhna padega',
     en: 'To meet people, you need to be visible first',
   },
+  /** Reactions: a greeting from the person card, with no chat (see `REACTIONS`). */
+  reactGroup: { hi: 'Door se hi salaam', en: 'Greet them from here' },
+  reactNamaste: { hi: 'Namaste 🙏', en: 'Namaste 🙏' },
+  reactWave: { hi: 'Haath hilao 👋', en: 'Wave 👋' },
+  reactSentNamaste: { hi: '{name} ko namaste pahunch gaya', en: 'Your namaste reached {name}' },
+  reactSentWave: { hi: '{name} ne aapka hilta haath dekha', en: '{name} saw you wave' },
+  reactGotNamaste: { hi: '{name} ne aapko namaste kiya 🙏', en: '{name} says namaste 🙏' },
+  reactGotWave: { hi: '{name} aapko dekh ke haath hila rahe hain 👋', en: '{name} is waving at you 👋' },
+  reactAgain: {
+    hi: '{name} baar-baar bula rahe hain. Pasand nahi aa raha?',
+    en: '{name} keeps greeting you. Not into it?',
+  },
+  reactBlock: { hi: '{name} ko block karo', en: 'Block {name}' },
+  reactFar: {
+    hi: 'Thoda paas chalo: 8 metre ke andar se hi pahunchta hai',
+    en: 'Walk a little closer: it only reaches within 8 metres',
+  },
+  reactWait: {
+    hi: 'Ek baar kaafi hai. Thodi der baad phir se',
+    en: 'Once is plenty. Give it a little while',
+  },
+  reactGone: { hi: 'Woh ab yahan nahin dikh rahe', en: "They're not around here any more" },
+  reactMuted: {
+    hi: 'Moderator ne abhi aapko mute kiya hai, baad mein phir try karna',
+    en: 'A moderator has muted you for now. Try again later',
+  },
+  reactGhost: {
+    hi: 'Salaam karne ke liye pehle gali mein dikhna padega',
+    en: 'You need to be visible on the street to greet anyone',
+  },
+  reactOffline: {
+    hi: 'Gali se connection toot gaya, ek pal ruko',
+    en: 'Lost the street for a moment, hold on',
+  },
   personLoading: { hi: 'Thoda ruko…', en: 'One moment…' },
   personNoProfile: {
     hi: 'Poori profile abhi nahi khul paayi. Naam aur status dikh rahe hain.',
