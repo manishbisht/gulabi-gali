@@ -23,15 +23,17 @@ vi.mock('three', async (orig) => {
   return { ...real, WebGLRenderer: FakeRenderer }
 })
 
-vi.mock('../net/errorBeacon', () => ({ reportError: vi.fn() }))
+vi.mock('../net/errorBeacon', () => ({ beaconError: vi.fn() }))
 
-import { reportError } from '../net/errorBeacon'
+import { beaconError } from '../net/errorBeacon'
 import { clampDelta, createStage } from './stage'
 
 it('clamps frame delta to 0.1s', () => {
   expect(clampDelta(16)).toBeCloseTo(0.016)
   expect(clampDelta(5 * 60_000)).toBe(0.1) // back from background
   expect(clampDelta(-5)).toBe(0)
+  expect(clampDelta(NaN)).toBe(0) // a bad timestamp must not poison every position with NaN
+  expect(clampDelta(Infinity)).toBe(0)
 })
 
 it('dispose releases the WebGL context', () => {
@@ -49,8 +51,8 @@ it('a lost WebGL context goes to the error beacon, and our own dispose does not'
   const lost = new Event('webglcontextlost', { cancelable: true })
   canvas.dispatchEvent(lost)
   expect(lost.defaultPrevented).toBe(true)
-  expect(reportError).toHaveBeenCalledWith('webgl-lost', 'WebGL context lost')
+  expect(beaconError).toHaveBeenCalledWith('webgl-lost', 'WebGL context lost')
   stage.dispose()
   canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
-  expect(reportError).toHaveBeenCalledTimes(1)
+  expect(beaconError).toHaveBeenCalledTimes(1)
 })

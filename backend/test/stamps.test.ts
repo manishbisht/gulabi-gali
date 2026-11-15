@@ -68,7 +68,7 @@ describe('Jaipur Darshan stamps on the server', () => {
     expect(await stampsOf(await put(t, { stamps: [] }))).toEqual([])
   })
 
-  it('is for residents only: a token without a finished profile, or a banned one, is a ghost (403)', async () => {
+  it('is for residents only: a token without a finished profile is a ghost (403 ghost), a banned one 403 banned', async () => {
     const half = await login('Stamp Half')
     let res = await put(half, { stamps: ['jkk'] })
     expect(res.status).toBe(403)
@@ -77,6 +77,7 @@ describe('Jaipur Darshan stamps on the server', () => {
     await db.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(devId('Stamp Banned')).run()
     res = await put(banned, { stamps: ['jkk'] })
     expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'banned' }) // as every other write says it, not "ghost"
     const stored = await db
       .prepare('SELECT COUNT(*) AS n FROM user_stamps WHERE user_id IN (?, ?)')
       .bind(devId('Stamp Half'), devId('Stamp Banned'))
@@ -121,6 +122,18 @@ describe('Jaipur Darshan stamps on the server', () => {
     const blocked = await profileOf(viewer, id)
     expect(blocked.status).toBe(404)
     expect(await blocked.text()).not.toContain('hawa-mahal')
+  })
+
+  it('a block the other way (the viewer blocked the stamp holder) hides the profile and its stamps too', async () => {
+    const viewer = await resident('Stamp Blocker')
+    const t = await resident('Stamp Blocked Holder')
+    await put(t, { stamps: ['hawa-mahal'] })
+    const id = devId('Stamp Blocked Holder')
+    expect((await profileOf(viewer, id)).status).toBe(200)
+    await api('/api/blocks', viewer, { method: 'POST', body: JSON.stringify({ id }) })
+    const res = await profileOf(viewer, id)
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('hawa-mahal')
   })
 
   it('a ghost viewer gets no profile, stamps or not', async () => {

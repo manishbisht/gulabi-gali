@@ -67,6 +67,14 @@ describe('scrub', () => {
     expect(scrub(firefox)).toBe(firefox)
     expect(scrub(`${firefox}\nsent by riya.k@example.in`)).toBe(`${firefox}\nsent by [email]`)
   })
+
+  it('keeps a frame whose URL has no scheme (`fn@file.js:1:2`): that is a frame, not an address', () => {
+    const bare = 'tick@index-abc.js:1:2345\nrender@main.js:3:4\n@chunk.js:9:9'
+    expect(scrub(bare)).toBe(bare)
+    // an address is still one, with a port after it or a script-like name inside it
+    expect(scrub('write to riya.k@example.in:25 now')).toBe('write to [email]:25 now')
+    expect(scrub('write to riya@main.js.example.in')).toBe('write to [email]')
+  })
 })
 
 describe('the reporter', () => {
@@ -101,6 +109,27 @@ describe('the reporter', () => {
     for (let i = 0; i < 10; i++) reporter.report('error', new Error(`other ${i}`))
     expect(MAX_PER_PAGE).toBe(5)
     expect(send).toHaveBeenCalledTimes(5)
+  })
+
+  it('keeps the whole report under 3.5 kB as sent, by bytes: three-byte text cannot push it past the Worker’s 4 kB', () => {
+    const { send, reporter } = sent()
+    const hindi = 'नमस्ते जयपुर '.repeat(120) // three bytes a letter, more than the 1024-character cap
+    const error = new Error(hindi)
+    error.stack = hindi
+    reporter.report('error', error)
+    const report = send.mock.calls[0]![0]
+    expect(new TextEncoder().encode(JSON.stringify(report)).length).toBeLessThanOrEqual(3500)
+    expect(report.msg.length).toBeGreaterThan(0)
+    expect(report.stack?.length ?? 0).toBeGreaterThan(0) // the stack gave way first, not all of it
+  })
+
+  it('does not cut a character in two when it shortens a report', () => {
+    const { send, reporter } = sent()
+    const error = new Error('x')
+    error.stack = '😀'.repeat(1000) // a surrogate pair each
+    reporter.report('error', error)
+    const stack = send.mock.calls[0]![0].stack!
+    expect(stack).toMatch(/^(?:😀)+$/u)
   })
 
   it('takes a rejection that is not an Error, and never throws itself', () => {

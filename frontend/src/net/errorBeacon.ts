@@ -35,13 +35,47 @@ const QUERY = new RegExp(
 )
 /**
  * An email: no `/` or `:` on either side of the `@`, so a Safari or Firefox stack frame (`fn@https://host/x.js:1:2`)
- * is never taken for one. Keep the same as the copy in backend/src/errors.ts.
+ * is never taken for one, nor is a bare one (`fn@file.js:1:2`: no address ends in a script extension). Keep the
+ * same as the copy in backend/src/errors.ts (a test holds them equal).
  */
-const EMAIL = new RegExp(`[^@${END}/:]+@[^@${END}/:]+\\.[a-z]{2,}\\b`, 'gi')
+const EMAIL = new RegExp(
+  `[^@${END}/:]+@(?![^@${END}/:]+\\.(?:m?js|cjs|jsx?|tsx?)(?=[:${END}]|$))[^@${END}/:]+\\.[a-z]{2,}\\b`,
+  'gi',
+)
 
 /** `text` with no query string or fragment on any URL, and every email-shaped run as `[email]`. */
 export function scrub(text: string): string {
   return text.replace(QUERY, '$1').replace(EMAIL, '[email]')
+}
+
+/**
+ * The most a report may weigh as sent. The Worker reads at most 4 kB, and `MSG_MAX` and `STACK_MAX` count
+ * characters: Devanagari is three bytes a letter, an emoji four, a control character six when escaped.
+ */
+const BODY_MAX_BYTES = 3500
+const bytesOf = (r: ClientErrorReport) => new TextEncoder().encode(JSON.stringify(r)).length
+
+/** `text` cut by `by` characters from the end, never leaving half of a surrogate pair. */
+function shorter(text: string, by: number): string {
+  let out = text.slice(0, Math.max(0, text.length - by))
+  if (/[\ud800-\udbff]$/.test(out)) out = out.slice(0, -1)
+  return out
+}
+
+/** The report cut, the stack first and then the message, until it weighs no more than `BODY_MAX_BYTES`. */
+function fit(report: ClientErrorReport): ClientErrorReport {
+  let { msg, stack } = report
+  for (
+    let over = bytesOf(report) - BODY_MAX_BYTES;
+    over > 0;
+    over = bytesOf({ ...report, msg, stack }) - BODY_MAX_BYTES
+  ) {
+    // a character is at least a byte, so cutting `over` characters always makes progress
+    if (stack) stack = shorter(stack, Math.ceil(over / 6)) || null
+    else if (msg.length > 1) msg = shorter(msg, Math.ceil(over / 6))
+    else break
+  }
+  return { ...report, msg, stack }
 }
 
 /** The district the player is in (null before the city opens), for the next report. */
@@ -72,7 +106,7 @@ export function createReporter(opts: {
         if (seen.has(key)) return
         seen.add(key)
         const stack = error instanceof Error && error.stack ? scrub(error.stack).slice(0, STACK_MAX) : null
-        opts.send({ msg, stack, where, ua: opts.ua, build: opts.build, district })
+        opts.send(fit({ msg, stack, where, ua: opts.ua, build: opts.build, district }))
       } catch {
         // reporting must never be a second error
       }
@@ -127,7 +161,7 @@ function pageReporter(): Reporter {
 }
 
 /** Reports an error the page caught itself (React's boundary, a lost WebGL context). */
-export const reportError = (where: ClientErrorWhere, error: unknown): void =>
+export const beaconError = (where: ClientErrorWhere, error: unknown): void =>
   pageReporter().report(where, error)
 
 /** Starts the page's reporting: called once, from main.tsx. */

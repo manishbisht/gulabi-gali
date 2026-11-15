@@ -32,7 +32,8 @@ function parseStamps(raw: unknown): string[] | null {
 /**
  * `PUT /api/me/stamps {stamps}`: adds the stamps a page has collected to the resident's own and answers the
  * whole set (`{stamps}`), so an empty list is a plain read. Never removes one. A resident only (`ACTIVE`; a
- * hidden one too): anyone else is 403 `ghost`, and a ghost's stamps stay on their device. 400 `invalid` for
+ * hidden one too): a banned one is 403 `banned` (the route's `bannedGate`, as for every write), anyone else
+ * 403 `ghost`, and a ghost's stamps stay on their device. 400 `invalid` for
  * an unknown id or more ids than there are stamps; 429 past `STAMP_LIMIT`.
  */
 export async function putStamps(env: Env, userId: string, raw: unknown, now = Date.now()): Promise<Response> {

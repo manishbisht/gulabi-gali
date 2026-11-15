@@ -6,6 +6,7 @@ import {
   ERROR_IP_LIMIT,
   ERROR_KEEP_MS,
   ERROR_LIMITS,
+  listClientErrors,
   purgeClientErrors,
 } from '../src/errors'
 import worker from '../src/index'
@@ -226,5 +227,35 @@ describe('GET /api/admin/errors', () => {
     expect(top!.lastSeen).toBeGreaterThan(Date.now() - 60_000)
     expect(rare).toMatchObject({ where: 'webgl-lost', msg: 'rare', count: 1, ua: { 'mobile/instagram': 1 } })
     expect(rare!.sample.stack).toBeNull()
+  })
+
+  it('a purge between the top list and the samples drops the group it emptied instead of failing the page', async () => {
+    await send(report({ msg: 'purged under the read' }))
+    await send(report({ msg: 'kept', where: 'rejection' }))
+    // the cron's sweep lands after the grouping query, just before the sample rows are read
+    const racing = {
+      ...testEnv,
+      DB: new Proxy(testEnv.DB, {
+        get(db, key) {
+          const value = Reflect.get(db, key) as unknown
+          if (key !== 'prepare') return typeof value === 'function' ? value.bind(db) : value
+          return (sql: string) => {
+            const stmt = db.prepare(sql)
+            if (!sql.includes('WHERE id IN')) return stmt
+            return {
+              bind: (...args: unknown[]) => ({
+                all: async () => {
+                  await db.prepare("DELETE FROM client_errors WHERE msg = 'purged under the read'").run()
+                  return stmt.bind(...args).all()
+                },
+              }),
+            }
+          }
+        },
+      }),
+    } as unknown as Env
+    const res = await listClientErrors(racing)
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as AdminErrorGroup[]).map((g) => g.msg)).toEqual(['kept'])
   })
 })

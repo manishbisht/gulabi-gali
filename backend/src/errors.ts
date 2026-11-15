@@ -42,9 +42,13 @@ const QUERY = new RegExp(
 )
 /**
  * An email: no `/` or `:` on either side of the `@`, so a Safari or Firefox stack frame (`fn@https://host/x.js:1:2`)
- * is never taken for one. Keep the same as the copy in frontend/src/net/errorBeacon.ts.
+ * is never taken for one, nor is a bare one (`fn@file.js:1:2`: no address ends in a script extension). Keep the
+ * same as the copy in frontend/src/net/errorBeacon.ts (a test holds them equal).
  */
-const EMAIL = new RegExp(`[^@${END}/:]+@[^@${END}/:]+\\.[a-z]{2,}\\b`, 'gi')
+const EMAIL = new RegExp(
+  `[^@${END}/:]+@(?![^@${END}/:]+\\.(?:m?js|cjs|jsx?|tsx?)(?=[:${END}]|$))[^@${END}/:]+\\.[a-z]{2,}\\b`,
+  'gi',
+)
 
 /** `text` with no query string or fragment on any URL, and every email-shaped run as `[email]`. */
 export function scrub(text: string): string {
@@ -152,8 +156,10 @@ export async function listClientErrors(env: Env): Promise<Response> {
       .all<{ fingerprint: string; ua: string; n: number }>(),
   ])
   const sampleOf = new Map(samples.results.map((s) => [s.id, s]))
-  const out: AdminErrorGroup[] = top.map((g) => {
-    const s = sampleOf.get(g.latest)!
+  const out: AdminErrorGroup[] = top.flatMap((g) => {
+    const s = sampleOf.get(g.latest)
+    // the cron's purge can land between the queries and take the sample: that group is gone, not a 500
+    if (!s) return []
     const ua: Record<string, number> = {}
     for (const u of uas.results) if (u.fingerprint === g.fingerprint) ua[u.ua] = u.n
     return {

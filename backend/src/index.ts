@@ -193,7 +193,7 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
       putProfile(env, user.id, await readJson(request))
     )
   if (pathname === '/api/me/stamps' && method === 'PUT')
-    return putStamps(env, user.id, await readJson(request))
+    return (await bannedGate(env, user.id)) ?? putStamps(env, user.id, await readJson(request))
   if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
   if (pathname === '/api/invites/redeem' && method === 'POST') {
     // Per address as well as per person (which `redeemInvite` counts): one person cannot spread guesses over accounts.

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { reportError } from '../net/errorBeacon'
+import { beaconError } from '../net/errorBeacon'
 
 export type QualityTier = 0 | 1 | 2
 
@@ -19,6 +19,7 @@ export interface Stage {
 
 /** Frame time in ms to seconds, capped so coming back from a background tab cannot fling the player. */
 export function clampDelta(ms: number): number {
+  if (!Number.isFinite(ms)) return 0
   return Math.min(Math.max(ms / 1000, 0), 0.1)
 }
 
@@ -134,7 +135,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     event.preventDefault()
     lost = true
     // how often phones drop the GPU is worth knowing (our own dispose removes this listener first)
-    reportError('webgl-lost', 'WebGL context lost')
+    beaconError('webgl-lost', 'WebGL context lost')
   }
   const onRestored = () => {
     // three.js re-creates its GL state and re-uploads resources itself; we re-fit and start counting again.

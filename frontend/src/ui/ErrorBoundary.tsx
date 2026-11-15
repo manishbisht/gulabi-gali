@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from 'react'
 import { useLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
-import { reportError } from '../net/errorBeacon'
+import { beaconError } from '../net/errorBeacon'
 
 function Crashed() {
   const [lang] = useLang()
@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { crashed:
     return { crashed: true }
   }
   componentDidCatch(error: unknown) {
-    reportError('react', error)
+    beaconError('react', error)
   }
   render() {
     return this.state.crashed ? <Crashed /> : this.props.children
