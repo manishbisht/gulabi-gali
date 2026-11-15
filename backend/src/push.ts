@@ -205,7 +205,7 @@ export async function removePush(
   return new Response(null, { status: 204 })
 }
 
-/** The statement that forgets every device of `userId` (account deletion). */
+/** The statement that forgets every device of `userId` (account deletion; a ban does it by trigger, 0008). */
 export const forgetPushOf = (env: Env, userId: string): D1PreparedStatement =>
   env.DB.prepare('DELETE FROM push_subs WHERE user_id = ?').bind(userId)
 

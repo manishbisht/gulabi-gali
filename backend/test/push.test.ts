@@ -180,6 +180,18 @@ describe('subscribing a device', () => {
     expect(fake.got).toHaveLength(0)
   })
 
+  it('a ban forgets every device (and an unban does not bring them back)', async () => {
+    const t = await resident('Push Ban Rows')
+    const other = await resident('Push Ban Other')
+    for (const tok of [t, t, other]) expect((await subscribe(tok, (await device()).body)).status).toBe(204)
+    expect(await rows(devId('Push Ban Rows'))).toHaveLength(2)
+    await db.prepare('UPDATE users SET banned = 1 WHERE id = ?').bind(devId('Push Ban Rows')).run()
+    expect(await rows(devId('Push Ban Rows'))).toEqual([])
+    expect(await rows(devId('Push Ban Other'))).toHaveLength(1)
+    await db.prepare('UPDATE users SET banned = 0 WHERE id = ?').bind(devId('Push Ban Rows')).run()
+    expect(await rows(devId('Push Ban Rows'))).toEqual([])
+  })
+
   it('deleting the account forgets every device', async () => {
     const t = await resident('Push Leaver')
     expect((await subscribe(t, (await device()).body)).status).toBe(204)
