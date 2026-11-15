@@ -54,12 +54,8 @@ async function laidOut(items: Record<string, Locator>, inside: [string, string][
       expect.soft(apart, `${keys[i]} overlaps ${keys[j]}`).toBe(true)
     }
   // one line each, not squeezed into a column of words
-  for (const k of ['place', 'weather']) expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
-  // the stamps chip opens the Darshan list: a thumb-sized button, one line
-  if (boxes.stamps) {
-    expect.soft(boxes.stamps.height, 'stamps height').toBeGreaterThanOrEqual(44)
-    expect.soft(boxes.stamps.height, 'stamps height').toBeLessThanOrEqual(48)
-  }
+  for (const k of ['place', 'weather', 'stamps'])
+    expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
   // thumb-sized switches
   for (const k of ['lang', 'sound', 'bandar']) {
     expect.soft(boxes[k]!.width, `${k} width`).toBeGreaterThanOrEqual(44)

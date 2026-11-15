@@ -1653,7 +1653,8 @@ small.words-hint {
 
 /* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
 button.stamp-count {
-  min-height: 44px;
+  position: relative;
+  min-height: 0;
   border: 1px solid var(--sandstone);
   font: inherit;
   font-size: 0.95rem;
@@ -1729,4 +1730,11 @@ button.stamp-count {
   font: inherit;
   font-size: 1.4rem;
   line-height: 1;
+}
+
+/* the chip stays as slim as its neighbours; its tap area is still thumb-sized */
+button.stamp-count::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
 }
