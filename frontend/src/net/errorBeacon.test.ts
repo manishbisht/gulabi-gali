@@ -48,6 +48,25 @@ describe('scrub', () => {
     expect(scrub('GET https://api.test/live?token=SECRET#x failed')).toBe('GET https://api.test/live failed')
     expect(scrub('mail me at a.b@example.in')).toBe('mail me at [email]')
   })
+
+  it('keeps Safari and Firefox stack frames (`fn@url:line:col`) whole, and still takes out a real email', () => {
+    const safari = [
+      'tick@https://gulabi-gali.manishbisht.me/assets/index-abc.js?v=3:1:2345',
+      'module code@https://gulabi-gali.manishbisht.me/assets/main-x1.js:3:4',
+      'global code@https://gulabi-gali.manishbisht.me/:1:1',
+    ].join('\n')
+    expect(scrub(safari)).toBe(
+      [
+        'tick@https://gulabi-gali.manishbisht.me/assets/index-abc.js:1:2345',
+        'module code@https://gulabi-gali.manishbisht.me/assets/main-x1.js:3:4',
+        'global code@https://gulabi-gali.manishbisht.me/:1:1',
+      ].join('\n'),
+    )
+    const firefox =
+      'createStage/onLost@https://g.test/assets/stage-9f.js:12:7\n@https://g.test/assets/index.js:1:99'
+    expect(scrub(firefox)).toBe(firefox)
+    expect(scrub(`${firefox}\nsent by riya.k@example.in`)).toBe(`${firefox}\nsent by [email]`)
+  })
 })
 
 describe('the reporter', () => {

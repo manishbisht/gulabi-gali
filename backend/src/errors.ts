@@ -34,7 +34,11 @@ const QUERY = new RegExp(
   `(\\b[a-z][a-z0-9+.-]*://[^?#${END}]*)[?#][^${END}]*?(?=(?::\\d+){1,2}(?=[${END}]|$)|[${END}]|$)`,
   'gi',
 )
-const EMAIL = new RegExp(`[^@${END}]+@[^@${END}]+\\.[a-z]{2,}`, 'gi')
+/**
+ * An email: no `/` or `:` on either side of the `@`, so a Safari or Firefox stack frame (`fn@https://host/x.js:1:2`)
+ * is never taken for one. Keep the same as the copy in frontend/src/net/errorBeacon.ts.
+ */
+const EMAIL = new RegExp(`[^@${END}/:]+@[^@${END}/:]+\\.[a-z]{2,}\\b`, 'gi')
 
 /** `text` with no query string or fragment on any URL, and every email-shaped run as `[email]`. */
 export function scrub(text: string): string {

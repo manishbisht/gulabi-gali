@@ -81,6 +81,24 @@ describe('POST /api/errors', () => {
       expect(all).not.toContain(leak)
   })
 
+  it('keeps Safari and Firefox stack frames (`fn@url:line:col`) whole, and still takes out a real email', async () => {
+    const safari = [
+      'tick@https://gulabi-gali.manishbisht.me/assets/index-abc.js?v=3:1:2345',
+      'module code@https://gulabi-gali.manishbisht.me/assets/main-x1.js:3:4',
+    ].join('\n')
+    const firefox = 'createStage/onLost@https://g.test/assets/stage-9f.js:12:7'
+    await send(report({ msg: 'from riya.k@example.in', stack: `${safari}\n${firefox}` }))
+    const [row] = (await rows()).results
+    expect(row!.stack).toBe(
+      [
+        'tick@https://gulabi-gali.manishbisht.me/assets/index-abc.js:1:2345',
+        'module code@https://gulabi-gali.manishbisht.me/assets/main-x1.js:3:4',
+        firefox,
+      ].join('\n'),
+    )
+    expect(row!.msg).toBe('from [email]')
+  })
+
   it('takes only the known kinds: anything else is unknown, and an unknown district is none', async () => {
     await send(report({ ua: { device: 'fridge', app: 'tiktok' }, district: 'atlantis' }))
     const [row] = (await rows()).results
