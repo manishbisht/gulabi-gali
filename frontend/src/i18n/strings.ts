@@ -713,6 +713,32 @@ export const STRINGS = {
     hi: 'Poster nahi utra. Dobara try karo.',
     en: "Couldn't take it down. Try again.",
   },
+  hintTitle: {
+    hi: 'Pehli baar gali mein? Bas teen baatein',
+    en: 'First time in the gali? Just three things',
+  },
+  hintWalkTouch: {
+    hi: 'Chalna: neeche wala joystick ungli se khiskao.',
+    en: 'Walk: drag the joystick at the bottom with a finger.',
+  },
+  hintWalkKeys: { hi: 'Chalna: W A S D ya arrow keys dabao.', en: 'Walk: W A S D or the arrow keys.' },
+  hintSitTouch: {
+    hi: 'Chai ki bench ke paas jao aur "Baitho" dabao: wahan baithe logon se baat hoti hai.',
+    en: 'Go up to a chai bench and tap "Sit here" to chat with whoever is sitting there.',
+  },
+  hintSitKeys: {
+    hi: 'Chai ki bench ke paas jaake E dabao: wahan baithe logon se baat hoti hai.',
+    en: 'Go up to a chai bench and press E to chat with whoever is sitting there.',
+  },
+  hintMeetTouch: {
+    hi: 'Kisi insaan pe tap karo, phir "Milna hai" se request bhejo.',
+    en: 'Tap a person, then "Say hello" to send them a request.',
+  },
+  hintMeetMouse: {
+    hi: 'Kisi insaan pe click karo, phir "Milna hai" se request bhejo.',
+    en: 'Click a person, then "Say hello" to send them a request.',
+  },
+  hintClose: { hi: 'Samajh gaye, chalo!', en: "Got it, let's go" },
   patangStart: { hi: 'Patang udao', en: 'Fly a kite' },
   patangLabel: { hi: 'Patang-baazi', en: 'Kite fight' },
   patangPull: { hi: 'Kheencho', en: 'Pull' },

@@ -40,6 +40,12 @@ export default defineConfig({
   ],
   use: {
     baseURL: 'http://127.0.0.1:5173',
+    // Every page starts with the first-visit hint already seen, so no spec has to close it first; hint.spec.ts
+    // clears this to see it. (`browser.newContext()` in tests/support/people.ts takes it too.)
+    storageState: {
+      cookies: [],
+      origins: [{ origin: 'http://127.0.0.1:5173', localStorage: [{ name: 'gg-hinted', value: '1' }] }],
+    },
     // Installed Chrome locally (its GPU path is the one players have); CI has
     // no Chrome, so it runs Playwright's own Chromium (`npx playwright install
     // chromium`).

@@ -55,6 +55,7 @@ import { InviteSheet } from './ui/InviteSheet'
 import { PrivacySheet } from './ui/PrivacySheet'
 import { AccountClosed } from './ui/AccountClosed'
 import { FullScreen } from './ui/FullScreen'
+import { FirstHint } from './ui/FirstHint'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -562,6 +563,8 @@ export default function App() {
                 )}
               </>
             )}
+            {/* a first visit's three steps, once the street is there to try them on */}
+            {typeof place !== 'string' && <FirstHint lang={lang} />}
           </>
         }
         bottom={
