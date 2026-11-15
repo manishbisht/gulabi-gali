@@ -3,11 +3,21 @@ import { closePeople, resident, seen, walk } from './support/people'
 
 /**
  * The city's cap, through the Worker's DEV_AUTH-only `/api/dev/gate`: every other spec needs two residents at
- * once, so the cap is 1 only for this one, and the gate starts empty.
+ * once, so the cap is 1 only for this one, and the gate starts empty. A district still holding the socket of an
+ * earlier spec's closing page vouches for that resident again after a clear, taking the one slot, so the gate is
+ * cleared until it has stayed empty for a few polls in a row.
  */
 const cap = async (request: APIRequestContext, maxLive: number | null) => {
-  const res = await request.post('http://127.0.0.1:8787/api/dev/gate', { data: { maxLive, clear: true } })
-  expect(res.status()).toBe(200)
+  let empty = 0
+  for (let tries = 0; tries < 60 && empty < 4; tries++) {
+    const res = await request.post('http://127.0.0.1:8787/api/dev/gate', { data: { maxLive, clear: true } })
+    expect(res.status()).toBe(200)
+    const { live, queue } = (await res.json()) as { live: number; queue: number }
+    empty = live === 0 && queue === 0 ? empty + 1 : 0
+    if (maxLive === null) return
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  expect(empty, 'the gate never stayed empty').toBe(4)
 }
 
 test.afterEach(closePeople)

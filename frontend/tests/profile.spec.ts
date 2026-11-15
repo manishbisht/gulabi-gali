@@ -27,4 +27,6 @@ test('a new resident fills the profile, becomes visible, and the sheet stays shu
   await page.getByRole('button', { name: 'Padharo!' }).click()
   await expect(page.getByText('Jaipur tumhe dekh sakta hai')).toBeVisible()
   await expect(page.getByRole('dialog')).toBeHidden()
+  // Leave the city now: an open page would keep its resident's slot in the gate for the specs that follow.
+  await page.close()
 })
