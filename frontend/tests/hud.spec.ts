@@ -13,6 +13,25 @@ test.afterEach(closePeople)
 
 /** The festival with a procession, the city line and the weather, all at once: the busiest the news gets. */
 async function busiest(page: Page) {
+  // The city line's text sets how the HUD wraps. A live /api/city reply (the local Worker asks Open-Meteo, up
+  // to 8 s) could land after the patch below and swap in today's real weather, so the reply is fixed too.
+  const now = new Date()
+  const at = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h).toISOString()
+  await page.route('**/api/city', (route) =>
+    route.fulfill({
+      json: {
+        fetchedAt: now.toISOString(),
+        tempC: 31,
+        condition: 'clear',
+        aqi: 162,
+        aqiBand: 'unhealthy',
+        sunrise: at(6),
+        sunset: at(18),
+        festival: null,
+        stale: false,
+      },
+    }),
+  )
   await page.goto('/?gg-test=1&gg-festival=gangaur')
   await page.getByRole('button', { name: 'Padharo!' }).click()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
