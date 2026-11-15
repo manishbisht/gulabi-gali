@@ -5,7 +5,7 @@ import { firstName } from './names'
 import { forgetWalls } from './posters'
 import { VISIBLE, visibleRow } from './profiles'
 import { MAX_GOING_NAMES, type DistrictId, type GoingView } from './protocol'
-import { deliver, PUSH_DEVICES } from './push'
+import { deliver, posterPlace, PUSH_DEVICES } from './push'
 import { isVerified } from './trust'
 
 /**
@@ -164,7 +164,7 @@ export const forgetRsvpsOf = (env: Env, userId: string): D1PreparedStatement =>
  * The cron's reminder: for every plan due within `REMIND_BEFORE_MS` of `now` on a poster still up for everyone
  * (not hidden, its owner seen by others), each person coming who is, as it sends, seen by others and verified,
  * and was not reminded yet, is marked reminded and pushed once (`deliver`, which names nobody: "your plan is in
- * an hour", held by the push service only until the plan). Someone with push off is marked and costs nothing.
+ * an hour", held by the push service only until the plan; a tap opens the city at the poster). Someone with push off is marked and costs nothing.
  * A run spends at most `budget` subrequests (see `REMIND_BUDGET`), always taking at least one person, and claims
  * only the people it then pushes; a push that failed (no device took it, and not because there was nothing to
  * send) is given back, for the next run while the plan is still ahead. Answers how many people's devices took
@@ -177,7 +177,7 @@ export async function remindMeetups(
   { budget = remindBudget(env) }: { budget?: number } = {},
 ): Promise<number> {
   const { results } = await env.DB.prepare(
-    `SELECT r.rowid AS rid, r.user_id, po.at_when,
+    `SELECT r.rowid AS rid, r.user_id, po.at_when, po.district, po.wall,
        (SELECT COUNT(*) FROM push_subs s WHERE s.user_id = r.user_id) AS devices
      FROM posters po JOIN rsvps r ON r.poster_id = po.id
        JOIN users u ON u.id = po.owner JOIN profiles p ON p.user_id = po.owner
@@ -187,23 +187,29 @@ export async function remindMeetups(
      ORDER BY po.at_when, r.rowid LIMIT ?3`,
   )
     .bind(now, now + REMIND_BEFORE_MS, REMIND_CANDIDATES)
-    .all<{ rid: number; user_id: string; at_when: number; devices: number }>()
-  // One push per person, however many of their plans are due: held until the soonest.
-  const people = new Map<string, { rids: number[]; at: number; devices: number }>()
+    .all<{ rid: number; user_id: string; at_when: number; district: string; wall: number; devices: number }>()
+  // One push per person, however many of their plans are due: held until the soonest, and opening its poster.
+  const people = new Map<string, { rids: number[]; at: number; place: string; devices: number }>()
   for (const r of results) {
     const p = people.get(r.user_id)
     if (p) p.rids.push(r.rid)
-    else people.set(r.user_id, { rids: [r.rid], at: r.at_when, devices: Math.min(r.devices, PUSH_DEVICES) })
+    else
+      people.set(r.user_id, {
+        rids: [r.rid],
+        at: r.at_when,
+        place: posterPlace(r.district, r.wall),
+        devices: Math.min(r.devices, PUSH_DEVICES),
+      })
   }
   const rids: number[] = []
-  const due = new Map<string, number>()
+  const due = new Map<string, { at: number; place: string }>()
   let spent = REMIND_OVERHEAD
   for (const [id, p] of people) {
     const cost = p.devices ? p.devices + REMIND_PER_PERSON : 0
     if (cost && due.size && spent + cost > budget) continue
     spent += cost
     rids.push(...p.rids)
-    if (p.devices) due.set(id, p.at)
+    if (p.devices) due.set(id, p)
   }
   if (!rids.length) return 0
   // Claimed in one statement: a run overlapping this one cannot push the same person again.
@@ -218,9 +224,9 @@ export async function remindMeetups(
   const sent = await Promise.all(
     [...due]
       .filter(([id]) => mine.has(id))
-      .map(async ([id, at]) => ({
+      .map(async ([id, { at, place }]) => ({
         id,
-        ...(await deliver(env, id, 'meetup', fetcher, now, (at - now) / 1000)),
+        ...(await deliver(env, id, 'meetup', fetcher, now, { ttlS: (at - now) / 1000, at: place })),
       })),
   )
   const failed = sent.filter((s) => s.retry).flatMap((s) => mine.get(s.id)!)

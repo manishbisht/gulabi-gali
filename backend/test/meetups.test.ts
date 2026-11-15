@@ -455,7 +455,8 @@ describe('the reminder an hour before', () => {
     const payload = JSON.parse(
       new TextDecoder().decode(await decryptPayload(first.got.get(phone.endpoint)!, phone.ua)),
     )
-    expect(payload).toEqual({ t: 'meetup', lang: 'hi' })
+    // The kind, the language and where the plan is (for the tap to open, never shown): no name, no words.
+    expect(payload).toEqual({ t: 'meetup', lang: 'hi', at: 'university:poster-0' })
 
     // Once only.
     const again = service()

@@ -6,9 +6,9 @@ import { b64url, sendPush, vapidFrom, type Vapid } from './webpush'
 /**
  * Push notifications for requests and messages, opted into per device from the profile sheet.
  *
- * Privacy: a push names nobody and quotes nothing. Its payload is `{t, lang}` and nothing else: the service
- * worker shows "Gulabi Gali" over "a new request" or "a new message" in the device's language, and a tap opens
- * the inbox. The person who asked or wrote is seen only inside the app, where blocks and hides already apply.
+ * Privacy: a push names nobody and quotes nothing. Its payload is `{t, lang}` and nothing else (a meet-up
+ * reminder adds its poster's wall, `at`, for the tap only): the service worker shows "Gulabi Gali" over "a new
+ * request" or "a new message" in the device's language, and a tap opens the inbox. The person who asked or wrote is seen only inside the app, where blocks and hides already apply.
  *
  * Off by itself without a VAPID key (the `VAPID_PRIVATE_JWK` secret, set by `scripts/vapid-setup.mjs`) or a
  * subject (`VAPID_SUBJECT`): subscribing is 404 `off`, and nothing is ever sent.
@@ -225,13 +225,18 @@ export async function pushTo(
   now = Date.now(),
   ttlS = PUSH_TTL_S,
 ): Promise<number> {
-  return (await deliver(env, userId, kind, fetcher, now, ttlS)).took
+  return (await deliver(env, userId, kind, fetcher, now, { ttlS })).took
 }
+
+/** A meet-up reminder's poster, as a place link names it: `<district>:poster-<wall>`. */
+export const posterPlace = (district: string, wall: number) => `${district}:poster-${wall}`
 
 /**
  * `pushTo`, saying also whether to try again later: `retry` when no device took it because something failed
  * (a push service error other than 404/410, a network error, D1 unreachable), never when there was simply
- * nothing to send (push off, no resident, no device, past the limit) or a device took it. Never throws.
+ * nothing to send (push off, no resident, no device, past the limit) or a device took it. A `meetup` may carry
+ * `at`, its poster's place (`posterPlace`): the service worker puts it in the tap's data only, so the tap opens
+ * the city there; it names a wall, never a person, and is never shown. Never throws.
  */
 export async function deliver(
   env: Env,
@@ -239,7 +244,7 @@ export async function deliver(
   kind: PushTopic,
   fetcher: typeof fetch = fetch,
   now = Date.now(),
-  ttlS = PUSH_TTL_S,
+  { ttlS = PUSH_TTL_S, at }: { ttlS?: number; at?: string } = {},
 ): Promise<{ took: number; retry: boolean }> {
   const none = { took: 0, retry: false }
   try {
@@ -261,8 +266,11 @@ export async function deliver(
     const outcomes = await Promise.all(
       results.map(async (sub): Promise<'took' | 'gone' | 'failed'> => {
         try {
-          // The whole payload: what kind of thing, and the language to say it in. No name, no text, no id.
-          const payload = JSON.stringify({ t: kind, lang: sub.lang })
+          // The whole payload: what kind of thing, the language to say it in, and for a reminder the wall the
+          // tap opens. No name, no text, no id.
+          const payload = JSON.stringify(
+            kind === 'meetup' && at ? { t: kind, lang: sub.lang, at } : { t: kind, lang: sub.lang },
+          )
           const opts = {
             ttl: Math.max(MIN_PUSH_TTL_S, Math.round(ttlS)),
             topic: kind,

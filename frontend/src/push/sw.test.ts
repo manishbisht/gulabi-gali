@@ -87,6 +87,51 @@ describe('the service worker', () => {
     })
   }
 
+  it('a meet-up reminder carrying its poster opens the city there (?at=), and never shows where', async () => {
+    const sw = boot()
+    await sw.fire('push', push({ t: 'meetup', lang: 'en', at: 'university:poster-3' }))
+    const [title, options] = sw.showNotification.mock.calls[0] as unknown as [string, { data: unknown }]
+    // the place rides in the click data only: nothing on the lock screen names it
+    expect(JSON.stringify({ ...options, data: undefined, title })).not.toMatch(/university|poster/)
+    expect(options.data).toEqual({ kind: 'meetup', at: 'university:poster-3' })
+    await sw.fire('notificationclick', { notification: { close: vi.fn(), data: options.data } })
+    expect(sw.openWindow).toHaveBeenCalledWith(`${SCOPE}?at=university:poster-3`)
+  })
+
+  it('with the page open, the reminder brings it forward and takes it to the poster', async () => {
+    const page = {
+      url: SCOPE,
+      postMessage: vi.fn(),
+      focus: vi.fn(async () => page),
+      navigate: vi.fn(async () => page),
+    }
+    const sw = boot([page])
+    await sw.fire('notificationclick', {
+      notification: { close: vi.fn(), data: { kind: 'meetup', at: 'amer:poster-0' } },
+    })
+    expect(page.focus).toHaveBeenCalled()
+    expect(page.navigate).toHaveBeenCalledWith(`${SCOPE}?at=amer:poster-0`)
+    expect(sw.openWindow).not.toHaveBeenCalled()
+    // a page the worker cannot steer (not yet controlled) gets a new window there instead
+    const stuck = { ...page, navigate: vi.fn(async () => Promise.reject(new TypeError('not controlled'))) }
+    const again = boot([stuck])
+    await again.fire('notificationclick', {
+      notification: { close: vi.fn(), data: { kind: 'meetup', at: 'amer:poster-0' } },
+    })
+    expect(again.openWindow).toHaveBeenCalledWith(`${SCOPE}?at=amer:poster-0`)
+  })
+
+  it('a place that is not a poster place is ignored: the tap opens the city as it is', async () => {
+    for (const at of ['javascript:alert(1)', 'university:poster-3&inbox=1', 'x'.repeat(80), 7, null]) {
+      const sw = boot()
+      await sw.fire('push', push({ t: 'meetup', lang: 'en', at }))
+      const [, options] = sw.showNotification.mock.calls[0] as unknown as [string, { data: unknown }]
+      expect(options.data, String(at)).toEqual({ kind: 'meetup' })
+      await sw.fire('notificationclick', { notification: { close: vi.fn(), data: options.data } })
+      expect(sw.openWindow).toHaveBeenCalledWith(SCOPE)
+    }
+  })
+
   it('shows only its own words: anything else a payload carries never reaches the screen', async () => {
     const sw = boot()
     await sw.fire(
