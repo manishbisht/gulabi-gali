@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
 import { MAX_BENCH_LINE, type BenchLine } from '../net/protocol'
@@ -22,6 +22,8 @@ interface Props {
   onStand(): void
   /** Blocks the sitter who said a line; true once done. */
   onBlock?(id: string, name: string): Promise<boolean>
+  /** "Bulao": a link to this bench or tapri to send someone (see `PlaceInvite`). */
+  invite?: ReactNode
 }
 
 /**
@@ -29,7 +31,7 @@ interface Props {
  * line to say, and Utho. It sits beside the joystick; while the phone keyboard is up it spans the screen just
  * above the keyboard instead (the joystick is under the keyboard then anyway).
  */
-export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand, onBlock }: Props) {
+export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand, onBlock, invite }: Props) {
   const [text, setText] = useState('')
   const [blocking, setBlocking] = useState<{ id: string; name: string } | null>(null)
   /** Who is being reported; `blocked` when they were just blocked from the block question's "Also report?". */
@@ -58,6 +60,7 @@ export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand
     >
       <div className="bench-head">
         <h2>{title}</h2>
+        {invite}
         <button type="button" className="person-close" onClick={onStand}>
           {t('benchStand', lang)}
         </button>

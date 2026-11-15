@@ -4,6 +4,7 @@ import { resolveUser } from './auth'
 import { blockUser, listBlocks, unblockUser } from './blocks'
 import { listMatches, listMessages, postMessage, unmatch } from './chat'
 import { allowedOrigin, corsHeaders } from './cors'
+import { cityCount } from './count'
 import { openDistrict } from './district'
 import type { Env } from './env'
 import { ERROR_IP_LIMIT, ERROR_MAX_BODY, purgeClientErrors, recordClientError } from './errors'
@@ -293,6 +294,10 @@ export default {
       return json({ hashes: await hashedList() }, 200, origin, { 'cache-control': 'public, max-age=86400' })
     }
     if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
+    const later: Later = ctx ? (work) => ctx.waitUntil(work) : floating
+    // Public: how many people others can see in the city now, rounded (see `cityCount`).
+    if (pathname === '/api/count' && request.method === 'GET')
+      return withCors(await cityCount(env, request, url.origin, later), origin)
     const live = pathname.match(/^\/api\/districts\/([^/]+)\/live$/)
     if (live || pathname === '/api/inbox') {
       // Every socket open counts, ghosts and reconnects included.
@@ -300,7 +305,6 @@ export default {
       if (slow) return slow
       return live ? openDistrict(request, env, live[1]) : openInbox(request, env)
     }
-    const later: Later = ctx ? (work) => ctx.waitUntil(work) : floating
     if (pathname.startsWith('/api/')) return withCors(await handleApi(request, env, url, later), origin)
     return json({ error: 'not found' }, 404, origin)
   },

@@ -79,9 +79,18 @@ button {
 }
 
 .intro-tagline {
-  margin: 0 0 20px;
+  margin: 0;
   color: var(--sandstone);
   font-size: 1.1rem;
+}
+
+/* Who's here: one line, kept even while empty so the button below never jumps when it fills in. */
+.intro-count {
+  min-height: 1.5em;
+  margin: 0 0 12px;
+  color: var(--cream);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .enter {
@@ -385,7 +394,16 @@ button {
   list-style: none;
 }
 
+.map-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .map-list button {
+  flex: 1 1 0;
+  min-width: 0;
   width: 100%;
   min-height: 44px;
   padding: 0 14px;
@@ -412,6 +430,13 @@ button {
 
 .map-more[open] summary {
   margin-bottom: 6px;
+}
+
+/* "Bulao" beside a row: as tall as the row, only as wide as its word. */
+.map-list .map-invite {
+  flex: none;
+  width: auto;
+  text-align: center;
 }
 
 .map-list button[data-target] {
@@ -457,6 +482,58 @@ button {
 
 .landmark-stamp:disabled {
   opacity: 0.5;
+}
+
+.landmark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* "Bulao": a link to the place, to send someone. Quieter than the card's own action. */
+.place-invite {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sandstone);
+  border-radius: 999px;
+  background: none;
+  color: var(--cream);
+  font-size: 0.95rem;
+}
+
+/* The icon form, on a card's crowded row: a thumb-sized circle. */
+.place-invite.place-invite-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+}
+
+/* Button and its status line together; the line floats over the button, so it never moves the row. */
+.place-invite-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.place-invite-note {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 1;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--plum);
+  color: var(--cream);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.place-invite-note:not(:empty) {
+  padding: 4px 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
 }
 
 .person-card .person-area,
@@ -709,6 +786,21 @@ button {
 
 .landmark-card.bench-chat h2 {
   margin: 0;
+}
+
+/* "Bulao" (an icon) sits between the title and Utho, all on one row: the title takes what is left, and wraps
+   inside it rather than push the buttons down. */
+.bench-head {
+  gap: 4px;
+}
+
+.bench-head h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bench-head .person-close {
+  padding: 0 8px;
 }
 
 .landmark-card .bench-with {

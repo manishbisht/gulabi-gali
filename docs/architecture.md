@@ -551,3 +551,34 @@ cannot sit on a chip or on the bottom row), and the street stays walkable under 
 it, focus goes to the button when it opens and to the canvas when it closes. It slides in like the other cards,
 and not at all with reduced motion. Once closed, `gg-hinted` in `localStorage` keeps it from showing again. The e2e run seeds
 `gg-hinted` for every page (`playwright.config.ts`, `storageState`), so only `hint.spec.ts` sees it.
+
+### Who's here (`backend/src/count.ts`, `frontend/src/live/useCityCount.ts`)
+
+The welcome screen says how many people are in the lanes now. `GET /api/count` (public) asks `GateDO.visible()`:
+the people a district holds as residents (slots with a district; not the 20 s hold after the last socket
+closes). Ghosts, someone hidden or banned and anyone waiting in line hold no slot, so they are never counted.
+The Worker rounds it (`roundCount`): below `COUNT_FLOOR` (3) it is 0 and the page says it is quiet, so one or
+two people are never told apart from none; 3 to 9 as they are; from 10 a multiple of 5, rounded down, shown as
+"n+". It is one number for the whole city: no names, ids or per-district split. One read per Cloudflare location
+per 30 s (`caches.default`, `COUNT_CACHE_S`) serves every page meanwhile, and the answer to a browser is
+`no-store`, so what a page shows is never more than 30 s old; per address it goes through `COUNT_LIMITER`. It
+never fans out to the four districts, and misses that land together in one isolate share one gate read, kept for
+`COUNT_MEMO_MS` (2 s) after (a failed read is not kept; a miss waiting on another's read gives up after 5 s). The page (`useCityCount`) asks when the welcome screen mounts and every
+30 s while the tab shows (and at once when it shows again), keeps the last number through a failed read, and
+shows nothing until one arrives.
+
+### Links to a place (`frontend/src/world/placeLink.ts`, `frontend/src/ui/PlaceInvite.tsx`)
+
+"Bulao" on a landmark card, the bench panel and each row of the map's list hands on
+`https://gulabi-gali.manishbisht.me/?at=<district>:<place>` with a short line (`shareLink`, the invite codes'
+helper: the share sheet, else the clipboard). On the landmark card and the bench panel it is an icon with the
+same accessible name, so those rows stay one line on a 360 px phone; the map's rows keep the word. Its status
+line is always mounted (empty while idle) and floats over the button, so it never moves the row. Place ids are the map's (`mapItems`): a landmark's id, `metro`,
+`poster-<n>`, and `bench-<n>` / `tapri-<n>` for the n-th seat as the server numbers them. The link carries the
+place and nothing about the sharer. On load `App` reads it once (`readPlaceLink`, which accepts only a known
+district and a short `[a-z0-9-]` id); after Padharo! it remembers the district (`gg-district`), drops `at` from
+the address bar, and the session opens that district with `startAt`: `placeSpot` stands the player by a
+landmark where the auto-taxi sets riders down (in its ring, so its card opens), at the metro, at the first clear
+point round a bench or tapri within reach to sit, or in front of a poster wall, facing it with the view turned
+to match. A place the district does not have is the usual spawn. `placeLink.test.ts` checks every place in
+every district round-trips to a clear spot in reach.

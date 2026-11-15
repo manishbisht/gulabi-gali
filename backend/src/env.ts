@@ -15,6 +15,8 @@ export interface Env {
   WRITES_LIMITER?: RateLimit
   /** `POST /api/errors` per address, asked before anything touches D1 (see `errors.ts`). */
   ERRORS_LIMITER?: RateLimit
+  /** `GET /api/count` per address, asked before the edge cache (see `cityCount`). */
+  COUNT_LIMITER?: RateLimit
   /** The API's own origin: the edge-cache key of the posters' signed-out lists (see `wallKey`). */
   API_ORIGIN?: string
   CLERK_SECRET_KEY?: string

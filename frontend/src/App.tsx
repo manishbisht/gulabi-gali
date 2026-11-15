@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
 import { patangAvailable } from './games/patang'
 import { hasWebGL } from './engine/webgl'
@@ -36,13 +36,16 @@ import { useStamps } from './world/useStamps'
 import { useCityMap } from './world/useCityMap'
 import { processionLine } from './live/procession'
 import { DISTRICT_NAMES, DISTRICT_SHORT_NAMES } from './world/districtNames'
-import { savedDistrict, useTravel } from './world/useTravel'
+import { rememberDistrict, savedDistrict, useTravel } from './world/useTravel'
+import { dropPlaceLink, readPlaceLink } from './world/placeLink'
+import { mapItems } from './world/cityMap'
 import type { DistrictId, FestivalId } from './net/protocol'
 import type { DistrictDef, Vec2 } from './world/types'
 import { Hud } from './ui/Hud'
 import { PhotoMode } from './ui/PhotoMode'
 import { Intro } from './ui/Intro'
 import { LandmarkCard } from './ui/LandmarkCard'
+import { PlaceInvite } from './ui/PlaceInvite'
 import { DriveButtons } from './ui/DriveButtons'
 import { Joystick } from './ui/Joystick'
 import { Patang } from './ui/Patang'
@@ -98,8 +101,14 @@ export default function App() {
   const [lang, setLang] = useLang()
   const auth = useAuth()
   const [entered, setEntered] = useState(false)
+  /** A link to a place (`?at=`, see placeLink): the city opens there once "Padharo" is pressed. */
+  const [link] = useState(() => readPlaceLink(location.search))
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [here, setHere] = useState<DistrictId>('walled-city')
+  /** The district the session stands the player in now (its `place` hook says), for "Bulao" on its cards. */
+  const [hereDef, setHereDef] = useState<DistrictDef | null>(null)
+  /** Its places by map id, worked out once per district. */
+  const places = useMemo(() => hereDef && new Map(mapItems(hereDef, []).map((i) => [i.id, i])), [hereDef])
   // an error report says which district it happened in (none before the city opens)
   useEffect(() => noteDistrict(entered ? here : null), [entered, here])
   const [webgl] = useState(hasWebGL)
@@ -287,7 +296,8 @@ export default function App() {
       controls,
       canvas,
       bubbleHost: bubbles,
-      start: savedDistrict(),
+      start: link?.district ?? savedDistrict(),
+      startAt: link?.place,
       hooks: {
         lang: () => langRef.current,
         track,
@@ -313,6 +323,7 @@ export default function App() {
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
+          if (def) setHereDef(def)
         },
       },
     })
@@ -377,6 +388,7 @@ export default function App() {
     freeze,
     override,
     queued,
+    link,
   ])
 
   const viewer: Viewer = !auth.signedIn
@@ -509,6 +521,12 @@ export default function App() {
       />
     )
 
+  /** "Bulao" (as an icon: the cards' rows are full) for a place in the district the player is in, by its map id. */
+  const invite = (id: string) => {
+    const place = places?.get(id)
+    return hereDef && place && <PlaceInvite district={hereDef.id} place={place} lang={lang} compact />
+  }
+
   /** A banned account: a plain screen over everything (the city behind it stays a ghost's). */
   const closed = banned && <AccountClosed lang={lang} onSignOut={() => void auth.signOut()} />
   if (!webgl || stageFailed) return closed || <NoWebGL lang={lang} />
@@ -519,7 +537,14 @@ export default function App() {
           <Intro
             lang={lang}
             onLang={setLang}
-            onEnter={() => setEntered(true)}
+            onEnter={() => {
+              // followed: this district from now on, and the link out of the address bar
+              if (link) {
+                rememberDistrict(link.district)
+                dropPlaceLink()
+              }
+              setEntered(true)
+            }}
             onPrivacy={() => setPrivacyOpen(true)}
           />
           {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
@@ -757,6 +782,7 @@ export default function App() {
                         if (done) bench.forget(id)
                         return done
                       }}
+                      invite={invite(bench.seat.bench.id)}
                     />
                   )
                 ) : near ? (
@@ -765,6 +791,7 @@ export default function App() {
                     lang={lang}
                     stamped={have.includes(near.id)}
                     onCollect={collectHere}
+                    invite={invite(near.id)}
                   />
                 ) : sheetOpen ? (
                   <TravelSheet

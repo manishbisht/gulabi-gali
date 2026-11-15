@@ -15,6 +15,14 @@ export interface CitySnapshot {
   stale: boolean // true when this is the built-in default, not live data
 }
 
+/**
+ * `GET /api/count` (public): how many people others can see in the city now. 0 means fewer than three (never
+ * told apart); three to nine as they are; from ten a multiple of five, rounded down. No names or districts.
+ */
+export interface CityCount {
+  people: number
+}
+
 /** Keep in step with `PALETTE` in frontend/src/world/palette.ts. */
 export const OUTFITS = [
   'pink',

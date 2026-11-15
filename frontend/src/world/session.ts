@@ -22,6 +22,7 @@ import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
+import { placeSpot } from './placeLink'
 import { createPeople, createPeopleLabels, type People, type Remote } from './people'
 import { createPosters, type Posters } from './posters'
 import { createRooftop, roofHeight, type RoofHooks, type Rooftop } from './rooftop'
@@ -129,6 +130,11 @@ export interface CitySessionOptions {
   bubbleHost: HTMLElement
   /** The district the city opens in. */
   start: DistrictId
+  /**
+   * A place in `start` to stand at instead of its spawn, from a link (see `placeSpot`); the first district only.
+   * One it does not have is the spawn.
+   */
+  startAt?: string
   hooks: SessionHooks
   /** Tests hand in a fake socket. */
   WebSocketImpl?: typeof WebSocket
@@ -195,6 +201,7 @@ export interface CitySession {
 /** The world for one visit to the city: the district the player is in, its systems, and travel. */
 export function createCitySession(opts: CitySessionOptions): CitySession {
   const { stage, controls, canvas, bubbleHost, hooks } = opts
+  let startAt = opts.startAt
   stage.scene.background = new THREE.Color(SKY) // until the live sky takes over
   /** Listener lists are replaced, never mutated, so a listener may unsubscribe while they run. */
   let entered: ((d: District) => void)[] = []
@@ -266,8 +273,16 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       colliders: district.colliders,
       occluders: district.occluders,
     })
-    const start = district.def[at]
-    player.teleport(start.x, start.z)
+    // opened from a link to a place: there, facing it, the first time only
+    const spot = at === 'spawn' && startAt ? placeSpot(district, startAt) : null
+    startAt = undefined
+    if (spot) {
+      player.lookAlong(spot.ry)
+      player.teleport(spot.x, spot.z, spot.ry)
+    } else {
+      const start = district.def[at]
+      player.teleport(start.x, start.z)
+    }
     const npcs = createNpcs(district.def.npcs, stage.scene)
     const animals = createAnimals(district.def, stage.scene, {
       colliders: district.colliders,

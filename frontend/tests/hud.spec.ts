@@ -316,3 +316,51 @@ test('seated at a tapri on a small phone, the bench panel and the joystick fit s
   await expect(page.locator('.hud-actions button')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Auto chalao' })).toHaveCount(0)
 })
+
+/** The most of the screen's height a card at the bottom may take, so the street above stays in view. */
+const CARD_SHARE = 0.4
+
+test('a landmark card on a small phone: "Bulao" sits on the stamp row, and the card stays beside the joystick', async ({
+  page,
+}) => {
+  // in by a link to Albert Hall (offline, as in city.spec.ts), which stands you in its ring
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+  await page.goto('/?gg-test=1&at=mi-road:albert-hall')
+  await page.getByRole('button', { name: 'Padharo!' }).click()
+  const card = page.getByRole('region', { name: 'Albert Hall' })
+  await expect(card).toBeVisible()
+  await card.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const stamp = card.getByRole('button', { name: 'Stamp lo' })
+  const bulao = card.getByRole('button', { name: 'Bulao: Albert Hall ka link bhejo' })
+  await sideBySide({ card, joystick: page.locator('.joystick') })
+  const [c, s, b] = [(await card.boundingBox())!, (await stamp.boundingBox())!, (await bulao.boundingBox())!]
+  expect(c.height, 'card height').toBeLessThanOrEqual(PHONE.height * CARD_SHARE)
+  // one row of actions: Bulao beside the stamp button, not wrapped under it, and thumb-sized
+  expect(Math.abs(b.y + b.height / 2 - (s.y + s.height / 2)), 'Bulao on the stamp row').toBeLessThan(4)
+  expect(b.x + b.width, 'Bulao inside the card').toBeLessThanOrEqual(c.x + c.width)
+  expect(b.width).toBeGreaterThanOrEqual(44)
+  expect(b.height).toBeGreaterThanOrEqual(44)
+  if (process.env.GG_CARD_SHOT) await page.screenshot({ path: process.env.GG_CARD_SHOT })
+})
+
+test('seated at a tapri on a small phone, the panel head keeps its title, "Bulao" and Utho on one row', async ({
+  browser,
+}) => {
+  const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+  const { page } = await resident(browser, 'Bina', phone)
+  await hopTo(page, TAPRI.x + 2.2, TAPRI.z + 0.5)
+  await page.getByRole('button', { name: 'Baitho' }).click()
+  const panel = page.getByRole('region', { name: 'Tapri pe' })
+  await expect(panel).toBeVisible()
+  await panel.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const title = panel.getByRole('heading', { name: 'Tapri pe' })
+  const bulao = panel.getByRole('button', { name: /^Bulao: Chai ki tapri \d+ ka link bhejo$/ })
+  const utho = panel.getByRole('button', { name: 'Utho' })
+  await sideBySide({ panel, joystick: page.locator('.joystick') })
+  await sideBySide({ title, bulao, utho })
+  const boxes = await Promise.all([title, bulao, utho].map(async (l) => (await l.boundingBox())!))
+  const mid = (b: { y: number; height: number }) => b.y + b.height / 2
+  for (const b of boxes.slice(1)) expect(Math.abs(mid(b) - mid(boxes[0]!)), 'one row').toBeLessThan(6)
+  for (const b of boxes.slice(1)) expect(b.height, 'thumb-sized').toBeGreaterThanOrEqual(44)
+  if (process.env.GG_BENCH_SHOT) await page.screenshot({ path: process.env.GG_BENCH_SHOT })
+})

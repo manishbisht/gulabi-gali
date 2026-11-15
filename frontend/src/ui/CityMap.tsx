@@ -4,6 +4,7 @@ import { footprint } from '../world/kit'
 import { mapItems, targetDistance, type MapItem, type MapItemKind, type MapTarget } from '../world/cityMap'
 import { PALETTE } from '../world/palette'
 import type { DistrictDef, Vec2 } from '../world/types'
+import { PlaceInvite } from './PlaceInvite'
 import { useDialog } from './useDialog'
 
 /** What the map reads of the street while it is open: where you are and face, and who is drawn there. */
@@ -42,7 +43,8 @@ const NEAR_SEATS = 3
  * benches and tapris, poster walls, you with your heading, and the people the street shows as plain dots.
  * Every place is a button: picking one makes it the compass's target. Every place also has a thumb-sized row in
  * the list under the map, nearest first: the landmarks, the metro and the nearest seats, then the other seats
- * and the poster walls folded away. A 22 px dot among its neighbours is no target for a thumb.
+ * and the poster walls folded away. A 22 px dot among its neighbours is no target for a thumb. Each row has
+ * "Bulao" beside it: a link to that place to send someone.
  */
 export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: Props) {
   const ref = useDialog<HTMLElement>(onClose)
@@ -81,6 +83,7 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
       >
         {view ? t('mapAway', lang, { name: label(i), m: Math.round(away(i)) }) : label(i)}
       </button>
+      <PlaceInvite district={def.id} place={i} lang={lang} className="map-invite" />
     </li>
   )
   const title = t('mapTitle', lang, { place: def.name[lang] })

@@ -20,6 +20,9 @@ export function savedDistrict(): DistrictId {
   return DISTRICTS.find((d) => d === id) ?? 'walled-city'
 }
 
+/** Where the city reopens from now on (a link to a place in another district: see `placeLink`). */
+export const rememberDistrict = (id: DistrictId) => storage.set(KEY, id)
+
 /**
  * Loads `id` and, once it is in, swaps it for the district the player is in, standing them at its
  * station. Rejects, with the old district still running, if `id` cannot be loaded.

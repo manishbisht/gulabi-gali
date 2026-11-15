@@ -89,7 +89,7 @@ it('tapping a place picks it as the target; Escape and the close button close', 
 
 it('the list under the map names the landmarks and the metro with how far each is', async () => {
   const { host } = await mount()
-  const list = [...host.querySelectorAll('.map-list button')].map((b) => b.textContent)
+  const list = [...host.querySelectorAll('.map-list button[data-id]')].map((b) => b.textContent)
   // from (1.5, 44): Badi Chaupar's 8.4 m fountain is 39.8 m north
   expect(list).toContain('Badi Chaupar · 40 m')
   expect(list.some((s) => s?.startsWith('Metro station · '))).toBe(true)
@@ -100,8 +100,8 @@ const metresOf = (b: Element) => Number(/· (\d+) m$/.exec(b.textContent ?? '')!
 
 it('every place on the map has a row in the list too, nearest first: benches and walls past the first few fold away', async () => {
   const { host, props } = await mount()
-  const main = [...host.querySelectorAll('.map-list:not(.map-more-list) button')]
-  const more = [...host.querySelectorAll('.map-more .map-list button')]
+  const main = [...host.querySelectorAll('.map-list:not(.map-more-list) button[data-id]')]
+  const more = [...host.querySelectorAll('.map-more .map-list button[data-id]')]
   // every target is reachable from a row (a 22 px dot is too small to tap among its neighbours)
   const ids = [...main, ...more].map((b) => b.getAttribute('data-id'))
   expect(new Set(ids)).toEqual(
@@ -145,4 +145,27 @@ it('the compass names the target with its distance, turns its arrow, and a tap c
   expect((host.querySelector('.compass-arrow') as HTMLElement).style.transform).toBe('rotate(30deg)')
   await act(async () => button.click())
   expect(onClear).toHaveBeenCalledOnce()
+})
+
+it('every row in the list has "Bulao": the link to that place, without picking it', async () => {
+  const share = vi.fn<(data: ShareData) => Promise<void>>(async () => {})
+  vi.stubGlobal('navigator', { share })
+  try {
+    const { host, props } = await mount()
+    const rows = [...host.querySelectorAll('.map-list li')]
+    expect(rows.length).toBe(host.querySelectorAll('.map-item').length)
+    for (const li of rows) expect(li.querySelector('button.map-invite')!.textContent).toBe('Invite')
+    const hawa = rows.find((li) => li.querySelector('[data-id="hawa-mahal"]'))!
+    await act(async () => hawa.querySelector<HTMLButtonElement>('button.map-invite')!.click())
+    expect(share).toHaveBeenCalledWith({
+      text: "Come to Hawa Mahal in Gulabi Gali — let's meet there!",
+      url: 'https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
+    })
+    const wall = rows.find((li) => li.querySelector('[data-kind="poster"]'))!
+    await act(async () => wall.querySelector<HTMLButtonElement>('button.map-invite')!.click())
+    expect(share.mock.lastCall![0].url).toMatch(/\?at=walled-city:poster-\d+$/)
+    expect(props.onPick).not.toHaveBeenCalled()
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

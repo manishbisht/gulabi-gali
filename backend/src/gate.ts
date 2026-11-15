@@ -78,6 +78,17 @@ export class GateDO extends DurableObject<Env> {
     return this.sql.exec<{ n: number }>('SELECT COUNT(DISTINCT user_id) AS n FROM slots').one().n
   }
 
+  /**
+   * How many people others can see now: those a district holds as residents. Not a hold (their last socket
+   * closed), and never anyone waiting in line, a ghost, or someone hidden or banned, who hold no slot at all.
+   * For the welcome screen's count (see `cityCount`).
+   */
+  visible(): number {
+    return this.sql
+      .exec<{ n: number }>("SELECT COUNT(DISTINCT user_id) AS n FROM slots WHERE district != ''")
+      .one().n
+  }
+
   /** For the admin page: who holds a slot, and how many wait. */
   stats(): { live: number; queue: number } {
     return {
