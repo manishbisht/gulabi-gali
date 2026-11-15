@@ -20,6 +20,12 @@ test('a kite round: cross strings, pull, "Wo kaata!", and the score', async ({ p
   await page.getByRole('button', { name: 'Patang udao' }).click()
   const game = page.getByRole('dialog', { name: 'Patang-baazi' })
   await expect(game).toBeVisible()
+  // From here only the test moves the round on (`step`), so neither a slow frame rate nor a rival's chance
+  // pull can decide it: a rival's string is tied across ours, and the others keep their hands to themselves.
+  await page.evaluate(() => {
+    window.__gg.patang().forceCross()
+    window.__gg.patang().pause(true)
+  })
   expect(await page.evaluate(() => window.__gg.patang().active)).toBe(true)
   expect(await page.evaluate(() => window.__gg.patang().rivals())).toBe(6)
 
@@ -29,14 +35,16 @@ test('a kite round: cross strings, pull, "Wo kaata!", and the score', async ({ p
   await page.keyboard.up('w')
   expect(await page.evaluate(() => window.__gg.position())).toEqual(before)
 
-  // hold pull, then tie a rival's string across ours: it is cut after 0.6 s
+  // hold pull with the tied rival across ours: it is cut after 0.6 s of game time. Each frame counts for at
+  // most 0.25 s, so a starved software-WebGL frame rate could take longer than any wait to get there; the
+  // step hook plays 0.7 s at once, with the pull the button holds.
   const pull = page.getByRole('button', { name: 'Kheencho' })
   const box = (await pull.boundingBox())!
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
   await page.waitForTimeout(200)
-  await page.evaluate(() => window.__gg.patang().forceCross())
-  await expect.poll(() => page.evaluate(() => window.__gg.patang().score())).toBeGreaterThanOrEqual(1)
+  await page.evaluate(() => window.__gg.patang().step(0.7))
+  expect(await page.evaluate(() => window.__gg.patang().score())).toBeGreaterThanOrEqual(1)
   await expect(page.getByText(/Wo kaata/)).toBeVisible()
   await page.mouse.up()
 

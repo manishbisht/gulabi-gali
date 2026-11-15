@@ -111,10 +111,15 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
     const s = sim.state
     /** What the HUD last showed: React is told only when something on it changes. */
     const shown = { left: ROUND_S, score: 0, over: false, cuts: 0 }
-    const off = stage.onFrame((dt) => {
+    const read = () => {
       input.pull = h.key || h.button
       input.steer = clamp1((h.right ? 1 : 0) - (h.left ? 1 : 0) + h.stick + h.drag)
-      sim.update(input, dt)
+    }
+    /** Test hook only (`pause`): frames draw but do not move the round on. */
+    let paused = false
+    const off = stage.onFrame((dt) => {
+      read()
+      if (!paused) sim.update(input, dt)
       view.update(s, at)
       const left = Math.ceil(s.timeLeft)
       if (s.cutSeq !== shown.cuts) woKaata()
@@ -135,6 +140,13 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
         finish() {
           for (let i = 0; i < ROUND_S * 5 && !s.over; i++) sim.update({ pull: true, steer: 0 }, 0.25)
         },
+        step(seconds) {
+          read()
+          for (let i = 0; i < Math.round(seconds * 30) && !s.over; i++) sim.update(input, 1 / 30)
+        },
+        pause(on) {
+          paused = on
+        },
         score: () => s.score,
         rivals: () => s.rivals.length,
       }),
@@ -146,7 +158,15 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
       sim.dispose()
       view.dispose()
       installTestHooks({
-        patang: () => ({ active: false, forceCross() {}, finish() {}, score: () => 0, rivals: () => 0 }),
+        patang: () => ({
+          active: false,
+          forceCross() {},
+          finish() {},
+          step() {},
+          pause() {},
+          score: () => 0,
+          rivals: () => 0,
+        }),
       })
     }
   }, [stage, at, round])

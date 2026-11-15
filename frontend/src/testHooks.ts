@@ -50,6 +50,13 @@ export interface GgTestApi {
     forceCross(): void
     /** Plays the rest of the round out at once. */
     finish(): void
+    /**
+     * Plays `seconds` of game time at once, in steady 1/30 s steps, with whatever the player holds now: a
+     * slow machine's clamped frames cannot stretch a contest past a test's wait.
+     */
+    step(seconds: number): void
+    /** Stops (or restarts) frames moving the round on, so only `step` does: the drawing goes on. */
+    pause(on: boolean): void
     score(): number
     rivals(): number
   }

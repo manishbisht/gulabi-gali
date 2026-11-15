@@ -155,7 +155,8 @@ export interface Patang {
   update(input: PatangInput, dt: number): PatangState
   /**
    * For tests: ties the nearest live rival's string across the player's and holds it there. `rivalPulls`
-   * makes it pull (after `rivalDelay` seconds), otherwise it keeps its hands to itself.
+   * makes it pull (after `rivalDelay` seconds), otherwise it keeps its hands to itself. For as long as it is
+   * held, the other rivals let go and think of nothing new, so no stray pull can decide the round.
    */
   forceCross(rivalPulls?: boolean, rivalDelay?: number): void
   dispose(): void
@@ -351,6 +352,11 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
       pick.locked = false
       pick.pullFor = rivalPulls ? 5 : 0
       pick.pullDelay = rivalPulls ? rivalDelay : 0
+      for (const r of rivals) {
+        if (r === pick || !r.alive) continue
+        r.pullFor = 0
+        r.think = Math.max(r.think, pick.hold)
+      }
     },
     dispose() {
       disposed = true

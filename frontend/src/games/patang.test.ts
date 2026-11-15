@@ -146,6 +146,20 @@ describe('the manjha contest', () => {
     expect(early.state.score).toBe(1)
   })
 
+  it('while one rival is tied across, the rest keep their hands to themselves: the test owns the contest', () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const p = createPatang(seed, 2)
+      run(p, 1) // every rival has had a think
+      if (p.state.over) continue
+      p.forceCross()
+      for (let i = 0; i < 4 * 30; i++) {
+        p.update({ pull: false, steer: 0 }, 1 / 30)
+        expect(p.state.rivals.some((r) => r.pulling)).toBe(false)
+      }
+      expect(p.state.over).toBe(false)
+    }
+  })
+
   it('a cut rival drifts away and a new one flies in after 3 s', () => {
     const p = createPatang(11, 2, { rivals: 1 })
     p.forceCross()

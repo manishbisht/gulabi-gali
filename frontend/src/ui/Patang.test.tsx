@@ -119,6 +119,24 @@ it('keeps the cuts made so far when the player leaves mid-round', () => {
   history.replaceState(null, '', '/')
 })
 
+it('the step and pause hooks: only a test moves the round on, by a fixed stretch with what is held', () => {
+  vi.stubEnv('VITE_TEST_HOOKS', '1')
+  history.replaceState(null, '', '/?gg-test=1')
+  mount()
+  act(() => window.__gg.patang().forceCross())
+  act(() => window.__gg.patang().step(0.3))
+  expect(window.__gg.patang().score()).toBe(0) // nobody pulling: no contest
+  key('Space') // hold pull, the rival still tied across
+  act(() => window.__gg.patang().pause(true))
+  act(() => {
+    for (let i = 0; i < 60; i++) frames.forEach((f) => f(1 / 30))
+  })
+  expect(window.__gg.patang().score()).toBe(0) // paused: two seconds of frames move nothing on
+  act(() => window.__gg.patang().step(0.7)) // past the 0.6 s contest, and not one frame drawn
+  expect(window.__gg.patang().score()).toBeGreaterThanOrEqual(1) // any other string it crosses goes too
+  history.replaceState(null, '', '/')
+})
+
 it('Enter on the focused Pull button holds the pull, like Space', () => {
   mount()
   const pull = document.querySelector<HTMLElement>('.patang-pull')!
