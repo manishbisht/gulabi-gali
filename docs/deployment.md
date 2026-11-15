@@ -19,7 +19,8 @@ database and two Durable Objects; the Durable Object classes are created by the 
 1. Cloudflare account, token and KV namespace (section 1, steps 1 and 2).
 2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0004`).
 3. **Clerk** (section 1b): create the app, then set the Worker secrets.
-4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); the first push to `main` deploys.
+4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); a run of the workflow on `main`
+   deploys (dispatch it by hand: pushes do not start it at the moment, see **CI caveats** in section 3).
 5. GitHub Pages and the `github-pages` secrets, including `VITE_CLERK_PUBLISHABLE_KEY` (section 2).
 6. Optional: Cloudflare Web Analytics, the `VITE_CF_BEACON_TOKEN` secret (section 2c).
 7. Optional: push notifications, `node scripts/vapid-setup.mjs` (section 2e).
@@ -40,7 +41,8 @@ database and two Durable Objects; the Durable Object classes are created by the 
    - `CLOUDFLARE_API_TOKEN`: the token from step 1.
    - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare dashboard, Workers, Account ID.
 
-   The `deploy-api` job runs `wrangler deploy` on a push to `main` and skips quietly while these are unset.
+   The `deploy-api` job runs `wrangler deploy` on a run of the workflow on `main` and skips quietly while these
+   are unset (see **CI caveats** in section 3: pushes to `main` do not start the workflow at the moment).
 
 4. **The API domain.** `wrangler.jsonc` declares a custom domain,
    `routes: [{ pattern: "api.gulabi-gali.manishbisht.me", custom_domain: true }]`. Cloudflare creates the DNS
@@ -354,7 +356,8 @@ at the usual spawn. Nothing to set.
 A resident can tick "Naye messages pe batao" in their profile sheet. Then, while Gulabi Gali is shut on that
 device (no inbox socket open), a new request or message makes the phone show **"Gulabi Gali"** over **"Ek nayi
 request"** or **"Ek naya message"** (in English if they use English). Never a name, never what was said: the
-push carries only `{t, lang}`, encrypted to that browser. Tapping it opens the inbox. At most one push a minute
+push carries only `{t, lang}`, encrypted to that browser (a meet-up reminder adds its poster's place, which the
+phone never shows: a tap opens the city there). Tapping a request or message opens the inbox. At most one push a minute
 and ten an hour per person; anything past that waits for the inbox. It is not offered inside Instagram's
 in-app browser, nor on an iPhone outside an installed home-screen app (the sheet says how to add it).
 
@@ -371,9 +374,20 @@ It makes a new P-256 key pair in memory and pipes the private key (a JWK) into t
 nothing to disk. If the Worker step fails, GitHub is left alone; if the GitHub step fails, run it again (a fresh
 pair replaces both). Never paste either key anywhere else, and never put them in `wrangler.jsonc`.
 
-Then, in this order: apply migration `0006_push.sql` and deploy the Worker (CI does both on a push to `main`),
-and let the site build again (the same run), which bakes the public key in. `VAPID_SUBJECT` (a var in
-`backend/wrangler.jsonc`, the site's URL) names the sender to the push services; nothing to change.
+Then, in this order, by hand (CI will not do it for you; see **CI caveats** below):
+
+1. Nothing to deploy for the secret: `wrangler secret put`, inside the script, already deploys a new version of
+   the Worker carrying it.
+2. Migration `0006_push.sql` on the remote database, if it is not there yet (a no-op if it is), from `backend/`:
+   `npx wrangler d1 migrations apply gulabi-gali --remote`. Deploy the Worker (`npx wrangler deploy`) only if
+   its code changed since the last deploy.
+3. Rebuild the site, which bakes the public key in: dispatch the `pages` workflow on `main`, from the Actions
+   tab (pages, Run workflow, branch `main`) or with
+   `gh api -X POST repos/<owner>/<repo>/actions/workflows/<id>/dispatches -f ref=main` (`<id>` is the number
+   `gh api repos/<owner>/<repo>/actions/workflows` lists for `deploy.yml`; the file name `deploy.yml` works too).
+
+`VAPID_SUBJECT` (a var in `backend/wrangler.jsonc`, the site's URL) names the sender to the push services;
+nothing to change.
 
 Running the script again replaces the keys: every existing subscription stops working at once, and each device
 subscribes again by itself the next time the new site opens there (no prompt, the permission stays).
@@ -384,7 +398,7 @@ services (FCM, Mozilla, Apple, Windows); any other endpoint is refused.
 
 **Pre-launch checks**
 
-- [ ] After the script, the deploy and the site build: on Android Chrome, sign in, open Profile and tick "Naye
+- [ ] After the script, the migration and the dispatched site build: on Android Chrome, sign in, open Profile and tick "Naye
       messages pe batao"; allow notifications.
 - [ ] Close the tab. From a second account, send that resident a request: the phone shows "Gulabi Gali · Ek
       nayi request", with no name. Tapping it opens the site; after Padharo! the Mulaqaatein sheet is open.
@@ -411,13 +425,27 @@ of an evening empties every bench's last ten minutes (and the memory of who sat 
 **Migration `0007_rsvp.sql` (meet-ups).** It adds `rsvps` ("Main aaunga/aaungi" on a poster) and the triggers
 that delete them with their poster, on a hide, a ban or a block. Apply it before the Worker that needs it ships:
 the Worker's poster list reads `rsvps` for every poster, so a Worker deployed first answers every wall with an
-error. CI's deploy job does it in that order; by hand, `npx wrangler d1 migrations apply gulabi-gali --remote`
-from `backend/`, then `wrangler deploy`. Once deployed it is frozen: new schema goes in `0008` and later. The
-meet-up reminder rides on the push setup above (no new secret) and on the existing 15-minute cron.
+error. Do it by hand (see **CI caveats**), from `backend/`: `npx wrangler d1 migrations apply gulabi-gali
+--remote`, then `npx wrangler deploy`, then dispatch the `pages` workflow (section 2e, step 3). Once deployed it
+is frozen: new schema goes in `0008` and later. The meet-up reminder rides on the push setup above (no new
+secret) and on the existing 15-minute cron; a tap on it opens the city at the plan's poster.
 
-The deploy job applies D1 migrations (`wrangler d1 migrations apply gulabi-gali --remote`) before it deploys the
-Worker, and on `main` the Pages build waits for that job, so the frontend never ships ahead of the API it talks
-to. Keep every migration additive (new tables, new columns with defaults, new indexes), so the Worker still
+**Migration `0008_ban_push.sql`.** A trigger: a ban deletes the person's push subscriptions. Additive and
+harmless to run before or after the Worker; apply it the same way (`npx wrangler d1 migrations apply gulabi-gali
+--remote` from `backend/`).
+
+**CI caveats.** The `deploy-api` job applies the migrations and deploys the Worker only when the `backend`
+environment holds `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID`); without them its steps skip quietly and
+the job still reports success, so a green run has deployed nothing to Cloudflare. And pushes to `main` do not
+start the workflow at the moment: GitHub records the push but creates no check suite for it (the workflow is
+active and valid; this is a repository or account setting to look at, under Settings, Actions). Until that is
+sorted, after a push to `main`: apply any new migration and `npx wrangler deploy` from `backend/` by hand, then
+dispatch the `pages` workflow by hand to build and publish the site.
+
+When it runs with the token (see **CI caveats**), the deploy job applies D1 migrations (`wrangler d1
+migrations apply gulabi-gali --remote`) before it deploys the Worker, and on `main` the Pages build waits for
+that job, so the frontend never ships ahead of the API it talks to. By hand, keep the same order: migrations,
+then the Worker, then the site. Keep every migration additive (new tables, new columns with defaults, new indexes), so the Worker still
 running between the two steps works against the migrated database.
 
 ## Local development
