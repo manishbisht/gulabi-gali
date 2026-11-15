@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Locator } from '@playwright/test'
 
 test.beforeEach(({ page }) => page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {}))
@@ -67,6 +68,24 @@ test.describe('a first visit', () => {
       await page.waitForTimeout(500)
       await expect(page.getByRole('dialog', { name: /Pehli baar gali mein/ })).toHaveCount(0)
     })
+  })
+
+  test('its text has the contrast of the cream on plum it is drawn in, from the first frame (axe)', async ({
+    page,
+  }) => {
+    await page.goto('/?gg-test=1')
+    await page.getByRole('button', { name: 'Padharo!' }).click()
+    const hint = page.getByRole('dialog', { name: /Pehli baar gali mein/ })
+    await expect(hint).toBeVisible()
+    // no wait for the slide-in: the card must not be part-transparent while it arrives
+    expect(await hint.evaluate((n) => getComputedStyle(n).animationName)).toBe('hint-up')
+    const { violations } = await new AxeBuilder({ page })
+      .include('.first-hint')
+      .withRules(['color-contrast'])
+      .analyze()
+    expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.html.slice(0, 60)).join(' | ')}`)).toEqual(
+      [],
+    )
   })
 
   test('with a keyboard it names the keys, and Escape closes it', async ({ page }) => {

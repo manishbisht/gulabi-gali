@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import type { DistrictId } from '../net/protocol'
 import { METRO_STATIONS } from '../world/metroRide'
+import { inertRest } from './inertRest'
 
 /** Waiting at the next station this long offers a way back to the district left. */
 export const STUCK_MS = 15_000
@@ -40,11 +41,8 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null
     button.current?.focus()
     // everything else on the page is inert while the coach is up; its own nodes (marked) are not
-    const others = [...(button.current?.parentElement?.children ?? [])].filter(
-      (el) => !el.hasAttribute('data-metro-ride'),
-    )
-    const was = others.map((el) => el.hasAttribute('inert'))
-    others.forEach((el) => el.setAttribute('inert', ''))
+    // (one that arrives meanwhile, a toast or a card, is made inert too)
+    const release = inertRest(button.current?.parentElement, (el) => el.hasAttribute('data-metro-ride'))
     // the game listens on the window: keys other than Tab go no further than here
     const block = (e: KeyboardEvent) => {
       if (e.key === 'Tab') return
@@ -54,9 +52,7 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
     window.addEventListener('keydown', block, true)
     return () => {
       window.removeEventListener('keydown', block, true)
-      others.forEach((el, i) => {
-        if (!was[i]) el.removeAttribute('inert')
-      })
+      release()
       const back = before && before.isConnected && before !== document.body ? before : stage()
       back?.focus()
     }

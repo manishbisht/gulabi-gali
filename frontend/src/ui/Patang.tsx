@@ -7,6 +7,7 @@ import { t, type Lang } from '../i18n/strings'
 import type { Controls } from '../player/controls'
 import { installTestHooks } from '../testHooks'
 import type { Vec2 } from '../world/types'
+import { inertRest } from './inertRest'
 import { Joystick } from './Joystick'
 
 /** A drag this many CSS px from where it began is full steer. */
@@ -55,9 +56,8 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null
     el?.focus()
     controls.freeze(true)
-    const others = [...(el?.parentElement?.children ?? [])].filter((n) => n !== el)
-    const was = others.map((n) => n.hasAttribute('inert'))
-    others.forEach((n) => n.setAttribute('inert', ''))
+    // (one that arrives meanwhile, a toast or a card, is made inert too)
+    const release = inertRest(el?.parentElement, (n) => n === el)
     const h = held.current
     const set = (code: string, on: boolean) => {
       if (code === 'Space') h.key = on
@@ -93,9 +93,7 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp, true)
       window.removeEventListener('blur', onBlur)
-      others.forEach((n, i) => {
-        if (!was[i]) n.removeAttribute('inert')
-      })
+      release()
       controls.freeze(false)
       const back = before && before.isConnected && before !== document.body ? before : stageEl()
       back?.focus()

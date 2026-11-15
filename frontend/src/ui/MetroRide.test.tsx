@@ -95,6 +95,15 @@ it('makes the rest of the page inert, swallows game keys, and gives focus back w
   expect(document.activeElement).toBe(metro)
 })
 
+it('makes a sibling that arrives meanwhile inert too, and gives it back', async () => {
+  show()
+  const late = host.appendChild(document.createElement('div'))
+  await act(async () => {})
+  expect(late.hasAttribute('inert')).toBe(true)
+  renderPage(null)
+  expect(late.hasAttribute('inert')).toBe(false)
+})
+
 it('falls back to the stage when what had focus is gone', () => {
   const metro = document.getElementById('metro')!
   act(() => metro.focus())

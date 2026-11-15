@@ -3,6 +3,7 @@ import { t, type Lang, type StringKey } from '../i18n/strings'
 import { getInvites, redeemInvite, type RedeemError } from '../net/api'
 import type { InviteView, Me } from '../net/protocol'
 import { shareCode, showCode } from './inviteShare'
+import { useDialog } from './useDialog'
 
 interface Props {
   me: Me
@@ -27,6 +28,7 @@ const ERROR_TEXT: Record<RedeemError, StringKey> = {
  * with a share button.
  */
 export function InviteSheet({ me, lang, token, onVerified, onClose }: Props) {
+  const ref = useDialog<HTMLElement>(onClose)
   const [verified, setVerified] = useState(me.verified)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -71,6 +73,7 @@ export function InviteSheet({ me, lang, token, onVerified, onClose }: Props) {
   return (
     <div className="auth-scrim">
       <section
+        ref={ref}
         className="auth-sheet invite-sheet"
         role="dialog"
         aria-modal="true"

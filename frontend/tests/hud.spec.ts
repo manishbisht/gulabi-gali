@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { closePeople, resident } from './support/people'
+import { closePeople, hopTo, resident } from './support/people'
 
 /** A small phone, held upright. */
 const PHONE = { width: 360, height: 740 }
@@ -70,7 +70,7 @@ function common(page: Page): Record<string, Locator> {
     place: page.locator('.hud-top .hud-chip').nth(0),
     weather: page.locator('.hud-top .hud-chip').nth(1),
     stamps: page.getByTitle('Jaipur Darshan stamps'),
-    lang: toggles.getByRole('button', { name: 'Bhasha badlo: English' }),
+    lang: toggles.getByRole('button', { name: 'English: bhasha badlo' }),
     sound: toggles.getByRole('button', { name: 'Awaaz chalu ya band karo' }),
     bandar: toggles.getByRole('button', { name: 'Bandar band karo' }),
     banner: page.getByText('Gangaur ki shubhkamnayein!'),
@@ -136,6 +136,9 @@ test('the HUD switches say what they do, and show their state only through aria-
   await page.keyboard.press('Enter')
   // still the same switch, now pressed: the monkey is off
   await expect(bandar).toHaveAttribute('aria-pressed', 'true')
+  // pressed, it shows its off edge; with the keyboard on it, the focus ring wins over that dashed edge
+  await expect(bandar).toHaveCSS('outline-width', '3px')
+  await expect(bandar).toHaveCSS('outline-style', 'solid')
   expect(await page.evaluate(() => localStorage.getItem('gg-no-bandar'))).toBe('1')
   await page.keyboard.press('Enter')
   await expect(bandar).toHaveAttribute('aria-pressed', 'false')
@@ -143,6 +146,9 @@ test('the HUD switches say what they do, and show their state only through aria-
 
 /** Each item whole on the screen, and none on another. */
 async function sideBySide(items: Record<string, Locator>) {
+  // A button appears a frame after the teleport that brings it into reach: measuring before it is there read
+  // a null box (the one flake of a full run). Wait for each, then measure.
+  for (const item of Object.values(items)) await expect(item).toBeVisible()
   const boxes = Object.entries(
     Object.fromEntries(
       await Promise.all(Object.entries(items).map(async ([k, l]) => [k, (await l.boundingBox())!] as const)),
@@ -202,4 +208,26 @@ test('on a small phone with a dog in tow, the bottom row fits: on foot by an aut
   await sideBySide({ joystick, horn, exit })
   await page.waitForTimeout(600) // the camera settles behind the auto, for the picture
   await page.screenshot({ path: '../.superpowers/sdd/2026-11-14-phase-4-extras/launch-b-driving-360.png' })
+})
+
+/** The Walled City's tapri by Johari Bazaar, at (-5.6, 36), its counter facing east. */
+const TAPRI = { x: -5.6, z: 36 }
+
+test('seated at a tapri on a small phone, the bench panel and the joystick fit side by side, with no street button on them', async ({
+  browser,
+}) => {
+  // Seated and "Auto chalao" together cannot happen: benches.test.ts holds every seat out of an auto's
+  // reach. So the bottom row seated is the panel and the joystick, and the street's buttons are gone.
+  const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+  const asha = await resident(browser, 'Asha', phone)
+  const { page } = asha
+  await hopTo(page, TAPRI.x + 2.2, TAPRI.z + 0.5)
+  await page.getByRole('button', { name: 'Baitho' }).click()
+  const panel = page.getByRole('region', { name: 'Tapri pe' })
+  await expect(panel).toBeVisible()
+  // the card slides up for 220 ms: measure where it comes to rest, not where it starts
+  await panel.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  await sideBySide({ panel, joystick: page.locator('.joystick') })
+  await expect(page.locator('.hud-actions button')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Auto chalao' })).toHaveCount(0)
 })

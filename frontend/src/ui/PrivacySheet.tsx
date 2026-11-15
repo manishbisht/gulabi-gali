@@ -1,5 +1,6 @@
 import { ANALYTICS_ON } from '../buildFlags'
 import { t, type Lang, type StringKey } from '../i18n/strings'
+import { useDialog } from './useDialog'
 
 interface Props {
   lang: Lang
@@ -27,9 +28,11 @@ const SECTIONS: [StringKey, StringKey][] = [
 
 /** What Gulabi Gali keeps, in plain words. Linked from the intro and the profile sheet. */
 export function PrivacySheet({ lang, onClose }: Props) {
+  const ref = useDialog<HTMLElement>(onClose)
   return (
     <div className="auth-scrim">
       <section
+        ref={ref}
         className="auth-sheet privacy-sheet"
         role="dialog"
         aria-modal="true"

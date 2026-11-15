@@ -48,7 +48,7 @@ test('opens on the Pink City', async ({ page }) => {
   await enterCity(page)
   expect(await page.evaluate(() => window.__gg.district())).toBe('walled-city')
   await expect(page.locator('.hud-top')).toContainText('Gulabi Shahar')
-  await page.getByRole('button', { name: 'Bhasha badlo: English' }).click()
+  await page.getByRole('button', { name: 'English: bhasha badlo' }).click()
   await expect(page.locator('.hud-top')).toContainText('Pink City')
 })
 
@@ -94,7 +94,7 @@ test('E opens the nearest character, who says they are not real', async ({ page 
   await expect(card).toContainText('Lassiwala')
   await expect(card).toContainText('Ye ek kirdaar hai, asli insaan nahi — asli log jald aa rahe hain.')
   await expect(card.getByRole('button')).toHaveCount(1) // Close only: there is no message button
-  await page.getByRole('button', { name: 'Bhasha badlo: English' }).click()
+  await page.getByRole('button', { name: 'English: bhasha badlo' }).click()
   await expect(card).toContainText('This is a character, not a real person. Real people are coming soon.')
   await page.keyboard.press('e') // E again closes it
   await expect(card).toHaveCount(0)

@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
+import { useDialog } from '../ui/useDialog'
 import { InAppHint } from './InAppHint'
 import { AuthContext, type AuthMode, type AuthState } from './useAuth'
 
@@ -15,10 +16,17 @@ interface Props {
 }
 
 export function SignInSheet({ form, onClose }: { form: ReactNode; onClose: () => void }) {
+  const ref = useDialog<HTMLElement>(onClose)
   const [lang] = useLang() // read when the sheet opens, so it follows the language chosen in the HUD
   return (
     <div className="auth-scrim">
-      <section className="auth-sheet" role="dialog" aria-modal="true" aria-label={t('signInTitle', lang)}>
+      <section
+        ref={ref}
+        className="auth-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('signInTitle', lang)}
+      >
         <h2>{t('signInTitle', lang)}</h2>
         <InAppHint lang={lang} />
         {form}

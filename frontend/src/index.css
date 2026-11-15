@@ -24,6 +24,22 @@ button {
   touch-action: manipulation;
 }
 
+/*
+ * Where the keyboard is, visibly: a cream ring with a plum edge, readable on the plum sheets and over the
+ * street alike. :focus-visible leaves a tap or a click alone, so a phone looks as before. Things that only take
+ * focus from script (the dialogs, the street) are tabindex -1 and keep no ring.
+ */
+:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--plum);
+}
+
+[tabindex='-1']:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .stage {
   position: fixed;
   inset: 0;
@@ -316,6 +332,7 @@ button {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .joystick-knob {
@@ -1394,7 +1411,7 @@ small.words-hint {
   position: fixed;
   inset: 0;
   z-index: 55;
-  outline: none;
+  outline: none; /* a tabindex -1 root the game focuses itself: nothing to ring */
   pointer-events: none;
 }
 
@@ -1507,6 +1524,7 @@ small.words-hint {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .patang-pull:active {
@@ -1570,6 +1588,12 @@ small.words-hint {
   outline-offset: -3px;
 }
 
+/* a toggle the keyboard is on shows its ring, not the dashed "off" edge */
+.hud-toggles .hud-chip:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 2px;
+}
+
 /* the monkey's switch: one small emoji chip, only in the Walled City */
 .hud-toggles .bandar-toggle,
 .hud-toggles .sound-toggle {
@@ -1581,6 +1605,14 @@ small.words-hint {
   flex: none;
   width: 100%;
   margin-top: 10px;
+  /* slides in without fading: a card that is part-transparent for 220 ms reads as low contrast (axe) */
+  animation-name: hint-up;
+}
+
+@keyframes hint-up {
+  from {
+    transform: translateY(24px);
+  }
 }
 
 .first-hint ol {

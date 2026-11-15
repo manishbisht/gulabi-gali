@@ -4,6 +4,7 @@ import { PLAYER_RADIUS, WALK_SPEED } from '../player/player'
 import { BENCH_RANGE, benchesOf, nearestBench, seatPose } from './benches'
 import { moveWithCollision } from './collision'
 import { DISTRICTS, loadDistrict } from './district'
+import { MOUNT_RANGE } from './driving'
 import walledCity from './districts/walledCity'
 
 describe('benches', () => {
@@ -69,6 +70,27 @@ describe('benches', () => {
             0.4,
           )
       }
+      d.dispose()
+    }
+  }, 30_000)
+})
+
+describe('seats and parked autos', () => {
+  it('no seat is within reach of a parked auto, so seated and "Auto chalao" never share the bottom row', async () => {
+    for (const id of DISTRICTS) {
+      const d = await loadDistrict(id)
+      const def = d.def
+      const autos = def.props.filter((p) => p.kind === 'auto')
+      expect(autos.length, id).toBeGreaterThan(0)
+      for (const bench of benchesOf(def))
+        for (let n = 0; n < BENCH_SEATS; n++) {
+          const seat = seatPose(bench, n)
+          for (const auto of autos)
+            expect(
+              Math.hypot(seat.x - auto.at.x, seat.z - auto.at.z),
+              `${bench.id} seat ${n} by the auto at ${auto.at.x},${auto.at.z}`,
+            ).toBeGreaterThan(MOUNT_RANGE)
+        }
       d.dispose()
     }
   }, 30_000)

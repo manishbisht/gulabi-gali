@@ -29,7 +29,8 @@ export const STRINGS = {
   reload: { hi: 'Reload karo', en: 'Reload' },
   weatherUnknown: { hi: '—', en: '—' },
   langToggle: { hi: 'English', en: 'हिन्दी' },
-  langToggleLabel: { hi: 'Bhasha badlo: English', en: 'Switch language: Hinglish' },
+  // starts with the visible label (`langToggle`): voice control says what it reads, and WCAG 2.5.3 wants it in the name
+  langToggleLabel: { hi: 'English: bhasha badlo', en: 'हिन्दी: switch language' },
   /** The HUD's group of small switches: language, sound, and the monkey in the Walled City. */
   hudSwitches: { hi: 'Settings', en: 'Settings' },
   festivalSankranti: {
@@ -521,8 +522,8 @@ export const STRINGS = {
   privacyClose: { hi: 'Theek hai', en: 'OK' },
   deleteTitle: { hi: 'Account delete karo', en: 'Delete my account' },
   deleteWhat: {
-    hi: 'Yeh wapas nahi aayega. Profile, invite codes, poster, requests aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
-    en: "This cannot be undone. Your profile, invite codes, posters, requests and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to {OWNER_CONTACT} to remove it. You can start again fresh, though a moderator's ban or mute stays.",
+    hi: 'Yeh wapas nahi aayega. Profile, invite codes, poster, requests, Jaipur Darshan ke stamps aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye {OWNER_CONTACT} pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
+    en: "This cannot be undone. Your profile, invite codes, posters, requests, Jaipur Darshan stamps and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to {OWNER_CONTACT} to remove it. You can start again fresh, though a moderator's ban or mute stays.",
   },
   deleteTypeLabel: { hi: 'Confirm karne ke liye DELETE likho', en: 'Type DELETE to confirm' },
   deleteConfirm: { hi: 'Hamesha ke liye delete karo', en: 'Delete forever' },

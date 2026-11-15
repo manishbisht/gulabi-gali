@@ -68,6 +68,18 @@ it('Escape closes it too', () => {
   expect(storage.get('gg-hinted')).toBe('1')
 })
 
+it("an Escape that is for a sheet over the street leaves the hint open; a bare street's closes it", () => {
+  mount()
+  const sheet = document.body.appendChild(document.createElement('section'))
+  sheet.setAttribute('aria-modal', 'true')
+  act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(dialog()).not.toBeNull()
+  expect(storage.get('gg-hinted')).toBeNull()
+  sheet.remove()
+  act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(dialog()).toBeNull()
+})
+
 it('is never shown once seen', () => {
   storage.set('gg-hinted', '1')
   mount()

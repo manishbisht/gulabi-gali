@@ -7,6 +7,7 @@ import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import { ReportSheet } from '../ui/ReportSheet'
 import { StampsLine } from '../ui/StampsLine'
+import { useDialog } from '../ui/useDialog'
 import { DeleteAccount } from './DeleteAccount'
 import { AvatarBuilder } from './AvatarBuilder'
 import { areaLabel, HERE_FOR_LABEL, HOME_AREAS } from './homeAreas'
@@ -46,6 +47,7 @@ export function ProfileSheet({
   onPrivacy,
   onDelete,
 }: Props) {
+  const ref = useDialog<HTMLElement>(onClose)
   const p = me.profile
   const [name, setName] = useState(p?.name ?? '')
   const [look, setLook] = useState<AvatarLook>(() => (p && lookFromWire(p.look)) || loadOrCreateLook())
@@ -134,6 +136,7 @@ export function ProfileSheet({
   return (
     <div className="auth-scrim">
       <section
+        ref={ref}
         className="auth-sheet profile-sheet"
         role="dialog"
         aria-modal="true"

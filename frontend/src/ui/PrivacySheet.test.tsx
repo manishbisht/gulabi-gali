@@ -50,3 +50,16 @@ it('a build with it says plainly that Cloudflare, an outside company, counts the
   expect(hi).toMatch(/aapka naam/)
   expect(hi).not.toMatch(/\btum(hara|hare|he)?\b/)
 })
+
+it('Escape closes it', async () => {
+  vi.resetModules()
+  const { PrivacySheet } = await import('./PrivacySheet')
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  const onClose = vi.fn()
+  await act(async () => root.render(<PrivacySheet lang="en" onClose={onClose} />))
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  await act(async () => void document.activeElement?.dispatchEvent(escape))
+  expect(onClose).toHaveBeenCalledTimes(1)
+  await act(async () => root.unmount())
+})

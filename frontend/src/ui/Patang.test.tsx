@@ -91,6 +91,25 @@ it('holds the player still and inerts its siblings, and hands both back', () => 
   act(() => r.unmount())
 })
 
+it('makes a sibling that arrives while the game is up inert too, and gives it back', async () => {
+  document.body.innerHTML = '<div id="app"></div>'
+  const app = document.getElementById('app')!
+  const r = createRoot(app)
+  const page = (open: boolean) => (
+    <>
+      <canvas />
+      {open && <Patang lang="en" stage={stage} controls={controls} at={at} onExit={() => {}} />}
+    </>
+  )
+  act(() => r.render(page(true)))
+  const late = app.appendChild(document.createElement('div')) // a toast, a card: not there when the game opened
+  await act(async () => {})
+  expect(late.hasAttribute('inert')).toBe(true)
+  act(() => r.render(page(false)))
+  expect(late.hasAttribute('inert')).toBe(false)
+  act(() => r.unmount())
+})
+
 it('shows the score when the round is over, with Again and Stop', () => {
   mount()
   act(() => {

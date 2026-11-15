@@ -29,6 +29,8 @@ export function FirstHint({ lang }: { lang: Lang }) {
     button.current?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
+      // a sheet (or the kite game) over the street owns this Escape, even one that does not preventDefault
+      if (document.querySelector('[aria-modal="true"]')) return
       storage.set(HINTED_KEY, '1')
       setOpen(false)
       stageEl()?.focus()
