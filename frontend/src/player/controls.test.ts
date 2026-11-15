@@ -135,4 +135,13 @@ describe('createControls', () => {
     expect(c.interact()).toBe(false) // the frozen press is gone, not saved up
     expect(c.move().z).toBe(1)
   })
+
+  it('freezing lets go of a held stick, so nobody walks off alone afterwards', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    c.setJoystick({ x: 0, z: 1 })
+    c.freeze(true)
+    c.freeze(false)
+    expect(c.move()).toEqual({ x: 0, z: 0 })
+  })
 })

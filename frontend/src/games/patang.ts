@@ -17,9 +17,14 @@ const MAX_DT = 0.25
 const STEER_SPEED = 9
 /** Pulling is hard work: steering slows to this fraction of its speed. */
 const PULL_DRAG = 0.5
-/** Nobody can pull for ever: after this long the arm rests, and cannot pull again for `PULL_REST`. */
-const PULL_MAX = 2.5
-const PULL_REST = 1.2
+/**
+ * Nobody can pull for ever. Pulling drains a bucket (2 s of it, 1 per second); letting go refills it slowly,
+ * and a bucket run dry cannot pull again until it holds `PULL_RESUME`, so letting go for a frame does not
+ * dodge the tiring.
+ */
+const STAMINA_MAX = 2
+const STAMINA_REFILL = 0.6
+const PULL_RESUME = 0.3
 const PLAYER_Y = 13
 const RIVAL_SPEED = 3.5
 const RIVAL_RISE = 2.5
@@ -100,6 +105,9 @@ export interface PatangKite {
   alive: boolean
   /** How long the current pull has lasted. */
   pullTime: number
+  /** What is left in the pulling bucket, and whether it ran dry and is still refilling to `PULL_RESUME`. */
+  stamina: number
+  locked: boolean
 }
 
 interface Rival extends PatangKite {
@@ -111,7 +119,6 @@ interface Rival extends PatangKite {
   /** How much longer it means to pull, and how long before it may begin. */
   pullFor: number
   pullDelay: number
-  rest: number
   /** Pinned in place (a test's forced crossing). */
   hold: number
   /** Counts down to a new rival, once cut. */
@@ -178,7 +185,6 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
   const rand = rng(seed)
   const n = opts.rivals ?? rivalCount(quality)
   let time = 0
-  let rest = 0
   let disposed = false
   const player: PatangKite = {
     x: 0,
@@ -188,6 +194,8 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
     pulling: false,
     alive: true,
     pullTime: 0,
+    stamina: STAMINA_MAX,
+    locked: false,
   }
   const rivals: Rival[] = []
   const spawn = (r: Rival, at: 'edge' | 'sky') => {
@@ -204,7 +212,8 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
     r.think = 0.3 + rand() * 1.5
     r.pullFor = 0
     r.pullDelay = 0
-    r.rest = 0
+    r.stamina = STAMINA_MAX
+    r.locked = false
     r.hold = 0
     r.respawn = 0
   }
@@ -226,31 +235,26 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
     rivals,
   }
 
-  /** What `tire` hands back, reused: a frame allocates nothing. */
-  const tired = { pulling: false, rest: 0 }
-  /** Both arms tire: whether this kite may pull now (in `tired`), tracking how long it has been at it. */
-  function tireInto(k: PatangKite, wants: boolean, h: number, resting: number) {
-    let r = Math.max(0, resting - h)
-    let pulling = wants && r === 0
-    if (pulling) {
+  /** Both arms tire: whether this kite may pull now, draining or refilling its bucket. */
+  function canPull(k: PatangKite, wants: boolean, h: number): boolean {
+    if (wants && !k.locked) {
       k.pullTime += h
-      if (k.pullTime >= PULL_MAX) {
-        k.pullTime = 0
-        r = PULL_REST
-        pulling = false
-      }
-    } else k.pullTime = 0
-    tired.pulling = pulling
-    tired.rest = r
+      k.stamina -= h
+      if (k.stamina > 0) return true
+      k.stamina = 0
+      k.locked = true
+    }
+    k.pullTime = 0
+    k.stamina = Math.min(STAMINA_MAX, k.stamina + STAMINA_REFILL * h)
+    if (k.locked && k.stamina >= PULL_RESUME) k.locked = false
+    return false
   }
 
   function slice(input: PatangInput, h: number) {
     time += h
     state.timeLeft = Math.max(0, ROUND_S - time)
     // the player
-    tireInto(player, input.pull, h, rest)
-    player.pulling = tired.pulling
-    rest = tired.rest
+    player.pulling = canPull(player, input.pull, h)
     const steer = clamp(input.steer, -1, 1)
     player.x = clamp(player.x + steer * STEER_SPEED * (player.pulling ? PULL_DRAG : 1) * h, -X_RANGE, X_RANGE)
     player.y = PLAYER_Y + Math.sin(time * 1.3) * 0.6
@@ -293,9 +297,7 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
         r.pullDelay = 0
       }
       const wants = r.pullDelay <= 0 && r.pullFor > 0
-      tireInto(r, wants, h, r.rest)
-      r.pulling = tired.pulling
-      r.rest = tired.rest
+      r.pulling = canPull(r, wants, h)
       if (wants && r.hold <= 0) r.pullFor -= h
 
       // do the two strings cross?
@@ -345,7 +347,8 @@ export function createPatang(seed: number, quality: Tier, opts: { rivals?: numbe
       pick.ty = pick.y
       pick.cross = 0
       pick.hold = 5
-      pick.rest = 0
+      pick.stamina = STAMINA_MAX
+      pick.locked = false
       pick.pullFor = rivalPulls ? 5 : 0
       pick.pullDelay = rivalPulls ? rivalDelay : 0
     },

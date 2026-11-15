@@ -11,6 +11,8 @@ import { Joystick } from './Joystick'
 
 /** A drag this many CSS px from where it began is full steer. */
 const DRAG_FULL = 70
+/** How long a click that is not a press (assistive tech) pulls for. */
+const TAP_PULL_MS = 800
 
 interface Props {
   lang: Lang
@@ -69,9 +71,18 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
       if (e.key === 'Tab') return
       e.stopImmediatePropagation()
       if (e.key === 'Escape') return onExitRef.current()
+      // Enter on the focused Pull button holds it, as Space does; on any other button it still clicks
+      if (e.code === 'Enter' && (e.target as Element | null)?.closest?.('.patang-pull')) {
+        h.key = true
+        return e.preventDefault()
+      }
       if (set(e.code, true)) e.preventDefault()
     }
     const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Enter' && (e.target as Element | null)?.closest?.('.patang-pull')) {
+        h.key = false
+        return e.preventDefault()
+      }
       if (set(e.code, false)) e.preventDefault() // a space is never a click on the focused button
     }
     const onBlur = () => Object.assign(h, { key: false, button: false, left: false, right: false })
@@ -130,6 +141,8 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
     })
     return () => {
       off()
+      // leaving by Stop, Escape, Again or the festival ending keeps the cuts made so far
+      saveBest(s.score)
       sim.dispose()
       view.dispose()
       installTestHooks({
@@ -141,6 +154,10 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
   useEffect(() => {
     if (hud.over) again.current?.focus()
   }, [hud.over])
+  // a new round: the button that was focused is gone, so the dialog takes focus
+  useEffect(() => {
+    if (round > 0) root.current?.focus()
+  }, [round])
 
   const pullDown = (e: PointerEvent<HTMLButtonElement>) => {
     unlockAudio() // a tap: the browser lets the chirp's audio context run
@@ -148,6 +165,8 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
     held.current.button = true
   }
   const pullUp = () => void (held.current.button = false)
+  const tap = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(tap.current), [])
   const dragFrom = useRef<{ id: number; x: number } | null>(null)
 
   const again1 = () => {
@@ -212,6 +231,13 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
               onPointerUp={pullUp}
               onPointerCancel={pullUp}
               onLostPointerCapture={pullUp}
+              onClick={(e) => {
+                // a click with no press before it (a screen reader's activate): pull for a moment
+                if (e.detail !== 0) return
+                held.current.button = true
+                clearTimeout(tap.current)
+                tap.current = setTimeout(() => void (held.current.button = false), TAP_PULL_MS)
+              }}
               onContextMenu={(e) => e.preventDefault()}
             >
               {t('patangPull', lang)}

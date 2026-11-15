@@ -1360,9 +1360,14 @@ small.words-hint {
 
 .patang-cut {
   display: inline-block;
-  font: 800 2.2rem/1.1 'Baloo 2', system-ui, sans-serif;
+  font:
+    800 2.2rem/1.1 'Baloo 2',
+    system-ui,
+    sans-serif;
   color: #fff;
-  text-shadow: 0 2px 0 var(--plum), 0 0 14px rgb(214 51 108 / 0.8);
+  text-shadow:
+    0 2px 0 var(--plum),
+    0 0 14px rgb(214 51 108 / 0.8);
   animation: patang-cut 1.4s ease-out forwards;
 }
 
@@ -1417,7 +1422,10 @@ small.words-hint {
   border: 3px solid var(--cream);
   background: var(--pink);
   color: var(--plum);
-  font: 800 1.3rem 'Baloo 2', system-ui, sans-serif;
+  font:
+    800 1.3rem 'Baloo 2',
+    system-ui,
+    sans-serif;
   pointer-events: auto;
   touch-action: none;
   user-select: none;
@@ -1449,7 +1457,10 @@ small.words-hint {
 
 .patang-big {
   margin: 0;
-  font: 800 2rem 'Baloo 2', system-ui, sans-serif;
+  font:
+    800 2rem 'Baloo 2',
+    system-ui,
+    sans-serif;
 }
 
 .patang-actions {

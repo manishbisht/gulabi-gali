@@ -77,6 +77,31 @@ export function createPatangView(stage: Stage, rivals: number): PatangView {
   const rp = rivalLines.attributes.position!.array as Float32Array
   const pp = playerLine.attributes.position!.array as Float32Array
 
+  // the sky plane's size this frame, read by the helpers below (made once, not per frame)
+  let halfH = 1
+  let halfW = 1
+  let size = 1
+  const lx = (x: number) => (x / X_RANGE) * halfW * 0.9
+  const ly = (y: number) => ((y / Y_MAX) * 2 - 1) * halfH
+  const place = (i: number, k: PatangState['player'], o: Float32Array, at6: number) => {
+    dummy.position.set(lx(k.x), ly(k.y), 0)
+    dummy.rotation.set(0, 0, k.tilt)
+    dummy.scale.setScalar(i === 0 ? size * 1.15 : size)
+    dummy.updateMatrix()
+    kites.setMatrixAt(i, dummy.matrix)
+    o[at6] = lx(k.anchorX)
+    o[at6 + 1] = ly(0)
+    o[at6 + 2] = 0
+    o[at6 + 3] = lx(k.x)
+    o[at6 + 4] = ly(k.y) - size * 0.5
+    o[at6 + 5] = 0
+    // a cut string goes slack: it is no line from the ground any more
+    if (!k.alive) {
+      o[at6 + 3] = o[at6]!
+      o[at6 + 4] = o[at6 + 1]!
+    }
+  }
+
   return {
     update(state, at) {
       camera.position.set(at.x, EYE_Y, at.z + EYE_BACK)
@@ -86,30 +111,9 @@ export function createPatangView(stage: Stage, rivals: number): PatangView {
       camera.getWorldDirection(forward)
       group.position.copy(camera.position).addScaledVector(forward, DEPTH)
       group.quaternion.copy(camera.quaternion)
-      const halfH = DEPTH * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
-      const halfW = halfH * camera.aspect
-      const lx = (x: number) => (x / X_RANGE) * halfW * 0.9
-      const ly = (y: number) => ((y / Y_MAX) * 2 - 1) * halfH
-      const size = halfH * 0.1
-
-      const place = (i: number, k: PatangState['player'], o: Float32Array, at6: number) => {
-        dummy.position.set(lx(k.x), ly(k.y), 0)
-        dummy.rotation.set(0, 0, k.tilt)
-        dummy.scale.setScalar(i === 0 ? size * 1.15 : size)
-        dummy.updateMatrix()
-        kites.setMatrixAt(i, dummy.matrix)
-        o[at6] = lx(k.anchorX)
-        o[at6 + 1] = ly(0)
-        o[at6 + 2] = 0
-        o[at6 + 3] = lx(k.x)
-        o[at6 + 4] = ly(k.y) - size * 0.5
-        o[at6 + 5] = 0
-        // a cut string goes slack: it is no line from the ground any more
-        if (!k.alive) {
-          o[at6 + 3] = o[at6]!
-          o[at6 + 4] = o[at6 + 1]!
-        }
-      }
+      halfH = DEPTH * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+      halfW = halfH * camera.aspect
+      size = halfH * 0.1
       place(0, state.player, pp, 0)
       for (let i = 0; i < rivals; i++) place(i + 1, state.rivals[i]!, rp, i * 6)
       kites.instanceMatrix.needsUpdate = true

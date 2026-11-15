@@ -65,6 +65,36 @@ describe('steering', () => {
   })
 })
 
+describe('pulling tires', () => {
+  const hold = { pull: true, steer: 0 }
+  it('runs dry after 2 s of pulling', () => {
+    const p = createPatang(1, 2, { rivals: 0 })
+    run(p, 1.9, hold)
+    expect(p.state.player.pulling).toBe(true)
+    run(p, 0.3, hold)
+    expect(p.state.player.pulling).toBe(false)
+  })
+
+  it('cannot be dodged by letting go for one frame', () => {
+    const p = createPatang(1, 2, { rivals: 0 })
+    run(p, 2.4, hold)
+    p.update(idle, 1 / 60) // one frame of letting go
+    p.update(hold, 1 / 60)
+    expect(p.state.player.pulling).toBe(false)
+  })
+
+  it('pulls again once the bucket has refilled enough', () => {
+    const p = createPatang(1, 2, { rivals: 0 })
+    run(p, 2.4, hold)
+    run(p, 0.05) // 0.27 refilled: not yet 0.3
+    p.update(hold, 1 / 60)
+    expect(p.state.player.pulling).toBe(false)
+    run(p, 0.5)
+    p.update(hold, 1 / 60)
+    expect(p.state.player.pulling).toBe(true)
+  })
+})
+
 describe('the manjha contest', () => {
   it('crossing for 0.6 s while pulling cuts the rival', () => {
     const p = createPatang(11, 2, { rivals: 1 })

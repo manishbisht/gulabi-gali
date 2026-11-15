@@ -15,7 +15,7 @@ export interface Controls {
   horn(): boolean
   setJoystick(v: Vec2): void
   /**
-   * Holds the player still while a minigame has the keys and the stick: `move()` and `drive()` read zero, and
+   * Holds the player still while a minigame has the keys and the stick: `move()` and `drive()` read zero (the stick is let go of), and
    * E and Space (the horn) are not heard. Letting go (or `freeze(false)`) hands them back; a key held through
    * it carries on being held.
    */
@@ -106,6 +106,8 @@ export function createControls(target: Window): Controls {
     },
     freeze(on) {
       frozen = on
+      // a stick still held when its widget goes away would never say it let go
+      if (on) joystick = { x: 0, z: 0 }
       interactQueued = false
       hornQueued = false
     },

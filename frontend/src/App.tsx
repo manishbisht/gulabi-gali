@@ -288,6 +288,7 @@ export default function App() {
       controls.dispose()
       controlsRef.current = null
       stageRef.current = null
+      setKiteFrom(null) // a kite fight borrows this stage and these controls, and ends with them
       stage.dispose()
     }
   }, [

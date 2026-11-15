@@ -5,6 +5,8 @@ import * as THREE from 'three'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Stage } from '../engine/stage'
 import type { Controls } from '../player/controls'
+import { loadBest } from '../games/patang'
+import { storage } from '../storage'
 import { Patang } from './Patang'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -32,7 +34,12 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="app"></div>'
   root = createRoot(document.getElementById('app')!)
 })
-afterEach(() => act(() => root.unmount()))
+afterEach(() => {
+  act(() => root.unmount())
+  storage.clear()
+  vi.unstubAllEnvs()
+  delete (window as { __gg?: unknown }).__gg
+})
 
 const mount = (onExit = () => {}) =>
   act(() => root.render(<Patang lang="en" stage={stage} controls={controls} at={at} onExit={onExit} />))
@@ -94,4 +101,32 @@ it('shows the score when the round is over, with Again and Stop', () => {
   expect(labels).toEqual(['Again', 'Stop'])
   expect(document.querySelector('.patang-score')!.textContent).toMatch(/Cuts: \d+/)
   expect(document.querySelector('.patang-score')!.textContent).toMatch(/Best: \d+/)
+})
+
+it('keeps the cuts made so far when the player leaves mid-round', () => {
+  vi.stubEnv('VITE_TEST_HOOKS', '1')
+  history.replaceState(null, '', '/?gg-test=1')
+  mount()
+  act(() => window.__gg.patang().forceCross())
+  key('Space') // hold pull
+  act(() => {
+    for (let i = 0; i < 90; i++) frames.forEach((f) => f(1 / 60))
+  })
+  expect(window.__gg.patang().score()).toBeGreaterThanOrEqual(1)
+  expect(loadBest()).toBe(0) // the round is not over
+  act(() => root.render(<></>)) // Stop, Escape or the festival ending all unmount it
+  expect(loadBest()).toBeGreaterThanOrEqual(1)
+  history.replaceState(null, '', '/')
+})
+
+it('Enter on the focused Pull button holds the pull, like Space', () => {
+  mount()
+  const pull = document.querySelector<HTMLElement>('.patang-pull')!
+  const down = new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', cancelable: true, bubbles: true })
+  act(() => void pull.dispatchEvent(down))
+  expect(down.defaultPrevented).toBe(true) // taken as a hold, not a click
+  const stop = document.querySelector<HTMLElement>('.patang-stop')!
+  const other = new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', cancelable: true, bubbles: true })
+  act(() => void stop.dispatchEvent(other))
+  expect(other.defaultPrevented).toBe(false) // Stop still clicks
 })
