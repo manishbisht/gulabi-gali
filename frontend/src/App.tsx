@@ -62,6 +62,7 @@ import { FullScreen } from './ui/FullScreen'
 import { FirstHint } from './ui/FirstHint'
 import { CityMap } from './ui/CityMap'
 import { Compass } from './ui/Compass'
+import { RoofButton, RoofNotice } from './ui/RoofButton'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -639,15 +640,14 @@ export default function App() {
                       {t('driveMount', lang)}
                     </button>
                   )}
-                  {(roof.near || roof.up) && !near && !sheetOpen && !card && !bench.seat && (
-                    <button
-                      type="button"
-                      className="metro-button roof-button"
-                      aria-keyshortcuts="E"
-                      onClick={roof.climb}
-                    >
-                      {t(roof.up ? 'roofDown' : 'roofUp', lang)}
-                    </button>
+                  {!near && !sheetOpen && !card && !bench.seat && (
+                    <RoofButton
+                      near={roof.near}
+                      up={roof.up}
+                      fading={roof.fading}
+                      lang={lang}
+                      onClimb={roof.climb}
+                    />
                   )}
                   {patangAvailable({
                     festival,
@@ -808,6 +808,7 @@ export default function App() {
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
       <div className="fade" data-on={fading || roof.fading || undefined} aria-hidden="true" />
+      <RoofNotice notice={roof.notice} lang={lang} />
       {kiteFrom && (
         <Patang
           lang={lang}

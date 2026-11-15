@@ -47,6 +47,8 @@ export function createDriving(opts: {
   player: Pick<Player, 'position' | 'driving' | 'mount' | 'dismount' | 'ridePose' | 'exitPoint'>
   /** Stands the player up from a bench, if they are seated. */
   stand?: () => void
+  /** The player is where no parked auto can be reached (up on a roof): none is in reach, and none mounts. */
+  away?: () => boolean
   hooks: DriveHooks
 }): Driving {
   const { autos, player, hooks } = opts
@@ -75,12 +77,12 @@ export function createDriving(opts: {
 
   return {
     update(pos) {
-      setNear(mounted >= 0 ? -1 : autos.nearest(pos, MOUNT_RANGE))
+      setNear(mounted >= 0 || opts.away?.() ? -1 : autos.nearest(pos, MOUNT_RANGE))
     },
     near: () => near >= 0,
     driving: () => mounted >= 0,
     mount() {
-      if (near < 0 || mounted >= 0) return
+      if (near < 0 || mounted >= 0 || opts.away?.()) return
       unlockAudio() // from a tap or a key: the horn may need this gesture
       opts.stand?.()
       const i = near

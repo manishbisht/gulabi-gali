@@ -64,7 +64,7 @@ describe('roofOver', () => {
     },
   )
 
-  it("climbing and coming down hop less than the server's speed check allows after standing still", () => {
+  it('the hop up or down is never longer than one full walking burst (a spent burst is caught: see createRooftop)', () => {
     expect(MAX_HOP).toBeLessThan(SERVER_BURST_M)
     for (const style of ['haveli', 'shop', 'modern'] as const)
       for (const w of [7, 10, 14, 26])
@@ -137,10 +137,10 @@ function setup(roof = roofOver(HAVELI, 1)) {
     fade: (on) => calls.push(`fade ${on}`),
   }
   let at: Vec2 = { x: 0, z: 0 }
-  let floor: { y: number; walls: AABB[] } | null = null
+  let floor: { y: number; walls: AABB[]; under?: AABB } | null = null
   const player = {
     teleport: vi.fn((x: number, z: number) => void (at = { x, z })),
-    setFloor: vi.fn((f: { y: number; walls: AABB[] } | null) => void (floor = f)),
+    setFloor: vi.fn((f: { y: number; walls: AABB[]; under?: AABB } | null) => void (floor = f)),
   }
   const face = vi.fn()
   const top = createRooftop({ roof, player, hooks, face })
@@ -180,7 +180,8 @@ describe('createRooftop', () => {
     expect(top.up()).toBe(false)
     expect(at()).toEqual(roof.stair)
     expect(floor()).toBeNull()
-    expect(calls.slice(5)).toEqual(['fade true', 'up false', 'fade false'])
+    // at the foot again before the screen clears: the button never goes away under a finger or the focus
+    expect(calls.slice(5)).toEqual(['fade true', 'up false', 'near true', 'fade false'])
     top.update(at())
     expect(top.near()).toBe(true)
   })
@@ -196,6 +197,38 @@ describe('createRooftop', () => {
     top.update(roof.stair) // a 'too-fast' snap back to where the server last heard of them
     expect(top.up()).toBe(false)
     expect(floor()).toBeNull()
+  })
+
+  it('a refused way down (the server snaps them back onto the strip) puts them back up there, not inside the walls', () => {
+    vi.useFakeTimers()
+    const { roof, top, floor } = setup()
+    top.update(roof.stair)
+    top.toggle()
+    vi.advanceTimersByTime(2 * ROOF_FADE_MS)
+    top.update(roof.landing)
+    top.toggle()
+    vi.advanceTimersByTime(2 * ROOF_FADE_MS)
+    expect(top.up()).toBe(false)
+    top.update(roof.stair)
+    // 'too-fast': back where the server last heard of them, on the strip; nobody on the street can stand there
+    top.update(roof.landing)
+    expect(top.up()).toBe(true)
+    expect(floor()!.y).toBe(roof.y)
+    expect(floor()!.under).toEqual(roof.building)
+  })
+
+  it('a refused climb whose snap to the foot lands while the screen clears leaves them on the street', () => {
+    vi.useFakeTimers()
+    const { roof, top, floor } = setup()
+    top.update(roof.stair)
+    top.toggle()
+    vi.advanceTimersByTime(ROOF_FADE_MS) // up, and the screen starting to clear
+    top.update(roof.landing)
+    top.update(roof.stair) // 'too-fast': back at the foot
+    expect(top.up()).toBe(false)
+    expect(floor()).toBeNull()
+    vi.advanceTimersByTime(ROOF_FADE_MS)
+    expect(top.up()).toBe(false)
   })
 
   it('walking away from the foot while the screen goes dark climbs nothing (the hop up would be too long)', () => {
@@ -234,8 +267,15 @@ describe('up on the roof, with the real player', () => {
       move: () => move,
       look: () => ({ yaw: 0, pitch: 0, held: false }),
       drive: () => ({ x: 0, z: 0 }),
+      jog: () => false,
+      zoom: () => {
+        const k = zoom.next
+        zoom.next = 1
+        return k
+      },
     } as unknown as Controls
-    return { controls, move }
+    const zoom = { next: 1 }
+    return { controls, move, zoom }
   }
 
   it('cannot walk off the strip in any direction, and the camera rises with it', () => {
@@ -289,6 +329,34 @@ describe('up on the roof, with the real player', () => {
     vi.useRealTimers()
     expect(player.position()).toEqual(roof.stair)
     expect(player.elevation()).toBe(0)
+    player.dispose()
+  })
+
+  it('up there the camera still keeps out of the buildings around, zoomed all the way out, though not its own', () => {
+    const roof = roofOver(HAVELI, 1) // its front, and the strip, face +z: the camera looks back over the street
+    const across: AABB = { minX: -8, maxX: 8, minZ: 12, maxZ: 22 } // the row across the street
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera()
+    const { controls, zoom } = stick()
+    const player = createPlayer({
+      scene,
+      camera,
+      controls,
+      look: { skin: 1, outfit: 'teal', head: 'none' },
+      colliders: [footprint(HAVELI), across],
+      occluders: [footprint(HAVELI), across],
+    })
+    const top = createRooftop({ roof, player, hooks: { near() {}, up() {}, fade() {} } })
+    vi.useFakeTimers()
+    top.update(roof.stair)
+    top.toggle()
+    vi.advanceTimersByTime(2 * ROOF_FADE_MS)
+    vi.useRealTimers()
+    zoom.next = 1.6
+    for (let i = 0; i < 60; i++) player.update(1 / 30)
+    // pulled in short of the row across the street, and not into the player's head by the roof underfoot
+    expect(camera.position.z).toBeLessThan(across.minZ)
+    expect(dist({ x: camera.position.x, z: camera.position.z }, player.position())).toBeGreaterThan(3)
     player.dispose()
   })
 })

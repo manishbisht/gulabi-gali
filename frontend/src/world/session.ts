@@ -298,6 +298,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       autos: district.autos,
       player,
       stand: () => sitting?.stand(),
+      // up on the roof the autos below are out of reach (the rooftop is made just after this)
+      away: () => roof?.up() ?? false,
       hooks: {
         ...(hooks.drive ?? { near() {}, driving() {}, blocked() {}, rescued() {} }),
         driving(on) {

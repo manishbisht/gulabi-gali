@@ -10,8 +10,11 @@ import type { AABB, BuildingSpec, RoofDef, Vec2 } from './types'
  *
  * The others are told nothing new: a move carries x and z only, and the strip lies inside the building's
  * footprint, where nobody on the street can stand, so a client that sees someone there draws them on the roof
- * (`roofHeight`). The climb is a hop in x and z of at most `MAX_HOP`, well inside the one-second burst the
- * server's speed check allows a walker after standing still (8 m), so it never reads as too fast.
+ * (`roofHeight`). The climb is a hop in x and z of at most `MAX_HOP`, no longer than the one-second burst the
+ * server's speed check allows a walker after standing still (8 m). That burst refills at only 4 m/s while walking
+ * (0.8 m/s at a jog), so a hop soon after another (down straight after climbing) can still be refused as too
+ * fast. A refusal puts the player back where the server last heard of them, and where that is decides where they
+ * are: on the strip they are up on the roof (nobody on the street can stand there), anywhere else on the street.
  */
 
 /** The climb shows, and E climbs, this close to the stair's foot. */
@@ -210,7 +213,7 @@ export interface RoofHooks {
 /** What the rooftop moves: the player's own body (see player.ts). */
 export interface RoofPlayer {
   teleport(x: number, z: number, ry?: number): void
-  setFloor(floor: { y: number; walls: AABB[] } | null): void
+  setFloor(floor: { y: number; walls: AABB[]; under?: AABB } | null): void
 }
 
 export interface Rooftop {
@@ -226,9 +229,10 @@ export interface Rooftop {
 /**
  * The viewpoint's goings up and down. The climb sets the player in the middle of the strip facing `roof.view`,
  * and `face` turns the view that way too; the way down sets them at the stair's foot. Up there the strip's walls
- * are their only ones (`RoofPlayer.setFloor`), so they cannot walk off it. If anything moves them out of it all
- * the same (the server putting them back where it last heard of them), they are on the street again at once:
- * never left standing in the air.
+ * are their only ones (`RoofPlayer.setFloor`), so they cannot walk off it. If anything moves them all the same
+ * (the server refusing a hop and putting them back where it last heard of them), where they land decides: off
+ * the strip, on the street again at once (never left standing in the air); on it, up on the roof again (never
+ * left inside the building).
  */
 export function createRooftop(opts: {
   roof: RoofDef
@@ -238,7 +242,7 @@ export function createRooftop(opts: {
   face?(yaw: number): void
 }): Rooftop {
   const { roof, player, hooks } = opts
-  const walls = roofWalls(roof)
+  const floor = { y: roof.y, walls: roofWalls(roof), under: roof.building }
   // up there, the player and the view turn to `roof.view`; at the foot, the player faces the street
   const dx = roof.view.x - roof.landing.x
   const dz = roof.view.z - roof.landing.z
@@ -267,12 +271,13 @@ export function createRooftop(opts: {
       player.setFloor(null)
       player.teleport(roof.stair.x, roof.stair.z, facing)
       setUp(false)
+      setNear(true) // at the foot before the screen clears: the button stays put under a finger or the focus
       return
     }
     // walked away from the foot while the screen went dark: the hop up would be longer than `MAX_HOP` allows
     if (!inReach()) return
     setNear(false)
-    player.setFloor({ y: roof.y, walls })
+    player.setFloor(floor)
     player.teleport(roof.landing.x, roof.landing.z, viewing)
     opts.face?.(looking)
     setUp(true)
@@ -282,11 +287,18 @@ export function createRooftop(opts: {
     update(pos) {
       at.x = pos.x
       at.z = pos.z
-      if (timer) return // mid-fade: nothing changes under the black
-      if (up && !inside(pos, roof.area, 0.01)) {
+      // Where the player stands says where they are, even mid-fade: a refused hop puts them back where the
+      // server last heard of them. Off the strip they are on the street; on it, up on the roof (never in the air,
+      // never inside the walls).
+      const onStrip = inside(pos, roof.area, 0.01)
+      if (up && !onStrip) {
         player.setFloor(null)
         setUp(false)
+      } else if (!up && onStrip) {
+        player.setFloor(floor)
+        setUp(true)
       }
+      if (timer) return // mid-fade: the button keeps what it says under the black
       setNear(!up && inReach())
     },
     near: () => near,

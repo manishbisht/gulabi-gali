@@ -311,6 +311,9 @@ export const STRINGS = {
   /** The rooftop viewpoint's stair, and the way back down from up there. */
   roofUp: { hi: 'Chhat pe chalo', en: 'Up to the roof' },
   roofDown: { hi: 'Neeche chalo', en: 'Back down' },
+  /** Said politely to a screen reader on arriving. */
+  roofOnTop: { hi: 'Chhat pe aa gaye.', en: "You're up on the roof." },
+  roofOnStreet: { hi: 'Neeche gali mein aa gaye.', en: 'Back down on the street.' },
   driveExit: { hi: 'Utro', en: 'Get out' },
   driveHorn: { hi: 'Horn bajao', en: 'Honk the horn' },
   driveHornShort: { hi: 'Horn', en: 'Honk' },

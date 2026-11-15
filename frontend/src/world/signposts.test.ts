@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { bearing } from './cityMap'
 import { DISTRICTS, loadDistrict, type District } from './district'
-import { buildSignposts, signpostsOf } from './signposts'
+import { buildSignposts, letteringLayout, signpostsOf } from './signposts'
 import type { AABB, DistrictDef, Vec2 } from './types'
 
 const loaded = new Map<string, Promise<District>>()
@@ -77,6 +77,27 @@ describe.each(DISTRICTS)('%s: signposts', (id) => {
         ;(o.material as THREE.Material).dispose()
       }
     })
+  })
+
+  it('letter every board from one small canvas: a name once per place, each distance once', async () => {
+    const { def } = await load(id)
+    const posts = signpostsOf(def)
+    const layout = letteringLayout(posts)
+    // well under the 2048 px a phone's GPU may cap a texture at, whatever the district
+    expect(layout.height).toBeLessThanOrEqual(1024)
+    expect(layout.width).toBeLessThanOrEqual(1024)
+    const places = new Set(posts.flatMap((p) => p.boards.map((b) => b.id)))
+    expect(layout.names.size).toBe(places.size)
+    const metres = new Set(posts.flatMap((p) => p.boards.map((b) => b.metres)))
+    expect(layout.metres.size).toBe(metres.size)
+    // no two slots overlap, and all of them are on the canvas
+    const rects = [...layout.names.values(), ...layout.metres.values()]
+    for (const [i, a] of rects.entries()) {
+      expect(a.x + a.w).toBeLessThanOrEqual(layout.width)
+      expect(a.y + a.h).toBeLessThanOrEqual(layout.height)
+      for (const b of rects.slice(i + 1))
+        expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h).toBe(false)
+    }
   })
 
   it('stand clear of everything else, the procession and the way in, and the district has them', async () => {

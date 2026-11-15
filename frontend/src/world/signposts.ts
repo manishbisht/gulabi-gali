@@ -42,11 +42,14 @@ const BOARD_FROM = 0.07
 const BODY_L = 1.7
 const TIP_L = 0.32
 const BOARD_T = 0.06
-/** The lettering: a 4:1 face on each side of the body, from a 512 x 128 slot of the shared canvas. */
+/** The lettering: a 4:1 face on each side of the body, a name (3:1) and its distance (2:1, half as tall) side by side. */
 const FACE_W = 1.6
 const FACE_H = 0.4
-const SLOT_W = 512
-const SLOT_H = 128
+const NAME_W = 1.2
+/** In the shared canvas: a 384 x 128 slot per place, and a 128 x 64 cell per distance. */
+const CANVAS_W = 512
+const NAME_PX = { w: 384, h: 128 }
+const METRES_PX = { w: 128, h: 64 }
 
 /** Every signpost in the district, with its boards. */
 export function signpostsOf(def: DistrictDef): Signpost[] {
@@ -81,40 +84,91 @@ function tip(): THREE.BufferGeometry {
   return g.translate(BOARD_FROM + BODY_L, 0, -BOARD_T / 2)
 }
 
-/** The district's lettering: one slot per board, top to bottom in the order they are built. */
-function letter(posts: Signpost[]): HTMLCanvasElement | null {
-  const n = posts.reduce((sum, p) => sum + p.boards.length, 0)
-  if (!n || typeof document === 'undefined') return null
+/** A rectangle of the lettering canvas, in px from its top left. */
+export interface Slot {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * Where everything is lettered on the district's one canvas: each place's name once (however many posts point at
+ * it), down the left; each distance once, two to a name's height down the right, then four to a row below. A
+ * district's few places and distances fit in well under 1024 px, far from the 2048 a phone may cap a texture at.
+ */
+export function letteringLayout(posts: Signpost[]): {
+  width: number
+  height: number
+  names: Map<string, Slot>
+  metres: Map<number, Slot>
+} {
+  const names = new Map<string, Slot>()
+  const metres = new Map<number, Slot>()
+  for (const post of posts)
+    for (const b of post.boards)
+      if (!names.has(b.id)) names.set(b.id, { x: 0, y: names.size * NAME_PX.h, ...NAME_PX })
+  const beside = names.size * 2 // distance cells beside the names
+  const below = names.size * NAME_PX.h
+  const perRow = CANVAS_W / METRES_PX.w
+  for (const post of posts)
+    for (const b of post.boards) {
+      if (metres.has(b.metres)) continue
+      const i = metres.size
+      const at =
+        i < beside
+          ? { x: NAME_PX.w, y: i * METRES_PX.h }
+          : {
+              x: ((i - beside) % perRow) * METRES_PX.w,
+              y: below + Math.floor((i - beside) / perRow) * METRES_PX.h,
+            }
+      metres.set(b.metres, { ...at, ...METRES_PX })
+    }
+  const rows = Math.ceil(Math.max(0, metres.size - beside) / perRow)
+  return { width: CANVAS_W, height: Math.max(1, below + rows * METRES_PX.h), names, metres }
+}
+
+/** The district's lettering, laid out as `letteringLayout` says. */
+function letter(posts: Signpost[], layout: ReturnType<typeof letteringLayout>): HTMLCanvasElement | null {
+  if (!layout.names.size || typeof document === 'undefined') return null
   const canvas = document.createElement('canvas')
-  canvas.width = SLOT_W
-  canvas.height = SLOT_H * n
+  canvas.width = layout.width
+  canvas.height = layout.height
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
   ctx.fillStyle = PALETTE.teal
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.textBaseline = 'middle'
-  let slot = 0
-  for (const post of posts)
-    for (const b of post.boards) {
-      const y = slot++ * SLOT_H
-      ctx.fillStyle = PALETTE.white
-      ctx.fillRect(0, y, SLOT_W, 4)
-      ctx.fillRect(0, y + SLOT_H - 4, SLOT_W, 4)
-      const two = b.name.hi !== b.name.en
-      const width = SLOT_W - 150
-      ctx.font = `700 ${two ? 40 : 46}px system-ui, sans-serif`
-      ctx.fillText(b.name.hi, 18, y + (two ? 42 : SLOT_H / 2), width)
-      if (two) {
-        ctx.font = '500 30px system-ui, sans-serif'
-        ctx.fillText(b.name.en, 18, y + 90, width)
-      }
-      ctx.font = '600 34px system-ui, sans-serif'
-      ctx.textAlign = 'right'
-      ctx.fillStyle = PALETTE.marigold
-      ctx.fillText(`${b.metres} m`, SLOT_W - 16, y + SLOT_H / 2)
-      ctx.textAlign = 'left'
+  const named = new Map(posts.flatMap((p) => p.boards.map((b) => [b.id, b.name] as const)))
+  for (const [id, r] of layout.names) {
+    const name = named.get(id)!
+    ctx.fillStyle = PALETTE.white
+    ctx.fillRect(r.x, r.y, r.w, 4)
+    ctx.fillRect(r.x, r.y + r.h - 4, r.w, 4)
+    const two = name.hi !== name.en
+    ctx.font = `700 ${two ? 40 : 46}px system-ui, sans-serif`
+    ctx.fillText(name.hi, r.x + 18, r.y + (two ? 42 : r.h / 2), r.w - 30)
+    if (two) {
+      ctx.font = '500 30px system-ui, sans-serif'
+      ctx.fillText(name.en, r.x + 18, r.y + 90, r.w - 30)
     }
+  }
+  ctx.font = '600 34px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillStyle = PALETTE.marigold
+  for (const [m, r] of layout.metres) ctx.fillText(`${m} m`, r.x + r.w / 2, r.y + r.h / 2, r.w - 12)
   return canvas
+}
+
+/** A plane showing slot `r` of a `w` x `h` canvas (v runs up from the canvas's bottom row). */
+function lettered(width: number, height: number, r: Slot, w: number, h: number): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(width, height)
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute
+  for (let k = 0; k < uv.count; k++) {
+    uv.setX(k, (uv.getX(k) > 0.5 ? r.x + r.w : r.x) / w)
+    uv.setY(k, 1 - (uv.getY(k) > 0.5 ? r.y : r.y + r.h) / h)
+  }
+  return g
 }
 
 /**
@@ -130,10 +184,9 @@ export function buildSignposts(def: DistrictDef): {
   const group = new THREE.Group()
   group.name = 'signposts'
   if (!posts.length) return { group, colliders: [], posts }
-  const total = posts.reduce((sum, p) => sum + p.boards.length, 0)
+  const layout = letteringLayout(posts)
   const wood: THREE.BufferGeometry[] = []
   const faces: THREE.BufferGeometry[] = []
-  let slot = 0
   for (const post of posts) {
     const n = post.boards.length
     const top = boardY(0, n) + BOARD_H / 2 + 0.2
@@ -144,14 +197,19 @@ export function buildSignposts(def: DistrictDef): {
       const place = (g: THREE.BufferGeometry) => g.rotateY(b.angle).translate(post.at.x, y, post.at.z)
       wood.push(place(box(BODY_L, BOARD_H, BOARD_T, BOARD_FROM + BODY_L / 2, -BOARD_H / 2, 0, 'teal')))
       wood.push(place(bake(tip(), 'teal')))
-      // the slot's rows of the canvas (v runs up from its bottom row)
-      const v0 = 1 - (slot + 1) / total
-      const v1 = 1 - slot / total
-      slot++
       for (const side of [1, -1]) {
-        const face = new THREE.PlaneGeometry(FACE_W, FACE_H)
-        const uv = face.getAttribute('uv') as THREE.BufferAttribute
-        for (let k = 0; k < uv.count; k++) uv.setY(k, uv.getY(k) > 0.5 ? v1 : v0)
+        // the name, and its distance by the point, as one face
+        const name = lettered(NAME_W, FACE_H, layout.names.get(b.id)!, layout.width, layout.height)
+        name.translate(-(FACE_W - NAME_W) / 2, 0, 0)
+        const far = lettered(
+          FACE_W - NAME_W,
+          FACE_H / 2,
+          layout.metres.get(b.metres)!,
+          layout.width,
+          layout.height,
+        )
+        far.translate(NAME_W / 2, 0, 0)
+        const face = merge([name, far])
         // the back face is the front turned round: its lettering reads left to right from that side too
         if (side < 0) face.rotateY(Math.PI)
         face.translate(BOARD_FROM + BODY_L / 2, 0, side * (BOARD_T / 2 + 0.004))
@@ -162,7 +220,7 @@ export function buildSignposts(def: DistrictDef): {
   const paint = new THREE.Mesh(merge(wood), new THREE.MeshLambertMaterial({ vertexColors: true }))
   paint.name = 'signpost-boards'
   paint.castShadow = true
-  const canvas = letter(posts)
+  const canvas = letter(posts, layout)
   const map = canvas ? new THREE.CanvasTexture(canvas) : null
   if (map) {
     map.colorSpace = THREE.SRGBColorSpace

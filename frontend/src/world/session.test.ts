@@ -1321,6 +1321,21 @@ describe('the rooftop viewpoint', () => {
     session.dispose()
   })
 
+  it('up on the roof no auto is in reach: "Auto chalao" goes, and mounting is refused', async () => {
+    const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+    const { session, tick, roofHooks } = await atStair({ drive }, 0)
+    expect(drive.near).toHaveBeenLastCalledWith(true)
+    session.climb()
+    fadeThrough(tick)
+    expect(roofHooks.up).toHaveBeenLastCalledWith(true)
+    expect(drive.near).toHaveBeenLastCalledWith(false)
+    session.mount()
+    tick(1 / 30)
+    expect(drive.driving).not.toHaveBeenCalled()
+    expect(session.player()!.driving()).toBe(false)
+    session.dispose()
+  })
+
   it('other people on the roof are drawn up there; on the street, on the street', async () => {
     const live = openLive()
     loads[0]!.resolve(fakeDistrict(walledCity))
