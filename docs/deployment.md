@@ -323,14 +323,15 @@ residents others can see in the city now. Only the gate's live slots count, so n
 banned, someone waiting in line, or someone whose last socket just closed. Below 3 it says 0 (the page says
 "Abhi shaant hai — pehle aao"), 3 to 9 as they are, and from 10 a multiple of 5 rounded down (the page shows
 "10+"). One number for the city: no names, ids or districts. Each Cloudflare location keeps the answer in its
-edge cache for 30 s (one GateDO read per location per 30 s); browsers keep no copy. Per address it goes through
+edge cache for 30 s (one GateDO read per location per 30 s, shared by misses that land together); browsers keep
+no copy. Per address it goes through
 the `COUNT_LIMITER` rate-limiting binding (namespace `51005` in `backend/wrangler.jsonc`, 120 a minute; nothing
 to create, it ships with the Worker). The page asks on the welcome screen and every 30 s while it shows; a
 failure just leaves the line empty. Deploy the Worker before the site, as always: until then the line stays
 empty.
 
-**Links to a place ("Bulao").** Landmark cards, the bench panel and every row of the map's place list have a
-"Bulao" button: the phone's share sheet (or, without one, the clipboard) with a short line and
+**Links to a place ("Bulao").** Landmark cards, the bench panel (both as a share icon) and every row of the map's
+place list have a "Bulao" button: the phone's share sheet (or, without one, the clipboard) with a short line and
 `https://gulabi-gali.manishbisht.me/?at=<district>:<place>`. The link names a place and nothing else, never who
 sent it. Opening it shows the welcome screen as usual; after Padharo! the city opens in that district with the
 visitor standing at the place, and the `at` part leaves the address bar. A place a district does not have opens

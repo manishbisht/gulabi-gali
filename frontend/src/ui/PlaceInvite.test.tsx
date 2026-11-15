@@ -31,6 +31,11 @@ const mount = (place: Parameters<typeof PlaceInvite>[0]['place'] = HAWA, lang: '
   act(async () => root.render(<PlaceInvite district="walled-city" place={place} lang={lang} />))
 const button = () => host.querySelector('button')!
 const note = () => host.querySelector('[role="status"]')
+/** The status line is always there (a live region must exist before it speaks), empty while it has nothing. */
+const quiet = () => {
+  expect(note()).not.toBeNull()
+  expect(note()!.textContent).toBe('')
+}
 
 it('"Bulao" opens the share sheet with a short line and the link to the place: nothing about the sharer', async () => {
   const share = vi.fn<(data: ShareData) => Promise<void>>(async () => {})
@@ -44,7 +49,7 @@ it('"Bulao" opens the share sheet with a short line and the link to the place: n
     text: 'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain!',
     url: 'https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
   })
-  expect(note()).toBeNull()
+  quiet()
 })
 
 it('a bench or tapri links by its kind and number', async () => {
@@ -69,7 +74,7 @@ it('with no share sheet (or a failed one) it copies the line and link, and says 
   )
   expect(note()!.textContent).toBe('Link copy ho gaya')
   await act(async () => vi.advanceTimersByTime(4000))
-  expect(note()).toBeNull()
+  quiet()
 })
 
 it('closing the share sheet is no failure; neither sheet nor clipboard working says so', async () => {
@@ -78,9 +83,23 @@ it('closing the share sheet is no failure; neither sheet nor clipboard working s
     clipboard: { writeText: vi.fn() },
   })
   await mount()
+  quiet()
   await act(async () => button().click())
-  expect(note()).toBeNull()
+  quiet()
   vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => Promise.reject(new Error('no'))) } })
   await act(async () => button().click())
   expect(note()!.textContent).toBe('Link bhej nahi paye. Phir se try karo.')
+})
+
+it('`compact`: an icon with the same accessible name (for the cards, where a word would crowd the row)', async () => {
+  const share = vi.fn<(data: ShareData) => Promise<void>>(async () => {})
+  vi.stubGlobal('navigator', { share })
+  await act(async () => root.render(<PlaceInvite district="walled-city" place={HAWA} lang="en" compact />))
+  expect(button().textContent).toBe('')
+  expect(button().getAttribute('aria-label')).toBe('Invite: send a link to Hawa Mahal')
+  expect(button().getAttribute('title')).toBe('Invite: send a link to Hawa Mahal')
+  expect(button().querySelector('svg')!.getAttribute('aria-hidden')).toBe('true')
+  expect(button().classList.contains('place-invite-icon')).toBe(true)
+  await act(async () => button().click())
+  expect(share).toHaveBeenCalledOnce()
 })

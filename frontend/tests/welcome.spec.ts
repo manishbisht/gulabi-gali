@@ -82,7 +82,8 @@ test('"Bulao" on the map copies the link when there is no share sheet', async ({
   await page.getByRole('button', { name: 'Naksha · Gulabi Shahar', exact: true }).tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Gulabi Shahar' })
   await map.getByRole('button', { name: 'Bulao: Hawa Mahal ka link bhejo' }).tap()
-  await expect(map.getByRole('status')).toHaveText('Link copy ho gaya')
+  // every row's status line is there, empty; only the one pressed speaks
+  await expect(map.getByRole('status').filter({ hasText: /\S/ })).toHaveText('Link copy ho gaya')
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain! https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
   )

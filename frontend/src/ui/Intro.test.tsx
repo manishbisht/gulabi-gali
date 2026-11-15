@@ -111,3 +111,28 @@ it('is polite live text, and is asked again every 30 s while the page shows (not
   expect(fetchMock).toHaveBeenCalledTimes(3)
   root = createRoot(host)
 })
+
+it('coming back to the tab asks again at once, not at the next 30 s tick', async () => {
+  answer = async () => Response.json({ people: 3 })
+  await mount()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+  await act(async () => void document.dispatchEvent(new Event('visibilitychange')))
+  // going away asks nothing
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  answer = async () => Response.json({ people: 6 })
+  state.mockReturnValue('visible')
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(line()!.textContent).toBe('6 log abhi gali mein')
+  state.mockRestore()
+  // and once the screen is gone, coming back asks nothing
+  act(() => root.unmount())
+  document.dispatchEvent(new Event('visibilitychange'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  root = createRoot(host)
+})

@@ -1,6 +1,13 @@
 import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COUNT_CACHE_S, COUNT_FLOOR, countKey, roundCount } from '../src/count'
+import {
+  COUNT_CACHE_S,
+  COUNT_FLOOR,
+  COUNT_MEMO_MS,
+  countKey,
+  forgetCountMemo,
+  roundCount,
+} from '../src/count'
 import type { Env } from '../src/env'
 import { GATE_NAME } from '../src/gate'
 import worker from '../src/index'
@@ -15,8 +22,11 @@ beforeAll(async () => {
   await applyD1Migrations(testEnv.DB, testEnv.TEST_MIGRATIONS)
 })
 
-// Each test asks the gate afresh: no edge copy from the one before.
-beforeEach(() => caches.default.delete(countKey(testEnv, API)))
+// Each test asks the gate afresh: no edge copy, and no read this isolate remembers, from the one before.
+beforeEach(async () => {
+  forgetCountMemo()
+  await caches.default.delete(countKey(testEnv, API))
+})
 
 afterEach(async () => {
   await settle()
@@ -112,6 +122,7 @@ describe('GET /api/count', () => {
     await walker('Cache Xenia', 'mi-road')
     expect((await count()).body).toEqual({ people: 3 })
     await caches.default.delete(countKey(testEnv, API))
+    forgetCountMemo()
     expect((await count()).body).toEqual({ people: 4 })
   })
 
@@ -151,5 +162,67 @@ describe('GET /api/count', () => {
     err.mockRestore()
     expect(res.status).toBe(503)
     expect(await caches.default.match(countKey(testEnv, API))).toBeUndefined()
+  })
+})
+
+describe('a launch spike: misses at once share one gate read', () => {
+  /** An env whose gate answers `visible` only when the test says, counting how often it is asked. */
+  function slowGate() {
+    const asked = { n: 0 }
+    let answer: (n: number) => void = () => {}
+    let fail: (e: Error) => void = () => {}
+    const gateEnv = {
+      ...testEnv,
+      GATE: {
+        idFromName: () => ({}),
+        get: () => ({
+          visible: () => {
+            asked.n++
+            return new Promise<number>((res, rej) => {
+              answer = res
+              fail = rej
+            })
+          },
+        }),
+      },
+    } as unknown as Env
+    return { gateEnv, asked, answer: (n: number) => answer(n), fail: (e: Error) => fail(e) }
+  }
+  const ask = (e: Env) => worker.fetch(new Request(`${API}/api/count`), e)
+
+  it('five misses in flight together ask the gate once, and all get its answer', async () => {
+    const { gateEnv, asked, answer } = slowGate()
+    const pending = Array.from({ length: 5 }, () => ask(gateEnv))
+    await vi.waitFor(() => expect(asked.n).toBe(1), WAIT)
+    answer(7)
+    const all = await Promise.all(pending)
+    expect(await Promise.all(all.map((r) => r.json()))).toEqual(Array(5).fill({ people: 7 }))
+    expect(asked.n).toBe(1)
+  })
+
+  it(`an answer is kept in this isolate for ${COUNT_MEMO_MS} ms, so a miss right after (another location's edge copy ran out) asks nothing`, async () => {
+    expect(COUNT_MEMO_MS).toBeLessThanOrEqual(2000)
+    const { gateEnv, asked, answer } = slowGate()
+    const first = ask(gateEnv)
+    await vi.waitFor(() => expect(asked.n).toBe(1), WAIT)
+    answer(4)
+    expect(await (await first).json()).toEqual({ people: 4 })
+    await caches.default.delete(countKey(testEnv, API))
+    expect(await (await ask(gateEnv)).json()).toEqual({ people: 4 })
+    expect(asked.n).toBe(1)
+  })
+
+  it('a failed read is not kept: the next miss asks again', async () => {
+    const { gateEnv, asked, fail, answer } = slowGate()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const first = ask(gateEnv)
+    await vi.waitFor(() => expect(asked.n).toBe(1), WAIT)
+    fail(new Error('gate down'))
+    expect((await first).status).toBe(503)
+    err.mockRestore()
+    const second = ask(gateEnv)
+    await vi.waitFor(() => expect(asked.n).toBe(2), WAIT)
+    answer(5)
+    expect(await (await second).json()).toEqual({ people: 5 })
   })
 })

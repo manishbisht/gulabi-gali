@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
 import { patangAvailable } from './games/patang'
 import { hasWebGL } from './engine/webgl'
@@ -105,6 +105,10 @@ export default function App() {
   const [link] = useState(() => readPlaceLink(location.search))
   const [place, setPlace] = useState<DistrictDef['name'] | 'loading' | 'failed'>('loading')
   const [here, setHere] = useState<DistrictId>('walled-city')
+  /** The district the session stands the player in now (its `place` hook says), for "Bulao" on its cards. */
+  const [hereDef, setHereDef] = useState<DistrictDef | null>(null)
+  /** Its places by map id, worked out once per district. */
+  const places = useMemo(() => hereDef && new Map(mapItems(hereDef, []).map((i) => [i.id, i])), [hereDef])
   // an error report says which district it happened in (none before the city opens)
   useEffect(() => noteDistrict(entered ? here : null), [entered, here])
   const [webgl] = useState(hasWebGL)
@@ -319,6 +323,7 @@ export default function App() {
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
+          if (def) setHereDef(def)
         },
       },
     })
@@ -516,10 +521,10 @@ export default function App() {
       />
     )
 
-  /** "Bulao" for a place in the district the player is in (its map's id), once it has loaded. */
+  /** "Bulao" (as an icon: the cards' rows are full) for a place in the district the player is in, by its map id. */
   const invite = (id: string) => {
-    const place = map.def && mapItems(map.def, []).find((i) => i.id === id)
-    return place && <PlaceInvite district={map.def!.id} place={place} lang={lang} />
+    const place = places?.get(id)
+    return hereDef && place && <PlaceInvite district={hereDef.id} place={place} lang={lang} compact />
   }
 
   /** A banned account: a plain screen over everything (the city behind it stays a ghost's). */

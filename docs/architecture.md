@@ -562,14 +562,18 @@ two people are never told apart from none; 3 to 9 as they are; from 10 a multipl
 "n+". It is one number for the whole city: no names, ids or per-district split. One read per Cloudflare location
 per 30 s (`caches.default`, `COUNT_CACHE_S`) serves every page meanwhile, and the answer to a browser is
 `no-store`, so what a page shows is never more than 30 s old; per address it goes through `COUNT_LIMITER`. It
-never fans out to the four districts. The page (`useCityCount`) asks when the welcome screen mounts and every
-30 s while the tab shows, keeps the last number through a failed read, and shows nothing until one arrives.
+never fans out to the four districts, and misses that land together in one isolate share one gate read, kept for
+`COUNT_MEMO_MS` (2 s) after (a failed read is not kept; a miss waiting on another's read gives up after 5 s). The page (`useCityCount`) asks when the welcome screen mounts and every
+30 s while the tab shows (and at once when it shows again), keeps the last number through a failed read, and
+shows nothing until one arrives.
 
 ### Links to a place (`frontend/src/world/placeLink.ts`, `frontend/src/ui/PlaceInvite.tsx`)
 
 "Bulao" on a landmark card, the bench panel and each row of the map's list hands on
 `https://gulabi-gali.manishbisht.me/?at=<district>:<place>` with a short line (`shareLink`, the invite codes'
-helper: the share sheet, else the clipboard). Place ids are the map's (`mapItems`): a landmark's id, `metro`,
+helper: the share sheet, else the clipboard). On the landmark card and the bench panel it is an icon with the
+same accessible name, so those rows stay one line on a 360 px phone; the map's rows keep the word. Its status
+line is always mounted (empty while idle) and floats over the button, so it never moves the row. Place ids are the map's (`mapItems`): a landmark's id, `metro`,
 `poster-<n>`, and `bench-<n>` / `tapri-<n>` for the n-th seat as the server numbers them. The link carries the
 place and nothing about the sharer. On load `App` reads it once (`readPlaceLink`, which accepts only a known
 district and a short `[a-z0-9-]` id); after Padharo! it remembers the district (`gg-district`), drops `at` from

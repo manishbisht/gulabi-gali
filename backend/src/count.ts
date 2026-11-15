@@ -25,14 +25,49 @@ export const countKey = (env: Env, fallbackOrigin = 'https://api.gulabi-gali.man
   new Request(`${env.API_ORIGIN || fallbackOrigin}/api/count`)
 
 /**
+ * One gate read serves every miss in this isolate that comes while it is under way, and for this long after:
+ * when the edge copy runs out under a launch spike, the misses that land together ask the gate once, not once
+ * each.
+ */
+export const COUNT_MEMO_MS = 2000
+/** A miss sharing another's read gives up after this (a read whose request was cancelled might never settle). */
+const SHARED_WAIT_MS = 5000
+
+let memo: { at: number; people: Promise<number> } | null = null
+
+/** Tests: the next miss asks the gate afresh. */
+export const forgetCountMemo = () => void (memo = null)
+
+/** The rounded count: the read this isolate has under way or made in the last `COUNT_MEMO_MS`, else a new one. */
+function readCount(env: Env, now: number): Promise<number> {
+  if (memo && now - memo.at < COUNT_MEMO_MS) {
+    const shared = memo.people
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const late = new Promise<never>((_, no) => {
+      timer = setTimeout(() => no(new Error('shared gate read took too long')), SHARED_WAIT_MS)
+    })
+    return Promise.race([shared, late]).finally(() => clearTimeout(timer))
+  }
+  const people = env.GATE.get(env.GATE.idFromName(GATE_NAME)).visible().then(roundCount)
+  const mine = { at: now, people }
+  memo = mine
+  // a failed read is not kept: the next miss asks again
+  people.catch(() => {
+    if (memo === mine) memo = null
+  })
+  return people
+}
+
+/**
  * `GET /api/count`, public (no sign-in, ghosts included): how many residents others can see in the city now,
  * as `roundCount` says it. Only the gate's live slots count (see `GateDO.visible`): never a ghost, someone
  * hidden or banned, someone waiting in line, or a slot held after its socket closed. One number for the city:
  * no names, ids or districts.
  *
  * Per address through `COUNT_LIMITER` first; then the edge's copy, at most `COUNT_CACHE_S` old, so a crowd on
- * the welcome screen asks the gate once per location per 30 s. Browsers keep no copy (`no-store`), so what
- * they show is never older than the edge's. A gate that cannot be asked is a 503, cached nowhere.
+ * the welcome screen asks the gate once per location per 30 s, and misses that land together share one read
+ * (`COUNT_MEMO_MS`). Browsers keep no copy (`no-store`), so what they show is never older than the edge's. A gate
+ * that cannot be asked is a 503, cached nowhere.
  */
 export async function cityCount(env: Env, request: Request, origin: string, later: Later): Promise<Response> {
   const slow = await ipLimit(env, env.COUNT_LIMITER, request)
@@ -42,7 +77,7 @@ export async function cityCount(env: Env, request: Request, origin: string, late
   if (hit) return client(hit)
   let people: number
   try {
-    people = roundCount(await env.GATE.get(env.GATE.idFromName(GATE_NAME)).visible())
+    people = await readCount(env, Date.now())
   } catch (err) {
     console.error('count: gate failed', err)
     return Response.json({ error: 'unavailable' }, { status: 503, headers: { 'cache-control': 'no-store' } })
