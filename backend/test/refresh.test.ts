@@ -572,7 +572,7 @@ describe('the district alarm', () => {
     await runInDurableObject(stub(district), (i) => i.alarm())
     expect(await armed()).not.toBeNull() // someone is still here: the sweep is booked again
     sock.close()
-    await expect.poll(() => runInDurableObject(stub(district), (i) => i.sockets().length), WAIT).toBe(0)
+    await expect.poll(() => runInDurableObject(stub(district), (i) => (i as unknown as { sockets(): WebSocket[] }).sockets().length), WAIT).toBe(0)
     await runInDurableObject(stub(district), (_i, state) => state.storage.deleteAlarm())
     await runInDurableObject(stub(district), (i) => i.alarm())
     expect(await armed()).toBeNull() // nobody left: no timer, so the object can hibernate

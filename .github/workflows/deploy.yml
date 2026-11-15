@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
       options: --user 1001 --ipc=host
     steps:
       - name: Check out repository
@@ -96,8 +96,8 @@ jobs:
         working-directory: frontend
         run: |
           installed="$(node -p "require('@playwright/test/package.json').version")"
-          if [ "$installed" != "1.63.0" ]; then
-            echo "::error::@playwright/test is $installed but the e2e image is v1.63.0: update the image tag in deploy.yml."
+          if [ "$installed" != "1.65.1" ]; then
+            echo "::error::@playwright/test is $installed but the e2e image is v1.65.1: update the image tag in deploy.yml."
             exit 1
           fi
 
