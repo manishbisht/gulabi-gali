@@ -200,7 +200,7 @@ export default function App() {
   /** A resident's stamps are kept on the server too (a ghost's only here). */
   const { near, have, toast, collectHere, track } = useStamps(
     lang,
-    shown ? { id: residentId, token: auth.token, stamps: shown.stamps } : null,
+    shown ? { id: residentId, token: auth.token, stamps: shown.stamps ?? [] } : null,
   )
   const liveToken = useRef<() => Promise<string | null>>(async () => null)
   const liveAs = useRef<string | null>(null)

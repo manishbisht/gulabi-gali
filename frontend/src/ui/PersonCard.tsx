@@ -94,7 +94,7 @@ export function PersonCard({
               ` · ${t('personHereFor', lang, { what: t(HERE_FOR_LABEL[profile.hereFor], lang) })}`}
           </p>
           {profile.about && <p>{profile.about}</p>}
-          {profile.stamps?.length > 0 && <StampsLine ids={profile.stamps} lang={lang} />}
+          {!!profile.stamps?.length && <StampsLine ids={profile.stamps} lang={lang} />}
           {profile.link && (
             <p className="person-link">
               {t('personLink', lang)}:{' '}

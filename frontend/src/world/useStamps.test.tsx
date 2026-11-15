@@ -151,6 +151,16 @@ it('a failed push on sign-in is retried on the next load', async () => {
   expect(pushed(fetchMock)).toEqual([['hawa-mahal']])
 })
 
+it('a profile without `stamps` (an older Worker) reads as none: no crash, and the device still pushes', async () => {
+  localStorage.setItem('gg-stamps', JSON.stringify(['hawa-mahal']))
+  const fetchMock = server()
+  const { id, token } = resident()!
+  const { out, settle } = mount({ id, token } as Account)
+  await settle()
+  expect(out.have).toEqual(['hawa-mahal'])
+  expect(pushed(fetchMock)).toEqual([['hawa-mahal']])
+})
+
 it('signing out stops the pushing', async () => {
   const fetchMock = server()
   const { out, rerender, settle } = mount(resident())

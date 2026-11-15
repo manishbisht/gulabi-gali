@@ -12,8 +12,8 @@ export interface StampAccount {
   /** Who they are: a different one starts the syncing afresh. */
   id: string
   token(): Promise<string | null>
-  /** The stamps the server last said they hold (their profile's). */
-  stamps: readonly string[]
+  /** The stamps the server last said they hold (their profile's). Missing (an older Worker) reads as none. */
+  stamps?: readonly string[]
 }
 
 /** A stamp the server knows: a save from an older page may hold one that is no longer a landmark. */
@@ -43,7 +43,7 @@ export function useStamps(lang: Lang, account: StampAccount | null) {
 
   const user = account?.id ?? null
   const token = account?.token
-  const serverKey = account ? keyOf(account.stamps) : null
+  const serverKey = account ? keyOf(account.stamps ?? []) : null
   const serverStamps = useRef<readonly string[]>([])
   /** The resident now: an answer for anyone else is dropped. */
   const userRef = useRef(user)

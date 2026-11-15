@@ -327,6 +327,40 @@ it('signing out brings the ghost look back on the player at once', async () => {
   await act(async () => root.unmount())
 })
 
+it('a profile with no `stamps` field (an older Worker, a rollback) still opens the city as a resident', async () => {
+  const me = {
+    id: 'u',
+    complete: true,
+    profile: {
+      id: 'u',
+      name: 'Asha',
+      look: PROFILE_LOOK,
+      status: '',
+      homeArea: 'Raja Park',
+      hereFor: null,
+      about: '',
+      pauseRequests: false,
+    },
+  }
+  vi.stubGlobal('fetch', async (url: string) =>
+    String(url).endsWith('/api/me') ? Response.json(me) : Promise.reject(new TypeError('offline')),
+  )
+  localStorage.setItem('gg-lang', 'hi')
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  await act(async () =>
+    root.render(
+      <AuthContext.Provider value={signedIn()}>
+        <App />
+      </AuthContext.Provider>,
+    ),
+  )
+  await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
+  await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
+  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/9')
+  await act(async () => root.unmount())
+})
+
 it('signed in but /api/me failing: still a ghost chip, with a way to sign out', async () => {
   vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')))
   localStorage.setItem('gg-lang', 'hi')
