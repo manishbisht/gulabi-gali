@@ -5,13 +5,13 @@
   "compatibility_date": "2026-08-01",
   "observability": { "enabled": true },
   // Replace the id with the output of: wrangler kv namespace create CITY
-  "kv_namespaces": [{ "binding": "CITY", "id": "REPLACE_WITH_CITY_KV_ID" }],
+  "kv_namespaces": [{ "binding": "CITY", "id": "e7b324909cfc47b883bcbf65c30b678b" }],
   // Replace the id with the output of: wrangler d1 create gulabi-gali
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "gulabi-gali",
-      "database_id": "REPLACE_WITH_D1_ID",
+      "database_id": "0bb72cff-094b-4759-b043-7ba817f1cc94",
       "migrations_dir": "migrations",
     },
   ],
