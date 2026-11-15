@@ -151,6 +151,10 @@ numbered files in `backend/migrations/`, applied with the same command.
   it with `clerk:`. Never a `dev:` id.
 - `MAX_LIVE` (var, default `"300"`): residents shown at once; the rest wait in line. `MAX_IP_SOCKETS` (var,
   default `"24"`): live sockets from one address. Both are in `backend/wrangler.jsonc`; change and deploy.
+- `REMIND_BUDGET` (var, `"24"`): subrequests, D1 calls included, one cron run may spend on meet-up reminders
+  (`backend/src/meetups.ts`). Sized for the Workers Free plan (about 50 subrequests and 50 D1 queries a run,
+  shared with the other cron sweeps); whoever does not fit is reminded on the next run. On the Paid plan (1000 a
+  run) set it to `"300"`.
 - Rate limits: `SOCKETS_LIMITER`, `SIGNIN_LIMITER`, `WRITES_LIMITER`, `ERRORS_LIMITER` and `COUNT_LIMITER` use
   namespace ids `51001`, `51002`, `51003`, `51004` and `51005`. They only have to be unique within the Cloudflare
   account; change them if something else uses them.
@@ -326,8 +330,8 @@ banned, someone waiting in line, or someone whose last socket just closed. Below
 "10+"). One number for the city: no names, ids or districts. Each Cloudflare location keeps the answer in its
 edge cache for 30 s (one GateDO read per location per 30 s, shared by misses that land together); browsers keep
 no copy. Per address it goes through
-the `COUNT_LIMITER` rate-limiting binding (namespace `51005` in `backend/wrangler.jsonc`, 120 a minute; nothing
-to create, it ships with the Worker). The page asks on the welcome screen and every 30 s while it shows; a
+the `COUNT_LIMITER` rate-limiting binding (namespace `51005` in `backend/wrangler.jsonc`, 300 a minute, since Indian
+carriers put many phones behind one address at launch; nothing to create, it ships with the Worker). The page asks on the welcome screen and every 30 s while it shows; a
 failure just leaves the line empty. Deploy the Worker before the site, as always: until then the line stays
 empty.
 

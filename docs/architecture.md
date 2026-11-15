@@ -378,8 +378,9 @@ is `unconfirmed` and never counts. Unhiding closes no report: they stay open, ev
 
 ### Rate limits (`limits.ts`)
 
-Per address, three Workers Rate Limiting bindings (sockets 120 a minute, sign-ins 20 a minute, writes 300 a
-minute) plus an hourly invite-redemption count in D1; loopback is exempt only in dev. Per account, D1
+Per address, five Workers Rate Limiting bindings (sockets 120 a minute, sign-ins 20 a minute, writes 300 a
+minute, error reports 20 a minute, the welcome count 300 a minute, roomy because Indian carriers put many phones
+behind one address) plus an hourly invite-redemption count in D1; loopback is exempt only in dev. Per account, D1
 `counters`: requests 5 a day for an account under 7 days old and 20 after, messages 30 a minute, reports 20 a
 day, blocks and unblocks 30 an hour together, stamp pushes 30 an hour. A refusal is a 429 with `Retry-After`, and the page says so (`net/rateNotice.ts`).
 
