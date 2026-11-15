@@ -19,6 +19,12 @@ const LANE = { perSecond: 2, burst: 10 }
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
 const PING = '{"t":"ping"}'
 const PONG = '{"t":"pong"}'
+/**
+ * A socket not heard from for this long is taken for dead: a locked phone or a frozen tab keeps one "open" for
+ * minutes after its page stopped listening. A client pings every 25 s (`frontend/src/net/inbox.ts`), so a live
+ * one is never this quiet: about two pings and some slack.
+ */
+export const INBOX_STALE_MS = 60_000
 
 /** Hands work that must outlive the response to the runtime (`ctx.waitUntil`). */
 export type Later = (work: Promise<unknown>) => void
@@ -73,6 +79,7 @@ interface Tab {
   closed?: boolean
   bad: number
   tokens: number
+  /** When the object last heard a frame of this socket's (or opened it), ms: its token bucket's clock too. */
   at: number
 }
 
@@ -84,6 +91,8 @@ interface Tab {
  */
 export class InboxDO extends DurableObject<Env> {
   private tabs = new WeakMap<WebSocket, Tab>()
+  /** The time, ms. Tests move it on to age a socket. */
+  clock: () => number = Date.now
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -94,7 +103,7 @@ export class InboxDO extends DurableObject<Env> {
     if (request.headers.get('Upgrade') !== 'websocket')
       return new Response('expected websocket', { status: 426 })
     if (!request.headers.get(WHO_HEADER)) return Response.json({ error: 'ghost' }, { status: 403 })
-    const now = Date.now()
+    const now = this.clock()
     const open = this.sockets().sort((x, y) => this.tab(x).opened - this.tab(y).opened)
     const opened = Math.max(now, ...open.map((ws) => this.tab(ws).opened + 1))
     while (open.length >= INBOX_SOCKETS) this.drop(open.shift()!, LIVE_CLOSE.replaced, 'too many tabs')
@@ -120,15 +129,21 @@ export class InboxDO extends DurableObject<Env> {
   }
 
   /**
-   * RPC: sends `n` to every open socket, serialised once. Answers how many it went to. With none open and
+   * RPC: sends `n` to every live socket, serialised once. Answers how many it went to. With none live and
    * `pushTo` given (this object's person, passed only when the sender may be notified about: see `notify`), a
    * request or a message is pushed to their devices instead: an open inbox already shows it, so a push then
-   * would only buzz twice.
+   * would only buzz twice. A socket not heard from for `INBOX_STALE_MS` does not count as open: it is closed
+   * (`LIVE_CLOSE.idle`, which a page that wakes up reconnects after, fetching its lists) and the push goes.
    */
   async notify(n: InboxNotice, pushFor?: string): Promise<number> {
     const text = JSON.stringify(n)
+    const now = this.clock()
     let sent = 0
     for (const ws of this.sockets()) {
+      if (now - this.heard(ws) >= INBOX_STALE_MS) {
+        this.drop(ws, LIVE_CLOSE.idle, 'idle')
+        continue
+      }
       try {
         ws.send(text)
         sent++
@@ -143,7 +158,7 @@ export class InboxDO extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     const tab = this.tab(ws)
     if (tab.closed) return
-    const now = Date.now()
+    const now = this.clock()
     tab.tokens = Math.min(LANE.burst, tab.tokens + (LANE.perSecond * Math.max(0, now - tab.at)) / 1000)
     tab.at = now
     if (tab.tokens < 1) return this.drop(ws, LIVE_CLOSE.invalid, 'flood')
@@ -183,6 +198,12 @@ export class InboxDO extends DurableObject<Env> {
     } catch {
       // Already closing.
     }
+  }
+
+  /** When `ws` was last heard from: a frame the object read, or a ping the edge answered for it. */
+  private heard(ws: WebSocket): number {
+    const auto = this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0
+    return Math.max(this.tab(ws).at, auto)
   }
 
   private sockets(): WebSocket[] {

@@ -1,8 +1,10 @@
-import { applyD1Migrations, env } from 'cloudflare:test'
+import { applyD1Migrations, env, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
-import { postMessage } from '../src/chat'
-import type { Later } from '../src/inbox'
+import { postMessage, unmatch } from '../src/chat'
+import { inboxOf, INBOX_STALE_MS, type InboxDO, type Later } from '../src/inbox'
+import { LIVE_CLOSE } from '../src/protocol'
+import { sendRequest } from '../src/requests'
 import { PUSH_DEVICES, PUSH_LIMIT, pushTo, putPush } from '../src/push'
 import { b64url } from '../src/webpush'
 import { api, closeAll, devId, inbox, login, pair, resident, WAIT } from './helpers'
@@ -188,6 +190,13 @@ describe('subscribing a device', () => {
 })
 
 describe('the inbox decides to push', () => {
+  /** A `later` that keeps the notices, so a test can wait for them to finish (each one decides about pushing). */
+  function collected() {
+    const work: Promise<unknown>[] = []
+    const later: Later = (p) => void work.push(p)
+    return { later, settled: () => Promise.all(work) }
+  }
+
   it('a request to someone with no inbox open buzzes their device, with no name and no words in it', async () => {
     const asker = await resident('Push Kavya')
     const t = await resident('Push Meera')
@@ -211,20 +220,85 @@ describe('the inbox decides to push', () => {
   })
 
   it('no push while they have an inbox open: the socket hears it instead', async () => {
-    const asker = await resident('Push Open A')
+    await resident('Push Open A')
     const t = await resident('Push Open B')
     expect((await subscribe(t, (await device()).body)).status).toBe(204)
     const box = await inbox(t)
     const fake = fakePushService()
-    expect((await ask(asker, devId('Push Open B'))).status).toBe(201)
+    const open = collected()
+    const res = await sendRequest(
+      testEnv,
+      devId('Push Open A'),
+      { to: devId('Push Open B'), reason: REASON },
+      Date.now(),
+      open.later,
+    )
+    expect(res.status).toBe(201)
+    // Every notice has been delivered and every push decided: nothing can still be on its way.
+    await open.settled()
     await box.next('request')
-    // Settle: the request's notice has come and gone, and it pushed nothing.
-    await new Promise((r) => setTimeout(r, 100))
     expect(fake.got).toHaveLength(0)
   })
 
+  /** Shifts `userId`'s inbox clock to `at` (null puts the real one back). */
+  const inboxClock = (userId: string, at: number | null) =>
+    runInDurableObject(inboxOf(testEnv, userId), (instance: InboxDO) => {
+      instance.clock = at === null ? Date.now : () => at
+    })
+
+  it('a socket not heard from for a minute (a locked phone) does not stop the push; it is closed', async () => {
+    const t = await resident('Push Stale')
+    const d = await device()
+    expect((await subscribe(t, d.body)).status).toBe(204)
+    const box = await inbox(t)
+    // The edge answers its ping: heard from now, but not again.
+    box.ws.send('{"t":"ping"}')
+    await box.next('pong')
+    const fake = fakePushService()
+    await inboxClock(devId('Push Stale'), Date.now() + INBOX_STALE_MS + 1_000)
+    try {
+      const sent = await inboxOf(testEnv, devId('Push Stale')).notify(
+        { t: 'request', id: 'r-stale' },
+        devId('Push Stale'),
+      )
+      expect(sent).toBe(0)
+    } finally {
+      await inboxClock(devId('Push Stale'), null)
+    }
+    expect(fake.got.map((g) => g.endpoint)).toEqual([d.endpoint])
+    await vi.waitFor(() => expect(box.closes).toEqual([LIVE_CLOSE.idle]), WAIT)
+    expect(box.messages.filter((m) => m.t === 'request')).toEqual([])
+  })
+
+  it('a socket whose ping the edge answered a moment ago is live: it hears the notice, no push', async () => {
+    const t = await resident('Push Fresh')
+    expect((await subscribe(t, (await device()).body)).status).toBe(204)
+    const box = await inbox(t)
+    // Opened long ago as far as the object knows, and no frame of its own since...
+    await runInDurableObject(inboxOf(testEnv, devId('Push Fresh')), (instance: InboxDO, state) => {
+      const old = Date.now() - 2 * INBOX_STALE_MS
+      for (const ws of state.getWebSockets()) {
+        const tab = ws.deserializeAttachment() as Record<string, unknown>
+        ws.serializeAttachment({ ...tab, opened: old, at: old })
+      }
+      ;(instance as unknown as { tabs: WeakMap<object, unknown> }).tabs = new WeakMap()
+    })
+    // ...but its ping, answered at the edge, was just now.
+    box.ws.send('{"t":"ping"}')
+    await box.next('pong')
+    const fake = fakePushService()
+    const sent = await inboxOf(testEnv, devId('Push Fresh')).notify(
+      { t: 'request', id: 'r-fresh' },
+      devId('Push Fresh'),
+    )
+    expect(sent).toBe(1)
+    await box.next('request', (m) => m.id === 'r-fresh')
+    expect(fake.got).toHaveLength(0)
+    expect(box.closes).toEqual([])
+  })
+
   it('a message to someone with no inbox open buzzes as a message; an unmatch never does', async () => {
-    const { a, b, matchId } = await pair('Push Chat A', 'Push Chat B')
+    const { a, b, aId, matchId } = await pair('Push Chat A', 'Push Chat B')
     const d = await device('en')
     expect((await subscribe(b, d.body)).status).toBe(204)
     const fake = fakePushService()
@@ -236,8 +310,10 @@ describe('the inbox decides to push', () => {
     await vi.waitFor(() => expect(fake.got).toHaveLength(1), WAIT)
     expect(await opened(fake.got[0]!, d.ua)).toEqual({ t: 'message', lang: 'en' })
     expect(new TextDecoder().decode(await decryptPayload(fake.got[0]!.body, d.ua))).not.toContain('chai')
-    expect((await api(`/api/matches/${matchId}`, a, { method: 'DELETE' })).status).toBe(204)
-    await new Promise((r) => setTimeout(r, 100))
+    // The unmatch's notices, each decided (pushed or not) before `settled` resolves.
+    const gone = collected()
+    expect((await unmatch(testEnv, aId, matchId, gone.later)).status).toBe(204)
+    await gone.settled()
     expect(fake.got).toHaveLength(1)
   })
 
@@ -278,13 +354,6 @@ describe('the inbox decides to push', () => {
     expect(await pushTo(testEnv, devId('Push Banned'), 'request')).toBe(0)
     expect(fake.got).toHaveLength(0)
   })
-
-  /** A `later` that keeps the notices, so a test can wait for them to finish (each one decides about pushing). */
-  function collected() {
-    const work: Promise<unknown>[] = []
-    const later: Later = (p) => void work.push(p)
-    return { later, settled: () => Promise.all(work) }
-  }
 
   it('a hidden sender’s message still reaches an open inbox, but never pushes', async () => {
     const { b, aId, matchId } = await pair('Push Hid A', 'Push Hid B')
