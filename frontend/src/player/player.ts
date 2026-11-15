@@ -15,6 +15,15 @@ export const PLAYER_RADIUS = 0.4
 /** The driver sits this far up in the auto's seat. */
 const SEAT_Y = 0.35
 
+/** Up on a roof (see world/rooftop.ts): how high, the walls that hold the player in, and the building underfoot. */
+export interface Floor {
+  y: number
+  walls: AABB[]
+  under?: AABB
+}
+const sameBox = (a: AABB, b: AABB) =>
+  a.minX === b.minX && a.maxX === b.maxX && a.minZ === b.minZ && a.maxZ === b.maxZ
+
 interface Options {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
@@ -39,7 +48,11 @@ export type Pilot = (dt: number, to: Pose) => void
 export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
   let avatar = buildAvatar(look)
   scene.add(avatar)
-  const follow = createFollowCamera(camera, occluders)
+  /** Up on a roof (see world/rooftop.ts): the body stands at `y`, and only `walls` hold it in. */
+  let floor: Floor | null = null
+  /** What the camera keeps out of: on a roof, all but the building underfoot (its footprint holds the player). */
+  const seen = [...(occluders ?? [])]
+  const follow = createFollowCamera(camera, seen)
   const fwd = new THREE.Vector3()
   let pos: Vec2 = { x: 0, z: 0 }
   // driving: the vehicle holds the speed and the heading; this file holds the body, and the collisions
@@ -58,7 +71,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
    * Only frames bring the view round behind the auto, so getting in never whips it round in one step.
    */
   function sync(dt: number, frame = false) {
-    avatar.position.set(pos.x, driving ? SEAT_Y : 0, pos.z)
+    avatar.position.set(pos.x, driving ? SEAT_Y : (floor?.y ?? 0), pos.z)
     if (driving && ride) {
       ride.position.set(pos.x, 0, pos.z)
       ride.rotation.y = vehicle.heading
@@ -88,6 +101,19 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     driving: (): boolean => driving,
     /** The last frame moved the player at a jog (on foot, never at the wheel). */
     jogging: (): boolean => jogged,
+    /**
+     * Up on a roof: the body stands at `floor.y` and walks only within `floor.walls` (the street's colliders do
+     * not hold it up there), and the camera keeps out of every building but `floor.under`, the one it stands on
+     * (its footprint holds the player). Null: back on the street. `teleport` places it.
+     */
+    setFloor(next: Floor | null) {
+      floor = next
+      seen.length = 0
+      for (const o of occluders ?? []) if (!next?.under || !sameBox(o, next.under)) seen.push(o)
+      sync(1)
+    },
+    /** How high the player's feet are: a roof's height up there, else 0. */
+    elevation: (): number => floor?.y ?? 0,
     /** Gets into an auto standing at (x, z) and facing `ry`. */
     mount(x: number, z: number, ry: number) {
       if (driving) return
@@ -172,7 +198,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         jogged = controls.jog()
         const speed = jogged ? JOG_SPEED : WALK_SPEED
         const step = { x: dx * speed * dt, z: dz * speed * dt }
-        pos = moveWithCollision(pos, step, colliders, PLAYER_RADIUS)
+        pos = moveWithCollision(pos, step, floor ? floor.walls : colliders, PLAYER_RADIUS)
         avatar.rotation.y = Math.atan2(dx, dz)
       }
       sync(dt, true)

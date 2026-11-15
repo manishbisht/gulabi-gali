@@ -2,6 +2,7 @@ import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { ALBERT_HALL, buildAlbertHall } from '../landmarks/albertHall'
 import { buildRamNiwasGate, RAM_NIWAS_GATE } from '../landmarks/ramNiwasGate'
+import { roofAt } from '../rooftop'
 import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
 import { centred, createFill, grow, placed, rect, wall, type Facing } from './layout'
 
@@ -267,6 +268,14 @@ const miRoad: DistrictDef = {
   landmarks,
   npcs,
   props,
+  /** On MI Road before the garden gate, and where the side roads meet it. */
+  signposts: [
+    { x: 6, z: 44.5 },
+    { x: -74.5, z: 44 },
+    { x: 75, z: 44 },
+  ],
+  /** A three-storey shop on MI Road just east of the gate's apron, looking over the garden to Albert Hall. */
+  roof: roofAt(buildings, { x: 40.5, z: 36.5 }, -1, HALL_AT),
 }
 
 export default miRoad

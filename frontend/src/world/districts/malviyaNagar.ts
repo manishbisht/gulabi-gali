@@ -1,6 +1,7 @@
 import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { buildWtp, WTP } from '../landmarks/wtp'
+import { roofAt } from '../rooftop'
 import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
 import { centred, createFill, grow, placed, rect, type Facing } from './layout'
 
@@ -189,6 +190,14 @@ const malviyaNagar: DistrictDef = {
   landmarks,
   npcs,
   props,
+  /** On JLN Marg before WTP's forecourt, and where the side streets meet it. */
+  signposts: [
+    { x: -5, z: 38 },
+    { x: -39, z: 37.5 },
+    { x: 39, z: 37.5 },
+  ],
+  /** A three-storey block on JLN Marg by the street running south: its roof looks across the road at WTP. */
+  roof: roofAt(buildings, { x: -11, z: 61.5 }, -1, WTP_AT),
 }
 
 export default malviyaNagar

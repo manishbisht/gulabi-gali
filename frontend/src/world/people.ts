@@ -62,9 +62,9 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 /**
  * The other people in the district, as the live socket describes them. Each is one avatar (shared geometry,
  * one draw call) and an invisible tap target; a frame eases every body toward its last reported point and
- * allocates nothing.
+ * allocates nothing. `heightAt` says how high someone standing at (x, z) is (up on a rooftop; the street is 0).
  */
-export function createPeople(scene: THREE.Object3D): People {
+export function createPeople(scene: THREE.Object3D, heightAt?: (x: number, z: number) => number): People {
   const tapMaterial = new THREE.MeshBasicMaterial({ visible: false })
   const tapGeometry = new THREE.CylinderGeometry(TAP_RADIUS, TAP_RADIUS, TAP_HEIGHT, 8)
   const byId = new Map<string, Entry>()
@@ -198,6 +198,7 @@ export function createPeople(scene: THREE.Object3D): People {
         const pos = body.position
         pos.x = person.x - (person.x - pos.x) * k
         pos.z = person.z - (person.z - pos.z) * k
+        pos.y = heightAt ? heightAt(pos.x, pos.z) : 0
         body.rotation.y = wrap(person.ry - wrap(person.ry - body.rotation.y) * k)
         const dx = pos.x - from.x
         const dz = pos.z - from.z
@@ -297,7 +298,7 @@ export function createPeopleLabels(host: HTMLElement) {
         const slot = pool[i]!
         const r = i < n ? near[i]! : null
         near[i] = null
-        if (r) v.set(r.body.position.x, ABOVE_HEAD, r.body.position.z).project(camera)
+        if (r) v.set(r.body.position.x, r.body.position.y + ABOVE_HEAD, r.body.position.z).project(camera)
         if (!r || v.z > 1) {
           // nobody for this slot, or they are behind the camera; let go of whoever it showed
           slot.el.hidden = true

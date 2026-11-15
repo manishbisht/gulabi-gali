@@ -28,6 +28,7 @@ import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
 import { useTaxi } from './world/useTaxi'
 import { taxiAvailable } from './world/taxi'
+import { useRooftop } from './world/useRooftop'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
@@ -65,6 +66,7 @@ import { FullScreen } from './ui/FullScreen'
 import { FirstHint } from './ui/FirstHint'
 import { CityMap } from './ui/CityMap'
 import { Compass } from './ui/Compass'
+import { RoofButton, RoofNotice } from './ui/RoofButton'
 
 /**
  * The bench notices that are a passing toast (`ghost` is a card; `rate` and `muted` are lines in the bench
@@ -131,6 +133,9 @@ export default function App() {
   /** The auto-taxi: an auto at its stand in reach, the "Le chalo" list, and the ride. */
   const taxi = useTaxi()
   const { hooks: taxiHooks, bind: bindTaxi } = taxi
+  /** The rooftop viewpoint: its stair in reach, being up there, and the fade between. */
+  const roof = useRooftop()
+  const { hooks: roofHooks, bind: bindRoof } = roof
   /** The street animals: the one in reach, the one following, and their passing lines. */
   const animals = useAnimals()
   const { hooks: animalHooks, bind: bindAnimals } = animals
@@ -304,6 +309,7 @@ export default function App() {
         taxi: taxiHooks,
         animals: animalHooks,
         bandar: bandarHooks,
+        roof: roofHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -317,10 +323,12 @@ export default function App() {
     bindDrive(city)
     bindTaxi(city)
     bindAnimals(city)
+    bindRoof(city)
     bindMap({ session: city, stage })
 
     return () => {
       bindMap(null)
+      bindRoof(null)
       bindAnimals(null)
       bindTaxi(null)
       bindDrive(null)
@@ -360,6 +368,8 @@ export default function App() {
     animalHooks,
     bindAnimals,
     bindMap,
+    roofHooks,
+    bindRoof,
     bandarHooks,
     current,
     now,
@@ -460,7 +470,8 @@ export default function App() {
     mapBlockedRef.current = sheetUp
   }, [sheetUp, mapBlockedRef])
   // the monkey keeps off the street while anything is over it
-  const bandarBlocked = sheetUp || !!near || !!ride || taxi.riding || !!kiteFrom || !!bench.seat || map.open
+  const bandarBlocked =
+    sheetUp || !!near || !!ride || taxi.riding || !!kiteFrom || !!bench.seat || map.open || roof.up
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked
@@ -657,10 +668,20 @@ export default function App() {
                     card: !!card || !!near || sheetOpen || taxi.sheetOpen,
                     kite: !!kiteFrom,
                     metro: !!ride || fading,
+                    roof: roof.up || roof.fading,
                   }) && (
                     <button type="button" className="metro-button taxi-button" onClick={taxi.open}>
                       {t('taxiOpen', lang)}
                     </button>
+                  )}
+                  {!near && !sheetOpen && !card && !bench.seat && (
+                    <RoofButton
+                      near={roof.near}
+                      up={roof.up}
+                      fading={roof.fading}
+                      lang={lang}
+                      onClimb={roof.climb}
+                    />
                   )}
                   {patangAvailable({
                     festival,
@@ -668,6 +689,7 @@ export default function App() {
                     seated: !!bench.seat,
                     card: !!card,
                   }) &&
+                    !roof.up &&
                     !near &&
                     !sheetOpen && (
                       <button
@@ -829,7 +851,8 @@ export default function App() {
         />
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
-      <div className="fade" data-on={fading || taxi.dark || undefined} aria-hidden="true" />
+      <div className="fade" data-on={fading || roof.fading || taxi.dark || undefined} aria-hidden="true" />
+      <RoofNotice notice={roof.notice} lang={lang} />
       {kiteFrom && (
         <Patang
           lang={lang}

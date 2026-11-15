@@ -4,6 +4,7 @@ import { BADI_CHAUPAR, buildBadiChaupar } from '../landmarks/badiChaupar'
 import { buildHawaMahal, HAWA_MAHAL } from '../landmarks/hawaMahal'
 import { buildJantarMantar, JANTAR_MANTAR } from '../landmarks/jantarMantar'
 import { buildTripoliaGate, TRIPOLIA_GATE } from '../landmarks/tripoliaGate'
+import { roofAt } from '../rooftop'
 import type { AABB, BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
 import { centred, createFill, grow, placed, rect, wall, type Facing } from './layout'
 
@@ -317,6 +318,17 @@ const walledCity: DistrictDef = {
   landmarks,
   npcs,
   props,
+  /** Where Johari Bazaar meets the Chaupar, and where the bazaar crosses the lanes east and west. */
+  signposts: [
+    { x: 5.5, z: 18 },
+    { x: -62, z: 7.6 },
+    { x: 62, z: -7.6 },
+  ],
+  /**
+   * A three-storey haveli at the head of Johari Bazaar: its stair faces the Chaupar, and its roof looks across
+   * it to Hawa Mahal.
+   */
+  roof: roofAt(buildings, { x: -12.5, z: 26 }, 1, HAWA_AT),
 }
 
 export default walledCity
