@@ -164,6 +164,7 @@ button {
 }
 
 .hud-top .hud-chip {
+  padding-inline: 9px; /* the place, the weather and "0/10" keep one row beside the toggles on a 360 px phone */
   white-space: nowrap;
 }
 
@@ -2148,7 +2149,7 @@ small.words-hint {
   outline-offset: 3px;
 }
 
-/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 9/9 earns a badge. */
+/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 10/10 earns a badge. */
 /* The place chip opens the city map (M): as slim as the chip it was, with a thumb-sized tap area. */
 button.place-button {
   position: relative;
