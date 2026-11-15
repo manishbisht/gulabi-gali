@@ -1,3 +1,4 @@
+import { ANALYTICS_ON } from '../buildFlags'
 import { t, type Lang, type StringKey } from '../i18n/strings'
 
 interface Props {
@@ -14,6 +15,8 @@ const SECTIONS: [StringKey, StringKey][] = [
   ['privacyStoredTitle', 'privacyStoredPosters'],
   ['privacyStoredTitle', 'privacyStoredTombstone'],
   ['privacyStoredTitle', 'privacyStoredErrors'],
+  // the Web Analytics line, only in a build that counts visits with it
+  ...(ANALYTICS_ON ? ([['privacyStoredTitle', 'privacyAnalytics']] as [StringKey, StringKey][]) : []),
   ['privacyBenchTitle', 'privacyBench'],
   ['privacyReportsTitle', 'profilePrivacy'],
   ['privacyReportsTitle', 'privacyReportsKept'],

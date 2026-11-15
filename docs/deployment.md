@@ -280,7 +280,9 @@ Pages, not proxied by Cloudflare). Copy the `token` value out of the snippet (a 
 it to the `github-pages` environment as the secret `VITE_CF_BEACON_TOKEN`. The next build puts the beacon
 (`https://static.cloudflareinsights.com/beacon.min.js`) in the page and adds exactly two hosts to the CSP:
 `static.cloudflareinsights.com` to `script-src` and `cloudflareinsights.com` to `connect-src`. Without the
-secret (and always in dev and e2e) there is no beacon and the CSP is unchanged. Numbers show in the same Web
+secret (and always in dev and e2e) there is no beacon and the CSP is unchanged. The privacy sheet follows the
+same switch (`__GG_ANALYTICS__`, `src/buildFlags.ts`): only a build with the token has the line saying that
+Cloudflare, an outside company, counts the visits, without cookies. Numbers show in the same Web
 Analytics page, usually within minutes.
 
 **Where errors show.** The page reports what breaks on people's phones to the Worker's own

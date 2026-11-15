@@ -2,7 +2,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import { analyticsCsp, analyticsTag } from './src/analytics.ts'
 
@@ -121,10 +121,14 @@ function contentSecurityPolicy(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), babel({ presets: [reactCompilerPreset()] }), contentSecurityPolicy()],
-  // read by src/net/errorBeacon.ts
-  define: { __GG_BUILD__: JSON.stringify(buildSha()) },
+  define: {
+    // read by src/net/errorBeacon.ts
+    __GG_BUILD__: JSON.stringify(buildSha()),
+    // read by src/buildFlags.ts: the privacy sheet names Web Analytics only in a build that has it
+    __GG_ANALYTICS__: JSON.stringify(!!loadEnv(mode, import.meta.dirname, 'VITE_').VITE_CF_BEACON_TOKEN),
+  },
   build: {
     // The `three` chunk is Three.js itself, about 570 kB minified (~145 kB gzipped), and is
     // split out on purpose so it caches across deploys. It is the one chunk allowed past
@@ -141,4 +145,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

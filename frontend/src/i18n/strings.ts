@@ -482,8 +482,13 @@ export const STRINGS = {
     en: 'After an account is deleted, if a ban, hide, mute or a 14-day request wait was on it, a small record with only the account id and that state stays, so deleting is no way around them.',
   },
   privacyStoredErrors: {
-    hi: 'Jab page pe kuch toot jaata hai, toh uski chhoti si report hamare apne server pe jaati hai: kya toota, phone tha ya computer, Instagram/Facebook ke andar khula tha ya nahi, aur kaun si jagah. Naam, id ya tumhara likha kuch nahi. 14 din mein mit jaati hai. Kitne log aaye, ye hum Cloudflare Web Analytics se ginte hain, bina cookie ke.',
-    en: 'When something breaks on the page, a short report goes to our own server: what broke, phone or computer, whether it opened inside Instagram/Facebook, and which area. No names, ids or anything you typed. It is deleted within 14 days. We count visits with Cloudflare Web Analytics, which uses no cookies.',
+    hi: 'Jab page pe kuch toot jaata hai, toh uski chhoti si report hamare apne server pe jaati hai: kya toota, phone tha ya computer, Instagram/Facebook ke andar khula tha ya nahi, aur kaun si jagah. Aapka naam, id ya aapka likha kuch nahi. 14 din mein mit jaati hai.',
+    en: 'When something breaks on the page, a short report goes to our own server: what broke, phone or computer, whether it opened inside Instagram/Facebook, and which area. No names, ids or anything you typed. It is deleted within 14 days.',
+  },
+  /** Only in a build with Web Analytics (`ANALYTICS_ON`). */
+  privacyAnalytics: {
+    hi: 'Is site pe kitne log aaye, ye hamare liye Cloudflare (ek bahar ki company) ginta hai, Cloudflare Web Analytics se. Isme koi cookie nahi lagti, aur aapka naam ya account use nahi bataya jaata.',
+    en: 'Cloudflare, an outside company, counts the visits to this site for us (Cloudflare Web Analytics). It uses no cookies, and it is not told your name or account.',
   },
   privacyBenchTitle: { hi: 'Bench ki baatein', en: 'Bench talk' },
   privacyBench: {

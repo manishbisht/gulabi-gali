@@ -117,7 +117,9 @@ backend file, then copy it over.
 - The Worker's CORS list (`backend/src/cors.ts`) is the site's origin plus the local dev origins.
 - Cloudflare Web Analytics is opt-in at build time: only when `VITE_CF_BEACON_TOKEN` is set does the build
   put its beacon in `index.html` and add `static.cloudflareinsights.com` (script-src) and
-  `cloudflareinsights.com` (connect-src) to the policy (`src/analytics.ts`). Without it the policy is as above.
+  `cloudflareinsights.com` (connect-src) to the policy (`src/analytics.ts`), and define `__GG_ANALYTICS__`
+  true so the privacy sheet names it (`src/buildFlags.ts`). Without it the policy is as above and the sheet
+  says nothing about it (the bundler drops that line).
 - `__GG_BUILD__` (the git short sha, `GG_BUILD_SHA` overrides) is defined at build time for the error beacon.
 
 ## Phase 2: meeting people
