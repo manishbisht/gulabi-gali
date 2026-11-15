@@ -238,6 +238,15 @@ describe('adaptive quality', () => {
     expect(run(300, 40).tiers).toEqual([]) // 250 ms+ frames are a tab coming back, not a slow device
   })
 
+  it('counts game time as the clamped dts, so slow frames run behind the wall clock', () => {
+    const fast = run(16, 100) // 1.6 s of wall time, all of it game time
+    expect(fast.stage.gameTime()).toBeCloseTo(1.6, 5)
+    fast.stage.dispose()
+    const slow = run(400, 10) // 4 s of wall time, 0.1 s a frame
+    expect(slow.stage.gameTime()).toBeCloseTo(1, 5)
+    slow.stage.dispose()
+  })
+
   it('never steps below the lowest tier, and starts where the session left off', () => {
     const low = run(40, 200, '0')
     expect(low.stage.quality).toBe(0)

@@ -389,6 +389,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     installTestHooks({
       quality: () => stage.quality,
       framesSinceRestore: stage.framesSinceRestore,
+      gameTime: stage.gameTime,
       position: player.position,
       view: player.view,
       teleport: player.teleport,

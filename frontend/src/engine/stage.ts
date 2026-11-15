@@ -21,6 +21,8 @@ export interface Stage {
   capture<T>(read: (canvas: HTMLCanvasElement) => T): T
   /** Frames drawn since the WebGL context was last restored (or since start). */
   framesSinceRestore(): number
+  /** Seconds of game time the frames have run: the sum of their clamped dts, so slow frames count less than the wall clock. */
+  gameTime(): number
   dispose(): void
 }
 
@@ -67,6 +69,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   let lost = false
   let disposed = false
   let sinceRestore = 0
+  let gameClock = 0
   let slow = 0
   let sampled = 0
 
@@ -132,6 +135,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     last = now
     if (lost) return
     const dt = clampDelta(delta)
+    gameClock += dt
     for (const cb of frameListeners) cb(dt)
     renderer.render(scene, camera)
     sinceRestore++
@@ -220,6 +224,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       }
     },
     framesSinceRestore: () => sinceRestore,
+    gameTime: () => gameClock,
     dispose() {
       if (disposed) return
       disposed = true

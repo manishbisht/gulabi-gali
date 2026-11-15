@@ -9,6 +9,8 @@ export interface GgTestApi {
   quality(): 0 | 1 | 2
   /** Frames drawn since the WebGL context was last restored (or since start). */
   framesSinceRestore(): number
+  /** Seconds of game time the frames have run (their clamped dts): what movement is measured against. */
+  gameTime(): number
   /** Where the player stands, in metres. */
   position(): Vec2
   /**

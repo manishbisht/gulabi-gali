@@ -19,14 +19,18 @@ async function underWay(page: Page) {
     .toBeGreaterThan(0.2)
 }
 
-/** Metres a second over the next 400 ms, timed in the page. */
+/**
+ * Metres a second of game time over the next 400 ms, timed in the page. Each frame's dt is clamped (0.1 s), so
+ * on a slow machine game time runs behind the wall clock; dividing by wall seconds would make a pace depend on
+ * the frame rate it happened to be measured at.
+ */
 const pace = (page: Page) =>
   page.evaluate(async () => {
     const a = window.__gg.position()
-    const t = performance.now()
+    const t = window.__gg.gameTime()
     await new Promise((r) => setTimeout(r, 400))
     const b = window.__gg.position()
-    return Math.hypot(b.x - a.x, b.z - a.z) / ((performance.now() - t) / 1000)
+    return Math.hypot(b.x - a.x, b.z - a.z) / (window.__gg.gameTime() - t)
   })
 
 /** Waits for the camera to finish easing into its zoom, and gives back where it settled. */
