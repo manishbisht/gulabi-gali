@@ -290,7 +290,12 @@ The client has the same check for a hint while typing (`filter/WordsHint`); the 
 Symmetric and total: the two never see each other in districts, person cards, requests or chats. A block deletes
 pending requests between them, ends any match (through `endMatch`, which holds the chat as evidence first) and
 stands the blocked person up from a shared bench. The blocked person is told nothing. The `blocks` row keeps the
-blocked person's first name from block time, so the block list never shows live profile data.
+blocked person's first name from block time, so the block list never shows live profile data. A block can name
+a person (`{id}`, from a person card or a chat) or a poster (`{poster}`): the poster's owner, found while the
+poster is in D1 and for 7 days after it comes down (`poster_owners`, below); a poster nobody remembers is a 404
+`gone`, and the page says the block did not happen. The block list (`GET /api/blocks`) never carries an id: each
+block has a random `handle`, which is all unblocking (`DELETE /api/blocks/:handle`) and reporting from the list
+(`{kind: 'person', targetId: handle, blocked: true}`) take. So a poster owner's id is never sent to anyone.
 
 ### Live changes reach live sockets (`refresh.ts`)
 
@@ -345,7 +350,7 @@ banned, hidden or deleted.
 `endMatch(..., 'delete')`, holding its last 30 messages as evidence, and the other person hears `unmatched`.
 Then one D1 batch deletes the profile, every pending or accepted request in either direction (`ignored` ones
 stay with their reason blanked: they are the 14-day cooldowns, which the cron sweeps), the invites they own,
-the blocks they made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is
+their posters (and what `poster_owners` remembers of them), the blocks they made and their counters, sets `reporter = 'deleted'` on reports they filed (their evidence is
 kept), and deletes the `users` row. Blocks others made against them stay (their saved name blanked), so they
 still protect their owners if the id returns; reports about them stay until closed. The `users` row stays as a
 tombstone (verified cleared) while a ban, a hide (or enough counted reports to hide them, which hides them
@@ -363,7 +368,7 @@ message for autos. Everything else is local to the page.
 
 | What           | Frontend                                                                                             | Server                                                             |
 | -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved`, D1 `posters` |
+| Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved/posterHidden`, D1 `posters`, `poster_owners` |
 | Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                         |
 | Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                               |
 | Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                               |
@@ -380,8 +385,8 @@ sky with its festival effects) and disposes them on leave, as for phase 2.
 flowchart LR
   B["Browser"] -->|"GET /api/districts/:id/posters"| W["Worker: posters.ts"]
   B -->|"POST /api/posters, DELETE /api/posters/:id"| W
-  W --> D1[("D1: posters, reports.poster_id")]
-  W -->|"RPC posterAdded / posterRemoved"| DD["DistrictDO"]
+  W --> D1[("D1: posters, poster_owners, reports.poster_id")]
+  W -->|"RPC posterAdded / posterRemoved / posterHidden"| DD["DistrictDO"]
   DD -->|"WS: poster add / remove"| B
   A["Admin page"] -->|"DELETE /api/admin/posters/:id"| W
   C["Cron"] -->|"purgePosters"| D1
@@ -391,19 +396,33 @@ Each district has a few `poster-wall` props with 6 slots each (`POSTER_WALLS`, `
 A poster is 10 to 140 characters, word-filtered, with an optional `when` up to 30 days ahead; it comes down 6 h
 after its `when`, or 7 days after pinning. Only a verified resident others can see may pin, not while muted,
 at most 2 up at once and 5 pins a day (`allow`, refunded for a pin that lost a race for its slot). On a full
-wall the oldest poster that is not the pinner's goes, a hidden one first. The list is public (cached 30 s for
-a signed-out caller); a signed-in caller's list leaves out anyone blocked either way and marks their own
-`mine`. A pin, a take-down, a ban, a deletion, a hide and the cron's sweep of expired posters each tell the
-district, which pushes `poster` add or remove to everyone connected (never to anyone blocked either way with
-the owner). The page draws each wall as one canvas texture.
+wall the oldest poster that is not the pinner's goes, a hidden one first. The pin's own write is guarded by the
+pinner still having room and still being verified and visible, so a ban, hide or unverify that lands mid-pin
+never puts a poster up. The list is public: signed out it is served through the edge cache (`caches.default`,
+one entry per district whatever the query string, 30 s, dropped at once at the location that changed a wall);
+a signed-in caller's list leaves out anyone blocked either way and marks their own `mine`, and a token that does
+not verify is a 401 (the page keeps the walls it has), never the public list. A pin, a take-down, a ban, a
+deletion, a hide and the cron's sweep of expired posters each tell the district, which pushes `poster` add or
+remove to everyone connected (never to anyone blocked either way with the owner). The page draws each wall as
+one canvas texture.
+
+Every delete from `posters` (taken down, replaced on a full wall, expired, an admin, a ban, a deletion) is
+remembered by a trigger in `poster_owners` (poster id, owner, `removed_at`), so a block from a poster card that
+was open when the poster came down still finds its owner. The cron forgets those rows after 7 days, and an
+account deletion forgets its own at once.
 
 Moderation: a poster report (kind `poster`) is filed about the poster's owner, with `poster_id` naming the
 poster, so the admin queue shows it with every other report about that person, the poster's text, wall and
 `when` as its evidence. Three distinct reporters who are verified, not banned, at least 7 days old and not
 blocked by the owner hide the poster off every wall until an admin acts (`posterAutoHide`); anyone else's
-report is queued and does not count, and a poster report never counts toward hiding a person. An admin takes a
-poster down from the report (`DELETE /api/admin/posters/:id`), which also closes every open report on it. A
-ban, an account deletion and a hide take the person's posters down too.
+report is queued and does not count, and a poster report never counts toward hiding a person. A hidden poster
+still counts toward its owner's two: their own list, and their own sockets (`DistrictDO.posterHidden`), keep it,
+marked `hidden`, so they see it greyed with a note and can take it down; nobody else is ever sent it. The queue
+says whether each reported poster is up, hidden or gone (`posterState`). An admin takes a poster down from the
+report (`DELETE /api/admin/posters/:id`), which also closes every open report on it; dismissing the last open
+report on a hidden poster, when none was actioned, puts it back up and pushes it to its district as a fresh pin
+would (`unhidePoster`). A ban and an account deletion take the person's posters down; a hide takes them off
+everyone's walls but their own.
 
 ### The client-only extras: nothing is broadcast
 

@@ -212,7 +212,10 @@ OWNER_CONTACT frontend/src/i18n/strings.ts` must find nothing afterwards (the te
 unchanged. The poster pin limit (5 a day per account) is a D1 counter, like the phase 3 per-account limits, and
 pins also pass through the existing `WRITES_LIMITER`. Posters are text only: no images, so no storage bucket.
 
-**Migration `0003_posters.sql`.** It adds the `posters` table and `reports.poster_id`, additive like `0002`. The
+**Migration `0003_posters.sql`.** It adds the `posters` table and `reports.poster_id`; `poster_owners` (a 7-day
+memory of who pinned a poster that came down, filled by a trigger on every delete from `posters`, so a block from
+a poster that went meanwhile still works); and a random `handle` on each `blocks` row (the block list shows that,
+never the blocked person's id). Additive like `0002`. The
 deploy job applies it before the Worker that needs it ships (see section 3); by hand it is the same
 `npx wrangler d1 migrations apply gulabi-gali --remote` from `backend/`. Once deployed it is frozen: new schema
 goes in `0004` and later.
@@ -221,8 +224,18 @@ goes in `0004` and later.
 poster's owner, showing the poster's text, district, wall and time. **Take the poster down** removes it from
 every wall at once and closes every open report on it; banning the owner takes all their posters down too.
 Three reports on one poster from verified members whose accounts are at least a week old hide it on their own
-until you act; reports from anyone else are queued but do not hide it. Expired posters are deleted by the same
-15-minute cron as everything else.
+until you act; reports from anyone else are queued but do not hide it. Each poster report says whether its
+poster is up, hidden or gone. A hidden poster still counts toward its owner's two; they see it greyed on their
+own walls and can take it down, and nobody else sees it. **Dismissing** its last open report puts it back up on
+every wall (unless you actioned one of its reports: then it stays hidden until it expires or comes down).
+Expired posters, and the 7-day memory of who pinned posters that came down, are deleted by the same 15-minute
+cron as everything else.
+
+**The public poster list is edge-cached.** Signed out, `GET /api/districts/:id/posters` is served through the
+Cache API for 30 s per district (keyed by district on an internal host, whatever the query string), so it cannot
+be used to hammer D1. A change drops the entry at once in the location that made it; elsewhere a hidden or removed
+poster drops out within the 30 s. On a `workers.dev` route the Cache API does nothing (every call reads D1); on the
+custom domain it works.
 
 **The extras need nothing at deploy.** Autos, the metro ride, street animals, processions, the kite fight and
 the bandar run in the page only and are not sent to the Worker (an auto driver's moves carry a flag, so the
@@ -235,6 +248,10 @@ already send.
       same district sees it appear without a reload.
 - [ ] Report it from another account, see it on the admin page with its text and wall, take it down, and check
       it leaves the wall in the second browser and the report is closed.
+- [ ] Hide a test poster with three week-old verified reporters (or set `hidden = 1` on its row): its owner sees
+      it greyed and can take it down; dismissing its reports on the admin page puts it back up.
+- [ ] Block from a poster card, then take that poster down from its owner's account before confirming: the
+      block still goes through, and the blocker's block list shows only the first name.
 - [ ] Look at the Galta bandar on a phone, near Jantar Mantar with a safa or cap on (its rooftop run has only
       been checked in tests), and switch it off with the 🐒 chip.
 - [ ] Drive an auto with two accounts in the district: the other sees the driver sitting in an auto.
@@ -268,9 +285,13 @@ running between the two steps works against the migrated database.
 - `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend`: creates the local tables (once, and after
   each new migration).
 - After pulling phase 3, run `rm -rf backend/.wrangler/state` once, then the migrations command above. After
-  pulling phase 4 only the migrations command is needed (`0003` is additive).
+  pulling phase 4 only the migrations command is needed (`0003` is additive). `0003` was edited in place before
+  it was ever deployed (the poster tombstones and block handles): a local database that applied an earlier
+  `0003` will not apply it again, so reset it once (`rm -rf backend/.wrangler/state`, then the migrations
+  command).
 - `npm run dev -w backend -- --var DEV_AUTH:1`: the Worker on `http://127.0.0.1:8787`, with name-only dev
-  sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health` and the live sockets,
+  sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health`, the word list, the
+  waitlist, each district's poster list (`/api/districts/:id/posters`, public by design) and the live sockets,
   which then treat you as a ghost.
 - `VITE_DEV_AUTH=1 npm run dev -w frontend` shows the dev sign-in sheet. Never for a production build.
 - `npm run dev -w frontend`: Vite on `http://localhost:5173`, which talks to `127.0.0.1:8787` by default.

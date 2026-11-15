@@ -16,7 +16,7 @@ interface Props {
   stamps: string
   lang: Lang
   onLang: (l: Lang) => void
-  /** The sound switch (the horn is the only sound so far): whether it is on, and how to flip it. */
+  /** The sound switch (the horn, the metro's arrival chime and the "Wo kaata" chirp): whether it is on, and how to flip it. */
   sound?: { on: boolean; onToggle: () => void }
   /** The monkey's switch, a small chip for the Walled City only: whether the monkey is off, and how to flip it. */
   bandar?: { off: boolean; onToggle: () => void }
