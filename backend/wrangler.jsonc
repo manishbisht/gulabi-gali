@@ -43,6 +43,9 @@
     // Every API write (POST, PUT, DELETE): a flood ceiling, not a quota. Carriers put many people behind one
     // address, and junk posts before sign-in count too, so it is roomy; per-account limits do the fine work.
     { "name": "WRITES_LIMITER", "namespace_id": "51003", "simple": { "limit": 300, "period": 60 } },
+    // Error reports from pages (POST /api/errors, no sign-in): checked before any D1 write, so a flood costs
+    // nothing; the D1 per-address count and the city-wide hourly ceiling come after it (src/errors.ts).
+    { "name": "ERRORS_LIMITER", "namespace_id": "51004", "simple": { "limit": 20, "period": 60 } },
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
   // The most live sockets one district holds (ghosts included), and from one address or IPv6 /64; and the most

@@ -1,6 +1,6 @@
 import { DISTRICT_IDS } from './district'
 import type { Env } from './env'
-import { DAY_MS } from './limits'
+import { allow, DAY_MS, rateLimited } from './limits'
 import type { AdminErrorGroup, ClientErrorWhere, DistrictId, UaApp, UaDevice } from './protocol'
 
 /*
@@ -16,6 +16,12 @@ export const ERROR_MAX_BODY = 4 * 1024
 export const ERROR_LIMITS = { msg: 300, stack: 1024, build: 40 } as const
 /** Reports per address: 20 a minute, counted in D1 like the invite limit (see `ipWindowLimit`). */
 export const ERROR_IP_LIMIT = { perWindow: 20, windowMs: 60_000, bucket: 'errors-ip' } as const
+/**
+ * The most reports the whole city stores in an hour, from every address together (counted in D1 under `global`,
+ * after the per-address limits and only for a well-formed report). With the 14-day purge this bounds
+ * `client_errors` to about 100,000 rows (some 150 MB at the most) however many addresses a flood comes from.
+ */
+export const ERROR_GLOBAL_LIMIT = { perWindow: 300, windowMs: 3600_000, bucket: 'errors-all' } as const
 /** The cron deletes reports older than this. */
 export const ERROR_KEEP_MS = 14 * DAY_MS
 /** The admin page lists this many fingerprints, the most frequent first. */
@@ -80,13 +86,15 @@ function parse(raw: unknown): Clean | null {
 }
 
 /**
- * `POST /api/errors` (the caller has already counted it against `ERROR_IP_LIMIT` and read at most
- * `ERROR_MAX_BODY`; `raw` is null for a body that was not JSON or was too big). An empty 204, or a 400: never
- * anything from the body.
+ * `POST /api/errors` (the caller has already asked `ERRORS_LIMITER`, counted it against `ERROR_IP_LIMIT` and
+ * read at most `ERROR_MAX_BODY`; `raw` is null for a body that was not JSON or was too big). Counted against
+ * `ERROR_GLOBAL_LIMIT`, then stored. An empty 204, a 400 or a 429: never anything from the body.
  */
 export async function recordClientError(env: Env, raw: unknown, now = Date.now()): Promise<Response> {
   const report = parse(raw)
   if (!report) return Response.json({ error: 'invalid' }, { status: 400 })
+  const { perWindow, windowMs, bucket } = ERROR_GLOBAL_LIMIT
+  if (!(await allow(env, 'global', bucket, perWindow, windowMs, now))) return rateLimited(windowMs, now)
   await env.DB.prepare(
     `INSERT INTO client_errors (fingerprint, place, msg, stack, ua, build, district, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

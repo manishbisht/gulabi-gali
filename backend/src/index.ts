@@ -130,9 +130,11 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
   const { pathname } = url
   // A page reporting an error it caught (no sign-in; see errors.ts). Ahead of the writes limit, with its own
   // per-address allowance: a page that keeps failing must not use up the writes of everyone behind its address.
+  // The binding first, so a flood is refused before anything is written to D1; then the D1 count per address.
   if (pathname === '/api/errors') {
     if (method !== 'POST') return Response.json({ error: 'not found' }, { status: 404 })
     return (
+      (await ipLimit(env, env.ERRORS_LIMITER, request)) ??
       (await ipWindowLimit(env, request, ERROR_IP_LIMIT)) ??
       recordClientError(env, await readJson(request, ERROR_MAX_BODY))
     )

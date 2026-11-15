@@ -13,6 +13,8 @@ export interface Env {
   SOCKETS_LIMITER?: RateLimit
   SIGNIN_LIMITER?: RateLimit
   WRITES_LIMITER?: RateLimit
+  /** `POST /api/errors` per address, asked before anything touches D1 (see `errors.ts`). */
+  ERRORS_LIMITER?: RateLimit
   /** The API's own origin: the edge-cache key of the posters' signed-out lists (see `wallKey`). */
   API_ORIGIN?: string
   CLERK_SECRET_KEY?: string

@@ -467,9 +467,11 @@ names a person.
    message) once and at most 5 in all. It goes by `navigator.sendBeacon` as `text/plain` (a simple request: no
    preflight, and it survives the page closing), falling back to a `keepalive` fetch; it never throws.
 3. **Taken in.** `POST /api/errors` needs no sign-in. It is handled before the writes limiter (a failing page
-   must not use up the writes of everyone behind its address) with its own D1-counted allowance of 20 a minute
-   per address (`ipWindowLimit`, bucket `errors-ip`), reads at most 4 kB, takes only the known fields and
-   values, scrubs URLs and emails again, cuts each field to size and answers an empty 204 (400 for anything
+   must not use up the writes of everyone behind its address) with its own allowance of 20 a minute per address:
+   the `ERRORS_LIMITER` binding first (a refused flood costs no D1 write), then a D1 count (`ipWindowLimit`,
+   bucket `errors-ip`). A well-formed report then counts against a city-wide ceiling of 300 stored an hour
+   (`ERROR_GLOBAL_LIMIT`, D1 under `global`), which bounds the table whatever the number of addresses. It reads at
+   most 4 kB, takes only the known fields and values, scrubs URLs and emails again, cuts each field to size and answers an empty 204 (400 for anything
    that is not a report, 429 over the limit): nothing from the body is ever sent back.
 4. **Kept.** One row per report in `client_errors` (migration `0004`), with a `fingerprint`: 16 hex characters
    of SHA-256 over `where` and the message with its digits taken out, so the same error from different chunks

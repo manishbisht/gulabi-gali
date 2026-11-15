@@ -1,7 +1,15 @@
 import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from '../src/env'
-import { ERROR_IP_LIMIT, ERROR_KEEP_MS, ERROR_LIMITS, purgeClientErrors } from '../src/errors'
+import {
+  ERROR_GLOBAL_LIMIT,
+  ERROR_IP_LIMIT,
+  ERROR_KEEP_MS,
+  ERROR_LIMITS,
+  purgeClientErrors,
+} from '../src/errors'
+import worker from '../src/index'
+import { windowStart } from '../src/limits'
 import type { AdminErrorGroup, ClientErrorReport } from '../src/protocol'
 import { api, login } from './helpers'
 
@@ -122,6 +130,51 @@ describe('POST /api/errors', () => {
     expect(over.status).toBe(429)
     expect((await send(report(), '203.0.113.51')).status).toBe(204)
     expect((await rows()).results).toHaveLength(21)
+  })
+
+  it('asks the ERRORS_LIMITER binding first: a flood it refuses costs no D1 write at all', async () => {
+    const seen: string[] = []
+    const refusing = {
+      limit: async ({ key }: { key: string }) => (seen.push(key), { success: false }),
+    } as RateLimit
+    const counters = () =>
+      testEnv.DB.prepare("SELECT COUNT(*) AS n FROM counters WHERE user_id = 'ip:203.0.113.60'").first<{
+        n: number
+      }>()
+    const res = await worker.fetch(
+      new Request(`${API}/api/errors`, {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': '203.0.113.60' },
+        body: JSON.stringify(report()),
+      }),
+      { ...testEnv, ERRORS_LIMITER: refusing },
+    )
+    expect(res.status).toBe(429)
+    expect(seen).toEqual(['203.0.113.60'])
+    expect((await counters())!.n).toBe(0)
+    expect((await rows()).results).toHaveLength(0)
+  })
+
+  it('stops storing once the whole city has sent its hourly ceiling, whatever the address', async () => {
+    expect(ERROR_GLOBAL_LIMIT.windowMs).toBe(3600_000)
+    const now = Date.now()
+    await testEnv.DB.prepare(
+      'INSERT OR REPLACE INTO counters (user_id, bucket, window_start, n) VALUES (?, ?, ?, ?)',
+    )
+      .bind(
+        'global',
+        ERROR_GLOBAL_LIMIT.bucket,
+        windowStart(now, ERROR_GLOBAL_LIMIT.windowMs),
+        ERROR_GLOBAL_LIMIT.perWindow - 1,
+      )
+      .run()
+    expect((await send(report({ msg: 'the last one this hour' }))).status).toBe(204)
+    expect((await send(report({ msg: 'one too many' }), '203.0.113.61')).status).toBe(429)
+    expect((await send(report({ msg: 'and from loopback' }))).status).toBe(429)
+    expect((await rows()).results.map((r) => r.msg)).toEqual(['the last one this hour'])
+    // junk is refused before it can use up the ceiling
+    expect((await send('not json')).status).toBe(400)
+    await testEnv.DB.prepare('DELETE FROM counters WHERE user_id = ?').bind('global').run()
   })
 
   it('groups the same error with different numbers under one fingerprint', async () => {

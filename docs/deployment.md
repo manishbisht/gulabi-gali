@@ -146,8 +146,9 @@ numbered files in `backend/migrations/`, applied with the same command.
   it with `clerk:`. Never a `dev:` id.
 - `MAX_LIVE` (var, default `"300"`): residents shown at once; the rest wait in line. `MAX_IP_SOCKETS` (var,
   default `"24"`): live sockets from one address. Both are in `backend/wrangler.jsonc`; change and deploy.
-- Rate limits: `SOCKETS_LIMITER`, `SIGNIN_LIMITER` and `WRITES_LIMITER` use namespace ids `51001`, `51002` and
-  `51003`. They only have to be unique within the Cloudflare account; change them if something else uses them.
+- Rate limits: `SOCKETS_LIMITER`, `SIGNIN_LIMITER`, `WRITES_LIMITER` and `ERRORS_LIMITER` use namespace ids
+  `51001`, `51002`, `51003` and `51004`. They only have to be unique within the Cloudflare account; change them if
+  something else uses them.
 
 **The first verified member.** Nobody can send requests until someone is verified, and an invite needs a
 verified member to give it. After the first deploy, sign in, open `#/admin`, look yourself up and press
@@ -289,7 +290,12 @@ where it was caught, mobile or desktop and whether it was inside Instagram or Fa
 sha and the district: no account id, name, email or typed text, and URLs lose their query strings (the
 Worker scrubs them again). A page sends at most 5, each distinct error once. The Worker takes 20 a minute per
 address and bodies of at most 4 kB, keeps them in D1 (`client_errors`, migration `0004`) and the 15-minute cron
-deletes them after 14 days. Read them on the admin page (`#/admin`), section **Errors**: the 20 most frequent
+deletes them after 14 days. The per-address limit is asked of the `ERRORS_LIMITER` rate-limiting binding first
+(namespace `51004` in `backend/wrangler.jsonc`, 20 a minute; nothing to create, it ships with the Worker), so a
+flood is refused before anything is written to D1; then a D1 count per address, then a city-wide ceiling of 300
+stored reports an hour from all addresses together (`ERROR_GLOBAL_LIMIT`). With the 14-day purge that keeps the
+table to about 100,000 rows at the very most; past the ceiling reports are refused (429) until the hour turns, so
+in a real outage the admin page still has the hour's worth to group. Read them on the admin page (`#/admin`), section **Errors**: the 20 most frequent
 errors, each with its count, when it was last seen, the browser kinds it came from, the build, the district
 and a sample stack (Refresh asks again). Nothing new to set: no secret, var or binding.
 
