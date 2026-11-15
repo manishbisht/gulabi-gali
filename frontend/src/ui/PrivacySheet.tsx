@@ -16,6 +16,7 @@ const SECTIONS: [StringKey, StringKey][] = [
   ['privacyStoredTitle', 'privacyStoredPosters'],
   ['privacyStoredTitle', 'privacyStoredTombstone'],
   ['privacyStoredTitle', 'privacyStoredErrors'],
+  ['privacyStoredTitle', 'privacyStoredPush'],
   // the Web Analytics line, only in a build that counts visits with it
   ...(ANALYTICS_ON ? ([['privacyStoredTitle', 'privacyAnalytics']] as [StringKey, StringKey][]) : []),
   ['privacyBenchTitle', 'privacyBench'],

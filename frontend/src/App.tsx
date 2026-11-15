@@ -10,6 +10,7 @@ import { noteDistrict } from './net/errorBeacon'
 import { useRateNotice } from './net/useRateNotice'
 import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
+import { usePush } from './push/usePush'
 import { VisibilityChip } from './ui/VisibilityChip'
 import { loadOrCreateLook, lookFromWire } from './player/avatar'
 import { useLang } from './i18n/lang'
@@ -255,6 +256,18 @@ export default function App() {
   if (!residentId && connOpen) setConnOpen(false)
   if (!residentId && inviteOpen) setInviteOpen(false)
   const connShown = connOpen && !!residentId
+  /** Push notifications: a tapped one opens the inbox (once there is a resident), and each visit refreshes it. */
+  const push = usePush({
+    ready: auth.ready,
+    signedIn: auth.signedIn,
+    resident: !!residentId,
+    token: auth.token,
+    lang,
+  })
+  if (push.inboxAsked && residentId) {
+    push.inboxDone()
+    setConnOpen(true)
+  }
   // C opens and closes Connections, unless a text field has the keys
   useEffect(() => {
     if (!residentId) return

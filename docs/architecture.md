@@ -415,15 +415,15 @@ The plan is `docs/superpowers/plans/2026-11-14-phase-4-extras.md`; the schema is
 `backend/migrations/0003_posters.sql`. Two pieces touch the server: the posters, and one flag on the `move`
 message for autos. Everything else is local to the page.
 
-| What           | Frontend                                                                                             | Server                                                             |
-| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| What           | Frontend                                                                                             | Server                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved/posterHidden`, D1 `posters`, `poster_owners` |
-| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                         |
-| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                               |
-| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                               |
-| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                         |
-| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                               |
-| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                               |
+| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                                                       |
+| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                                                             |
+| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                                                             |
+| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                                                       |
+| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                                                             |
+| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                                                             |
 
 `world/session.ts` builds each district's systems on enter (animals, the bandar, autos, the poster walls, the
 sky with its festival effects) and disposes them on leave, as for phase 2.
@@ -582,3 +582,51 @@ landmark where the auto-taxi sets riders down (in its ring, so its card opens), 
 point round a bench or tapri within reach to sit, or in front of a poster wall, facing it with the view turned
 to match. A place the district does not have is the usual spawn. `placeLink.test.ts` checks every place in
 every district round-trips to a clear spot in reach.
+
+## Launch and grow
+
+### Push notifications (`backend/src/push.ts`, `backend/src/webpush.ts`, `frontend/src/push/`, `frontend/public/sw.js`)
+
+```mermaid
+flowchart LR
+  API["Worker: POST /api/requests,<br/>POST /api/matches/:id/messages"] -->|"RPC notify(n, userId)"| IB["InboxDO"]
+  IB -->|"a socket is open"| WS["the open page<br/>(no push)"]
+  IB -->|"none open: pushTo"| D1[("D1: push_subs")]
+  IB -->|"aes128gcm + VAPID"| PS["the browser's push service<br/>(FCM, Mozilla, Apple, WNS)"]
+  PS --> SW["sw.js: 'Gulabi Gali · Ek nayi request'"]
+  SW -->|"tap"| APP["/?inbox=1, or a message to the open page:<br/>Mulaqaatein opens"]
+```
+
+Opt-in per device, from the profile sheet (`PushToggle`, residents only). `pushSupport` decides what the sheet
+shows: nothing in a build without `VITE_VAPID_PUBLIC_KEY`; an explanation instead of the switch in an in-app
+browser (Instagram has no push), on an iPhone or iPad outside an installed home-screen app (Safari gives push only
+there), or where the Push API is missing. Switching on asks permission, registers `/sw.js` (a static file served
+from the site's own origin; the CSP's `worker-src 'self'` covers it; it caches nothing and has no fetch handler),
+subscribes with the VAPID public key and sends the subscription to `PUT /api/me/push` with the language. Each
+visit re-sends it (`syncPush`: the language now, the endpoint the browser has now, a new subscription if the key
+changed or the browser dropped it, and off if the permission was taken back). Switching off and signing out
+(`signOutStoppingPush`, wrapped round every mode's `signOut`) send `DELETE /api/me/push` while the token still
+works, then unsubscribe; a page that finds nobody signed in (the session ended elsewhere) unsubscribes too.
+
+The Worker side (`push.ts`): `push_subs` (`0006_push.sql`) is keyed by endpoint, so a browser signed in as
+someone else moves to them; at most 5 devices a person. Endpoints must be https on the browsers' push services
+(FCM, `*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`; loopback http only under
+`DEV_AUTH`), so the Worker never posts to an address of a client's choosing. `PUT` is residents only, 409 `key`
+when the browser subscribed with another server key, 404 `off` without VAPID; both routes count against
+`push-sub` (30 an hour). `InboxDO.notify` sends a notice to the open sockets and, only when none is open, the
+notice is a `request` or a `message`, and the caller vouched for the sender (`notify(..., { push })`: a
+request's sender has passed `visibleRow`; a message pushes only if its sender passes `visibleRow` now, so a
+hidden person's messages reach an open inbox but never a lock screen), calls `pushTo`: nothing for a banned person or past the per-person limit
+(`push-minute` 1, `push-hour` 10, counted with `allow`), else one push per device, `TTL` a day, `Topic` the kind
+(so pending ones collapse at the push service). The payload is `{t, lang}` and nothing else, so the lock screen
+can never show a name or a message, and `sw.js` shows only its own words (`pushTitle`, `pushRequest`,
+`pushMessage`, checked against `strings.ts` by `sw.test.ts`), tagged per kind so a newer one replaces the last.
+A 404 or 410 from the push service deletes the row; account deletion deletes them all in its batch.
+
+`webpush.ts` is RFC 8291 (`aes128gcm`, one record) and RFC 8292 (an ES256 JWT for the endpoint's origin, 12
+hours) on WebCrypto alone; `test/webpush.test.ts` checks it byte for byte against RFC 8291's worked example and
+by round trip with a decrypting helper. The private key is the Worker secret `VAPID_PRIVATE_JWK` and the public
+key the site's `VITE_VAPID_PUBLIC_KEY`, both set by `scripts/vapid-setup.mjs`, which the owner runs (see
+deployment.md); either missing turns the feature off. Tests make their own pair in memory (`backend/vitest.config.ts`,
+`frontend/playwright.config.ts`); the e2e spec (`tests/push.spec.ts`) stands in for the browser's push service
+with a stub `PushManager` and a fake push service on this machine, and decrypts what the Worker sends.

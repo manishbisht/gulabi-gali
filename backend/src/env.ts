@@ -35,4 +35,11 @@ export interface Env {
   MAX_IP_SOCKETS?: string
   /** The most residents seen at once across the city (see `GateDO`). A number; 300 when unset. */
   MAX_LIVE?: string
+  /**
+   * Push notifications' VAPID private key: a P-256 private JWK (`d`, `x`, `y`) as JSON. A secret set by
+   * `scripts/vapid-setup.mjs`, never printed, never in wrangler.jsonc. Unset: push is off (see `push.ts`).
+   */
+  VAPID_PRIVATE_JWK?: string
+  /** Who sends the pushes, for the push services (an https: URL). A var in wrangler.jsonc. Unset: push is off. */
+  VAPID_SUBJECT?: string
 }

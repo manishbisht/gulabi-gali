@@ -359,6 +359,46 @@ export async function deleteMyAccount(token: string): Promise<boolean> {
   }
 }
 
+/** A device's push subscription as `PUT /api/me/push` takes it (see src/push/push.ts). */
+export interface PushSubscriptionInput {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  lang: 'hi' | 'en'
+  /** The server key the browser subscribed with, so a server with another one can say so (409 `key`). */
+  server: string
+}
+
+/**
+ * `PUT /api/me/push`: the status (204 when stored), or 0 when the API could not be reached. Never rejects. Plain
+ * `fetch`, like the other push call: a visit refreshes it in the background, and the switch has its own line.
+ */
+export async function putPushSubscription(token: string, input: PushSubscriptionInput): Promise<number> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me/push`, {
+      method: 'PUT',
+      headers: json(token),
+      body: JSON.stringify(input),
+    })
+    return res.status
+  } catch {
+    return 0
+  }
+}
+
+/** `DELETE /api/me/push`: true once this device's subscription is off the server. Never rejects. */
+export async function deletePushSubscription(token: string, endpoint: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me/push`, {
+      method: 'DELETE',
+      headers: json(token),
+      body: JSON.stringify({ endpoint }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 /** True once the block the list calls `handle` is lifted (or was never one of yours). Never rejects. */
 export async function unblockPerson(token: string, handle: string): Promise<boolean> {
   try {

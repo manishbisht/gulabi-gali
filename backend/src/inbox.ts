@@ -4,6 +4,7 @@ import { allowedOrigin } from './cors'
 import { WHO_HEADER } from './district'
 import type { Env } from './env'
 import { activeRow } from './profiles'
+import { isPushKind, pushTo } from './push'
 import type { RefreshWhy } from './refresh'
 import { LIVE_CLOSE, type InboxNotice } from './protocol'
 
@@ -27,12 +28,19 @@ export const floating: Later = (work) => void work
 export const inboxOf = (env: Env, userId: string) => env.INBOX.get(env.INBOX.idFromName(`inbox:${userId}`))
 
 /**
- * Tells `userId`'s open inbox sockets about `n`, over RPC. It never throws or rejects: a notice is a nudge to
- * refetch, and the request that caused it has already succeeded, so a failure here is only logged.
+ * Tells `userId`'s open inbox sockets about `n`, over RPC. With `push` (the caller has checked that whoever it
+ * is from may be notified about: someone others can see, never a hidden person) and none open, a request or a
+ * message pushes to their devices instead (see `InboxDO.notify`). It never throws or rejects: a notice is a
+ * nudge to refetch, and the request that caused it has already succeeded, so a failure here is only logged.
  */
-export async function notify(env: Env, userId: string, n: InboxNotice): Promise<void> {
+export async function notify(
+  env: Env,
+  userId: string,
+  n: InboxNotice,
+  { push = false }: { push?: boolean } = {},
+): Promise<void> {
   try {
-    await inboxOf(env, userId).notify(n)
+    await inboxOf(env, userId).notify(n, push ? userId : undefined)
   } catch (err) {
     console.error('inbox: notify failed', err)
   }
@@ -71,7 +79,8 @@ interface Tab {
 /**
  * One person's inbox (`inbox:<userId>`): their open sockets, told about requests, matches and messages as they
  * happen. It keeps no storage. Sockets hibernate, everything a socket needs lives in its attachment, and a
- * notice to an object with no sockets is simply dropped: the client fetches lists when it opens.
+ * notice to an object with no sockets is dropped (the client fetches lists when it opens), except that a
+ * request or a message then pushes to the person's subscribed devices (`pushTo`, which names nobody).
  */
 export class InboxDO extends DurableObject<Env> {
   private tabs = new WeakMap<WebSocket, Tab>()
@@ -110,8 +119,13 @@ export class InboxDO extends DurableObject<Env> {
     for (const ws of this.sockets()) this.drop(ws, LIVE_CLOSE.banned, 'not a resident')
   }
 
-  /** RPC: sends `n` to every open socket, serialised once. Answers how many it went to. */
-  notify(n: InboxNotice): number {
+  /**
+   * RPC: sends `n` to every open socket, serialised once. Answers how many it went to. With none open and
+   * `pushTo` given (this object's person, passed only when the sender may be notified about: see `notify`), a
+   * request or a message is pushed to their devices instead: an open inbox already shows it, so a push then
+   * would only buzz twice.
+   */
+  async notify(n: InboxNotice, pushFor?: string): Promise<number> {
     const text = JSON.stringify(n)
     let sent = 0
     for (const ws of this.sockets()) {
@@ -122,6 +136,7 @@ export class InboxDO extends DurableObject<Env> {
         // Closing under us: its close handler will tidy up.
       }
     }
+    if (sent === 0 && pushFor && isPushKind(n.t)) await pushTo(this.env, pushFor, n.t)
     return sent
   }
 

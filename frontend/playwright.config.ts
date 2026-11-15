@@ -1,8 +1,25 @@
 import { defineConfig } from '@playwright/test'
+import { generateKeyPairSync } from 'node:crypto'
 // The e2e sign-in switch, named once: the Worker takes it as a wrangler var, the bundle as a Vite env.
 // Neither is ever set in a shipped config; this file is the only place that turns them on. The admin list
 // makes whoever dev-logs in as "Owner" (`dev:owner`) the moderator, for the admin page's e2e.
 const DEV_AUTH = { worker: '--var DEV_AUTH:1 --var ADMIN_USER_IDS:dev:owner', bundle: 'VITE_DEV_AUTH=1' }
+
+/**
+ * Push notifications' VAPID pair for this run only: made here in memory, handed to the Worker (its private
+ * JWK) and the bundle (its public key), and never written anywhere. Production's pair is the owner's
+ * (scripts/vapid-setup.mjs). Pushes go to a fake push service the spec runs (tests/push.spec.ts).
+ */
+function testVapid(): { worker: string; bundle: string } {
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+  const { kty, crv, d, x, y } = privateKey.export({ format: 'jwk' })
+  const point = publicKey.export({ format: 'der', type: 'spki' }).subarray(-65)
+  return {
+    worker: `--var 'VAPID_PRIVATE_JWK:${JSON.stringify({ kty, crv, d, x, y })}'`,
+    bundle: `VITE_VAPID_PUBLIC_KEY=${point.toString('base64url')}`,
+  }
+}
+const VAPID = testVapid()
 
 export default defineConfig({
   testDir: './tests',
@@ -17,7 +34,7 @@ export default defineConfig({
   webServer: [
     {
       // The local D1 needs its tables before /api/me can answer; applying them again is a no-op.
-      command: `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend && npm run dev -w backend -- ${DEV_AUTH.worker}`,
+      command: `npx wrangler d1 migrations apply gulabi-gali --local --cwd backend && npm run dev -w backend -- ${DEV_AUTH.worker} ${VAPID.worker}`,
       cwd: '..',
       url: 'http://127.0.0.1:8787/health',
       // Locally a Worker already on :8787 is reused (faster); it must have been started with the DEV_AUTH
@@ -34,7 +51,7 @@ export default defineConfig({
       // GG_ALLOW_LOCAL_API: this bundle talks to the local Worker on purpose.
       // VITE_TEST_HOOKS: only this build carries window.__gg; the shipped one does not.
       // VITE_DEV_AUTH: this build signs in by name against the Worker's /api/dev/login.
-      command: `GG_ALLOW_LOCAL_API=1 VITE_TEST_HOOKS=1 ${DEV_AUTH.bundle} npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort`,
+      command: `GG_ALLOW_LOCAL_API=1 VITE_TEST_HOOKS=1 ${DEV_AUTH.bundle} ${VAPID.bundle} npm run build && npm run preview -- --port 5173 --host 127.0.0.1 --strictPort`,
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,

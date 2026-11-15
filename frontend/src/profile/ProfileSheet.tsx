@@ -4,6 +4,7 @@ import { t, type Lang } from '../i18n/strings'
 import { getBlocks, unblockPerson, type ProfileInput } from '../net/api'
 import { HERE_FOR, type BlockListEntry, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
+import { PushToggle } from '../push/PushToggle'
 import type { AvatarLook } from '../world/types'
 import { ReportSheet } from '../ui/ReportSheet'
 import { StampsLine } from '../ui/StampsLine'
@@ -274,6 +275,7 @@ export function ProfileSheet({
             {t(busy ? 'profileSaving' : 'profileSave', lang)}
           </button>
         </form>
+        {token && me.complete && <PushToggle lang={lang} token={token} />}
         {token && me.complete && (blocked || blockedNote) && (
           <div className="blocked-list">
             <h3>{t('blockedTitle', lang)}</h3>

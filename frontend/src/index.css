@@ -1525,6 +1525,41 @@ small.words-hint {
   opacity: 0.8;
 }
 
+/* "Naye messages pe batao": the push switch (outside the form: it acts at once), or why there is none */
+.push-setting {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.push-setting .check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+}
+
+.push-setting .check input {
+  min-height: 24px;
+  width: 24px;
+  margin: 0;
+}
+
+.push-setting span,
+.push-setting p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.push-setting small {
+  opacity: 0.7;
+}
+
+.push-setting [role='alert'] {
+  font-size: 0.85rem;
+}
+
 /* A banned account's screen: over the city and every sheet. */
 .account-closed {
   position: fixed;

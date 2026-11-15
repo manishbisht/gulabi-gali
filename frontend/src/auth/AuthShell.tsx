@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
+import { signOutStoppingPush } from '../push/push'
 import { useDialog } from '../ui/useDialog'
 import { InAppHint } from './InAppHint'
 import { AuthContext, type AuthMode, type AuthState } from './useAuth'
@@ -43,7 +44,14 @@ export function AuthShell({ mode, signedIn, token, signOut, form, children }: Pr
   const [open, setOpen] = useState(false)
   if (signedIn && open) setOpen(false) // signing in closes the sheet
   const value = useMemo<AuthState>(
-    () => ({ mode, signedIn, ready: true, token, signOut, openSignIn: () => setOpen(true) }),
+    () => ({
+      mode,
+      signedIn,
+      ready: true,
+      token,
+      signOut: signOutStoppingPush(token, signOut),
+      openSignIn: () => setOpen(true),
+    }),
     [mode, signedIn, token, signOut],
   )
   return (

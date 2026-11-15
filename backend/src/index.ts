@@ -14,6 +14,7 @@ import { hashedList } from './filter/server'
 import { floating, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
+import { putPush, removePush } from './push'
 import { listPosters, pinPoster, publicPosters, purgePosters, removeOwnPoster } from './posters'
 import { fileReport, purgeReportEvidence } from './reports'
 import { putStamps } from './stamps'
@@ -199,6 +200,11 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     )
   if (pathname === '/api/me/stamps' && method === 'PUT')
     return (await bannedGate(env, user.id)) ?? putStamps(env, user.id, await readJson(request))
+  // This device's push subscription (see push.ts): on from the profile sheet, off there or on sign-out.
+  if (pathname === '/api/me/push' && method === 'PUT')
+    return (await bannedGate(env, user.id)) ?? putPush(env, user.id, await readJson(request))
+  if (pathname === '/api/me/push' && method === 'DELETE')
+    return removePush(env, user.id, await readJson(request))
   if (pathname === '/api/invites' && method === 'GET') return listInvites(env, user.id)
   if (pathname === '/api/invites/redeem' && method === 'POST') {
     // Per address as well as per person (which `redeemInvite` counts): one person cannot spread guesses over accounts.
