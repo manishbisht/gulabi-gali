@@ -10,7 +10,7 @@ import { useAuth, type AuthState } from './useAuth'
 
 const clerk = vi.hoisted(() => ({ crash: () => {} }))
 vi.mock('./clerk', () => ({
-  default: ({ onSession }: { onSession: (s: ClerkSession) => void }) => {
+  default: function FakeClerk({ onSession }: { onSession: (s: ClerkSession) => void }) {
     const [boom, setBoom] = useState(false)
     useEffect(() => {
       onSession({ signedIn: true, ready: true, token: async () => 'live', signOut: async () => {} })
