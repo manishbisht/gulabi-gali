@@ -3,7 +3,7 @@ import type { Lang } from '../i18n/strings'
 import { t } from '../i18n/strings'
 import { putStamps } from '../net/api'
 import type { LandmarkDef, Vec2 } from './types'
-import { claim, collect, collected, mergeStamps, nearestLandmark, release, STAMPS } from './stamps'
+import { claim, collect, collected, mergeStamps, nearestLandmark, park, release, STAMPS } from './stamps'
 
 const TOAST_MS = 3500
 
@@ -29,13 +29,19 @@ const keyOf = (ids: readonly string[]) => [...ids].sort().join(',')
  * holds) joins too. A failed push is silent and is tried again on the next stamp or the next load; nothing
  * here ever waits on the server.
  *
- * The set on the device belongs to the account that signed in last (`claim`), and goes when they sign out
- * (`signedIn` turning false), so it never reaches the next account. `signedIn` is separate from `account`,
- * which is also null while a resident's profile is still loading.
+ * The set on the device is tagged with the account it belongs to (`claim`, once that account has a profile);
+ * an untagged one is a ghost's, or an account that has no profile yet, and is never touched. With no account
+ * (a ghost, a lost token, a profile still loading) a tagged set is parked in its account's stash, not shown
+ * and not wiped (`park`); that account gets it back, and pushes what the server never confirmed, when it next
+ * has a profile. Only on a sign-out after `claim` ran, and with every stamp confirmed on the server, is the set
+ * cleared outright. No other account ever receives or pushes it.
  */
-export function useStamps(lang: Lang, account: StampAccount | null, signedIn: boolean = account !== null) {
+export function useStamps(lang: Lang, account: StampAccount | null) {
   const [near, setNear] = useState<LandmarkDef | null>(null)
-  const [have, setHave] = useState(collected)
+  const [have, setHave] = useState(() => {
+    if (!account) park() // a page that opens with a set tagged to someone must not show it as the street's
+    return collected()
+  })
   const [toast, setToast] = useState<string | null>(null)
   const nearRef = useRef<LandmarkDef | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -60,29 +66,39 @@ export function useStamps(lang: Lang, account: StampAccount | null, signedIn: bo
   const synced = useRef<{ user: string; key: string } | null>(null)
   const pushing = useRef<{ user: string; key: string } | null>(null)
 
-  // Before anything is merged or pushed: a set that is another account's is wiped, this one's is kept.
+  /** The stamps the server is known to hold for `user`: the profile's, and every push answer. */
+  const confirmed = useRef<ReadonlySet<string>>(new Set())
+  /** The account `claim` ran for, until it has none again. */
+  const claimedFor = useRef<string | null>(null)
+
+  // Before anything is merged or pushed. With a profile: the set is this account's (see `claim`). Without one
+  // after having had one (a sign-out, a lost token): cleared when the server holds all of it, else parked.
   useEffect(() => {
-    if (!user) return
-    // the device's storage changed under the page (an external system): show what it holds now
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (claim(user)) setHave(collected())
-  }, [user])
-  // Signing out empties the device's set (a ghost afterwards starts from none).
-  const wasSignedIn = useRef(signedIn)
-  useEffect(() => {
-    if (wasSignedIn.current && !signedIn) {
-      release()
+    const was = claimedFor.current
+    claimedFor.current = user
+    let changed: boolean
+    if (user) changed = claim(user)
+    else {
       synced.current = null
       pushing.current = null
-      setHave([])
+      const all = was !== null && collected().every((id) => confirmed.current.has(id))
+      if (all) release()
+      else park()
+      changed = true
     }
-    wasSignedIn.current = signedIn
-  }, [signedIn])
+    confirmed.current = new Set()
+    if (!changed) return
+    const next = collected()
+    // the device's storage changed under the page (an external system): show what it holds now
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHave((was) => (keyOf(was) === keyOf(next) ? was : next))
+  }, [user])
 
   // What the profile says the server holds joins the stamps here (a second device's show up).
   useEffect(() => {
     if (!user || serverKey === null) return
     synced.current = { user, key: serverKey }
+    confirmed.current = new Set(serverStamps.current)
     if (mergeStamps(serverStamps.current)) setHave(collected())
   }, [user, serverKey])
 
@@ -100,6 +116,7 @@ export function useStamps(lang: Lang, account: StampAccount | null, signedIn: bo
       if (same(pushing.current)) pushing.current = null
       if (!answer || userRef.current !== user) return
       synced.current = { user, key: keyOf(answer) }
+      confirmed.current = new Set(answer)
       if (mergeStamps(answer)) setHave(collected())
     })()
   }, [user, token, serverKey, have])

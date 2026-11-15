@@ -28,25 +28,92 @@ it('fetchCity returns the live snapshot when the API answers', async () => {
   expect(await fetchCity()).toEqual(live)
 })
 
-it('fetchCity gives up on an API that never answers, and still honours the caller’s own signal', async () => {
-  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort())
+/** An older phone's browser: no `AbortSignal.any` (Safari < 17.4, Chrome < 116) or `AbortSignal.timeout` (Safari < 16). */
+async function withoutNewAbortApis(run: () => Promise<void>) {
+  const saved = { any: AbortSignal.any, timeout: AbortSignal.timeout }
+  Object.defineProperty(AbortSignal, 'any', { value: undefined, configurable: true, writable: true })
+  Object.defineProperty(AbortSignal, 'timeout', { value: undefined, configurable: true, writable: true })
+  try {
+    await run()
+  } finally {
+    Object.defineProperty(AbortSignal, 'any', { value: saved.any, configurable: true, writable: true })
+    Object.defineProperty(AbortSignal, 'timeout', {
+      value: saved.timeout,
+      configurable: true,
+      writable: true,
+    })
+  }
+}
+/** A fetch that only ever ends by being aborted. */
+const hangs = () =>
   vi.stubGlobal(
     'fetch',
     (_url: string, init?: RequestInit) =>
       new Promise<Response>((_, reject) => {
-        // a fetch that only ever ends by being aborted
-        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
-        if (init?.signal?.aborted) reject(new DOMException('aborted', 'AbortError'))
+        const stop = () => reject(new DOMException('aborted', 'AbortError'))
+        if (init?.signal?.aborted) stop()
+        init?.signal?.addEventListener('abort', stop)
       }),
   )
-  expect((await fetchCity()).stale).toBe(true)
-  expect(timeout).toHaveBeenCalledWith(8000)
-  timeout.mockRestore()
-  // and the caller's signal alone ends it too
-  const own = new AbortController()
-  const pending = fetchCity(own.signal)
-  own.abort()
-  expect((await pending).stale).toBe(true)
+
+it('fetchCity works in a browser with neither AbortSignal.any nor AbortSignal.timeout: live data comes back', async () => {
+  await withoutNewAbortApis(async () => {
+    const live = { ...fallbackSnapshot(new Date()), stale: false, tempC: 29 }
+    vi.stubGlobal('fetch', () => Promise.resolve(Response.json(live)))
+    expect(await fetchCity()).toEqual(live)
+    expect(await fetchCity(new AbortController().signal)).toEqual(live)
+  })
+})
+
+it('fetchCity, without those APIs, gives up after 8 s and leaves no timer behind', async () => {
+  vi.useFakeTimers()
+  try {
+    await withoutNewAbortApis(async () => {
+      hangs()
+      const pending = fetchCity()
+      await vi.advanceTimersByTimeAsync(7999)
+      let settled = false
+      void pending.then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect((await pending).stale).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('fetchCity, without those APIs, still honours the caller’s signal (aborted before or during), and clears its timer', async () => {
+  vi.useFakeTimers()
+  try {
+    await withoutNewAbortApis(async () => {
+      hangs()
+      const own = new AbortController()
+      const during = fetchCity(own.signal)
+      own.abort()
+      expect((await during).stale).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+      const before = fetchCity(own.signal) // already aborted
+      expect((await before).stale).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('fetchCity gives up on an API that never answers, with the APIs present too', async () => {
+  vi.useFakeTimers()
+  try {
+    hangs()
+    const pending = fetchCity()
+    await vi.advanceTimersByTimeAsync(8000)
+    expect((await pending).stale).toBe(true)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('strips trailing slashes from the API base', async () => {

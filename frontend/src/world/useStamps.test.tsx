@@ -43,22 +43,21 @@ const HAWA = { id: 'hawa-mahal', name: { hi: 'Hawa Mahal', en: 'Hawa Mahal' }, a
 const JKK = { id: 'jkk', name: { hi: 'JKK', en: 'JKK' }, at: { x: 100, z: 0 }, radius: 5 }
 const LANDMARKS = [HAWA, JKK] as unknown as LandmarkDef[]
 
-function mount(account: Account, signedIn: boolean = account !== null) {
+function mount(account: Account) {
   const out = {} as ReturnType<Hook['useStamps']>
   let root: Root
-  function Probe({ acc, on }: { acc: Account; on: boolean }) {
-    Object.assign(out, hook.useStamps('en', acc, on))
+  function Probe({ acc }: { acc: Account }) {
+    Object.assign(out, hook.useStamps('en', acc))
     return null
   }
   const host = document.createElement('div')
   act(() => {
     root = createRoot(host)
-    root.render(<Probe acc={account} on={signedIn} />)
+    root.render(<Probe acc={account} />)
   })
   return {
     out,
-    rerender: (acc: Account, on: boolean = acc !== null) =>
-      act(() => root.render(<Probe acc={acc} on={on} />)),
+    rerender: (acc: Account) => act(() => root.render(<Probe acc={acc} />)),
     /** Lets the push's promises settle. */
     settle: () => act(async () => {}),
     unmount: () => act(() => root.unmount()),
@@ -195,6 +194,75 @@ it('a set left by another account (the page closed without a sign-out) is not in
   await settle()
   expect(fetchMock).not.toHaveBeenCalled() // nothing of Asha's went up under Ravi
   expect(out.have).toEqual(['wtp']) // only what the server holds for Ravi
+})
+
+const local = () => JSON.parse(localStorage.getItem('gg-stamps') ?? '[]') as string[]
+const stashOf = (id: string) => JSON.parse(localStorage.getItem(`gg-stamps-of:${id}`) ?? '[]') as string[]
+
+it('(a) a ghost who signs in without finishing a profile and signs out keeps the stamps they collected', async () => {
+  const fetchMock = server()
+  const { out, rerender, settle } = mount(null) // a ghost
+  collectAt(out, HAWA)
+  rerender(null) // signed in, no profile yet: no account for the hook
+  rerender(null) // and signed out again
+  await settle()
+  expect(out.have).toEqual(['hawa-mahal'])
+  expect(local()).toEqual(['hawa-mahal'])
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it('(b) stamps the server never confirmed survive a session that just ends, and only their account gets them back', async () => {
+  const fetchMock = server([], true) // every push fails: nothing is confirmed
+  const asha = mount(resident([], 'dev:asha'))
+  collectAt(asha.out, HAWA)
+  await asha.settle()
+  asha.rerender(null) // the token is lost; no sign-out ran
+  await asha.settle()
+  expect(asha.out.have).toEqual([]) // the street no longer shows her stamps
+  expect(stashOf('dev:asha')).toEqual(['hawa-mahal']) // but they are kept
+  // Ravi signs in on this phone: he neither sees nor pushes them
+  const ok = server()
+  asha.unmount()
+  const ravi = mount(resident([], 'dev:ravi'))
+  await ravi.settle()
+  expect(ravi.out.have).toEqual([])
+  expect(ok).not.toHaveBeenCalled()
+  ravi.unmount()
+  // Asha comes back: they are hers again, and go up
+  const back = mount(resident([], 'dev:asha'))
+  await back.settle()
+  expect(back.out.have).toEqual(['hawa-mahal'])
+  expect(pushed(ok)).toEqual([['hawa-mahal']])
+  expect(fetchMock).toHaveBeenCalled()
+})
+
+it('(b) a set tagged to an account, found by a page that is not signed in (a lost token), is parked, not shown or wiped', async () => {
+  localStorage.setItem('gg-stamps', JSON.stringify(['hawa-mahal']))
+  localStorage.setItem('gg-stamps-owner', 'dev:asha')
+  const fetchMock = server()
+  const ghost = mount(null)
+  await ghost.settle()
+  expect(ghost.out.have).toEqual([])
+  expect(stashOf('dev:asha')).toEqual(['hawa-mahal'])
+  ghost.unmount()
+  const asha = mount(resident([], 'dev:asha'))
+  await asha.settle()
+  expect(asha.out.have).toEqual(['hawa-mahal'])
+  expect(pushed(fetchMock)).toEqual([['hawa-mahal']])
+})
+
+it('(c) an account that collects before its profile is finished keeps those stamps when it is', async () => {
+  // the phone still holds the last account\'s unconfirmed set
+  localStorage.setItem('gg-stamps', JSON.stringify(['wtp']))
+  localStorage.setItem('gg-stamps-owner', 'dev:asha')
+  const fetchMock = server()
+  const { out, rerender, settle } = mount(null) // Ravi signed in, profile not done
+  collectAt(out, HAWA)
+  rerender(resident([], 'dev:ravi'))
+  await settle()
+  expect(out.have).toEqual(['hawa-mahal'])
+  expect(pushed(fetchMock)).toEqual([['hawa-mahal']]) // Asha's 'wtp' is not Ravi's to push
+  expect(stashOf('dev:asha')).toEqual(['wtp'])
 })
 
 it('the account that signs in keeps what its ghost collected, and the same account on a reload keeps its set', async () => {

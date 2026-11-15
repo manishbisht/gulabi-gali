@@ -48,15 +48,22 @@ const CITY_TIMEOUT_MS = 8000
 
 /** Never rejects: any failure, or no answer in `CITY_TIMEOUT_MS`, yields the stale default. */
 export async function fetchCity(signal?: AbortSignal): Promise<CitySnapshot> {
+  // Built by hand, not with AbortSignal.timeout / .any: neither exists on the phones that matter (Safari < 16 and
+  // < 17.4, Chrome < 116), and a throw here would hand them the stale sky forever.
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), CITY_TIMEOUT_MS)
+  const forward = () => ctl.abort()
+  if (signal?.aborted) ctl.abort()
+  else signal?.addEventListener('abort', forward)
   try {
-    const timeout = AbortSignal.timeout(CITY_TIMEOUT_MS)
-    const res = await fetchNoting(`${API_BASE}/api/city`, {
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    })
+    const res = await fetchNoting(`${API_BASE}/api/city`, { signal: ctl.signal })
     if (!res.ok) return fallbackSnapshot(new Date())
     return (await res.json()) as CitySnapshot
   } catch {
     return fallbackSnapshot(new Date())
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', forward)
   }
 }
 

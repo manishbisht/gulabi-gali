@@ -19,7 +19,15 @@ export const stampName = (id: string, lang: Lang): string => STAMPS.find((s) => 
 
 /** The landmark ids stamped so far, in the order they were collected: each known stamp once, nothing else. */
 export function collected(): string[] {
-  const saved = storage.getJSON<unknown>(KEY, [])
+  return idsAt(KEY)
+}
+
+/** Where an account's stamps wait while someone else (or nobody) is signed in on this device. */
+const stashKey = (user: string) => `gg-stamps-of:${user}`
+
+/** The known stamp ids in a saved list, each once. */
+function idsAt(key: string): string[] {
+  const saved = storage.getJSON<unknown>(key, [])
   if (!Array.isArray(saved)) return []
   return saved.filter(
     (id, i): id is string =>
@@ -27,22 +35,46 @@ export function collected(): string[] {
   )
 }
 
+const union = (a: readonly string[], b: readonly string[]) => [...a, ...b.filter((id) => !a.includes(id))]
+
 /**
- * Marks this device's set as `user`'s. The set belongs to whoever signed in last, so when it was another
- * account's (a page closed without signing out) it is wiped first: the next person on a shared phone neither
- * sees nor pushes the one before's stamps. A ghost's own set (no owner) goes to whoever signs in first.
- * True when it wiped.
+ * Takes the set off the street when it belongs to an account: it moves to that account's own stash (kept, so
+ * the same account gets it back and pushes what the server never confirmed), and the device's set and its owner
+ * clear. Nothing is lost, and nobody else sees or pushes it. An untagged set (a ghost's, or an account with no
+ * profile yet) is left where it is.
+ */
+export function park(): void {
+  const owner = storage.get(OWNER) || null
+  if (owner === null) return
+  const held = collected()
+  if (held.length) storage.set(stashKey(owner), JSON.stringify(union(idsAt(stashKey(owner)), held)))
+  storage.set(KEY, '[]')
+  storage.set(OWNER, '')
+}
+
+/**
+ * `user` has a profile: the device's set is theirs now. An untagged set (collected as a ghost, or before the
+ * profile was done) becomes theirs; one tagged to the same account stays; one tagged to a different account is
+ * parked first (see `park`). Whatever this account left in its stash comes back. True when the set changed.
  */
 export function claim(user: string): boolean {
   const owner = storage.get(OWNER) || null
-  if (owner === user) return false
+  let changed = false
+  if (owner !== null && owner !== user) {
+    park()
+    changed = true
+  }
   storage.set(OWNER, user)
-  if (owner === null) return false
-  storage.set(KEY, '[]')
-  return true
+  const back = idsAt(stashKey(user))
+  if (back.length) {
+    storage.set(KEY, JSON.stringify(union(collected(), back)))
+    storage.set(stashKey(user), '[]')
+    changed = true
+  }
+  return changed
 }
 
-/** Signing out: the set and its owner go, so the device starts clean for a ghost or the next account. */
+/** Signing out with every stamp confirmed on the server: the set and its owner go, nothing is left behind. */
 export function release(): void {
   storage.set(KEY, '[]')
   storage.set(OWNER, '')

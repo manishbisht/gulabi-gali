@@ -85,3 +85,38 @@ Playwright full run, raw tail:
 `npx playwright test hud.spec.ts --repeat-each=10`, raw tail:
 
     50 passed (2.1m)
+
+## Fix round 1 (from 4283149)
+
+### 1. fetchCity and old browsers (api.ts)
+
+`fetchCity` now builds its 8 s timeout with `setTimeout` plus an `AbortController`: an already-aborted caller signal aborts at once, otherwise an abort listener forwards it; `finally` clears the timer and removes the listener. Neither `AbortSignal.any` nor `AbortSignal.timeout` is used.
+
+Tests (api.test.ts) with both APIs set to undefined: live data still returns (with and without a caller signal); times out at exactly 8 s (not at 7.999) and leaves 0 timers; caller abort during or before the call is honoured and leaves 0 timers; plus a timeout test with the APIs present. RED first run (before the change): 3 failed, 10 passed (the no-APIs live test, the no-APIs 8 s test, the APIs-present timeout test; the old code only passed when the APIs existed and the timer was real). GREEN: `npx vitest run src/net src/live`: 84 passed.
+
+Grep of frontend/src (non-test) for new APIs (`AbortSignal.any/timeout`, `.at(`, `structuredClone`, `Object.hasOwn`, `findLast`, `toSorted`, `toReversed`, `replaceAll`, `Array.fromAsync`, `groupBy`, `Promise.withResolvers`, `crypto.randomUUID`, `requestIdleCallback`, `flat/flatMap`, `queueMicrotask`):
+- `AbortSignal.any/timeout`: only the comment in api.ts now.
+- `Object.hasOwn` (Safari 15.4+): App.tsx:83, behind `gg-test=1 &&`, so it never runs in production. Left.
+- `Array.prototype.at(-1)` (Safari 15.4+, Chrome 92+): ChatView.tsx:110,142 and admin/ReportQueue.tsx:205. All run after a user opens a chat or the admin page, not at load. Left; flagged only.
+- `flat`/`flatMap` (ES2019), `queueMicrotask` (Safari 12.1+): old enough.
+- `structuredClone`, `findLast`, `toSorted`, `toReversed`, `replaceAll`, `fromAsync`, `groupBy`, `withResolvers`, `randomUUID`, `requestIdleCallback`: none.
+Nothing on a load path needed fixing.
+
+### 2. Stamps no longer wiped irreversibly (stamps.ts, useStamps.ts)
+
+New rule. A set is only tagged (`gg-stamps-owner`) once `claim` runs, i.e. once the account has a profile. Untagged stamps (a ghost's, or an account with no profile yet) are never touched. With no account (ghost, lost token, profile loading, sign-out) a tagged set is parked: moved to `gg-stamps-of:<account>` (union with what is there), not shown, not wiped, not pushed by anyone else. When that account has a profile again, `claim` brings its stash back and the normal push sends what the server never confirmed. A different account claiming a set tagged to someone else parks it first (so it neither sees nor pushes it). The set is cleared outright (`release`) only on losing the account after `claim` ran for it and with every stamp in the set confirmed on the server (profile stamps or a push answer). The `signedIn` argument of `useStamps` (and its App.tsx argument) is gone.
+
+Cases: (a) ghost signs in without a profile and signs out: untagged set kept (test). (b) token lost / session ended: unconfirmed stamps parked, shown to nobody, not wiped, a different account gets and pushes nothing, the same account gets them back and pushes (2 tests). (c) account collects before its profile is done, phone holds another account's tagged set: parked on load, its stamps survive `claim` and are pushed, the other's `wtp` is not (test). Shared phone case kept: sign-out with everything confirmed clears the set and the next account sees and pushes nothing.
+
+Honesty on RED: before the change 3 of the 4 new useStamps tests failed ((b) twice, (c)). Test (a) passed on the old code too, because the test helper no longer has a way to say "signed in without an account"; it is a regression guard for the new design, not a demonstrated fix.
+
+### Gate on the fixed head (raw)
+
+    Test Files  69 passed (69)
+         Tests  619 passed (619)
+    Test Files  26 passed (26)
+         Tests  359 passed (359)
+    built in 1.78s / 1.74s
+    ok: no __gg in the production build
+    (lint exit 0, prettier clean)
+    playwright: 1 skipped, 46 passed (2.7m)
