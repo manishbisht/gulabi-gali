@@ -103,3 +103,12 @@ it('falls back to the stage when what had focus is gone', () => {
   renderPage(null)
   expect(document.activeElement).toBe(document.querySelector('canvas'))
 })
+
+it('once the wait drags on, focus moves to the way back, so a keyboard or screen reader finds it', () => {
+  show({ waiting: true })
+  expect(document.activeElement).toBe(host.querySelector('button.metro-ride'))
+  act(() => vi.advanceTimersByTime(STUCK_MS))
+  const back = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Go back')!
+  expect(back).toBeDefined()
+  expect(document.activeElement).toBe(back)
+})

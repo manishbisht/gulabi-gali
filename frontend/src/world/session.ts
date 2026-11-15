@@ -281,7 +281,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       autos: district.autos,
       player,
       stand: () => sitting?.stand(),
-      hooks: hooks.drive ?? { near() {}, driving() {}, blocked() {}, rescued() {} },
+      hooks: {
+        ...(hooks.drive ?? { near() {}, driving() {}, blocked() {}, rescued() {} }),
+        driving(on) {
+          // at the wheel Space is the horn's alone
+          controls.holdSpace(on)
+          hooks.drive?.driving(on)
+        },
+      },
     })
     const systems: DistrictSystem[] = [
       npcs,
@@ -425,14 +432,10 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     player: () => here?.player ?? null,
     setLook: (look) => here?.player.setLook(look),
     travelTo(id, signal) {
-      // the metro takes a standing walker: get up from a bench, and out of an auto (a boxed-in second try
-      // sets the driver down where the auto stands)
+      // the metro takes a standing walker: get up from a bench, and out of an auto (boxed in, where the auto
+      // stands), with no toast about it
       here?.sitting?.stand()
-      const driving = here?.driving
-      if (driving?.driving()) {
-        driving.exit()
-        if (driving.driving()) driving.exit()
-      }
+      here?.driving.forceExit()
       return enter(id, 'station', signal)
     },
     onEnter(cb) {
@@ -572,13 +575,15 @@ function createInteraction(
     const r = canvas.getBoundingClientRect()
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, stage.camera)
+    // a poster's card or the composer has the screen as any card does: nothing under it opens
+    const postering = hooks.posters?.isOpen() ?? false
     const hit = npcs.pick(ray)
     if (hit) {
-      if (!landmarkNear) hooks.personCard.close() // a character outranks a person
-      return hooks.npcCard.tap(hit, landmarkNear)
+      if (!landmarkNear && !postering) hooks.personCard.close() // a character outranks a person
+      return hooks.npcCard.tap(hit, landmarkNear || postering)
     }
     const who = people?.pick(ray)
-    if (who) return hooks.personCard.tap(who, landmarkNear || hooks.npcCard.isOpen())
+    if (who) return hooks.personCard.tap(who, landmarkNear || postering || hooks.npcCard.isOpen())
     const poster = posters?.pick(ray)
     if (poster) {
       if (landmarkNear) return
@@ -587,7 +592,8 @@ function createInteraction(
       return hooks.posters?.tap(poster)
     }
     // last: an animal, unless a card is up, a landmark has the screen or the player is seated
-    if (landmarkNear || hooks.npcCard.isOpen() || hooks.personCard.isOpen() || sitting?.seated()) return
+    if (landmarkNear || postering || hooks.npcCard.isOpen() || hooks.personCard.isOpen() || sitting?.seated())
+      return
     const pet = animals.pick(ray, at)
     if (pet) animals.call(at, pet.id)
   }
@@ -605,7 +611,9 @@ function createInteraction(
       const pressed = key && !driving
       const chatting = hooks.npcCard.isOpen()
       const meeting = hooks.personCard.isOpen()
-      const card = chatting || meeting
+      // a poster's card or the composer is a card like any other: E is not for anything under it
+      const postering = hooks.posters?.isOpen() ?? false
+      const card = chatting || meeting || postering
       const seated = sitting?.seated() ?? false
       landmarkNear = hooks.track(pos, district.def.landmarks, pressed && !card && !seated) !== null
       // E by the station opens the metro, unless a landmark's or a character's card has it
@@ -618,15 +626,7 @@ function createInteraction(
       const bench = !!sitting && pressed && !card && (seated || (!landmarkNear && !metro && sitting.near()))
       if (bench) sitting.toggle()
       // E by a poster wall opens the composer, unless anything above has it or a poster's own UI is up
-      const wall =
-        pressed &&
-        !card &&
-        !seated &&
-        !landmarkNear &&
-        !metro &&
-        !bench &&
-        posters?.near() != null &&
-        !hooks.posters!.isOpen()
+      const wall = pressed && !card && !seated && !landmarkNear && !metro && !bench && posters?.near() != null
       if (wall) hooks.posters!.compose()
       // E by a parked auto drives it, unless anything above has the key
       const auto = pressed && !card && !seated && !landmarkNear && !metro && !bench && !wall && drive.near()
@@ -634,7 +634,7 @@ function createInteraction(
       hooks.npcCard.step(
         pos,
         npcs,
-        pressed && !meeting && !bench && !wall && !auto && (chatting || !metro),
+        pressed && !meeting && !postering && !bench && !wall && !auto && (chatting || !metro),
         landmarkNear,
       )
       // a character that just opened (or closed on this very E) keeps the key from the person card
@@ -644,6 +644,7 @@ function createInteraction(
           people,
           pressed &&
             !chatting &&
+            !postering &&
             !bench &&
             !wall &&
             !auto &&

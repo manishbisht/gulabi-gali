@@ -68,6 +68,7 @@ const controls: Controls = {
   drive: () => ({ x: 0, z: 0 }),
   setJoystick() {},
   freeze() {},
+  holdSpace: vi.fn(),
   dispose() {},
 }
 
@@ -708,11 +709,12 @@ it('at the wheel a tap opens no card, E gets out, and nothing else handles E', a
   const npcStep = vi.spyOn(live.hooks.npcCard, 'step')
   const interact = vi.spyOn(controls, 'interact')
 
-  // E beside a parked auto mounts it
+  // E beside a parked auto mounts it, and Space is the horn's alone until they get out
   interact.mockReturnValueOnce(true)
   live.tick(0.016)
   expect(drive.driving).toHaveBeenLastCalledWith(true)
   expect(live.session.player()!.driving()).toBe(true)
+  expect(controls.holdSpace).toHaveBeenLastCalledWith(true)
 
   // at the wheel, a tap on a person opens nothing
   tapCentre()
@@ -723,6 +725,7 @@ it('at the wheel a tap opens no card, E gets out, and nothing else handles E', a
   live.tick(0.016)
   expect(drive.driving).toHaveBeenLastCalledWith(false)
   expect(live.session.player()!.driving()).toBe(false)
+  expect(controls.holdSpace).toHaveBeenLastCalledWith(false)
   for (const spy of [personStep, npcStep]) expect(spy.mock.calls.at(-1)![2]).toBe(false)
   expect(track.mock.calls.at(-1)![2]).toBe(false)
   expect(trackStation.mock.calls.at(-1)![2]).toBe(false)
@@ -770,6 +773,91 @@ it('travel while driving dismounts first', async () => {
   await trip
   interact.mockRestore()
   live.session.dispose()
+})
+
+it('travel from an auto boxed in on every side gets out silently: no "blocked" toast, no "rescued" one', async () => {
+  const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+  const live = openLive(async () => null, { drive })
+  loads[0]!.resolve({
+    ...fakeDistrict(walledCity),
+    autos: { nearest: () => 0, pose: () => ({ x: 0, z: 0, ry: 0 }), take: vi.fn(), leave: vi.fn() },
+  })
+  await settle()
+  const interact = vi.spyOn(controls, 'interact')
+  interact.mockReturnValueOnce(true)
+  live.tick(0.016)
+  const player = live.session.player()!
+  expect(player.driving()).toBe(true)
+  vi.spyOn(player, 'exitPoint').mockReturnValue(null) // nowhere clear to stand
+  const trip = live.session.travelTo('mi-road')
+  expect(player.driving()).toBe(false)
+  expect(drive.blocked).not.toHaveBeenCalled()
+  expect(drive.rescued).not.toHaveBeenCalled()
+  loads[1]!.resolve(fakeDistrict(miRoad))
+  await trip
+  interact.mockRestore()
+  live.session.dispose()
+})
+
+it("a poster's card or composer keeps E and taps to itself, as any other card does", async () => {
+  const posters = {
+    near: vi.fn(),
+    tap: vi.fn(),
+    compose: vi.fn(),
+    isOpen: vi.fn(() => true),
+    left: vi.fn(),
+    gone: vi.fn(),
+  }
+  const drive = { near: vi.fn(), driving: vi.fn(), blocked: vi.fn(), rescued: vi.fn() }
+  const track = vi.fn<SessionHooks['track']>(() => null)
+  const trackStation = vi.fn<SessionHooks['trackStation']>(() => false)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('[]', { status: 200 })),
+  )
+  const live = openLive(async () => null, { posters, drive, track, trackStation })
+  loads[0]!.resolve({
+    ...fakeDistrict(walledCity),
+    autos: { nearest: () => 0, pose: () => ({ x: 0, z: 0, ry: 0 }), take: vi.fn(), leave: vi.fn() },
+  })
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  const look = { skin: 2, outfit: 'sandstone', head: 'none' } as const
+  ws.say({
+    t: 'welcome',
+    you: { id: null, visible: false },
+    people: [{ id: 'p1', name: 'Asha', look, status: '', x: 0, z: -5, ry: 0 }],
+  })
+  const personStep = vi.spyOn(live.hooks.personCard, 'step')
+  const npcStep = vi.spyOn(live.hooks.npcCard, 'step')
+  const personTap = vi.spyOn(live.hooks.personCard, 'tap')
+  // E, with an auto in reach: nothing under the card hears it
+  const interact = vi.spyOn(controls, 'interact').mockReturnValueOnce(true)
+  live.tick(0.016)
+  expect(drive.driving).not.toHaveBeenCalled()
+  expect(live.session.player()!.driving()).toBe(false)
+  expect(track.mock.calls.at(-1)![2]).toBe(false)
+  expect(trackStation.mock.calls.at(-1)![2]).toBe(false)
+  for (const spy of [personStep, npcStep]) expect(spy.mock.calls.at(-1)![2]).toBe(false)
+  // a tap on a person is told a card has the screen
+  const canvas = document.querySelector('canvas')!
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect
+  live.stage.camera.position.set(0, 1, 0)
+  live.stage.camera.lookAt(0, 1, -5)
+  live.stage.camera.updateMatrixWorld(true)
+  const at = { clientX: 50, clientY: 50 }
+  canvas.dispatchEvent(Object.assign(new Event('pointerdown'), at))
+  canvas.dispatchEvent(Object.assign(new Event('pointerup'), at))
+  expect(personTap).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), true)
+  // the card closes: E mounts the auto again
+  posters.isOpen.mockReturnValue(false)
+  interact.mockReturnValueOnce(true)
+  live.tick(0.016)
+  expect(drive.driving).toHaveBeenLastCalledWith(true)
+  interact.mockRestore()
+  live.session.dispose()
+  vi.unstubAllGlobals()
 })
 
 it('a cancelled trip disposes the district that arrives late and keeps the old one', async () => {

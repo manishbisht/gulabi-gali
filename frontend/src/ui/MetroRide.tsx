@@ -26,11 +26,13 @@ function stage(): HTMLElement | null {
 
 /**
  * The inside of a Pink Line coach, in CSS only, over the black screen. Tapping anywhere skips. Focus moves
- * onto the skip button while it shows, the game beneath is inert and ignores keys, and focus comes back
- * to where it was (or the stage) afterwards. The spoken status sits beside the button, not in it.
+ * onto the skip button while it shows (and onto "Go back" once the wait has dragged on), the game beneath is
+ * inert and ignores keys, and focus comes back to where it was (or the stage) afterwards. The spoken status sits
+ * beside the button, not in it.
  */
 export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
   const button = useRef<HTMLButtonElement>(null)
+  const backButton = useRef<HTMLButtonElement>(null)
   const onSkipRef = useRef(onSkip)
   const [stuck, setStuck] = useState(false)
 
@@ -66,6 +68,10 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
     const timer = setTimeout(() => setStuck(true), STUCK_MS)
     return () => clearTimeout(timer)
   }, [waiting])
+  // the way back appears where nobody is looking: focus goes to it, so a keyboard or a screen reader finds it
+  useEffect(() => {
+    if (stuck) backButton.current?.focus()
+  }, [stuck])
 
   const station = METRO_STATIONS[to][lang]
   return (
@@ -100,7 +106,7 @@ export function MetroRide({ from, to, lang, waiting, onSkip, onBack }: Props) {
         {t('rideNext', lang, { station })} {t(waiting ? 'rideWaiting' : 'rideDoors', lang)}
       </p>
       {stuck && (
-        <button type="button" data-metro-ride="" className="metro-back" onClick={onBack}>
+        <button ref={backButton} type="button" data-metro-ride="" className="metro-back" onClick={onBack}>
           {t('rideBack', lang)}
         </button>
       )}

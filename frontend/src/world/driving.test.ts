@@ -87,6 +87,27 @@ describe('createDriving', () => {
     expect(hooks.driving).toHaveBeenLastCalledWith(false)
   })
 
+  it('a forced exit (for travel) gets out at once and says nothing, boxed in or not', () => {
+    const boxed = setup(null)
+    boxed.d.update({ x: 0, z: 0 })
+    boxed.d.mount()
+    boxed.d.forceExit()
+    expect(boxed.d.driving()).toBe(false)
+    expect(boxed.player.dismount).toHaveBeenCalledWith({ x: 9, z: 9 })
+    expect(boxed.log).toEqual(['take 0', 'leave 0 9 9 1'])
+    expect(boxed.hooks.blocked).not.toHaveBeenCalled()
+    expect(boxed.hooks.rescued).not.toHaveBeenCalled()
+    expect(boxed.hooks.driving).toHaveBeenLastCalledWith(false)
+    // with room, the usual spot; on foot already, nothing
+    const free = setup()
+    free.d.update({ x: 0, z: 0 })
+    free.d.mount()
+    free.d.forceExit()
+    expect(free.player.dismount).toHaveBeenCalledWith({ x: 4, z: 0 })
+    free.d.forceExit()
+    expect(free.player.dismount).toHaveBeenCalledTimes(1)
+  })
+
   it('mounting again starts the boxed-in count over', () => {
     const { d, player, hooks } = setup(null)
     const spot = { current: null as Vec2 | null }

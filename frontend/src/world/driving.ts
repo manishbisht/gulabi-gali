@@ -27,6 +27,11 @@ export interface Driving {
   mount(): void
   /** Gets out at the nearest clear spot round the auto, or (nowhere clear) stays in and says so. */
   exit(): void
+  /**
+   * Gets out at once, saying nothing (the metro is taking the player): at the nearest clear spot, or where the
+   * auto stands when there is none. Nothing on foot.
+   */
+  forceExit(): void
   /** Space or the horn button; only while driving. */
   honk(): void
   dispose(): void
@@ -56,6 +61,18 @@ export function createDriving(opts: {
     near = i
   }
 
+  /**
+   * Out of the auto, at `out`; with nowhere to stand (even 6 m out), where the auto stands: on foot the walker's
+   * inside-a-collider rule lets them out by the nearest face, and no jump is needed.
+   */
+  const getOut = (out: Vec2 | null) => {
+    const { x, z, ry } = player.ridePose()
+    autos.leave(mounted, x, z, ry)
+    mounted = -1
+    player.dismount(out ?? { x, z })
+    hooks.driving(false)
+  }
+
   return {
     update(pos) {
       setNear(mounted >= 0 ? -1 : autos.nearest(pos, MOUNT_RANGE))
@@ -78,15 +95,12 @@ export function createDriving(opts: {
     exit() {
       if (mounted < 0) return
       const out = player.exitPoint()
-      const { x, z, ry } = player.ridePose()
       if (!out && ++boxedIn < 2) return hooks.blocked()
-      // the second try with nowhere to stand (even 6 m out) sets the player down where the auto stands: on foot
-      // the walker's inside-a-collider rule lets them out by the nearest face, and no jump is needed
-      autos.leave(mounted, x, z, ry)
-      mounted = -1
-      player.dismount(out ?? { x, z })
-      hooks.driving(false)
+      getOut(out)
       if (!out) hooks.rescued()
+    },
+    forceExit() {
+      if (mounted >= 0) getOut(player.exitPoint())
     },
     honk() {
       if (mounted >= 0) honk()

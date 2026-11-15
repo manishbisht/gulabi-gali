@@ -119,6 +119,35 @@ describe('createControls', () => {
     expect(c.drive().x).toBeCloseTo(0.3)
   })
 
+  it('while driving, Space is the horn alone: it presses no focused button, but still types into a field', () => {
+    const w = fakeWindow()
+    const c = (controls = createControls(w))
+    const space = (type: 'keydown' | 'keyup', tagName = 'BUTTON') => {
+      const e = new Event(type, { cancelable: true }) as Event & { code: string }
+      e.code = 'Space'
+      Object.defineProperty(e, 'target', { value: { tagName } })
+      w.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    // on foot, Space on a focused button presses it as ever
+    expect(space('keydown')).toBe(false)
+    expect(space('keyup')).toBe(false)
+    c.holdSpace(true)
+    expect(space('keydown')).toBe(true)
+    expect(space('keyup')).toBe(true)
+    expect(c.horn()).toBe(true)
+    // typing a line is typing, at the wheel or not
+    expect(space('keydown', 'INPUT')).toBe(false)
+    expect(space('keydown', 'TEXTAREA')).toBe(false)
+    // another key is left alone
+    const e = new Event('keydown', { cancelable: true }) as Event & { code: string }
+    e.code = 'Enter'
+    w.dispatchEvent(e)
+    expect(e.defaultPrevented).toBe(false)
+    c.holdSpace(false)
+    expect(space('keydown')).toBe(false)
+  })
+
   it('frozen for a minigame: no walking, no driving, no E or horn, until it thaws', () => {
     const w = fakeWindow()
     const c = (controls = createControls(w))

@@ -20,6 +20,11 @@ export interface Controls {
    * it carries on being held.
    */
   freeze(on: boolean): void
+  /**
+   * While on (at the wheel), Space is the horn's alone: its default is prevented, so it never also presses a
+   * focused HUD button (or scrolls). Typing in a text field still types a space.
+   */
+  holdSpace(on: boolean): void
   dispose(): void
 }
 
@@ -42,22 +47,31 @@ export function createControls(target: Window): Controls {
   let interactQueued = false
   let hornQueued = false
   let frozen = false
+  let spaceHeld = false
   /** What `drive()` hands back, reused: a frame of driving allocates nothing. */
   const drived: Vec2 = { x: 0, z: 0 }
 
   const axis = (positive: string[], negative: string[]) =>
     (positive.some((k) => down.has(k)) ? 1 : 0) - (negative.some((k) => down.has(k)) ? 1 : 0)
 
+  /** At the wheel, Space presses nothing but the horn (a button activates on Space's keyup, so both go). */
+  const holdHorn = (e: Event) => {
+    if (spaceHeld && (e as KeyboardEvent).code === 'Space' && !typing(e.target)) e.preventDefault()
+  }
   const onKeyDown = (e: Event) => {
     // Typing a line (bench chat, the profile) is not walking, nor pressing E.
     if (typing(e.target)) return
+    holdHorn(e)
     if (frozen) return
     const code = (e as KeyboardEvent).code
     if (code === 'KeyE' && !down.has(code)) interactQueued = true
     if (code === 'Space' && !down.has(code)) hornQueued = true
     down.add(code)
   }
-  const onKeyUp = (e: Event) => down.delete((e as KeyboardEvent).code)
+  const onKeyUp = (e: Event) => {
+    holdHorn(e)
+    down.delete((e as KeyboardEvent).code)
+  }
   // A key released while the tab was hidden never sends keyup; without this the player walks on alone.
   const onBlur = () => down.clear()
 
@@ -111,6 +125,9 @@ export function createControls(target: Window): Controls {
       interactQueued = false
       hornQueued = false
     },
+    holdSpace(on) {
+      spaceHeld = on
+    },
     setJoystick(v) {
       joystick = { x: v.x, z: v.z }
     },
@@ -120,6 +137,7 @@ export function createControls(target: Window): Controls {
       target.removeEventListener('blur', onBlur)
       down.clear()
       joystick = { x: 0, z: 0 }
+      spaceHeld = false
     },
   }
 }
