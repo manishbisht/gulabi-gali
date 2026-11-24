@@ -28,8 +28,12 @@ database and two Durable Objects; the Durable Object classes are created by the 
 
 ## 1. Cloudflare Worker (`backend/`)
 
-1. Create a Cloudflare account on the Workers Paid plan (the only paid item; everything else stays on free
-   tiers), and an API token from the "Edit Cloudflare Workers" template.
+1. Create a Cloudflare account and an API token from the "Edit Cloudflare Workers" template. The app runs
+   on the **Workers Free** plan, which is enough for a soft launch with a few friends. **Upgrade to Workers
+   Paid ($5/month, the only paid item) before any public announcement**: on Free, Durable Object duration
+   (about 13,000 GB-s a day, roughly 29 district-hours awake across the city) runs out after one busy
+   evening, and the 100,000-requests-a-day cap is next. After upgrading, raise `REMIND_BUDGET` to `"300"` in
+   `backend/wrangler.jsonc` (vars) and redeploy the Worker.
 2. Create the KV namespace the cron job writes the city snapshot to, and paste the id it prints over
    `REPLACE_WITH_CITY_KV_ID` in `backend/wrangler.jsonc`:
 
@@ -409,8 +413,11 @@ services (FCM, Mozilla, Apple, Windows); any other endpoint is refused.
 
 Cloudflare dashboard, Notifications, Add:
 
-- **Billing: usage-based billing** alert on Workers Paid, set a little over the plan's base so a runaway
-  loop emails you before it costs anything real.
+- **On Workers Free:** there is no bill to run up; a limit that is hit just refuses requests until the daily
+  reset. Watch Workers & Pages, Overview, for requests and Durable Object duration close to the daily caps:
+  that is the sign to upgrade.
+- **On Workers Paid:** add a **Billing: usage-based billing** alert set a little over the plan's base, so a
+  runaway loop emails you before it costs anything real.
 - **Workers: usage** (requests and CPU) notification for `gulabi-gali-api`.
 
 The city snapshot is one cron every 15 minutes plus cached reads (`cache-control: public, max-age=300`). Phase 2
