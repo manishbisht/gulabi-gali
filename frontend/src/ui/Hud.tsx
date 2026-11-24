@@ -38,6 +38,8 @@ interface Props {
   /** Opens photo mode; while it is on (`photo`) the HUD draws nothing. */
   onPhoto?: () => void
   photo?: boolean
+  /** Opens the dressing room on this device; present for anyone walking with this device's look (no finished profile). */
+  onLook?: () => void
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
@@ -64,6 +66,7 @@ export function Hud({
   onMap,
   onPhoto,
   photo = false,
+  onLook,
   top,
   bottom,
 }: Props) {
@@ -189,6 +192,19 @@ export function Hud({
               onClick={onPhoto}
             >
               <span aria-hidden="true">📷</span>
+            </button>
+          )}
+          {onLook && (
+            // the dressing room of anyone without a finished profile (a resident's is in the profile sheet)
+            <button
+              type="button"
+              className="hud-chip look-button"
+              aria-label={t('lookChip', lang)}
+              aria-haspopup="dialog"
+              title={t('lookOpen', lang)}
+              onClick={onLook}
+            >
+              <span aria-hidden="true">👕</span>
             </button>
           )}
           {bandar && (

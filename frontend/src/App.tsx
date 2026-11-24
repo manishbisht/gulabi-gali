@@ -4,6 +4,7 @@ import { patangAvailable } from './games/patang'
 import { hasWebGL } from './engine/webgl'
 import { useAuth } from './auth/useAuth'
 import { ProfileSheet } from './profile/ProfileSheet'
+import { LookEditor } from './profile/lazyLookEditor'
 import { useMe } from './profile/useMe'
 import { deleteMyAccount } from './net/api'
 import { noteDistrict } from './net/errorBeacon'
@@ -12,7 +13,7 @@ import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
 import { usePush } from './push/usePush'
 import { VisibilityChip } from './ui/VisibilityChip'
-import { loadOrCreateLook, lookFromWire } from './player/avatar'
+import { loadOrCreateLook, lookFromWire, lookKey as figureKey, saveLocalLook } from './player/avatar'
 import { useLang } from './i18n/lang'
 import { t, type StringKey } from './i18n/strings'
 import { cityLine } from './live/cityLine'
@@ -205,6 +206,8 @@ export default function App() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [darshanOpen, setDarshanOpen] = useState(false)
+  /** A guest's dressing room (a resident's opens from the profile sheet). */
+  const [lookOpen, setLookOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
   const profileLook = (me?.complete && me.profile && lookFromWire(me.profile.look)) || null
   const profileLookRef = useRef(profileLook)
@@ -231,7 +234,7 @@ export default function App() {
   /** The city session, while the stage is up; it re-paints the sky when a new snapshot lands. */
   const session = useRef<CitySession | null>(null)
   useEffect(() => session.current?.repaint(), [snapshot])
-  const lookKey = profileLook && `${profileLook.skin}|${profileLook.outfit}|${profileLook.head}`
+  const lookKey = profileLook && figureKey(profileLook)
   useEffect(() => {
     const had = profileLookRef.current
     profileLookRef.current = profileLook
@@ -270,6 +273,8 @@ export default function App() {
   // signing out shuts the sheet, so the next resident does not find it open
   if (!residentId && connOpen) setConnOpen(false)
   if (!residentId && inviteOpen) setInviteOpen(false)
+  // a finished profile takes the device's dressing room away: the profile sheet has the resident's
+  if (profileLook && lookOpen) setLookOpen(false)
   const connShown = connOpen && !!residentId
   /** Push notifications: a tapped one opens the inbox (once there is a resident), and each visit refreshes it. */
   const push = usePush({
@@ -525,6 +530,7 @@ export default function App() {
     inviteOpen ||
     privacyOpen ||
     darshanOpen ||
+    lookOpen ||
     !!queue.card
   useEffect(() => {
     mapBlockedRef.current = sheetUp
@@ -640,6 +646,7 @@ export default function App() {
                 setPhoto(stageRef.current)
               }
         }
+        onLook={profileLook ? undefined : () => setLookOpen(true)}
         top={
           <>
             {slowed && (
@@ -953,6 +960,21 @@ export default function App() {
         />
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
+      {lookOpen && (
+        <LookEditor
+          look={loadOrCreateLook()}
+          lang={lang}
+          mode="local"
+          onSave={(next) => {
+            // a guest's look lives on this device only, and the street shows it at once
+            saveLocalLook(next)
+            session.current?.setLook(next)
+            setLookOpen(false)
+            return true
+          }}
+          onCancel={() => setLookOpen(false)}
+        />
+      )}
       <div className="fade" data-on={fading || roof.fading || taxi.dark || undefined} aria-hidden="true" />
       <RoofNotice notice={roof.notice} lang={lang} />
       {kiteFrom && (

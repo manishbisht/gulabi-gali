@@ -129,6 +129,117 @@ describe('profiles API', () => {
     expect(((await res.json()) as { fields: string[] }).fields).toContain('look')
   })
 
+  describe('the dressing room', () => {
+    const lookOf = async (token: string) =>
+      ((await (await call('/api/me', {}, token)).json()) as Me).profile!.look
+    const put = (token: string, look: unknown) =>
+      call('/api/me/profile', { method: 'PUT', body: body({ look }) }, token)
+
+    it('stores a dressed look whole, with the older fields set to the nearest older look', async () => {
+      const token = await login('dressed')
+      const res = await put(token, {
+        skin: 0,
+        outfit: 'teal',
+        head: 'none',
+        tone: 7,
+        hat: 2, // a pagdi
+        hatC: 6, // marigold
+        dup: 2, // round the shoulders
+        dupC: 0,
+        hair: 3,
+      })
+      expect(res.status).toBe(200)
+      // whatever `skin` and `head` were sent, they are what an older client should draw
+      expect(await lookOf(token)).toEqual({
+        skin: 4,
+        outfit: 'teal',
+        head: 'safa',
+        tone: 7,
+        hat: 2,
+        hatC: 6,
+        dup: 2,
+        dupC: 0,
+        hair: 3,
+      })
+    })
+
+    it('fills in what a dressed look leaves out from its older fields, and keeps no colour for what is not worn', async () => {
+      const token = await login('halfdressed')
+      expect((await put(token, { skin: 3, outfit: 'pink', head: 'dupatta', hair: 4, hatC: 2 })).status).toBe(
+        200,
+      )
+      // skin 3 is tone 5; the dupatta stays over the head in the outfit's colour (pink is OUTFITS[0])
+      expect(await lookOf(token)).toEqual({
+        skin: 3,
+        outfit: 'pink',
+        head: 'dupatta',
+        tone: 5,
+        hat: 0,
+        dup: 1,
+        dupC: 0,
+        hair: 4,
+      })
+    })
+
+    it('an older look is stored as it came, and an older client saving it unchanged keeps the dressing', async () => {
+      const token = await login('oldclient')
+      expect((await put(token, { skin: 1, outfit: 'ochre', head: 'cap' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual({ skin: 1, outfit: 'ochre', head: 'cap' })
+
+      const dressed = { skin: 0, outfit: 'ochre', head: 'none', tone: 0, hat: 1, hatC: 1, dup: 0, hair: 2 }
+      expect((await put(token, dressed)).status).toBe(200)
+      const stored = await lookOf(token)
+      expect(stored).toMatchObject({ skin: 0, head: 'safa', tone: 0, hat: 1, hatC: 1 })
+      // a client from before the dressing room sends back only what it knows: nothing is lost
+      expect((await put(token, { skin: 0, outfit: 'ochre', head: 'safa' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual(stored)
+      // a new kurta colour from it changes the kurta only: the tone, the safa and its colour, the hair stay
+      expect((await put(token, { skin: 0, outfit: 'teal', head: 'safa' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual({ ...stored, outfit: 'teal' })
+      // another skin or head is a new, older look: the only terms that client can choose in
+      expect((await put(token, { skin: 3, outfit: 'teal', head: 'safa' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual({ skin: 3, outfit: 'teal', head: 'safa' })
+      expect((await put(token, dressed)).status).toBe(200)
+      expect((await put(token, { skin: 0, outfit: 'ochre', head: 'cap' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual({ skin: 0, outfit: 'ochre', head: 'cap' })
+    })
+
+    it('a dressed look saved again whole replaces the stored one, outfit and all', async () => {
+      const token = await login('redress')
+      const first = { skin: 0, outfit: 'ochre', head: 'none', tone: 1, hat: 0, dup: 2, dupC: 4, hair: 3 }
+      expect((await put(token, first)).status).toBe(200)
+      const second = { skin: 0, outfit: 'grass', head: 'none', tone: 1, hat: 0, dup: 0, hair: 3 }
+      expect((await put(token, second)).status).toBe(200)
+      expect(await lookOf(token)).toEqual(second)
+    })
+
+    it('rejects any option that is not in the set: no free text, no colours of its own', async () => {
+      const token = await login('badoption')
+      const base = { skin: 1, outfit: 'pink', head: 'none' }
+      for (const extra of [
+        { tone: 8 },
+        { tone: -1 },
+        { tone: 1.5 },
+        { tone: '3' },
+        { hat: 4 },
+        { hat: 'crown' },
+        { hatC: 10 },
+        { hatC: '#ff0000' },
+        { dup: 3 },
+        { dupC: 99 },
+        { hair: 5 },
+        { hair: null },
+      ]) {
+        const res = await put(token, { ...base, ...extra })
+        expect(res.status, JSON.stringify(extra)).toBe(400)
+        expect(((await res.json()) as { error: string; fields: string[] }).fields).toEqual(['look'])
+      }
+      // unknown keys are dropped, as they always were
+      expect((await put(token, { ...base, cape: 'red' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual(base)
+    })
+  })
+
   it('GET /api/profiles/:id is 401 without a token', async () => {
     const res = await call('/api/profiles/dev:roundtrip')
     expect(res.status).toBe(401)

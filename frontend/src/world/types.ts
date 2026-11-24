@@ -24,6 +24,13 @@ export type AvatarLook = {
   skin: 0 | 1 | 2 | 3 | 4
   outfit: PaletteKey
   head: 'none' | 'safa' | 'cap' | 'dupatta' | 'bun'
+  /** The dressing room's choices, as on the wire (see `AvatarLookWire`): absent, the older fields say. */
+  tone?: number
+  hat?: number
+  hatC?: number
+  dup?: number
+  dupC?: number
+  hair?: number
 }
 export interface PropSpec {
   /** `station`: a metro entrance; `bus-stop`: the bus stand of a district the metro does not reach (`byBus`). */

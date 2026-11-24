@@ -2,7 +2,9 @@
 import * as THREE from 'three'
 import { afterEach, expect, it } from 'vitest'
 import type { LivePerson } from '../net/protocol'
+import { buildAvatar, dressLook } from '../player/avatar'
 import { createPeople, createPeopleLabels } from './people'
+import type { AvatarLook } from './types'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -122,6 +124,25 @@ it('a join for someone already listed updates them in place', () => {
   expect(p).toMatchObject({ name: 'Asha R', status: 'naya status', look: { skin: 4, outfit: 'pink' } })
   people.apply({ t: 'status', id: 'dev:asha', text: 'phir se' })
   expect(people.list()[0]!.status).toBe('phir se')
+  people.dispose()
+})
+
+it('an older look is drawn as it always was; a change to the dressing alone dresses them again', () => {
+  const scene = new THREE.Scene()
+  const people = createPeople(scene)
+  const mesh = () => bodies(scene)[0]!.children.find((c) => c.name !== 'tap') as THREE.Mesh
+  people.apply(welcome([asha]))
+  // a look from before the dressing room: the same figure as its dressed twin
+  expect(mesh().geometry).toBe(buildAvatar(asha.look as AvatarLook).geometry)
+  expect(mesh().geometry).toBe(buildAvatar(dressLook(asha.look as AvatarLook, {})).geometry)
+  // the same older fields, a new plait: drawn anew
+  const plait = { ...dressLook(asha.look as AvatarLook, { hair: 4 }) } as LivePerson['look']
+  people.apply({ t: 'join', p: { ...asha, look: plait } })
+  expect(mesh().geometry).toBe(buildAvatar(plait as AvatarLook).geometry)
+  expect(mesh().geometry).not.toBe(buildAvatar(asha.look as AvatarLook).geometry)
+  // a newer client's option this build does not know falls back to the older fields, never to nobody
+  people.apply({ t: 'join', p: { ...asha, look: { ...asha.look, hat: 7, tone: 99 } } })
+  expect(mesh().geometry).toBe(buildAvatar(asha.look as AvatarLook).geometry)
   people.dispose()
 })
 

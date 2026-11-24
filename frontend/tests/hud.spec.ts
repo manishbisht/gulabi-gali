@@ -101,7 +101,7 @@ async function laidOut(items: Record<string, Locator>, inside: [string, string][
   for (const k of ['place', 'weather', 'stamps'])
     expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
   // thumb-sized switches
-  for (const k of ['lang', 'sound', 'bandar'].filter((k) => k in boxes)) {
+  for (const k of ['lang', 'sound', 'bandar', 'look'].filter((k) => k in boxes)) {
     expect.soft(boxes[k]!.width, `${k} width`).toBeGreaterThanOrEqual(44)
     expect.soft(boxes[k]!.height, `${k} height`).toBeGreaterThanOrEqual(44)
   }
@@ -160,6 +160,7 @@ test('on a small phone the HUD keeps to the top, with every chip whole and in re
     ...common(page),
     ghost: page.getByText(WORDS.hi.ghost, { exact: true }),
     signIn: page.getByRole('button', { name: WORDS.hi.signIn }),
+    look: page.locator('.hud-toggles .look-button'),
   }
   await laidOut(items, NEWS)
   await expect(items.weather!).toContainText('AQI 162')
@@ -194,6 +195,7 @@ for (const lang of LANGS)
             ...common(page, place, lang),
             ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
             signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+            look: page.locator('.hud-toggles .look-button'),
           },
           NEWS,
         )
@@ -252,6 +254,7 @@ for (const lang of LANGS) {
       ...common(page, place, lang),
       ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
       signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+      look: page.locator('.hud-toggles .look-button'),
     }
     await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(11\/11\)$/)
     await laidOut(items, NEWS)

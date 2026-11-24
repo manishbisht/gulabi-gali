@@ -166,6 +166,59 @@ describe('DistrictDO', () => {
     await watcher.next('leave', (m) => m.id === 'dev:arrive-anu')
   })
 
+  it('a dressed look goes out on join as small numbers, with the older fields an older client draws', async () => {
+    const watcher = await live('amer')
+    await watcher.next('welcome')
+    const look = { skin: 1, outfit: 'teal', head: 'none', tone: 4, hat: 1, hatC: 3, dup: 2, dupC: 5, hair: 4 }
+    const a = await live('amer', { token: await resident('Dressed Devi', { look }) })
+    await a.next('welcome')
+    a.send({ t: 'move', x: 1, z: 1, ry: 0 })
+    const join = await watcher.next('join', (m) => m.p.id === 'dev:dressed-devi')
+    // tone 4 is nearest the older skin 3; a safa is the older head
+    expect(join.p.look).toEqual({ ...look, skin: 3, head: 'safa' })
+    // no colour strings, no names of options: the whole look is a few dozen bytes
+    expect(JSON.stringify(join.p.look).length).toBeLessThan(100)
+    expect(JSON.stringify(join.p.look)).not.toMatch(/#|pagdi|plait|shoulders/)
+    a.close()
+  })
+
+  it('a look saved while connected reaches the others when the saver reconnects, as the client does on save', async () => {
+    const watcher = await live('mi-road')
+    await watcher.next('welcome')
+    const token = await resident('Redress Rekha')
+    const a = await live('mi-road', { token })
+    await a.next('welcome')
+    a.send({ t: 'move', x: 3, z: 3, ry: 0 })
+    const before = await watcher.next('join', (m) => m.p.id === 'dev:redress-rekha')
+    expect(before.p.look).toEqual({ skin: 1, outfit: 'pink', head: 'none' })
+
+    const look = { skin: 1, outfit: 'grass', head: 'none', tone: 6, hat: 3, hatC: 4, dup: 0, hair: 2 }
+    const saved = await SELF.fetch('https://api.test/api/me/profile', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: 'Redress Rekha',
+        look,
+        status: 'chai pe',
+        homeArea: 'Raja Park',
+        adult: true,
+        pledge: true,
+      }),
+    })
+    expect(saved.status).toBe(200)
+    // the client sees its look change and opens a new socket (App's `liveKey`); the old one goes
+    const b = await live('mi-road', { token })
+    await b.next('welcome')
+    a.close()
+    b.send({ t: 'move', x: 3.2, z: 3, ry: 0 })
+    const after = await watcher.next(
+      'join',
+      (m) => m.p.id === 'dev:redress-rekha' && m.p.look.tone !== undefined,
+    )
+    expect(after.p.look).toEqual({ ...look, skin: 4, head: 'cap' }) // tone 6 is nearest the older skin 4
+    b.close()
+  })
+
   it('moves are only relayed within 60 m', async () => {
     const a = await live('malviya-nagar', { token: await resident('Near Neha') })
     const b = await live('malviya-nagar', { token: await resident('Near Bina') })

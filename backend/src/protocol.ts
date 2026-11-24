@@ -41,11 +41,104 @@ export type OutfitKey = (typeof OUTFITS)[number]
 export const HEADS = ['none', 'safa', 'cap', 'dupatta', 'bun'] as const
 export type HeadKey = (typeof HEADS)[number]
 
-/** Mirrors the frontend `AvatarLook`, with plain string unions. */
+/**
+ * Mirrors the frontend `AvatarLook`, with plain string unions. `skin`, `outfit` and `head` are the look every
+ * client knows; the rest is the dressing room's (see `dressOf`), small indices, each optional. A look without
+ * them is drawn as it always was. When any is present the server stores them all, and sets `skin` and `head` to
+ * the nearest older look (`compactLook`), which is what a client from before the dressing room draws.
+ */
 export interface AvatarLookWire {
   skin: 0 | 1 | 2 | 3 | 4
   outfit: OutfitKey
   head: HeadKey
+  /** Skin tone, 0 to `TONE_COUNT - 1`. */
+  tone?: number
+  /** Headwear: an index into `HATS`. */
+  hat?: number
+  /** The headwear's colour: an index into `OUTFITS`. Left out when there is no headwear. */
+  hatC?: number
+  /** Dupatta or stole: an index into `DUPATTAS`. */
+  dup?: number
+  /** Its colour: an index into `OUTFITS`. Left out when it is off. */
+  dupC?: number
+  /** Hair: an index into `HAIRS`. */
+  hair?: number
+}
+
+/*
+ * The dressing room's options. Every list is append-only: a look names an option by its index, so an index
+ * never changes meaning. Every option is for everyone; each is named by garment and colour only.
+ */
+/** Skin tones, light to deep (the frontend's `TONES` holds their colours); a range, never a ranking. */
+export const TONE_COUNT = 8
+/** The tone each of the older five skins is: they are tones 1, 2, 3, 5 and 6, so nobody's colour changes. */
+export const TONE_OF_SKIN = [1, 2, 3, 5, 6] as const
+/** The nearest older skin to each tone: what a client from before tones draws. */
+export const SKIN_OF_TONE = [0, 0, 1, 2, 3, 3, 4, 4] as const
+/** Headwear. The safa and the pagdi are two ties of the Rajasthani turban. */
+export const HATS = ['none', 'safa', 'pagdi', 'cap'] as const
+/** A dupatta or stole: off, over the head (drawn round the shoulders under headwear), or round the shoulders. */
+export const DUPATTAS = ['off', 'head', 'shoulders'] as const
+/** `crop` is the close crop every figure had before hair was a choice; `bun` is the older `head: 'bun'`. */
+export const HAIRS = ['crop', 'bun', 'short', 'long', 'plait'] as const
+
+/** A look's dressing-room choices, every one filled in. */
+export interface Dress {
+  tone: number
+  hat: number
+  hatC: number
+  dup: number
+  dupC: number
+  hair: number
+}
+
+/** The dressing-room fields of a look, and how many options each has. */
+export const DRESS_LIMITS: Readonly<Record<keyof Dress, number>> = {
+  tone: TONE_COUNT,
+  hat: HATS.length,
+  hatC: OUTFITS.length,
+  dup: DUPATTAS.length,
+  dupC: OUTFITS.length,
+  hair: HAIRS.length,
+}
+
+/**
+ * Every choice of a look, each field it leaves out read from its older fields as they were always drawn: a safa
+ * in marigold, a white cap, a dupatta over the head in the outfit's colour, a bun.
+ */
+export function dressOf(look: AvatarLookWire): Dress {
+  const hat = look.hat ?? (look.head === 'safa' ? 1 : look.head === 'cap' ? 3 : 0)
+  return {
+    tone: look.tone ?? TONE_OF_SKIN[look.skin],
+    hat,
+    hatC: look.hatC ?? OUTFITS.indexOf(hat === 3 ? 'white' : 'marigold'),
+    dup: look.dup ?? (look.head === 'dupatta' ? 1 : 0),
+    dupC: look.dupC ?? OUTFITS.indexOf(look.outfit),
+    hair: look.hair ?? (look.head === 'bun' ? 1 : 0),
+  }
+}
+
+/** The older `head` nearest a dress: headwear first, then a dupatta over the head, then a bun. */
+export function legacyHead(d: Dress): HeadKey {
+  if (d.hat === 1 || d.hat === 2) return 'safa'
+  if (d.hat === 3) return 'cap'
+  if (d.dup === 1) return 'dupatta'
+  return d.hair === 1 ? 'bun' : 'none'
+}
+
+/** A dress as it goes on the wire: every choice, the older fields to match, no colour for what is not worn. */
+export function compactLook(outfit: OutfitKey, d: Dress): AvatarLookWire {
+  return {
+    skin: SKIN_OF_TONE[d.tone] ?? 0,
+    outfit,
+    head: legacyHead(d),
+    tone: d.tone,
+    hat: d.hat,
+    ...(d.hat ? { hatC: d.hatC } : {}),
+    dup: d.dup,
+    ...(d.dup ? { dupC: d.dupC } : {}),
+    hair: d.hair,
+  }
 }
 
 /** Neighbourhoods only, never precise locations. */

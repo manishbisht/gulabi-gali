@@ -4,11 +4,15 @@ import { wordsOk } from './filter/server'
 import { cleanName, firstName } from './names'
 import { stampsOf } from './stamps'
 import {
+  compactLook,
+  DRESS_LIMITS,
+  dressOf,
   HEADS,
   HERE_FOR,
   HOME_AREAS,
   OUTFITS,
   type AvatarLookWire,
+  type Dress,
   type FullProfile,
   type HereFor,
   type HomeArea,
@@ -64,16 +68,34 @@ function toFull(row: ProfileRow, withLink = false, stamps: string[] = []): FullP
 
 const isComplete = (row: ProfileRow) => row.adult === 1 && row.pledge === 1
 
+const DRESS_KEYS = Object.keys(DRESS_LIMITS) as (keyof Dress)[]
+
+/** Whether a look carries any of the dressing room's fields (else it is an older client's look). */
+const dressed = (look: AvatarLookWire): boolean => DRESS_KEYS.some((k) => look[k] !== undefined)
+
+/**
+ * A look from a request: the older fields as they always were, and the dressing room's, each an index into its
+ * option set or left out (anything else is not a look). A dressed look is stored whole (see `compactLook`).
+ * Unknown keys are dropped.
+ */
 function parseLook(x: unknown): AvatarLookWire | null {
   if (typeof x !== 'object' || x === null) return null
-  const { skin, outfit, head } = x as Record<string, unknown>
+  const raw = x as Record<string, unknown>
+  const { skin, outfit, head } = raw
   if (!Number.isInteger(skin) || (skin as number) < 0 || (skin as number) > 4) return null
   if (!OUTFITS.includes(outfit as never) || !HEADS.includes(head as never)) return null
-  return {
+  const look: AvatarLookWire = {
     skin: skin as AvatarLookWire['skin'],
     outfit: outfit as AvatarLookWire['outfit'],
     head: head as AvatarLookWire['head'],
   }
+  for (const k of DRESS_KEYS) {
+    const v = raw[k]
+    if (v === undefined) continue
+    if (!Number.isInteger(v) || (v as number) < 0 || (v as number) >= DRESS_LIMITS[k]) return null
+    look[k] = v as number
+  }
+  return dressed(look) ? compactLook(look.outfit, dressOf(look)) : look
 }
 
 export function cleanText(x: unknown, max: number, oneLine = false): string | null {
@@ -195,12 +217,19 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
   const field = (['name', 'status', 'about'] as const).find((f) => !wordsOk(p[f], f))
   if (field) return Response.json({ error: 'words', field }, { status: 400 })
   const now = Date.now()
+  // A client from before the dressing room sends back only the older fields. With the same skin and head, the
+  // dressing they stand for stays and only the kurta's colour is theirs to change; another skin or head is a new,
+  // older look (their choice, in the only terms that client knows).
+  const older = dressed(p.look) ? 0 : 1
   await env.DB.batch([
     env.DB.prepare('INSERT OR IGNORE INTO users (id, created_at) VALUES (?, ?)').bind(userId, now),
     env.DB.prepare(
       `INSERT INTO profiles (user_id, name, look, home_area, status, here_for, about, link, adult, pledge, pause_requests, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET name = excluded.name, look = excluded.look, home_area = excluded.home_area,
+       ON CONFLICT(user_id) DO UPDATE SET name = excluded.name,
+         look = CASE WHEN ? = 1 AND json_extract(profiles.look, '$.skin') = ? AND json_extract(profiles.look, '$.head') = ?
+           THEN json_set(profiles.look, '$.outfit', ?) ELSE excluded.look END,
+         home_area = excluded.home_area,
          status = excluded.status, here_for = excluded.here_for, about = excluded.about,
          link = CASE WHEN ? = 1 THEN excluded.link ELSE profiles.link END,
          adult = excluded.adult, pledge = excluded.pledge, pause_requests = excluded.pause_requests,
@@ -218,6 +247,10 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
       p.pledge ? 1 : 0,
       p.pauseRequests ? 1 : 0,
       now,
+      older,
+      p.look.skin,
+      p.look.head,
+      p.look.outfit,
       p.link === undefined ? 0 : 1,
     ),
   ])

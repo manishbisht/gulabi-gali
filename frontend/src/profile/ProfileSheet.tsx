@@ -11,6 +11,7 @@ import { StampsLine } from '../ui/StampsLine'
 import { useDialog } from '../ui/useDialog'
 import { DeleteAccount } from './DeleteAccount'
 import { AvatarBuilder } from './AvatarBuilder'
+import { LookEditor } from './lazyLookEditor'
 import { areaLabel, HERE_FOR_LABEL, HOME_AREAS } from './homeAreas'
 import { LIMITS } from './limits'
 import type { SaveOutcome } from './useMe'
@@ -66,6 +67,33 @@ export function ProfileSheet({
   const [bad, setBad] = useState<string[]>([])
   const [failed, setFailed] = useState(false)
   const [wordsRefused, setWordsRefused] = useState(false)
+  /** The dressing room is open over the sheet. */
+  const [dressing, setDressing] = useState(false)
+
+  /**
+   * The dressing room's Save. A resident's look is saved at once, alone: the rest goes as it is stored, so an
+   * edit still unsaved in this form waits for the form's own Save. A profile not yet made takes the look into
+   * the form, to be saved with it.
+   */
+  const keepLook = async (next: AvatarLook): Promise<boolean> => {
+    if (p && me.complete) {
+      const result = await onSave({
+        name: p.name,
+        look: lookToWire(next),
+        status: p.status,
+        homeArea: p.homeArea,
+        hereFor: p.hereFor,
+        about: p.about,
+        adult: true,
+        pledge: true,
+        pauseRequests: p.pauseRequests,
+      })
+      if (!result.ok) return false
+    }
+    setLook(next)
+    setDressing(false)
+    return true
+  }
 
   /** Whom you blocked: null while loading or when it could not load. */
   const [blocked, setBlocked] = useState<BlockListEntry[] | null>(null)
@@ -160,7 +188,7 @@ export function ProfileSheet({
             </small>
             <WordsHint text={name} lang={lang} />
           </label>
-          <AvatarBuilder look={look} lang={lang} onChange={setLook} />
+          <AvatarBuilder look={look} lang={lang} onEdit={() => setDressing(true)} />
           <label>
             {t('profileArea', lang)}
             <select
@@ -327,6 +355,15 @@ export function ProfileSheet({
         )}
         {onDelete && me.profile && <DeleteAccount lang={lang} onDelete={onDelete} />}
       </section>
+      {dressing && (
+        <LookEditor
+          look={look}
+          lang={lang}
+          mode={p && me.complete ? 'save' : 'apply'}
+          onSave={keepLook}
+          onCancel={() => setDressing(false)}
+        />
+      )}
     </div>
   )
 }
