@@ -22,6 +22,7 @@ describe('the auto-taxi', () => {
     expect(TAXI['walled-city'].stands).toContainEqual(STAND)
     expect(Object.keys(TAXI['walled-city'].drops).sort()).toEqual([
       'badi-chaupar',
+      'city-palace',
       'hawa-mahal',
       'jantar-mantar',
       'tripolia-gate',

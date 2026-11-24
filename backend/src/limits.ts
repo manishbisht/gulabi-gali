@@ -117,7 +117,7 @@ export async function requestLimit(env: Env, userId: string, now = Date.now()): 
 }
 
 /**
- * `PUT /api/me/stamps` per account: a page pushes once when it opens signed in and once per new stamp (eleven
+ * `PUT /api/me/stamps` per account: a page pushes once when it opens signed in and once per new stamp (thirteen
  * in all), so 30 an hour is room for many reloads, and a stuck loop stops there.
  */
 export const STAMP_LIMIT = { perWindow: 30, windowMs: 3600_000, bucket: 'stamps' } as const

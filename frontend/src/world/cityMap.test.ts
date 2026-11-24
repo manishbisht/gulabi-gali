@@ -81,6 +81,7 @@ it("a district's map items: every landmark (stamped or not), the metro, every be
     ['jantar-mantar', false],
     ['tripolia-gate', false],
     ['badi-chaupar', false],
+    ['city-palace', false],
   ])
   expect(of('metro')).toHaveLength(1)
   expect(of('metro')[0]!.at).toEqual(walledCity.station)
@@ -90,6 +91,14 @@ it("a district's map items: every landmark (stamped or not), the metro, every be
   for (const i of items) expect(i.name.hi && i.name.en).toBeTruthy()
   expect(new Set(items.map((i) => i.id)).size).toBe(items.length)
   expect(of('metro')[0]!.name).toEqual({ hi: 'Metro station', en: 'Metro station' })
+})
+
+it("Amer's map has Jal Mahal out in Man Sagar, by the fort, with its arrival at the palace's edge", () => {
+  const items = mapItems(amer, ['jal-mahal'])
+  const jal = items.find((i) => i.id === 'jal-mahal')!
+  expect(jal).toMatchObject({ kind: 'landmark', name: { hi: 'Jal Mahal', en: 'Jal Mahal' }, stamped: true })
+  expect(jal.area).toEqual(amer.landmarks.find((l) => l.id === 'jal-mahal')!.footprint)
+  expect(items.filter((i) => i.kind === 'landmark').map((i) => i.id)).toEqual(['amer-fort', 'jal-mahal'])
 })
 
 it.each([amer, nahargarh])(

@@ -1,6 +1,7 @@
 import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { AMER_FORT, buildAmerFort, PALACE } from '../landmarks/amerFort'
+import { buildJalMahal, JAL_MAHAL } from '../landmarks/jalMahal'
 import { roofAt } from '../rooftop'
 import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
 import { centred, createFill, grow, rect, wall, type Facing } from './layout'
@@ -11,7 +12,9 @@ import { centred, createFill, grow, rect, wall, type Facing } from './layout'
  * goes north along the lake's east shore, past the stalls, to the gate at the foot of the ramp. Between the road
  * and the lake, a garden and a low rampart with a bastion on it, whose roof looks across the water at the
  * palace. The old town's havelis and shops fill the west, the east and south of the road. No metro comes here:
- * the bus stops by the road.
+ * the bus stops by the road. South-west of the road, on the city side, lies Man Sagar with Jal Mahal out in it:
+ * a promenade along the road's south side looks across the water at the palace, and a ghat runs out from it
+ * toward the palace, which nobody walks to.
  */
 
 const SIZE = 200
@@ -39,6 +42,23 @@ const STATION_PLAZA = rect(56, NORTH - 10, 72, NORTH)
 const LANE = 80 // an east–west lane through the town south of the road; 6 m wide
 const CROSS = 4 // half-width of the street running south from the road
 
+/**
+ * Man Sagar, south-west of the road: the promenade along the road's south side, then the lake. The water you
+ * cannot walk into runs from the promenade's edge to the district's west and south walls, and east to a
+ * footpath along the street that runs south; the lake drawn goes on past the walls, so it does not end at one.
+ * A stone ghat runs out from the promenade into the water, toward Jal Mahal: the water is three boxes round it.
+ */
+const PROMENADE = rect(-HALF, SOUTH, -CROSS - 4, 58)
+const LAKE_SOUTH = rect(-HALF, PROMENADE.maxZ, PROMENADE.maxX, HALF)
+const GHAT = rect(-54, PROMENADE.maxZ, -46, 68.5)
+const MAN_SAGAR = [
+  rect(LAKE_SOUTH.minX, LAKE_SOUTH.minZ, GHAT.minX, LAKE_SOUTH.maxZ),
+  rect(GHAT.maxX, LAKE_SOUTH.minZ, LAKE_SOUTH.maxX, LAKE_SOUTH.maxZ),
+  rect(GHAT.minX, GHAT.maxZ, GHAT.maxX, LAKE_SOUTH.maxZ),
+]
+/** Jal Mahal, out in the lake a few metres off the ghat's end, its front turned to it. */
+const JAL_MAHAL_AT = { x: (GHAT.minX + GHAT.maxX) / 2, z: GHAT.maxZ + 4 + JAL_MAHAL.d / 2 }
+
 // ---- landmarks -------------------------------------------------------------------------------
 
 const landmarks: LandmarkDef[] = [
@@ -56,6 +76,24 @@ const landmarks: LandmarkDef[] = [
     build: async () => {
       const g = buildAmerFort()
       g.position.set(FORT_AT.x, 0, FORT_AT.z)
+      return g
+    },
+  },
+  {
+    id: 'jal-mahal',
+    name: { hi: 'Jal Mahal', en: 'Jal Mahal' },
+    story: {
+      hi: 'Man Sagar jheel ke beech, Sawai Jai Singh II ka sanwara Jal Mahal. Jheel bhari ho to iski paanch mein se chaar manzilein paani mein rehti hain; ise ghat se hi dekhte hain.',
+      en: 'Jal Mahal, restored by Sawai Jai Singh II, sits in Man Sagar lake. When the lake is full, four of its five storeys are under water; it is seen from the ghat.',
+    },
+    // the palace in the water: its ring reaches the end of the ghat in front of it, where the stamp is
+    at: JAL_MAHAL_AT,
+    radius: 13,
+    footprint: centred(JAL_MAHAL_AT, JAL_MAHAL),
+    build: async () => {
+      const g = buildJalMahal()
+      g.position.set(JAL_MAHAL_AT.x, 0, JAL_MAHAL_AT.z)
+      g.rotation.y = Math.PI // its front, with the pavilion, faces the promenade (north)
       return g
     },
   },
@@ -77,6 +115,7 @@ const KEEP_OUT = [
   rect(-HALF, LANE - 3, HALF, LANE + 3),
   rect(-CROSS, SOUTH, CROSS, HALF),
   STATION_PLAZA,
+  rect(LAKE_SOUTH.minX, SOUTH, LAKE_SOUTH.maxX + 2, HALF),
 ]
 
 const { buildings, rand, row } = createFill(1727, rect(-INNER, -INNER, INNER, INNER), KEEP_OUT)
@@ -111,7 +150,7 @@ const paving: Paving[] = [
   { ...rect(-HALF, NORTH, HALF, SOUTH), color: 'road' },
   { ...rect(-HALF, NORTH - KERB, HALF, NORTH), color: 'white' },
   { ...rect(-HALF, SOUTH, HALF, SOUTH + KERB), color: 'white' },
-  { ...rect(-HALF, LANE - 2.5, HALF, LANE + 2.5), color: 'road' },
+  { ...rect(-CROSS, LANE - 2.5, HALF, LANE + 2.5), color: 'road' },
   { ...rect(-CROSS + 0.5, SOUTH, CROSS - 0.5, HALF), color: 'road' },
   { ...GARDEN, color: 'grass' },
   // the ghat round the lake, the water, and the garden island in it
@@ -125,6 +164,13 @@ const paving: Paving[] = [
     ...rect(STATION_PLAZA.minX + 0.5, STATION_PLAZA.minZ + 0.5, STATION_PLAZA.maxX - 0.5, NORTH),
     color: 'white',
   },
+  // Man Sagar: the promenade, the ghat steps along its edge, and the water (on past the walls)
+  { ...rect(PROMENADE.minX, SOUTH + KERB, PROMENADE.maxX, PROMENADE.maxZ), color: 'white' },
+  { ...rect(-HALF * 1.6, PROMENADE.maxZ, LAKE_SOUTH.maxX, HALF * 1.6), color: 'sandstone' },
+  { ...rect(-HALF * 1.6, PROMENADE.maxZ + 1.5, LAKE_SOUTH.maxX - 1.5, HALF * 1.6), color: 'glass' },
+  // the ghat: its steps down into the water, and its top
+  { ...rect(GHAT.minX - 1.5, PROMENADE.maxZ, GHAT.maxX + 1.5, GHAT.maxZ + 1.5), color: 'sandstone' },
+  { ...GHAT, color: 'white' },
 ]
 
 // ---- props -----------------------------------------------------------------------------------
@@ -146,6 +192,13 @@ const props: PropSpec[] = [
   { kind: 'auto', at: { x: 20, z: 42.6 }, rot: 90 },
   { kind: 'auto', at: { x: 24, z: 42.6 }, rot: 90 },
   { kind: 'auto', at: { x: -60, z: 47.4 }, rot: 270 },
+  // the Man Sagar promenade: benches looking out across the water, lamps along its edge and at the ghat
+  ...[-76, -20].map((x): PropSpec => ({ kind: 'bench', at: { x, z: 54.5 } })),
+  ...[-88, -64, -30, -14].map((x): PropSpec => ({ kind: 'lamp', at: { x, z: 57.3 } })),
+  ...[GHAT.minX + 0.6, GHAT.maxX - 0.6].map((x): PropSpec => ({
+    kind: 'lamp',
+    at: { x, z: GHAT.maxZ - 0.6 },
+  })),
 ]
 
 // ---- the cast --------------------------------------------------------------------------------
@@ -214,7 +267,7 @@ const amer: DistrictDef = {
   ],
   /** The bastion on the rampart: its roof looks north across the lake at the palace. */
   roof: roofAt(buildings, BASTION, 1, { x: FORT_AT.x + PALACE.x, z: FORT_AT.z + PALACE.z }),
-  water: [WATER],
+  water: [WATER, ...MAN_SAGAR],
 }
 
 export default amer

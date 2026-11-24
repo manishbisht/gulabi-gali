@@ -41,6 +41,13 @@ function ringHasOpening(l: LandmarkDef, colliders: AABB[]): boolean {
 
 const intersects = (a: AABB, b: AABB) =>
   a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ
+const grownBy = (a: AABB, m: number): AABB => ({
+  minX: a.minX - m,
+  maxX: a.maxX + m,
+  minZ: a.minZ - m,
+  maxZ: a.maxZ + m,
+})
+const inside = (p: Vec2, a: AABB) => p.x > a.minX && p.x < a.maxX && p.z > a.minZ && p.z < a.maxZ
 
 const triangles = (o: THREE.Object3D) => {
   let n = 0
@@ -145,16 +152,19 @@ describe('the city', () => {
     expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer', 'nahargarh'])
   })
 
-  it('landmark count across districts is 11', async () => {
+  it('landmark count across districts is 13', async () => {
     const all = await Promise.all(DISTRICTS.map(load))
     expect(all.reduce((n, d) => n + d.def.landmarks.length, 0)).toBe(TOTAL_STAMPS)
-    expect(TOTAL_STAMPS).toBe(11)
+    expect(TOTAL_STAMPS).toBe(13)
   })
 
   it('the stamp list (stamps.json, which the server checks ids against) is every landmark, by its own name', async () => {
     const all = await Promise.all(DISTRICTS.map(load))
+    const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)
     const landmarks = all.flatMap((d) => d.def.landmarks.map((l) => ({ id: l.id, ...l.name })))
-    expect(STAMPS).toEqual(landmarks)
+    // in the order stamps were added (new ones go last, so a stored list keeps its meaning), not district order
+    expect([...STAMPS].sort(byId)).toEqual(landmarks.sort(byId))
+    expect(STAMPS.slice(-3).map((s) => s.id)).toEqual(['nahargarh-fort', 'jal-mahal', 'city-palace'])
   })
 
   it.each(DISTRICTS)('%s: names itself the way the metro lists it', async (id) => {
@@ -240,12 +250,13 @@ describe('district lifecycle', () => {
 })
 
 describe('the Walled City', () => {
-  it('is the Pink City, with its four landmarks', async () => {
+  it('is the Pink City, with its five landmarks', async () => {
     const d = await load('walled-city')
     expect(d.def.name).toEqual({ hi: 'Gulabi Shahar', en: 'Pink City' })
     expect(d.def.size).toBe(240)
     expect(d.def.landmarks.map((l) => l.id).sort()).toEqual([
       'badi-chaupar',
+      'city-palace',
       'hawa-mahal',
       'jantar-mantar',
       'tripolia-gate',
@@ -261,6 +272,41 @@ describe('the Walled City', () => {
     expect(at('jantar-mantar').x).toBeLessThan(0)
     expect(at('jantar-mantar').z).toBeLessThan(0)
     expect(at('tripolia-gate').x).toBeLessThan(-80)
+    // the City Palace's precinct lies north of Jantar Mantar and of Tripolia, its royal gate on the bazaar
+    const palace = d.def.landmarks.find((l) => l.id === 'city-palace')!.footprint
+    const jantar = d.def.landmarks.find((l) => l.id === 'jantar-mantar')!.footprint
+    expect(palace.maxZ).toBeLessThan(jantar.minZ - 20)
+    expect(palace.minX).toBeLessThan(at('jantar-mantar').x)
+    expect(palace.maxX).toBeGreaterThan(at('jantar-mantar').x)
+    expect(palace.minX).toBeLessThan(at('tripolia-gate').x + 5)
+  })
+
+  it('has the City Palace: a walled precinct you walk up to, its card at the courtyard gateway', async () => {
+    const d = await load('walled-city')
+    const palace = d.def.landmarks.find((l) => l.id === 'city-palace')!
+    const f = palace.footprint
+    // the ring is outside the gateway in the middle of the front (south) wall, on open ground
+    expect(palace.at.z).toBeGreaterThan(f.maxZ)
+    expect(palace.at.z - f.maxZ).toBeLessThan(palace.radius)
+    expect(Math.abs(palace.at.x - (f.minX + f.maxX) / 2)).toBeLessThan(1)
+    expect(blockedBy(d.colliders)(palace.at)).toBe(false)
+    // Chandra Mahal rises well over the havelis round it (four storeys at most), seen over the precinct wall
+    const box = new THREE.Box3().setFromObject(await palace.build())
+    expect(box.max.y).toBeGreaterThan(20)
+    // and the model keeps to its footprint
+    expect(box.min.x).toBeGreaterThanOrEqual(f.minX - 0.01)
+    expect(box.max.x).toBeLessThanOrEqual(f.maxX + 0.01)
+    expect(box.min.z).toBeGreaterThanOrEqual(f.minZ - 0.01)
+    expect(box.max.z).toBeLessThanOrEqual(f.maxZ + 0.01)
+  })
+
+  it("leaves the bazaars, the procession's loop and every character's walk where they were", async () => {
+    const d = await load('walled-city')
+    const palace = grownBy(d.def.landmarks.find((l) => l.id === 'city-palace')!.footprint, 1.3)
+    for (const p of d.def.processionRoute) expect(inside(p, palace)).toBe(false)
+    for (const n of d.def.npcs) for (const p of n.route) expect(inside(p, palace), n.id).toBe(false)
+    for (const p of d.def.props) expect(inside(p.at, palace), `${p.kind} ${p.at.x},${p.at.z}`).toBe(false)
+    for (const p of d.def.paving.filter((q) => q.color === 'road')) expect(intersects(p, palace)).toBe(false)
   })
 
   it('is filled with 80-120 pink havelis and shops', async () => {
@@ -369,9 +415,9 @@ describe('Amer', () => {
     const d = await load('amer')
     expect(d.def.name).toEqual({ hi: 'Amer', en: 'Amer' })
     expect(d.def.size).toBe(200)
-    expect(ids(d.def.landmarks)).toEqual(['amer-fort'])
+    expect(ids(d.def.landmarks)).toEqual(['amer-fort', 'jal-mahal'])
     // the hill rises north of the road, and the fort stands up on it, well above the street
-    const fort = d.def.landmarks[0]!
+    const fort = d.def.landmarks.find((l) => l.id === 'amer-fort')!
     const model = await fort.build()
     const box = new THREE.Box3().setFromObject(model)
     expect(box.max.y).toBeGreaterThan(18)
@@ -381,7 +427,7 @@ describe('Amer', () => {
   it('has the lake below the fort: water nobody walks into, between the road and the hill', async () => {
     const d = await load('amer')
     const lake = d.def.water!
-    expect(lake).toHaveLength(1)
+    expect(lake).toHaveLength(4) // Maota below the fort; Man Sagar on the city side, in three boxes round its ghat
     const [w] = lake
     expect(d.colliders).toContainEqual(w)
     const fort = d.def.landmarks[0]!.footprint
@@ -445,6 +491,112 @@ describe('Amer', () => {
 
   it('is where Gopal ji and Shabnam spend their days', async () => {
     expect(ids((await load('amer')).def.npcs)).toEqual(['gopal', 'shabnam'])
+  })
+})
+
+describe('Man Sagar and Jal Mahal (Amer, on the city side of the road)', () => {
+  /** Man Sagar's water: every box after Maota's, round the ghat. */
+  const manSagar = (d: District) => d.def.water!.slice(1)
+  /** The box the water's boxes fill, less the ghat: the lake's extent. */
+  const extent = (ws: AABB[]): AABB => ({
+    minX: Math.min(...ws.map((w) => w.minX)),
+    maxX: Math.max(...ws.map((w) => w.maxX)),
+    minZ: Math.min(...ws.map((w) => w.minZ)),
+    maxZ: Math.max(...ws.map((w) => w.maxZ)),
+  })
+  const jal = (d: District) => d.def.landmarks.find((l) => l.id === 'jal-mahal')!
+  const wet = (d: District) => (p: Vec2) => manSagar(d).some((w) => inside(p, w))
+
+  it('is a lake south of the road, out to the walls, that nobody walks into', async () => {
+    const d = await load('amer')
+    const lake = extent(manSagar(d))
+    for (const w of manSagar(d)) expect(d.colliders).toContainEqual(w)
+    expect(lake.minZ).toBeGreaterThan(d.def.spawn.z + 15) // past the road
+    expect(lake.minX).toBeLessThanOrEqual(-d.def.size / 2)
+    expect(lake.maxZ).toBeGreaterThanOrEqual(d.def.size / 2)
+    // every drop of water drawn inside the district is water you cannot walk into, and nothing is built on it
+    const half = d.def.size / 2
+    d.def.paving.forEach((p, i) => {
+      if (p.color !== 'glass') return
+      const inDistrict = {
+        minX: Math.max(p.minX, -half),
+        maxX: Math.min(p.maxX, half),
+        minZ: Math.max(p.minZ, -half),
+        maxZ: Math.min(p.maxZ, half),
+      }
+      const covered = d.def.water!.some(
+        (c) =>
+          inDistrict.minX >= c.minX &&
+          inDistrict.maxX <= c.maxX &&
+          inDistrict.minZ >= c.minZ &&
+          inDistrict.maxZ <= c.maxZ,
+      )
+      // the lake drawn round the ghat is covered by the boxes round it, where nothing is drawn over it: sample it
+      const over = d.def.paving.slice(i + 1)
+      if (!covered)
+        for (let x = inDistrict.minX + 0.25; x < inDistrict.maxX; x += 1)
+          for (let z = inDistrict.minZ + 0.25; z < inDistrict.maxZ; z += 1)
+            if (!over.some((q) => inside({ x, z }, q)))
+              expect(
+                d.def.water!.some((w) => inside({ x, z }, w)),
+                `water drawn at ${x},${z}`,
+              ).toBe(true)
+      for (const b of d.def.buildings)
+        expect(intersects(footprint(b), inDistrict), `${b.x},${b.z}`).toBe(false)
+    })
+  })
+
+  it('has Jal Mahal out in the water: water on every side, a few metres off the end of the ghat', async () => {
+    const d = await load('amer')
+    const l = jal(d)
+    const f = l.footprint
+    // water on every side, a few metres of it at least
+    for (const p of [
+      { x: f.minX - 3, z: (f.minZ + f.maxZ) / 2 },
+      { x: f.maxX + 3, z: (f.minZ + f.maxZ) / 2 },
+      { x: (f.minX + f.maxX) / 2, z: f.minZ - 3 },
+      { x: (f.minX + f.maxX) / 2, z: f.maxZ + 3 },
+      { x: f.minX - 3, z: f.minZ - 3 },
+      { x: f.maxX + 3, z: f.minZ - 3 },
+    ])
+      expect(wet(d)(p), `${p.x},${p.z}`).toBe(true)
+    // the walkable ground nearest it is the ghat's end, in front of its middle, under 6 m off (the map's arrival)
+    const ghatEnd = { x: l.at.x, z: f.minZ - 4 - PLAYER_RADIUS - 0.1 }
+    expect(blockedBy(d.colliders)(ghatEnd)).toBe(false)
+    expect(blockedBy(d.colliders)({ x: l.at.x, z: f.minZ - 2 })).toBe(true)
+    // its front (the pavilion) turned to the ghat, and it keeps to its footprint
+    const model = await l.build()
+    expect(model.rotation.y).toBeCloseTo(Math.PI)
+    const box = new THREE.Box3().setFromObject(model)
+    expect(box.max.y).toBeGreaterThan(8)
+    expect(box.min.x).toBeGreaterThanOrEqual(f.minX - 0.01)
+    expect(box.max.x).toBeLessThanOrEqual(f.maxX + 0.01)
+    expect(box.min.z).toBeGreaterThanOrEqual(f.minZ - 0.01)
+    expect(box.max.z).toBeLessThanOrEqual(f.maxZ + 0.01)
+  })
+
+  it('earns its stamp out on the ghat facing it, not on the promenade or the road', async () => {
+    const d = await load('amer')
+    const l = jal(d)
+    const lake = extent(manSagar(d))
+    const blocked = blockedBy(d.colliders)
+    // the ghat runs out from the promenade into the water, toward the palace
+    for (let z = lake.minZ - 1; z < l.footprint.minZ - 5; z += 0.5)
+      expect(blocked({ x: l.at.x, z }), `the ghat at ${z}`).toBe(false)
+    const end = { x: l.at.x, z: l.footprint.minZ - 4 - PLAYER_RADIUS - 0.1 }
+    expect(Math.hypot(end.x - l.at.x, end.z - l.at.z)).toBeLessThan(l.radius)
+    // the promenade, along the shore, is outside the ring
+    expect(l.at.z - lake.minZ).toBeGreaterThan(l.radius)
+  })
+
+  it('has benches on the promenade looking out across the water, and lamps along its edge', async () => {
+    const d = await load('amer')
+    const lake = extent(manSagar(d))
+    const onPromenade = (p: Vec2) => p.x < lake.maxX && p.z > 50 && p.z < lake.minZ
+    const benches = d.def.props.filter((p) => p.kind === 'bench' && onPromenade(p.at))
+    expect(benches.length).toBeGreaterThanOrEqual(2)
+    for (const b of benches) expect(b.rot ?? 0).toBe(0) // the front (+z) faces south, at the lake
+    expect(d.def.props.filter((p) => p.kind === 'lamp' && onPromenade(p.at)).length).toBeGreaterThanOrEqual(2)
   })
 })
 
