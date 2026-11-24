@@ -26,7 +26,7 @@ function LoadFailed({ lang, onClose }: { lang: Lang; onClose: () => void }) {
 
 /**
  * Catches a dressing room that could not load (a tab open across a deploy, a flaky network): the city goes on,
- * a line says to try again, and the next open fetches it afresh (a failed `lazy` would only fail again).
+ * a line says to reload (after a deploy the old file is gone), and the next open fetches it afresh (a failed `lazy` would only fail again).
  */
 class LoadBoundary extends Component<{ lang: Lang; onClose: () => void; children: ReactNode }> {
   state = { failed: false }

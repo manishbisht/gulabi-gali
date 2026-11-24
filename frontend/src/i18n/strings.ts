@@ -980,8 +980,8 @@ export const STRINGS = {
   lookCancel: { hi: 'Rehne do', en: 'Cancel' },
   lookSaveFailed: { hi: 'Save nahi hua. Phir se try karo.', en: "Couldn't save. Try again." },
   lookLoadFailed: {
-    hi: 'Kapde badalne wala panna khul nahi paya. Thodi der mein phir try karo.',
-    en: "Couldn't open the dressing room. Try again in a moment.",
+    hi: 'Kapde badalne wala panna khul nahi paya. Page reload karke phir try karo.',
+    en: "Couldn't open the dressing room. Reload the page and try again.",
   },
   lookLocal: {
     hi: 'Ye roop sirf is phone pe rahega. Login karo to sabko dikhega.',
