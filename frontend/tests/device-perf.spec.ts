@@ -33,6 +33,10 @@ import type { CDPSession, Page } from '@playwright/test'
  * follow, and after the walk the player drives the auto parked by the spawn for another 8 s, recorded on its
  * own. The 60 residents come from `node scripts/fake-residents.mjs 60 walled-city <seconds>`, run alongside;
  * the posters and the animals are always there. Results go to test-results/device-perf-extras.json.
+ *
+ * Winter (DEVICE_PERF_WINTER=1): the same walk on MI Road at 05:45 IST on 1 January, under a fog warning and
+ * unhealthy air, with the New Year override on: the morning's ground fog at its thickest and the string lights
+ * across MI Road, both up at once. Results go to test-results/device-perf-winter.json.
  */
 
 test.skip(!process.env.DEVICE_PERF, 'Measurement, not a test: set DEVICE_PERF=1 to run it.')
@@ -52,6 +56,9 @@ const CPU_SLOWDOWN = 6
 /** How long the walk along the bazaar is watched (and, with every extra on, the drive after it). */
 const WALK_MS = 8000
 const EXTRAS = !!process.env.DEVICE_PERF_EXTRAS
+const WINTER = !!process.env.DEVICE_PERF_WINTER
+/** New Year's morning, 05:45 IST: the lights are still up and the ground fog is at its thickest. */
+const WINTER_DAWN = '2027-01-01T00:15:00Z'
 /** The street dog that lives a few steps from the spawn, and the auto parked just past it. */
 const DOG = 'walled-city-dog-0'
 const AUTO_SIDE = { x: 0.8, z: 54 }
@@ -223,10 +230,9 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
 
   // Load: a cold visit, past the intro, to the first walkable frame. gg-full: drawn in full, as a phone
   // draws it (other test pages draw lite, see testRenderLite).
-  await page.goto(EXTRAS ? '/?gg-test=1&gg-full=1&gg-festival=sankranti' : '/?gg-test=1&gg-full=1', {
-    waitUntil: 'load',
-    timeout: 120000,
-  })
+  if (WINTER) await page.addInitScript(() => localStorage.setItem('gg-district', 'mi-road'))
+  const festival = EXTRAS ? '&gg-festival=sankranti' : WINTER ? '&gg-festival=newyear' : ''
+  await page.goto(`/?gg-test=1&gg-full=1${festival}`, { waitUntil: 'load', timeout: 120000 })
   await page.getByRole('button', { name: 'Padharo!' }).click()
   const entered = await page.evaluate(() => performance.now())
   await page.waitForFunction(() => (window as unknown as { __perf: Perf }).__perf.walkable !== null, null, {
@@ -241,6 +247,13 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     const info = gl?.getExtension('WEBGL_debug_renderer_info')
     return gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : 'no webgl'
   })
+
+  if (WINTER) {
+    await page.evaluate((iso) => {
+      window.__gg.setSnapshot({ condition: 'fog', aqi: 180, aqiBand: 'unhealthy' })
+      window.__gg.setNow(iso)
+    }, WINTER_DAWN)
+  }
 
   let extras: Result['extras']
   if (EXTRAS) {
@@ -312,7 +325,8 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     result.clerk = { mode: clerkMode === 'abort' ? 'abort' : 'stub', chunk, cdn }
   }
   mkdirSync('test-results', { recursive: true })
-  writeFileSync(`test-results/device-perf${EXTRAS ? '-extras' : ''}.json`, JSON.stringify(result, null, 2))
+  const suffix = EXTRAS ? '-extras' : WINTER ? '-winter' : ''
+  writeFileSync(`test-results/device-perf${suffix}.json`, JSON.stringify(result, null, 2))
   const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
   console.log(
     '\n| FCP ms | LCP ms | Walkable ms | Frames | p50 | p95 | p99 | max | >33ms | Tier | People | Heap MB |',
@@ -331,6 +345,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     )
     console.log(`Draw (walk): ${JSON.stringify(result.render)}; (drive): ${JSON.stringify(x.driveRender)}`)
   } else console.log(`\nDraw: ${JSON.stringify(result.render)}`)
+  if (WINTER) console.log(`Winter: ${JSON.stringify(await page.evaluate(() => window.__gg.sky()))}`)
   const busyLine = (f: Frames) =>
     `${f.taskPerFrame.toFixed(1)} ms task, ${f.scriptPerFrame.toFixed(1)} ms script`
   console.log(
