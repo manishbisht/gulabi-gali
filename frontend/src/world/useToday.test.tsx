@@ -245,6 +245,11 @@ it('a mark the server refuses for good (a 400 near midnight, a phone clock that 
   expect(out.done).toBe(false)
   expect(out.streak).toBe(3)
   expect(today.pendingDay('dev:asha')).toBe('')
+  // the next deed that meets the goal the same day neither cheers again nor sends again
+  act(() => deeds.emitDeed({ kind: 'photo' }))
+  await settle()
+  expect(out.done).toBe(false)
+  expect(fetchMock).toHaveBeenCalledTimes(1)
 })
 
 it('a mark that fails for now (offline, 429) stays pending and stays shown', async () => {

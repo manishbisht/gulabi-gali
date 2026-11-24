@@ -114,6 +114,9 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
    * pending; one the server refused for good (a day it will not take, a phone clock that is off) is dropped,
    * and the record falls back to the server's, so a done day it never took is not kept as done.
    */
+  // a day the server refused for good: no second toast or mark for it (a phone clock hours off would otherwise
+  // cheer and send again at every deed that meets the goal)
+  const refused = useRef('')
   const mark = useCallback(async (who: string, on: string) => {
     setPendingDay(who, on)
     const tok = await tokenRef.current?.().catch(() => null)
@@ -121,6 +124,7 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
     if (!answer || userRef.current !== who) return
     setPendingDay(who, '')
     if (answer !== 'refused') serverRecord.current = answer
+    else refused.current = on
     setRecord(serverRecord.current)
   }, [])
 
@@ -153,7 +157,7 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
         const day = refreshDay()
         const { override, record } = now.current
         const goal = override ?? goalFor(day)
-        if (record.last === day || !meets(goal, deed)) return
+        if (record.last === day || refused.current === day || !meets(goal, deed)) return
         const next = advance(record, day)
         now.current = { override, record: next }
         setRecord(next)
