@@ -373,7 +373,8 @@ const SENT = () => Response.json({ sent: true }, { status: 202 })
 /**
  * `POST /api/chai {to, bench, kind}`: "Chai pe bulao". The caller must be a resident others can see (403
  * `ghost`), not muted (403 `muted`), and sit at `bench` now as one (409 `not-seated`); `bench` a real bench id and
- * `kind` `bench` or `tapri` (400 `invalid`). Then `CHAI_LIMIT` is spent (429 `rate`). From there on the answer is
+ * `kind` `bench` or `tapri` (400 `invalid`). `CHAI_LIMIT` is spent (429 `rate`): the hour's before the seat
+ * check, the friend's after it. From there on the answer is
  * always 202 `{sent: true}`: the invite is written and the friend's inbox hears `chai` (a push when none is open)
  * only when `to` is a friend, a resident others can see, with no block either way and invites on; otherwise
  * nothing happens at all.
@@ -394,6 +395,9 @@ export async function sendChai(
   const district = bench ? benchDistrict(bench) : null
   const kind = BENCH_KINDS.find((k) => k === body.kind)
   if (!to || to === userId || !district || !kind) return fail('invalid', 400)
+  // The hour's allowance before the seat check: a try never wakes a district more often than it allows.
+  const slow = await spend(env, userId, CHAI_LIMIT.sender, now)
+  if (slow) return slow
   let sits = false
   try {
     sits = await env.DISTRICT.get(env.DISTRICT.idFromName(district)).seatedAt(bench, userId)
@@ -401,10 +405,8 @@ export async function sendChai(
     console.error('chai: seat check failed', err)
   }
   if (!sits) return fail('not-seated', 409)
-  const slow =
-    (await spend(env, userId, CHAI_LIMIT.sender, now)) ??
-    (await spend(env, userId, CHAI_LIMIT.pair, now, await pairBucket(to)))
-  if (slow) return slow
+  const tooSoon = await spend(env, userId, CHAI_LIMIT.pair, now, await pairBucket(to))
+  if (tooSoon) return tooSoon
   // Everything below is about the friend: none of it may change the answer.
   const [them, blocked, friends, theirs] = await Promise.all([
     visibleRow(env, to),
