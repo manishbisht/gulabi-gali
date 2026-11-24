@@ -8,14 +8,18 @@ import { b64url, sendPush, vapidFrom, type Vapid } from './webpush'
  *
  * Privacy: a push names nobody and quotes nothing. Its payload is `{t, lang}` and nothing else (a meet-up
  * reminder adds its poster's wall, `at`, for the tap only): the service worker shows "Gulabi Gali" over "a new
- * request" or "a new message" in the device's language, and a tap opens the inbox. The person who asked or wrote is seen only inside the app, where blocks and hides already apply.
+ * request", "a new message" or "a friend invited you for chai" in the device's language, and a tap opens the inbox. The person who asked or wrote is seen only inside the app, where blocks and hides already apply.
  *
  * Off by itself without a VAPID key (the `VAPID_PRIVATE_JWK` secret, set by `scripts/vapid-setup.mjs`) or a
  * subject (`VAPID_SUBJECT`): subscribing is 404 `off`, and nothing is ever sent.
  */
 
-/** The notices that push when the person has no inbox open: an `accepted` or an `unmatched` never does. */
-export const PUSH_KINDS = ['request', 'message'] as const
+/**
+ * The notices that push when the person has no inbox open: an `accepted`, an `unmatched` or a `friend` never
+ * does. `chai` is a friend's invite to their bench (see `sendChai`): "Gulabi Gali: ek dost ne chai pe bulaya",
+ * naming nobody.
+ */
+export const PUSH_KINDS = ['request', 'message', 'chai'] as const
 export type PushKind = (typeof PUSH_KINDS)[number]
 export const isPushKind = (t: string): t is PushKind => (PUSH_KINDS as readonly string[]).includes(t)
 /**

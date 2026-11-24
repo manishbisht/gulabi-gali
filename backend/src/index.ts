@@ -11,6 +11,18 @@ import { ERROR_IP_LIMIT, ERROR_MAX_BODY, purgeClientErrors, recordClientError } 
 import { listEnded, purgeEvidence } from './evidence'
 import { GATE_NAME, joinWaitlist, purgeWaitlist } from './gate'
 import { hashedList } from './filter/server'
+import {
+  acceptFriend,
+  askFriend,
+  declineFriend,
+  dismissChai,
+  listChai,
+  listFriends,
+  purgeFriends,
+  putFriendSettings,
+  removeFriend,
+  sendChai,
+} from './friends'
 import { floating, inboxOf, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
@@ -265,6 +277,35 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     if (method === 'PUT') return putGoing(env, user.id, id)
     if (method === 'DELETE') return deleteGoing(env, user.id, id)
   }
+  // Friends ("Dost banao") and "Chai pe bulao" (see friends.ts).
+  if (pathname === '/api/friends' && method === 'GET') return listFriends(env, user.id)
+  if (pathname === '/api/friends' && method === 'POST')
+    return askFriend(env, user.id, await readJson(request), Date.now(), later)
+  if (pathname === '/api/me/friend-settings' && method === 'PUT')
+    return putFriendSettings(env, user.id, await readJson(request))
+  const friend = pathname.match(/^\/api\/friends\/([^/]+)(?:\/(accept|decline))?$/)
+  if (friend) {
+    let id: string
+    try {
+      id = decodeURIComponent(friend[1]!)
+    } catch {
+      return Response.json({ error: 'not found' }, { status: 404 })
+    }
+    if (friend[2] === 'accept' && method === 'POST') return acceptFriend(env, user.id, id, Date.now(), later)
+    if (friend[2] === 'decline' && method === 'POST') return declineFriend(env, user.id, id)
+    if (!friend[2] && method === 'DELETE') return removeFriend(env, user.id, id)
+  }
+  if (pathname === '/api/chai' && method === 'GET') return listChai(env, user.id)
+  if (pathname === '/api/chai' && method === 'POST')
+    return sendChai(env, user.id, await readJson(request), Date.now(), later)
+  const chaiId = pathname.match(/^\/api\/chai\/([^/]+)$/)
+  if (chaiId && method === 'DELETE') {
+    try {
+      return await dismissChai(env, user.id, decodeURIComponent(chaiId[1]!))
+    } catch {
+      return new Response(null, { status: 204 })
+    }
+  }
   if (pathname === '/api/reports' && method === 'POST')
     return fileReport(env, user.id, await readJson(request), later)
   if (pathname === '/api/requests' && method === 'POST')
@@ -354,5 +395,6 @@ export default {
     ctx.waitUntil(purgePosters(env).catch((err) => console.error('poster sweep failed', err)))
     ctx.waitUntil(remindMeetups(env).catch((err) => console.error('meet-up reminder failed', err)))
     ctx.waitUntil(purgeClientErrors(env).catch((err) => console.error('client error sweep failed', err)))
+    ctx.waitUntil(purgeFriends(env).catch((err) => console.error('friends sweep failed', err)))
   },
 } satisfies ExportedHandler<Env>

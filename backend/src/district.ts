@@ -1374,6 +1374,14 @@ export class DistrictDO extends DurableObject<Env> {
   }
 
   /**
+   * RPC, for "Chai pe bulao" (see `sendChai`): whether `userId` sits at `bench` now as a resident others can see
+   * here (a ghost, someone hidden or waiting for room, does not count). Memory and attachments only.
+   */
+  seatedAt(bench: string, userId: string): boolean {
+    return this.sitters(bench).some((s) => s.seat.userId === userId && s.seat.person !== null)
+  }
+
+  /**
    * RPC, for a bench report, in one call: whether `reporter` and `target` sit at `bench` now or sat there in
    * the last `TRANSCRIPT_MS` (seats survive hibernation, the log of who sat does not), whether this instance
    * has been up for that whole window (`remembers`: only then does "not there" mean not there), and the
