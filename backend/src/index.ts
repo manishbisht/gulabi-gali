@@ -11,6 +11,7 @@ import { ERROR_IP_LIMIT, ERROR_MAX_BODY, purgeClientErrors, recordClientError } 
 import { listEnded, purgeEvidence } from './evidence'
 import { GATE_NAME, joinWaitlist, purgeWaitlist } from './gate'
 import { hashedList } from './filter/server'
+import { festivalOn } from './festivals'
 import { floating, inboxOf, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
@@ -62,7 +63,8 @@ export async function handleCity(
   // A failed or garbled KV read is just a cache miss.
   const stored = await env.CITY.get<CitySnapshot>(CITY_KEY, 'json').catch(() => null)
   const age = stored ? now.getTime() - Date.parse(stored.fetchedAt) : Infinity
-  if (stored && age <= MAX_AGE_MS) return json(stored, 200, origin, headers)
+  // The festival is a matter of the clock alone (New Year starts at 18:00 IST, not at the next cron run).
+  if (stored && age <= MAX_AGE_MS) return json({ ...stored, festival: festivalOn(now) }, 200, origin, headers)
   try {
     const live = await fetchSnapshot(fetcher, now, timeoutMs)
     // Serve the live snapshot even if storing it fails.

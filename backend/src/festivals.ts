@@ -10,8 +10,24 @@ export function istDay(now: Date): string {
   return new Date(now.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10)
 }
 
-/** The festival on `now`'s IST day. Where two entries overlap, the one listed first in the calendar wins. */
+/** YYYY-MM-DDTHH:MM of the given instant on the IST clock. */
+function istMinute(now: Date): string {
+  return new Date(now.getTime() + IST_OFFSET_MS).toISOString().slice(0, 16)
+}
+
+/**
+ * Whether `at` (an IST minute) falls in the entry: a day-only entry holds its whole first and last days; a timed
+ * one (New Year's evening to morning) starts at its start minute and has ended by its end minute.
+ */
+function holds(e: FestivalEntry, at: string): boolean {
+  const day = at.slice(0, 10)
+  const started = e.start.length > 10 ? at >= e.start : day >= e.start
+  const ended = e.end.length > 10 ? at >= e.end : day > e.end
+  return started && !ended
+}
+
+/** The festival at `now` on the IST calendar. Where two entries overlap, the one listed first in the calendar wins. */
 export function festivalOn(now: Date, calendar: FestivalEntry[] = CALENDAR): FestivalId | null {
-  const day = istDay(now)
-  return calendar.find((e) => e.start <= day && day <= e.end)?.id ?? null
+  const at = istMinute(now)
+  return calendar.find((e) => holds(e, at))?.id ?? null
 }

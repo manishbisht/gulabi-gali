@@ -2,14 +2,17 @@ import type { FestivalId } from './protocol'
 
 export interface FestivalEntry {
   id: FestivalId
-  start: string // YYYY-MM-DD, IST, inclusive
-  end: string // YYYY-MM-DD, IST, inclusive
+  /** YYYY-MM-DD (IST, the whole day), or YYYY-MM-DDTHH:MM (IST, from that minute). */
+  start: string
+  /** YYYY-MM-DD (IST, the whole day, inclusive), or YYYY-MM-DDTHH:MM (IST, over at that minute). */
+  end: string
 }
 
 // Sources: drikpanchang.com (New Delhi reference; Rajasthan observes the same civil day) cross-checked with
 // dekhopanchang.com, hindu-blog.com 2027 calendar and publicholidays.in. Gazetted Rajasthan lists are not
 // yet published for these years. Windows: sankranti = day before + day; holi = Holika Dahan..Dhulandi;
-// gangaur and teej = festival day + following day (Jaipur processions); diwali = Dhanteras..Bhai Dooj.
+// gangaur and teej = festival day + following day (Jaipur processions); diwali = Dhanteras..Bhai Dooj;
+// newyear = New Year's Eve 18:00 to 06:00 IST on 1 January (a fixed civil date: MI Road's string lights).
 //
 // 2027
 //  - Sankranti Jan 14: publicholidays.in + dekhopanchang.com (hindu-blog says rituals may run into Jan 15).
@@ -26,12 +29,15 @@ export interface FestivalEntry {
 //  - Hariyali Teej Jul 24: dekhopanchang.com + publicholidays.in.
 //  - Diwali: Dhanteras Oct 15 .. Bhai Dooj Oct 19: drikpanchang.com + dekhopanchang.com.
 export const CALENDAR: FestivalEntry[] = [
+  { id: 'newyear', start: '2026-12-31T18:00', end: '2027-01-01T06:00' },
+
   { id: 'sankranti', start: '2027-01-13', end: '2027-01-14' },
   { id: 'jlf', start: '2027-01-14', end: '2027-01-18' },
   { id: 'holi', start: '2027-03-21', end: '2027-03-22' },
   { id: 'gangaur', start: '2027-04-09', end: '2027-04-10' },
   { id: 'teej', start: '2027-08-04', end: '2027-08-05' },
   { id: 'diwali', start: '2027-10-27', end: '2027-10-31' },
+  { id: 'newyear', start: '2027-12-31T18:00', end: '2028-01-01T06:00' },
 
   { id: 'sankranti', start: '2028-01-14', end: '2028-01-15' },
   // UNVERIFIED: JLF 2028 dates are not announced; last week of January placeholder.
@@ -41,4 +47,5 @@ export const CALENDAR: FestivalEntry[] = [
   { id: 'gangaur', start: '2028-03-29', end: '2028-03-30' },
   { id: 'teej', start: '2028-07-24', end: '2028-07-25' },
   { id: 'diwali', start: '2028-10-15', end: '2028-10-19' },
+  { id: 'newyear', start: '2028-12-31T18:00', end: '2029-01-01T06:00' },
 ]

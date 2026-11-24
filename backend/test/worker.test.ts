@@ -58,6 +58,14 @@ it('serves the stored snapshot', async () => {
   expect(await res.json()).toEqual(fresh)
 })
 
+it('serves the stored snapshot with the festival as of now, not as of the last cron run', async () => {
+  // stored at 17:55 IST on 31 December, before New Year's lights; asked for at 18:05 IST
+  const before = { ...stored, fetchedAt: '2026-12-31T12:25:00.000Z', festival: null }
+  await env.CITY.put('now', JSON.stringify(before))
+  const res = await handleCity(env, rejecting, new Date('2026-12-31T12:35:00.000Z'))
+  expect(await res.json()).toEqual({ ...before, festival: 'newyear' })
+})
+
 it('serves a default snapshot when upstream fails', async () => {
   await env.CITY.delete('now')
   const res = await handleCity(env, rejecting, new Date('2026-11-14T06:30:00Z'))
