@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { emitDeed } from './deeds'
 import type { RoofHooks } from './rooftop'
 
 /** What the rooftop button asks of the city session. */
@@ -24,6 +25,7 @@ export function useRooftop() {
       near: setNear,
       up(on) {
         setUp(on)
+        if (on) emitDeed({ kind: 'roof' })
         setNotice(on ? 'up' : 'down')
       },
       fade: setFading,

@@ -9,6 +9,7 @@ vi.mock('./photo', () => ({
   capturePhoto: photo.capture,
   sharePhoto: photo.share,
 }))
+import { onDeed } from '../world/deeds'
 import { PhotoMode } from './PhotoMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -30,7 +31,11 @@ const q = (s: string) => host.querySelector<HTMLElement>(s)!
 
 it('a failed capture (a lost context) says so and shares and saves nothing', async () => {
   photo.capture.mockRejectedValue(new Error('capture: the WebGL context is lost'))
+  const deeds = vi.fn()
+  const off = onDeed(deeds)
   await act(async () => q('.photo-shutter').click())
+  off()
+  expect(deeds).not.toHaveBeenCalled() // no photo, so no "Aaj ka Darshan" photo either
   expect(q('.photo-note').textContent).toBe("Couldn't take the photo. Try again.")
   expect(photo.share).not.toHaveBeenCalled()
   expect((q('.photo-shutter') as HTMLButtonElement).disabled).toBe(false) // and it can be tried again
@@ -42,7 +47,11 @@ it('the status line is in the page from the start, empty, and only its text chan
   expect(note.textContent).toBe('')
   photo.capture.mockResolvedValue(new Blob())
   photo.share.mockResolvedValue('downloaded')
+  const deeds = vi.fn()
+  const off = onDeed(deeds)
   await act(async () => q('.photo-shutter').click())
+  off()
+  expect(deeds.mock.calls).toEqual([[{ kind: 'photo' }]]) // a photo taken does today's photo goal
   expect(q('.photo-note')).toBe(note)
   expect(note.textContent).toBe('Photo saved to your phone.')
 })

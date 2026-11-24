@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Stage } from '../engine/stage'
 import type { MapView } from '../ui/CityMap'
 import { mapPeople, type MapTarget } from './cityMap'
+import { emitDeed } from './deeds'
 import type { CitySession } from './session'
 import type { DistrictDef } from './types'
 import { createWayfinder, type Wayfinder, type WayReading } from './wayfinder'
@@ -55,6 +56,7 @@ export function useCityMap(keys: boolean) {
   const pick = useCallback((t: MapTarget) => {
     way.current?.set(t)
     setTarget(t)
+    emitDeed({ kind: 'map' })
     setOpen(false) // off to walk there
   }, [])
   const clear = useCallback(() => {

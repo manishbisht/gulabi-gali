@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Stage } from '../engine/stage'
 import { t, type Lang } from '../i18n/strings'
+import { emitDeed } from '../world/deeds'
 import { capturePhoto, sharePhoto, WORDMARK } from './photo'
 
 interface Props {
@@ -35,7 +36,9 @@ export function PhotoMode({ stage, lang, onExit }: Props) {
     setBusy(true)
     setNote(null)
     try {
-      const outcome = await sharePhoto(await capturePhoto(stage))
+      const shot = await capturePhoto(stage)
+      emitDeed({ kind: 'photo' }) // taken, whether it is then shared, saved or the share sheet closed
+      const outcome = await sharePhoto(shot)
       setNote(outcome === 'downloaded' ? t('photoDownloaded', lang) : null)
     } catch {
       setNote(t('photoFailed', lang))

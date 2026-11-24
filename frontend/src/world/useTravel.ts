@@ -4,6 +4,7 @@ import { storage } from '../storage'
 import { DISTRICTS } from './district'
 import { playRide, rideBy } from './metroRide'
 import { chime } from '../audio/horn'
+import { emitDeed } from './deeds'
 import type { Vec2 } from './types'
 
 const KEY = 'gg-district'
@@ -113,6 +114,7 @@ export function useTravel() {
         ])
         if (!bound()) return false
         chime(rideBy(from, id))
+        emitDeed({ kind: 'ride' })
         return true
       } catch {
         if (!bound()) return false

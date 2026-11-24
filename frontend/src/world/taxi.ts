@@ -1,4 +1,5 @@
 import type { ClientMsg, DistrictId } from '../net/protocol'
+import { emitDeed } from './deeds'
 import type { Pilot, Pose } from '../player/player'
 import { MOUNT_RANGE } from './driving'
 import type { ParkedAutos } from './props'
@@ -159,6 +160,8 @@ export function createTaxi(opts: {
     autos.leave(t.auto, t.home.x, t.home.z, t.home.ry)
     if (t.dark) hooks.dark(false)
     hooks.riding(false)
+    // a ride that reached its stop (not one the server sent back to the stand)
+    if (at === 'drop') emitDeed({ kind: 'auto' })
   }
 
   return {
