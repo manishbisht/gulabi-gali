@@ -120,6 +120,8 @@ const MAX_SAG = 1.2
 /** The twinkle: how fast each bulb breathes (radians a second) and how dim it gets at its lowest. */
 const TWINKLE = 2.2
 const TWINKLE_LOW = 0.45
+/** The twinkle is a slow breath: worked out about 15 times a second, not every frame, it looks the same. */
+const TWINKLE_STEP = 1 / 15
 
 /** One New Year bulb, in world space, and which of `BULB_COLOURS` it is. */
 export interface Bulb extends Diya {
@@ -332,6 +334,7 @@ export function createFestivalFx(
     bulbs.instanceColor.needsUpdate = true
   }
   let twinkling = false
+  let sinceGlow = 0
 
   // ---- Gangaur and Teej: the procession, rebuilt only when the festival or the tier changes
   let procession: Procession | null = null
@@ -382,7 +385,12 @@ export function createFestivalFx(
       time += dt
       if (id === 'newyear') {
         const twinkle = !still()
-        if (twinkle || twinkling) glow(time, twinkle)
+        sinceGlow += dt
+        // steady again at once when reduced motion comes on; otherwise a step now and then
+        if ((twinkle && sinceGlow >= TWINKLE_STEP) || (!twinkle && twinkling)) {
+          glow(time, twinkle)
+          sinceGlow = 0
+        }
         twinkling = twinkle
       } else if (id === 'sankranti') {
         const n = kites.count

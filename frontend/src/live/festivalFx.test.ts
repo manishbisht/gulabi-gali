@@ -266,6 +266,20 @@ describe('createFestivalFx: New Year', () => {
     district.dispose()
   })
 
+  it('works the twinkle out about 15 times a second, not every frame', async () => {
+    const scene = new THREE.Scene()
+    const district = await loadDistrict('mi-road')
+    const fx = createFestivalFx({ scene } as Stage, district, { reducedMotion: () => false })
+    fx.set('newyear', 2)
+    const colours = lights(scene).instanceColor!
+    const from = colours.version
+    for (let i = 0; i < 60; i++) fx.update(1 / 60) // one second of 60 fps frames
+    expect(colours.version - from).toBeGreaterThanOrEqual(12)
+    expect(colours.version - from).toBeLessThanOrEqual(16)
+    fx.dispose()
+    district.dispose()
+  })
+
   it('twinkles, writing into the same colour buffer, and holds steady under reduced motion', async () => {
     for (const reduced of [false, true]) {
       const scene = new THREE.Scene()
