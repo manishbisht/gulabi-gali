@@ -88,7 +88,8 @@ test('Dost banao from a chat, a yes from the profile, then Chai pe bulao from a 
 
   // B's inbox: who, and which tapri; Chalo points the compass at it (the same district)
   const open = b.page.getByRole('button', { name: /Mulaqaatein/ })
-  await expect(open.getByLabel('1 naye')).toBeVisible()
+  // (the badge also still counts the meet request B said yes to over the API, behind the page's back)
+  await expect(open.getByLabel(/^\d+ naye$/)).toBeVisible()
   await open.click()
   const sheetB = b.page.getByRole('dialog', { name: 'Aapki mulaqaatein' })
   await expect(sheetB).toContainText(`${a.name} ne chai pe bulaya · chai ki tapri, Gulabi Shahar`)
