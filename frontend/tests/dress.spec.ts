@@ -91,7 +91,7 @@ test.describe('on a small phone', () => {
       // focus goes back to the chip that opened it
       await expect(page.getByRole('button', { name: W.chip })).toBeFocused()
       const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('gg-look')!))
-      expect(kept).toMatchObject({ tone: 3, hat: 2, hair: 4, outfit: 'teal', head: 'safa', skin: 1 })
+      expect(kept).toMatchObject({ tone: 3, hat: 2, hair: 4, outfit: 'teal', head: 'safa', skin: 2 })
 
       // Cancel changes nothing
       await page.getByRole('button', { name: W.chip }).click()

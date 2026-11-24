@@ -136,7 +136,14 @@ export default function LookEditor({ look, lang, mode, onSave, onCancel }: Props
   }
   // a dupatta over the head and headwear do not go together: picking one moves the dupatta to the shoulders
   const pickHat = (hat: number) => change(hat && d.dup === 1 ? { hat, dup: 2 } : { hat })
-  const pickDup = (dup: number) => change(dup === 1 && d.hat ? { dup, hat: 0 } : { dup })
+  const pickDup = (dup: number) => {
+    const next: Partial<Dress> = dup === 1 && d.hat ? { dup, hat: 0 } : { dup }
+    // put on fresh, it starts in a colour that shows against the kurta (the older looks wore the kurta's own)
+    const kurta = WIRE_OUTFITS.indexOf(draft.outfit)
+    if (!d.dup && dup && d.dupC === kurta)
+      next.dupC = WIRE_OUTFITS.indexOf(draft.outfit === 'marigold' ? 'pink' : 'marigold')
+    change(next)
+  }
 
   const save = async () => {
     if (busy) return

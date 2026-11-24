@@ -2438,6 +2438,7 @@ button.stamp-count::after {
 
 /* the figure and the buttons stay put; the choices between them scroll */
 .look-editor {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   overflow: hidden;
