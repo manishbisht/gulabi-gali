@@ -92,8 +92,8 @@ const landmarks: LandmarkDef[] = [
     id: 'city-palace',
     name: { hi: 'City Palace', en: 'City Palace' },
     story: {
-      hi: 'Sawai Jai Singh II ne 1727 mein shahar ke saath ye mahal banwana shuru kiya. Saat manzila Chandra Mahal mein aaj bhi shahi parivaar rehta hai; baaki hissa museum hai.',
-      en: 'Sawai Jai Singh II began this palace with the city in 1727. The royal family still lives in the seven-storey Chandra Mahal; much of the rest is a museum.',
+      hi: 'Sawai Jai Singh II ne 1727 mein basaye apne shahar ke beech ye mahal banwaya. Saat manzila Chandra Mahal mein aaj bhi shahi parivaar rehta hai; baaki hissa museum hai.',
+      en: 'Sawai Jai Singh II built this palace at the heart of the city he founded in 1727. The royal family still lives in the seven-storey Chandra Mahal; much of the rest is a museum.',
     },
     at: PALACE_GATE_AT,
     radius: 8,
