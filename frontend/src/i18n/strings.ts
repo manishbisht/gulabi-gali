@@ -1091,11 +1091,11 @@ export const STRINGS = {
   },
   todayGoalRide: {
     hi: 'Metro ya bus se kisi aur mohalle jao',
-    en: 'Take the metro or the bus somewhere new',
+    en: 'Take the metro or the bus to another neighbourhood',
   },
   todayHintRide: {
-    hi: 'Station pe "Metro" dabao (Amer mein "Bus"), aur koi mohalla chuno.',
-    en: 'Press "Metro" at the station ("Bus" in Amer) and pick a neighbourhood.',
+    hi: 'Station pe "Metro" dabao (Amer aur Nahargarh mein "Bus"), aur koi mohalla chuno.',
+    en: 'Press "Metro" at the station ("Bus" in Amer and Nahargarh) and pick a neighbourhood.',
   },
   todayGoalAuto: { hi: 'Auto lekar kisi landmark tak jao', en: 'Ride an auto to a landmark' },
   todayHintAuto: {
@@ -1124,8 +1124,8 @@ export const STRINGS = {
   },
   todayDone: { hi: 'Aaj ka ho gaya ✓', en: 'Done for today ✓' },
   todayPending: {
-    hi: 'Abhi baaki hai. Koi jaldi nahi, poora din pada hai.',
-    en: "Still to do. No rush, there's all day.",
+    hi: 'Abhi baaki hai. Koi jaldi nahi.',
+    en: 'Still to do. No rush.',
   },
   todayStreak: { hi: 'Lagataar {n} din · sabse lamba {best}', en: '{n} days in a row · longest {best}' },
   todayStreakOne: { hi: 'Abhi tak 1 din · sabse lamba {best}', en: '1 day so far · longest {best}' },

@@ -14,8 +14,9 @@ import { STAMPS } from './stamps'
 export type GoalKind = 'darshan' | 'tapri' | 'ride' | 'auto' | 'photo' | 'roof' | 'map' | 'animal'
 
 /**
- * The kinds, in a fixed order the daily pick shuffles. Their ids are stable: never renamed, only added to (an
- * addition reshuffles the days to come, never the days gone).
+ * The kinds, in a fixed order the daily pick shuffles. Their ids are stable: never renamed, only added to. Adding
+ * a kind (or a stamp) reshuffles the whole schedule, days gone included; that is harmless, since a record keeps
+ * only the day a goal was done, never which goal it was.
  */
 export const GOAL_KINDS: readonly GoalKind[] = [
   'darshan',
