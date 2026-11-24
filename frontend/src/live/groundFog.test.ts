@@ -83,7 +83,7 @@ describe('createGroundFog', () => {
     }
   })
 
-  it('lies on the ground the player stands on: up on a roof, at the roof', () => {
+  it('lies low in the street, and is not drawn while the player stands up on a roof', () => {
     const stage = stageAt(2)
     const roofY = 9.6
     const fog = createGroundFog(stage, {
@@ -93,8 +93,11 @@ describe('createGroundFog', () => {
     fog.set(sky(1))
     fog.update(1 / 30, { x: 0, z: 0 })
     expect(banks(stage).position.y).toBe(0)
+    expect(banks(stage).visible).toBe(true)
     fog.update(1 / 30, { x: 120, z: 0 })
-    expect(banks(stage).position.y).toBe(roofY)
+    expect(banks(stage).visible).toBe(false)
+    fog.update(1 / 30, { x: 0, z: 0 })
+    expect(banks(stage).visible).toBe(true)
     fog.dispose()
   })
 

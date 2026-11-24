@@ -41,7 +41,7 @@ export function fogTexture(): THREE.DataTexture {
 
 export interface GroundFog {
   set(p: SkyParams): void
-  /** `pos`: where the player stands; the banks lie on the ground under them (a roof, up on one). */
+  /** `pos`: where the player stands; the banks lie low in the street, and are not drawn while they stand on a roof. */
   update(dt: number, pos?: Vec2): void
   dispose(): void
 }
@@ -50,13 +50,21 @@ export interface GroundFog {
 export function onDistrictGround(def: Pick<DistrictDef, 'size' | 'water'>, x: number, z: number): boolean {
   const half = def.size / 2
   if (Math.abs(x) > half || Math.abs(z) > half) return false
-  return !(def.water ?? []).some((w) => x >= w.minX && x <= w.maxX && z >= w.minZ && z <= w.maxZ)
+  const water = def.water
+  if (!water) return true
+  // a plain loop: this runs for every bank every frame, and must not allocate
+  for (let i = 0; i < water.length; i++) {
+    const w = water[i]!
+    if (x >= w.minX && x <= w.maxX && z >= w.minZ && z <= w.maxZ) return false
+  }
+  return true
 }
 
 export interface GroundFogOptions {
   /** Defaults to the browser's `prefers-reduced-motion`. */
   reducedMotion?: () => boolean
-  /** How high the ground the player stands on is (a roof's top, up there); 0, the street, by default. */
+  /** How high the ground the player stands on is (a roof's top, up there); 0, the street, by default. Up on a
+   * roof the banks are not drawn: from above, upright sprites hanging in the air read as cards, not mist. */
   floor?: (pos: Vec2) => number
   /** Whether a bank may lie over (x, z): not off the district's edge or over water. Everywhere, by default. */
   ground?: (x: number, z: number) => boolean
@@ -109,12 +117,11 @@ export function createGroundFog(stage: Stage, opts: GroundFogOptions = {}): Grou
       material.color.set(p.skyHorizon)
     },
     update(dt, pos) {
-      group.visible = level >= SHOW_FROM && stage.quality > 0
+      group.visible = level >= SHOW_FROM && stage.quality > 0 && !(pos && floor(pos) > 0)
       if (!group.visible) return
       const cx = stage.camera.position.x
       const cz = stage.camera.position.z
-      // on the ground the player stands on: on a roof the mist lies at the roof's level, not down in the street
-      group.position.set(cx, pos ? floor(pos) : 0, cz)
+      group.position.set(cx, 0, cz)
       const drift = !still()
       for (let i = 0; i < FOG_BANKS; i++) {
         const bank = banks[i]!

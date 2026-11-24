@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Stage } from '../engine/stage'
 import type { AqiBand, CitySnapshot } from '../net/protocol'
 import type { District } from '../world/district'
-import { winterFog } from './winter'
+import { WINTER_MAX, winterFog } from './winter'
 
 export interface SkyParams {
   sunElevationDeg: number
@@ -83,15 +83,20 @@ export function skyParams(s: CitySnapshot, now: Date): SkyParams {
   if (winter.ground > 0)
     horizon.lerp(MIST.clone().multiplyScalar(0.3 + 0.7 * day), winter.ground * MIST_HORIZON)
 
+  // a winter morning's fog never thins the haze, and never takes it past WINTER_MAX (see winter.ts)
+  const fogDensity = Math.max(FOG[s.aqiBand] * (s.condition === 'fog' ? FOG_WEATHER : 1), winter.density)
+  // the banks only add what the haze leaves room for: over a thicker haze they thin, so a landmark 25 m off is
+  // never hidden worse than the haze alone already hides it
+  const groundFog = winter.ground * Math.min(1, (WINTER_MAX / fogDensity) ** 2)
+
   const dim = rain ? 0.35 : s.condition === 'cloudy' || s.condition === 'fog' ? 0.55 : dust ? 0.7 : 1
   return {
     sunElevationDeg: elevation,
     sunAzimuthDeg: azimuth,
     skyTop: `#${top.getHexString()}`,
     skyHorizon: `#${horizon.getHexString()}`,
-    // a winter morning's fog never thins the haze, and never takes it past WINTER_MAX (see winter.ts)
-    fogDensity: Math.max(FOG[s.aqiBand] * (s.condition === 'fog' ? FOG_WEATHER : 1), winter.density),
-    groundFog: winter.ground,
+    fogDensity,
+    groundFog,
     sunIntensity: 0.25 + 1.95 * day * dim, // the 0.25 is moonlight
     ambientIntensity: 0.5 + 1.1 * day * (0.7 + 0.3 * dim),
     nightLights: t < rise + LIGHTS_MARGIN_MS || t > set - LIGHTS_MARGIN_MS,

@@ -117,6 +117,15 @@ describe('winter mornings', () => {
     expect(skyParams(worst, at('07:00:00')).fogDensity).toBe(skyParams(worst, at('12:00:00')).fogDensity)
   })
 
+  it('thins the banks of mist over a haze thicker than winter fog, so they hide nothing the haze leaves', () => {
+    for (const aqiBand of ['poor', 'unhealthy', 'severe'] as const) {
+      for (const condition of ['clear', 'fog'] as const) {
+        const p = skyParams({ ...jan, aqi: 300, aqiBand, condition } as CitySnapshot, at('07:00:00'))
+        expect(p.groundFog).toBeLessThanOrEqual(Math.min(1, (0.022 / p.fogDensity) ** 2) + 1e-9)
+      }
+    }
+  })
+
   it('pales the horizon toward mist while it lies', () => {
     const spread = (hex: string) => {
       const c = new THREE.Color(hex)
