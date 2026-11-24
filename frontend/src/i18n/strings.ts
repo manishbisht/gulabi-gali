@@ -1073,6 +1073,81 @@ export const STRINGS = {
   chaiNotNow: { hi: 'Abhi nahi', en: 'Not now' },
   /** The lock screen's words for an invite (public/sw.js holds the same, checked by sw.test.ts): nobody named. */
   pushChai: { hi: 'Ek dost ne chai pe bulaya', en: 'A friend invited you for chai' },
+
+  /* "Aaj ka Darshan": one small goal a day (world/today.ts). Every goal can be done alone, as a ghost. */
+  todayTitle: { hi: 'Aaj ka Darshan', en: "Today's Darshan" },
+  /** The chip's name (it shows an icon only), and the welcome screen's line. */
+  todayChip: { hi: 'Aaj ka Darshan: {goal}', en: "Today's Darshan: {goal}" },
+  todayChipDone: { hi: 'Aaj ka Darshan ho gaya: {goal}', en: "Today's Darshan, done: {goal}" },
+  todayGoalDarshan: { hi: '{place} ke darshan karo', en: 'Go and see {place}' },
+  todayHintDarshan: {
+    hi: '{district} mein hai. Paas pahunchte hi ho jaata hai; naksha raasta dikhata hai.',
+    en: "It's in {district}. It counts as soon as you get there; the map shows the way.",
+  },
+  todayGoalTapri: { hi: 'Kisi chai ki tapri ya bench tak jao', en: 'Walk up to a chai stall or a bench' },
+  todayHintTapri: {
+    hi: 'Har mohalle mein hain, naksha mein bhi dikhti hain. Baithna zaroori nahi.',
+    en: 'Every neighbourhood has some, and the map shows them. No need to sit.',
+  },
+  todayGoalRide: {
+    hi: 'Metro ya bus se kisi aur mohalle jao',
+    en: 'Take the metro or the bus somewhere new',
+  },
+  todayHintRide: {
+    hi: 'Station pe "Metro" dabao (Amer mein "Bus"), aur koi mohalla chuno.',
+    en: 'Press "Metro" at the station ("Bus" in Amer) and pick a neighbourhood.',
+  },
+  todayGoalAuto: { hi: 'Auto lekar kisi landmark tak jao', en: 'Ride an auto to a landmark' },
+  todayHintAuto: {
+    hi: 'Auto stand pe "Le chalo" dabao aur jagah chuno.',
+    en: 'Press "Take a ride" at an auto stand and pick a place.',
+  },
+  todayGoalPhoto: { hi: 'Photo mode mein ek photo khincho', en: 'Take a photo in photo mode' },
+  todayHintPhoto: {
+    hi: 'Upar 📷 dabao, frame set karo, phir shutter.',
+    en: 'Press 📷 at the top, frame your shot, then the shutter.',
+  },
+  todayGoalRoof: { hi: 'Kisi chhat pe chadh ke shahar dekho', en: 'Climb up to a rooftop and look out' },
+  todayHintRoof: {
+    hi: 'Har mohalle mein ek chhat ki seedhi hai; uske paas "Chhat pe chalo" aata hai.',
+    en: 'Every neighbourhood has a rooftop stair; by it you get "Up to the roof".',
+  },
+  todayGoalMap: { hi: 'Naksha kholo aur koi jagah chuno', en: 'Open the map and pick a place to head for' },
+  todayHintMap: {
+    hi: 'Upar jagah ke naam wala chip dabao, phir koi jagah chuno.',
+    en: 'Tap the place name at the top, then pick somewhere.',
+  },
+  todayGoalAnimal: { hi: 'Gali ke kisi jaanwar se dosti karo', en: 'Make friends with a street animal' },
+  todayHintAnimal: {
+    hi: 'Kutte ya billi ko "Saath chalo" bolo, ya gaay ko namaste karo.',
+    en: 'Ask a dog or a cat to "Come along", or greet a cow.',
+  },
+  todayDone: { hi: 'Aaj ka ho gaya ✓', en: 'Done for today ✓' },
+  todayPending: {
+    hi: 'Abhi baaki hai. Koi jaldi nahi, poora din pada hai.',
+    en: "Still to do. No rush, there's all day.",
+  },
+  todayStreak: { hi: 'Lagataar {n} din · sabse lamba {best}', en: '{n} days in a row · longest {best}' },
+  todayStreakOne: { hi: 'Abhi tak 1 din · sabse lamba {best}', en: '1 day so far · longest {best}' },
+  todayStreakNone: {
+    hi: 'Roz ek chhota sa kaam. Lagataar karne pe ginti badhti hai.',
+    en: 'One small thing a day. Do it on days in a row and the count grows.',
+  },
+  todayNewDay: {
+    hi: 'Naya Darshan roz raat 12 baje (India ka time). Sabke liye ek hi.',
+    en: 'A new one every midnight, India time. The same one for everyone.',
+  },
+  todayLocal: {
+    hi: 'Yeh ginti sirf is phone pe hai. Login karne pe aage se har phone pe saath rahegi.',
+    en: 'This count lives on this phone only. Sign in and from then on it goes with you.',
+  },
+  todayToast: {
+    hi: 'Aaj ka Darshan ho gaya! Lagataar {n} din',
+    en: "Today's Darshan, done! {n} days in a row",
+  },
+  todayToastFirst: { hi: 'Aaj ka Darshan ho gaya!', en: "Today's Darshan, done!" },
+  /** Added to the stamps chip's tooltip while a run of `STREAK_ACCENT` days or more is alive. */
+  todayStreakBadge: { hi: 'Lagataar {n} din ka Darshan', en: '{n}-day Darshan run' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

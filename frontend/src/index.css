@@ -2746,3 +2746,74 @@ button.stamp-count::after {
   font-size: 0.85rem;
   opacity: 0.8;
 }
+
+/* ---- "Aaj ka Darshan": the day's small goal (ui/Today.tsx) ---- */
+
+/*
+ * The chip ends the identity row. A guest's "nobody can see you" line and its sign-in button flow in that row as
+ * items of their own (not as one box as wide as the row), so the chip sits beside one of them, never on a line of
+ * its own: the HUD's head stays as tall as it was.
+ */
+.hud-identity > .visibility {
+  display: contents;
+}
+
+.hud-identity .today-chip {
+  position: relative;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--sandstone);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.today-chip[data-done] {
+  border-color: var(--marigold);
+}
+
+.today-tick {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--marigold);
+  color: #2a1d24;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.today-sheet p {
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.today-hint,
+.today-note {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.today-status[data-done] {
+  color: var(--marigold);
+  font-weight: 700;
+}
+
+/* A run of days alive (three or more): a quiet marigold glow on the stamps chip, nothing more. */
+.stamp-count[data-streak] {
+  box-shadow: 0 0 0 2px rgb(242 168 29 / 0.55);
+}
+
+/* the welcome screen's one line about the day's goal */
+.intro-today {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.85;
+  text-align: center;
+}

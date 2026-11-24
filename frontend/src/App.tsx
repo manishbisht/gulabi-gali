@@ -39,6 +39,10 @@ import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
+import { goalById, goalFor, istDay, type Goal } from './world/today'
+import { goalText } from './world/todayText'
+import { useToday } from './world/useToday'
+import { TodayChip, TodaySheet } from './ui/Today'
 import { useCityMap } from './world/useCityMap'
 import { processionLine } from './live/procession'
 import { DISTRICT_NAMES, DISTRICT_SHORT_NAMES } from './world/districtNames'
@@ -100,6 +104,13 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
   diwali: 'festivalDiwali',
   jlf: 'festivalJlf',
   newyear: 'festivalNewYear',
+}
+
+/** `?gg-today=<goal id>` stands in for the day's own "Aaj ka Darshan" goal, in test mode only. */
+function todayOverride(): Goal | null {
+  const q = new URLSearchParams(location.search)
+  const id = q.get('gg-today')
+  return q.get('gg-test') === '1' && id ? goalById(id) : null
 }
 
 /** `?gg-festival=<id>` stands in for the live festival, in test mode only. */
@@ -209,6 +220,11 @@ export default function App() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [darshanOpen, setDarshanOpen] = useState(false)
+  /** The "Aaj ka Darshan" sheet, from its chip. */
+  const [todayOpen, setTodayOpen] = useState(false)
+  const [todayGoal] = useState(todayOverride)
+  /** The goal the welcome screen names: the day's when the page opened (the street's chip keeps up after). */
+  const [introGoal] = useState(() => todayGoal ?? goalFor(istDay(Date.now())))
   /** A guest's dressing room (a resident's opens from the profile sheet). */
   const [lookOpen, setLookOpen] = useState(false)
   /** The look the profile gives the player; read by the session whenever a district opens. */
@@ -259,6 +275,12 @@ export default function App() {
   const { near, have, toast, collectHere, track } = useStamps(
     lang,
     shown ? { id: residentId, token: auth.token, stamps: shown.stamps ?? [] } : null,
+  )
+  /** "Aaj ka Darshan": a resident's record is the server's (a ghost's only here); its toast waits for the HUD. */
+  const today = useToday(
+    shown ? { id: residentId, token: auth.token, ...(me?.today ? { today: me.today } : {}) } : null,
+    !photo && !taxi.riding,
+    todayGoal,
   )
   const liveToken = useRef<() => Promise<string | null>>(async () => null)
   const liveAs = useRef<string | null>(null)
@@ -539,6 +561,7 @@ export default function App() {
     inviteOpen ||
     privacyOpen ||
     darshanOpen ||
+    todayOpen ||
     lookOpen ||
     !!queue.card
   useEffect(() => {
@@ -622,6 +645,7 @@ export default function App() {
               setEntered(true)
             }}
             onPrivacy={() => setPrivacyOpen(true)}
+            today={goalText(introGoal, lang).goal}
           />
           {privacyOpen && <PrivacySheet lang={lang} onClose={() => setPrivacyOpen(false)} />}
         </>
@@ -670,6 +694,10 @@ export default function App() {
               }
         }
         onLook={profileLook ? undefined : () => setLookOpen(true)}
+        today={
+          <TodayChip goal={today.goal} done={today.done} lang={lang} onOpen={() => setTodayOpen(true)} />
+        }
+        streak={today.streak}
         top={
           <>
             {slowed && (
@@ -687,6 +715,11 @@ export default function App() {
                 {toast && (
                   <div className="toast" role="status">
                     {toast}
+                  </div>
+                )}
+                {today.toast !== null && (
+                  <div className="toast today-toast" role="status">
+                    {today.toast > 1 ? t('todayToast', lang, { n: today.toast }) : t('todayToastFirst', lang)}
                   </div>
                 )}
                 {queue.admitted && (
@@ -975,6 +1008,17 @@ export default function App() {
         />
       )}
       {darshanOpen && <DarshanList ids={have} lang={lang} onClose={() => setDarshanOpen(false)} />}
+      {todayOpen && (
+        <TodaySheet
+          goal={today.goal}
+          done={today.done}
+          streak={today.streak}
+          best={today.best}
+          local={!residentId}
+          lang={lang}
+          onClose={() => setTodayOpen(false)}
+        />
+      )}
       {inviteOpen && me && residentId && (
         <InviteSheet
           me={me}

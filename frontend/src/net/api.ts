@@ -23,6 +23,7 @@ import type {
   ReportInput,
   ReportResult,
   RequestLists,
+  TodayRecord,
 } from './protocol'
 import { fetchNoting } from './rateNotice'
 
@@ -181,6 +182,27 @@ export async function putStamps(token: string, stamps: readonly string[]): Promi
     const body = (await res.json()) as { stamps?: unknown }
     return Array.isArray(body.stamps)
       ? body.stamps.filter((id): id is string => typeof id === 'string')
+      : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * "Aaj ka Darshan": tells the server today's goal is done (`day` is today's IST date; it refuses any other) and
+ * gets back its record, with the streak it worked out. Null for any failure. Never rejects.
+ */
+export async function putToday(token: string, day: string): Promise<TodayRecord | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/me/today`, {
+      method: 'PUT',
+      headers: { ...bearer(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ day }),
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as Partial<TodayRecord>
+    return typeof body.last === 'string' && typeof body.streak === 'number' && typeof body.best === 'number'
+      ? { last: body.last, streak: body.streak, best: body.best }
       : null
   } catch {
     return null

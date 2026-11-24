@@ -12,9 +12,11 @@ interface Props {
   onLang: (l: Lang) => void
   onEnter: () => void
   onPrivacy?: () => void
+  /** "Aaj ka Darshan": the day's goal, in `lang`; one quiet line, nothing to press. */
+  today?: string
 }
 
-export function Intro({ lang, onLang, onEnter, onPrivacy }: Props) {
+export function Intro({ lang, onLang, onEnter, onPrivacy, today }: Props) {
   const count = useCityCount()
   return (
     <div className="intro">
@@ -32,6 +34,7 @@ export function Intro({ lang, onLang, onEnter, onPrivacy }: Props) {
       <p className="intro-count" aria-live="polite">
         {count === null ? '' : countLine(count, lang)}
       </p>
+      {today && <p className="intro-today">{t('todayChip', lang, { goal: today })}</p>}
       <button type="button" className="enter" onClick={onEnter}>
         {t('enter', lang)}
       </button>

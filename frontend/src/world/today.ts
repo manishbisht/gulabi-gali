@@ -17,7 +17,16 @@ export type GoalKind = 'darshan' | 'tapri' | 'ride' | 'auto' | 'photo' | 'roof' 
  * The kinds, in a fixed order the daily pick shuffles. Their ids are stable: never renamed, only added to (an
  * addition reshuffles the days to come, never the days gone).
  */
-export const GOAL_KINDS: readonly GoalKind[] = ['darshan', 'tapri', 'ride', 'auto', 'photo', 'roof', 'map', 'animal']
+export const GOAL_KINDS: readonly GoalKind[] = [
+  'darshan',
+  'tapri',
+  'ride',
+  'auto',
+  'photo',
+  'roof',
+  'map',
+  'animal',
+]
 
 /** A day's goal. `id` is the kind, or `darshan:<stamp>` for a landmark. */
 export interface Goal {
@@ -45,7 +54,8 @@ export const dayBefore = (day: string): string =>
   new Date(Date.parse(`${day}T00:00:00Z`) - DAY_MS).toISOString().slice(0, 10)
 
 /** When the IST day holding `ms` ends, in ms: the chip turns over to the next goal then. */
-export const nextIstMidnight = (ms: number): number => Math.floor((ms + IST_OFFSET_MS) / DAY_MS + 1) * DAY_MS - IST_OFFSET_MS
+export const nextIstMidnight = (ms: number): number =>
+  Math.floor((ms + IST_OFFSET_MS) / DAY_MS + 1) * DAY_MS - IST_OFFSET_MS
 
 /** FNV-1a, 32 bits. */
 function hash(s: string): number {
@@ -91,8 +101,7 @@ export function goalFor(day: string): Goal {
 /** A goal from its id (the test override), or null for an id that is not one. */
 export function goalById(id: string): Goal | null {
   const [kind, stamp] = id.split(':')
-  if (kind === 'darshan')
-    return stamp && STAMPS.some((s) => s.id === stamp) ? { id, kind, stamp } : null
+  if (kind === 'darshan') return stamp && STAMPS.some((s) => s.id === stamp) ? { id, kind, stamp } : null
   return GOAL_KINDS.includes(kind as GoalKind) && !stamp ? { id, kind: kind as GoalKind } : null
 }
 

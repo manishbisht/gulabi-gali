@@ -69,13 +69,25 @@ it('a dog or cat coming along, or a cow answering a namaste, is an animal deed',
 
 it('a place picked on the map is a map deed', () => {
   const map = mount(() => useCityMap(true))
-  act(() => map.pick({ id: 'hawa-mahal', kind: 'landmark', name: { hi: 'Hawa Mahal', en: 'Hawa Mahal' }, at: { x: 0, z: 0 } } as Parameters<typeof map.pick>[0]))
+  act(() =>
+    map.pick({
+      id: 'hawa-mahal',
+      kind: 'landmark',
+      name: { hi: 'Hawa Mahal', en: 'Hawa Mahal' },
+      at: { x: 0, z: 0 },
+    } as Parameters<typeof map.pick>[0]),
+  )
   expect(deeds).toEqual([{ kind: 'map' }])
 })
 
 it("reaching a landmark's ring is a darshan deed for that landmark, once per arrival, stamp or no stamp", () => {
   const stamps = mount(() => useStamps('en', null))
-  const hawa = { id: 'hawa-mahal', name: { hi: 'Hawa Mahal', en: 'Hawa Mahal' }, at: { x: 0, z: 0 }, radius: 5 }
+  const hawa = {
+    id: 'hawa-mahal',
+    name: { hi: 'Hawa Mahal', en: 'Hawa Mahal' },
+    at: { x: 0, z: 0 },
+    radius: 5,
+  }
   const landmarks = [hawa] as unknown as LandmarkDef[]
   act(() => void stamps.track({ x: 50, z: 0 }, landmarks, false))
   act(() => void stamps.track({ x: 1, z: 0 }, landmarks, false))

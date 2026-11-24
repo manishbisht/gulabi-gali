@@ -41,8 +41,12 @@ describe('the IST day', () => {
   })
 
   it('turns over at midnight IST, and knows the day before across months and years', () => {
-    expect(nextIstMidnight(Date.parse('2026-11-24T10:00:00+05:30'))).toBe(Date.parse('2026-11-25T00:00:00+05:30'))
-    expect(nextIstMidnight(Date.parse('2026-11-24T00:00:00+05:30'))).toBe(Date.parse('2026-11-25T00:00:00+05:30'))
+    expect(nextIstMidnight(Date.parse('2026-11-24T10:00:00+05:30'))).toBe(
+      Date.parse('2026-11-25T00:00:00+05:30'),
+    )
+    expect(nextIstMidnight(Date.parse('2026-11-24T00:00:00+05:30'))).toBe(
+      Date.parse('2026-11-25T00:00:00+05:30'),
+    )
     expect(dayBefore('2026-12-01')).toBe('2026-11-30')
     expect(dayBefore('2027-01-01')).toBe('2026-12-31')
     expect(dayBefore('2028-03-01')).toBe('2028-02-29')
@@ -66,7 +70,7 @@ describe('the goal of the day', () => {
       expect(new Set(all.slice(r, r + GOAL_KINDS.length).map((g) => g.kind)).size).toBe(GOAL_KINDS.length)
   })
 
-  it("names a known landmark on a darshan day, and goes round all of them", () => {
+  it('names a known landmark on a darshan day, and goes round all of them', () => {
     const seen = new Set<string>()
     for (const g of days('2026-01-01', GOAL_KINDS.length * STAMPS.length).map(goalFor))
       if (g.kind === 'darshan') {
@@ -80,7 +84,8 @@ describe('the goal of the day', () => {
   it('reads an override id, and refuses one that is not a goal', () => {
     expect(goalById('photo')).toEqual({ id: 'photo', kind: 'photo' })
     expect(goalById('darshan:jkk')).toEqual({ id: 'darshan:jkk', kind: 'darshan', stamp: 'jkk' })
-    for (const bad of ['darshan', 'darshan:taj-mahal', 'greet', 'photo:x', '']) expect(goalById(bad)).toBeNull()
+    for (const bad of ['darshan', 'darshan:taj-mahal', 'greet', 'photo:x', ''])
+      expect(goalById(bad)).toBeNull()
   })
 
   it('never asks for another person, a sign-in or the monkey', () => {
@@ -107,7 +112,7 @@ describe('doing it', () => {
     }
   })
 
-  it("a darshan day is done at that landmark only", () => {
+  it('a darshan day is done at that landmark only', () => {
     const goal = goalById('darshan:hawa-mahal')!
     expect(meets(goal, { kind: 'darshan', stamp: 'hawa-mahal' })).toBe(true)
     expect(meets(goal, { kind: 'darshan', stamp: 'jkk' })).toBe(false)
@@ -157,8 +162,22 @@ describe('the streak', () => {
     expect(localRecord()).toEqual(NO_RECORD)
     saveLocalRecord({ last: '2026-11-24', streak: 2, best: 5 })
     expect(localRecord()).toEqual({ last: '2026-11-24', streak: 2, best: 5 })
-    for (const bad of ['nope', '{"last":"x","streak":1,"best":1}', '{"last":"2026-11-24","streak":5,"best":2}'])
-      expect(asRecord((() => { try { return JSON.parse(bad) } catch { return null } })())).toBeNull()
+    for (const bad of [
+      'nope',
+      '{"last":"x","streak":1,"best":1}',
+      '{"last":"2026-11-24","streak":5,"best":2}',
+    ])
+      expect(
+        asRecord(
+          (() => {
+            try {
+              return JSON.parse(bad)
+            } catch {
+              return null
+            }
+          })(),
+        ),
+      ).toBeNull()
     storage.set('gg-today', '{oops')
     expect(localRecord()).toEqual(NO_RECORD)
   })

@@ -222,7 +222,7 @@ describe('a ride', () => {
     expect(player.position()).toEqual(out)
   })
 
-  it("a ride that reaches its stop is an auto ride done for Aaj ka Darshan; one sent back to the stand is not", () => {
+  it('a ride that reaches its stop is an auto ride done for Aaj ka Darshan; one sent back to the stand is not', () => {
     const deeds: Deed[] = []
     const off = onDeed((d) => deeds.push(d))
     const arrived = setup()
