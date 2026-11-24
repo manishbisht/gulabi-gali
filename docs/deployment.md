@@ -17,7 +17,7 @@ database and two Durable Objects; the Durable Object classes are created by the 
 ## Owner checklist, in order
 
 1. Cloudflare account, token and KV namespace (section 1, steps 1 and 2).
-2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0008`).
+2. **D1** (section 1a): create the database, paste its id, apply the migrations (`0001` to `0008`, then `0010` and `0011`; there is no `0009`).
 3. **Clerk** (section 1b): create the app, then set the Worker secrets.
 4. GitHub `backend` environment and the API domain (section 1, steps 3 to 5); a run of the workflow on `main`
    deploys (dispatch it by hand: pushes do not start it at the moment, see **CI caveats** in section 3).
@@ -447,7 +447,7 @@ harmless to run before or after the Worker; apply it the same way (`npx wrangler
 
 **Migration `0010_friends.sql` (friends and "Chai pe bulao").** It adds `friends`, `friend_requests`,
 `friend_settings` and `chai_invites`, and the triggers that end a friendship with its match, a block, a hide or a
-ban. It does not depend on `0009`. Apply it before the Worker that needs it ships (the friends routes and an
+ban. There is no `0009` migration (the number went unused). Apply it before the Worker that needs it ships (the friends routes and an
 account deletion read these tables): from `backend/`, `npx wrangler d1 migrations apply gulabi-gali --remote`,
 then `npx wrangler deploy`, then dispatch the `pages` workflow. The invite push rides on the push setup above
 (no new secret), and the 15-minute cron sweeps old asks and invites in one more D1 call.

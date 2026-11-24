@@ -797,8 +797,10 @@ and holds a resident slot in a district right now, `here: <district>`. The Worke
 (`GateDO.where`, one read, nothing scheduled) about those friends alone; nobody else's id reaches it. It asks on
 every read, with an empty list too, so the time an answer takes never tells whether a friend turned sharing off. Off, away,
 waiting in line, or the gate out of reach all read the same: just the name. No position is ever sent. Nothing is
-pushed to anyone's socket: the page reads the list when the profile sheet, a chat or the chai picker opens, and
-every 30 s while the friends list is open, so it adds no Durable Object time but that one gate read.
+pushed to anyone's socket: the page reads the list when the profile sheet, a chat or the chai picker opens, on
+each inbox (re)connect and each `friend` notice (for the Profile button's count of waiting asks), and every 30 s
+while the friends list is open (not while the tab is hidden), so it adds no Durable Object time but that one gate
+read (capped at 20 a minute per account).
 
 Chai pe bulao: seated at a bench as a resident (the bench's district confirms it, `DistrictDO.seatedAt`), a
 person picks a friend (`POST /api/chai {to, bench, kind}`). Their own checks answer as usual (`ghost`, `muted`,
