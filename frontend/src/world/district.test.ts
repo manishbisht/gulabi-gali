@@ -141,14 +141,14 @@ const materials = (o: THREE.Object3D) => {
 }
 
 describe('the city', () => {
-  it('has all five districts', () => {
-    expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer'])
+  it('has all six districts', () => {
+    expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer', 'nahargarh'])
   })
 
-  it('landmark count across districts is 10', async () => {
+  it('landmark count across districts is 11', async () => {
     const all = await Promise.all(DISTRICTS.map(load))
     expect(all.reduce((n, d) => n + d.def.landmarks.length, 0)).toBe(TOTAL_STAMPS)
-    expect(TOTAL_STAMPS).toBe(10)
+    expect(TOTAL_STAMPS).toBe(11)
   })
 
   it('the stamp list (stamps.json, which the server checks ids against) is every landmark, by its own name', async () => {
@@ -167,7 +167,7 @@ describe('the city', () => {
   })
 
   it.each(DISTRICTS)(
-    '%s: has a metro entrance (Amer: a bus stand, it has no metro) by its station',
+    '%s: has a metro entrance (Amer and Nahargarh: a bus stand, they have no metro) by its station',
     async (id) => {
       const d = await load(id)
       const kind = byBus(id) ? 'bus-stop' : 'station'
@@ -445,6 +445,82 @@ describe('Amer', () => {
 
   it('is where Gopal ji and Shabnam spend their days', async () => {
     expect(ids((await load('amer')).def.npcs)).toEqual(['gopal', 'shabnam'])
+  })
+})
+
+describe('Nahargarh', () => {
+  it('is Nahargarh, with the fort on the ridge: walls and a gateway, north of the road', async () => {
+    const d = await load('nahargarh')
+    expect(d.def.name).toEqual({ hi: 'Nahargarh', en: 'Nahargarh' })
+    expect(d.def.size).toBe(200)
+    expect(ids(d.def.landmarks)).toEqual(['nahargarh-fort'])
+    const fort = d.def.landmarks[0]!
+    const box = new THREE.Box3().setFromObject(await fort.build())
+    expect(box.max.y).toBeGreaterThan(10)
+    expect(fort.footprint.maxZ).toBeLessThan(d.def.spawn.z - 40)
+    // the ring by the gate is on the fort's south face, where the road comes up
+    expect(fort.at.z).toBeGreaterThan(fort.footprint.maxZ)
+    expect(fort.at.x).toBeGreaterThan(fort.footprint.minX)
+    expect(fort.at.x).toBeLessThan(fort.footprint.maxX)
+  })
+
+  it('stands on a ridge: the ground stops at its west wall and the city lies below it, far off', async () => {
+    const d = await load('nahargarh')
+    expect(d.def.ridgeWest).toBe(-d.def.size / 2)
+    const city = d.root.getObjectByName('city-below')!
+    expect(city).toBeDefined()
+    const box = new THREE.Box3().setFromObject(city)
+    expect(box.max.x).toBeLessThanOrEqual(d.def.ridgeWest! + 0.01) // all of it past the edge
+    expect(box.min.y).toBeLessThan(-20) // well below the ridge
+    expect(box.min.x).toBeLessThan(d.def.ridgeWest! - 200) // a wide view
+    // cheap: a couple of draw calls, a few thousand triangles, and the lights of the city come on at night
+    let calls = 0
+    city.traverse((o) => {
+      if (o instanceof THREE.Mesh) calls++
+    })
+    expect(calls).toBeLessThanOrEqual(3)
+    expect(triangles(city)).toBeLessThan(8000)
+    expect(materials(city).some(glows)).toBe(true)
+    // nothing out there is something to walk into: it adds no collider
+    for (const c of d.colliders)
+      expect(c.minX < d.def.ridgeWest! - 10 && c.maxX < d.def.ridgeWest! - 10).toBe(false)
+  })
+
+  it('has a sunset point: the bastion on the terrace looks west, over the parapet, at the city', async () => {
+    const d = await load('nahargarh')
+    const roof = d.def.roof!
+    expect(roof.y).toBeGreaterThan(8)
+    expect(roofHeight(roof, roof.landing.x, roof.landing.z)).toBe(roof.y)
+    expect(roof.out).toEqual({ x: -1, z: 0 })
+    // the view is due west, out past the ridge's edge
+    expect(roof.view.x).toBeLessThan(d.def.ridgeWest!)
+    expect(Math.abs(roof.view.z - roof.landing.z)).toBeLessThan(1)
+    // and the roof is near the edge: little but the terrace between it and the drop
+    expect(roof.building.minX - d.def.ridgeWest!).toBeLessThan(20)
+  })
+
+  it('has no metro: a bus stand by the ridge road, chai stalls, benches facing the sunset, a poster wall and autos', async () => {
+    const d = await load('nahargarh')
+    const count = (k: string) => d.def.props.filter((p) => p.kind === k).length
+    expect(count('station')).toBe(0)
+    expect(count('bus-stop')).toBe(1)
+    expect(count('tapri')).toBeGreaterThanOrEqual(1)
+    expect(count('tapri')).toBeLessThanOrEqual(2)
+    expect(count('bench')).toBeGreaterThanOrEqual(2)
+    expect(count('bench')).toBeLessThanOrEqual(3)
+    expect(count('poster-wall')).toBe(1)
+    expect(count('auto')).toBeGreaterThanOrEqual(2)
+    // at least two benches look west (their front, +z, turned to -x), out at the sunset
+    expect(d.def.props.filter((p) => p.kind === 'bench' && p.rot === 90).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('has crenellated walls along the ridge', async () => {
+    const d = await load('nahargarh')
+    expect(d.def.buildings.filter((b) => b.style === 'wall').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('is where Bhanwar ji and Tara spend their days', async () => {
+    expect(ids((await load('nahargarh')).def.npcs)).toEqual(['bhanwar', 'tara'])
   })
 })
 

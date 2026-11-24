@@ -118,11 +118,13 @@ describe.each(DISTRICTS)('%s: signposts', (id) => {
   })
 })
 
-it("Amer's boards point at its bus stand, not a metro it does not have", async () => {
-  const { def } = await load('amer')
-  for (const post of signpostsOf(def)) {
-    const stop = post.boards.find((b) => b.id === 'metro')!
-    expect(stop.name).toEqual({ hi: 'Bus stand', en: 'Bus stop' })
+it("Amer's and Nahargarh's boards point at their bus stands, not a metro they do not have", async () => {
+  for (const id of ['amer', 'nahargarh'] as const) {
+    const { def } = await load(id)
+    for (const post of signpostsOf(def)) {
+      const stop = post.boards.find((b) => b.id === 'metro')!
+      expect(stop.name, id).toEqual({ hi: 'Bus stand', en: 'Bus stop' })
+    }
   }
   const { def: pink } = await load('walled-city')
   expect(signpostsOf(pink)[0]!.boards.find((b) => b.id === 'metro')!.name.en).toBe('Metro station')

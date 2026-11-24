@@ -21,6 +21,7 @@ const SPAWNS = {
   university: { x: -40, z: 42 },
   'malviya-nagar': { x: 6, z: 46 },
   amer: { x: 34, z: 31 },
+  nahargarh: { x: 50, z: 40 },
 }
 const OUTFITS = ['pink', 'terracotta', 'sandstone', 'ochre', 'white', 'teal', 'marigold', 'road', 'grass', 'glass']
 const HEADS = ['none', 'safa', 'cap', 'dupatta', 'bun']

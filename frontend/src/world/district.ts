@@ -8,8 +8,15 @@ import { buildRoof } from './rooftop'
 import { buildSignposts } from './signposts'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
-/** The five districts, in the order the travel sheet lists them: the metro's four, then Amer (by bus). */
-export const DISTRICTS: DistrictId[] = ['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer']
+/** The six districts, in the order the travel sheet lists them: the metro's four, then the bus's two. */
+export const DISTRICTS: DistrictId[] = [
+  'walled-city',
+  'mi-road',
+  'university',
+  'malviya-nagar',
+  'amer',
+  'nahargarh',
+]
 
 /** Each district is its own chunk, fetched only when the player goes there. */
 const SOURCES: Record<DistrictId, () => Promise<{ default: DistrictDef }>> = {
@@ -18,6 +25,7 @@ const SOURCES: Record<DistrictId, () => Promise<{ default: DistrictDef }>> = {
   university: () => import('./districts/university'),
   'malviya-nagar': () => import('./districts/malviyaNagar'),
   amer: () => import('./districts/amer'),
+  nahargarh: () => import('./districts/nahargarh'),
 }
 
 export interface District {
@@ -88,6 +96,7 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
     colliders.push(def.roof.flight)
   }
   colliders.push(...(def.water ?? []))
+  if (def.scenery) root.add(def.scenery())
   colliders.push(...boundary(def.size / 2))
 
   const hemi = new THREE.HemisphereLight('#E4EEF4', PALETTE.sandstone, 1.6)
@@ -161,7 +170,9 @@ function buildGround(def: DistrictDef): THREE.Mesh {
     return bake(g, color)
   }
   const span = def.size * 2.5 // reaches past the walls to the horizon
-  const parts = [quad({ minX: -span / 2, maxX: span / 2, minZ: -span / 2, maxZ: span / 2 }, 0, def.ground)]
+  // on a ridge the ground stops at its edge, where the scenery's slope falls away to the plain below
+  const west = def.ridgeWest ?? -span / 2
+  const parts = [quad({ minX: west, maxX: span / 2, minZ: -span / 2, maxZ: span / 2 }, 0, def.ground)]
   const levels: number[] = []
   def.paving.forEach((p, i) => {
     const under = def.paving.slice(0, i).map((q, j) => (overlap(p, q) ? levels[j]! : 0))

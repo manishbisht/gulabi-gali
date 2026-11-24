@@ -27,6 +27,34 @@ it("Amer's stalls along the path up to the fort have a murmur of their own, unde
   expect(amer.birds).toBeGreaterThan(mixFor('walled-city', DAY, null).birds)
 })
 
+it("Nahargarh's ridge has wind through it, birds by day, and only the far hum of the city below", () => {
+  const ridge = mixFor('nahargarh', DAY, null)
+  expect(ridge.wind).toBeGreaterThan(0)
+  expect(ridge.birds).toBeGreaterThan(mixFor('walled-city', DAY, null).birds)
+  expect(ridge.murmur).toBeGreaterThan(0)
+  expect(ridge.murmur).toBeLessThan(mixFor('amer', DAY, null).murmur)
+  // the wind keeps on through the night; nowhere else has it
+  expect(mixFor('nahargarh', NIGHT, null).wind).toBeGreaterThan(0)
+  for (const d of ['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer', 'nowhere-yet'])
+    expect(mixFor(d, DAY, null).wind, d).toBe(0)
+})
+
+it('the lowest tier keeps one steady layer up on the ridge too: the hum, not the wind', () => {
+  const thin = thinMix(mixFor('nahargarh', DAY, null))
+  expect(thin.wind).toBe(0)
+  expect(thin.murmur).toBeGreaterThan(0)
+})
+
+it('starts the wind on the ridge and stops it on dispose', () => {
+  const a = make('nahargarh')
+  doc.fire('pointerdown')
+  const c = made[0]!
+  // murmur (noise + its swell) and wind (noise + two gusts) run, with the two bird notes
+  expect(c.sources).toBe(7)
+  a.dispose()
+  expect(c.stopped).toBeGreaterThanOrEqual(5)
+})
+
 it('has birds by day, crickets at night, and bells only at dawn and dusk', () => {
   const day = mixFor('university', DAY, null)
   expect([day.birds > 0, day.crickets, day.bells]).toEqual([true, 0, 0])

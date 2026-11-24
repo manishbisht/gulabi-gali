@@ -15,6 +15,7 @@ import {
 } from './cityMap'
 import walledCity from './districts/walledCity'
 import amer from './districts/amer'
+import nahargarh from './districts/nahargarh'
 import { createPeople } from './people'
 import { wallsOf } from './posters'
 
@@ -91,12 +92,15 @@ it("a district's map items: every landmark (stamped or not), the metro, every be
   expect(of('metro')[0]!.name).toEqual({ hi: 'Metro station', en: 'Metro station' })
 })
 
-it('Amer has no metro: its map names the bus stand there instead, under the same id', () => {
-  const stop = mapItems(amer, []).find((i) => i.id === 'metro')!
-  expect(stop.kind).toBe('metro')
-  expect(stop.at).toEqual(amer.station)
-  expect(stop.name).toEqual({ hi: 'Bus stand', en: 'Bus stop' })
-})
+it.each([amer, nahargarh])(
+  '$id has no metro: its map names the bus stand there instead, under the same id',
+  (def) => {
+    const stop = mapItems(def, []).find((i) => i.id === 'metro')!
+    expect(stop.kind).toBe('metro')
+    expect(stop.at).toEqual(def.station)
+    expect(stop.name).toEqual({ hi: 'Bus stand', en: 'Bus stop' })
+  },
+)
 
 const person = (id: string, x: number, z: number): LivePerson => ({
   id,

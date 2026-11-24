@@ -3,6 +3,7 @@ import type { DistrictId } from '../net/protocol'
 import { PLAYER_RADIUS } from '../player/player'
 import { BENCH_RANGE, benchesOf } from './benches'
 import { DISTRICTS, loadDistrict, type District } from './district'
+import { byBus } from './metroRide'
 import { WALL_RANGE, wallsOf } from './posters'
 import { STAIR_RANGE } from './rooftop'
 import { TAXI } from './taxi'
@@ -124,8 +125,9 @@ const facing = (rot: number) => {
 }
 
 describe('on foot from the spawn', () => {
-  it('covers Amer and every other district', () => {
+  it('covers Amer, Nahargarh and every other district', () => {
     expect(DISTRICTS).toContain('amer')
+    expect(DISTRICTS).toContain('nahargarh')
   })
 
   it.each(DISTRICTS)(
@@ -146,7 +148,7 @@ describe('on foot from the spawn', () => {
         if (!walk.near(w.at, WALL_RANGE, ahead)) missed.push(`poster wall ${w.index}'s front`)
       }
       if (d.def.roof && !walk.near(d.def.roof.stair, STAIR_RANGE)) missed.push("the rooftop stair's foot")
-      if (!walk.near(d.def.station, STATION_RANGE)) missed.push(id === 'amer' ? 'the bus stand' : 'the metro')
+      if (!walk.near(d.def.station, STATION_RANGE)) missed.push(byBus(id) ? 'the bus stand' : 'the metro')
       expect(missed).toEqual([])
     },
   )

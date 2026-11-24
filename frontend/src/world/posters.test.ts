@@ -6,6 +6,7 @@ import miRoad from './districts/miRoad'
 import university from './districts/university'
 import malviyaNagar from './districts/malviyaNagar'
 import amer from './districts/amer'
+import nahargarh from './districts/nahargarh'
 import {
   createPosters,
   HIDDEN_PAPER,
@@ -25,6 +26,7 @@ const DEFS: Record<DistrictId, DistrictDef> = {
   university,
   'malviya-nagar': malviyaNagar,
   amer,
+  nahargarh,
 }
 
 /** A canvas stand-in that counts what is drawn on it. */

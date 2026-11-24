@@ -12,6 +12,7 @@ import type { ClientMsg, DistrictId, ServerMsg } from './net/protocol'
 import { benchesOf } from './world/benches'
 import malviyaNagar from './world/districts/malviyaNagar'
 import amer from './world/districts/amer'
+import nahargarh from './world/districts/nahargarh'
 import miRoad from './world/districts/miRoad'
 import university from './world/districts/university'
 import walledCity from './world/districts/walledCity'
@@ -248,6 +249,7 @@ const DEFS: Record<DistrictId, DistrictDef> = {
   university,
   'malviya-nagar': malviyaNagar,
   amer,
+  nahargarh,
 }
 
 /** Opens the city with the test hooks on, in Hinglish, starting in the Walled City. */
@@ -300,7 +302,14 @@ it('travels round the city and leaves nothing behind', async () => {
     timers: live.size,
     bubbles: host.querySelectorAll('.npc-bubble').length,
   }
-  for (const to of ['mi-road', 'university', 'malviya-nagar', 'amer', 'walled-city'] as DistrictId[]) {
+  for (const to of [
+    'mi-road',
+    'university',
+    'malviya-nagar',
+    'amer',
+    'nahargarh',
+    'walled-city',
+  ] as DistrictId[]) {
     await ride(host, to)
     expect(window.__gg.district()).toBe(to)
     expect(localStorage.getItem('gg-district')).toBe(to)
@@ -449,7 +458,7 @@ it('a profile with no `stamps` field (an older Worker, a rollback) still opens t
   )
   await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
   await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
-  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/10')
+  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/11')
   await act(async () => root.unmount())
 })
 

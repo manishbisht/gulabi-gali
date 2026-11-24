@@ -7,6 +7,7 @@ export const DISTRICT_NAMES: Record<DistrictId, { hi: string; en: string }> = {
   university: { hi: 'University–JKK', en: 'University & JKK' },
   'malviya-nagar': { hi: 'Malviya Nagar–WTP', en: 'Malviya Nagar & WTP' },
   amer: { hi: 'Amer', en: 'Amer' },
+  nahargarh: { hi: 'Nahargarh', en: 'Nahargarh' },
 }
 
 /**
@@ -19,4 +20,5 @@ export const DISTRICT_SHORT_NAMES: Record<DistrictId, { hi: string; en: string }
   university: { hi: 'University', en: 'University' },
   'malviya-nagar': { hi: 'Malviya Nagar', en: 'Malviya Nagar' },
   amer: DISTRICT_NAMES.amer,
+  nahargarh: DISTRICT_NAMES.nahargarh,
 }

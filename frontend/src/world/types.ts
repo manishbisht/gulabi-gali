@@ -104,4 +104,11 @@ export interface DistrictDef {
   roof?: RoofDef
   /** Open water nobody walks into (Amer's lake): colliders with no building, drawn by the district's paving. */
   water?: AABB[]
+  /**
+   * A ridge's edge (Nahargarh): west of this x the ground falls away, so the ground stops here and `scenery`
+   * draws what lies below. It is the district's west wall: nobody walks past it.
+   */
+  ridgeWest?: number
+  /** Far scenery outside the district's walls (Nahargarh's city below the ridge): drawn, never walked or hit. */
+  scenery?: () => THREE.Group
 }

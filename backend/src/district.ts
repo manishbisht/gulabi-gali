@@ -39,6 +39,7 @@ export const DISTRICT_IDS: readonly DistrictId[] = [
   'university',
   'malviya-nagar',
   'amer',
+  'nahargarh',
 ]
 
 /**

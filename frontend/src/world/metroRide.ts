@@ -7,7 +7,8 @@ export const RIDE_MS = 4000
 /**
  * The stop announced for each district. Badi Chaupar and Sindhi Camp are real Jaipur Pink Line stations
  * (Sindhi Camp is the nearest to MI Road). The Pink Line has no station by the University or in Malviya
- * Nagar, so those two are made-up stops. Amer has no metro at all: its stop is the bus stand by the lake.
+ * Nagar, so those two are made-up stops. Amer has no metro at all: its stop is the bus stand by the lake; nor
+ * has Nahargarh up on its ridge, whose stop is the bus stand on the ridge road.
  */
 export const METRO_STATIONS: Record<DistrictId, { hi: string; en: string }> = {
   'walled-city': { hi: 'Badi Chaupar', en: 'Badi Chaupar' },
@@ -15,15 +16,16 @@ export const METRO_STATIONS: Record<DistrictId, { hi: string; en: string }> = {
   university: { hi: 'University Gate', en: 'University Gate' }, // fictional
   'malviya-nagar': { hi: 'Malviya Nagar', en: 'Malviya Nagar' }, // fictional
   amer: { hi: 'Amer', en: 'Amer' }, // the bus stand
+  nahargarh: { hi: 'Nahargarh', en: 'Nahargarh' }, // the bus stand on the ridge road
 }
 
 /** The districts the metro does not reach: a bus runs there instead, from every station (and back). */
-const BUS_ONLY: readonly DistrictId[] = ['amer']
+const BUS_ONLY: readonly DistrictId[] = ['amer', 'nahargarh']
 
 /** Whether `id` is reached by bus, not the metro: its stop is a bus stand, not a metro entrance. */
 export const byBus = (id: DistrictId): boolean => BUS_ONLY.includes(id)
 
-/** What a district's stop is called on its map and signposts: the metro station, or Amer's bus stand. */
+/** What a district's stop is called on its map and signposts: the metro station, or a bus stand (Amer, Nahargarh). */
 export const stopName = (id: DistrictId): Record<Lang, string> => {
   const key = byBus(id) ? 'mapBus' : 'mapMetro'
   return { hi: t(key, 'hi'), en: t(key, 'en') }
