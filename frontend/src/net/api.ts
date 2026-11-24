@@ -47,6 +47,8 @@ export function fallbackSnapshot(now: Date): CitySnapshot {
   }
 }
 
+/** The `/api/city` version this build asks for: 2 is the first to name New Year. Bump it with a new festival. */
+const CITY_API_VERSION = 2
 /** Every festival this build can show; the Record makes a new `FestivalId` a compile error here until listed. */
 const FESTIVALS: Record<FestivalId, true> = {
   sankranti: true,
@@ -78,7 +80,9 @@ export async function fetchCity(signal?: AbortSignal): Promise<CitySnapshot> {
   if (signal?.aborted) ctl.abort()
   else signal?.addEventListener('abort', forward)
   try {
-    const res = await fetchNoting(`${API_BASE}/api/city`, { signal: ctl.signal })
+    // v=2 says this page knows every festival in `FESTIVALS`: without it the Worker holds back New Year, which
+    // a page built before it would break on (and the browser keeps the two answers apart)
+    const res = await fetchNoting(`${API_BASE}/api/city?v=${CITY_API_VERSION}`, { signal: ctl.signal })
     if (!res.ok) return fallbackSnapshot(new Date())
     const s = (await res.json()) as CitySnapshot
     return { ...s, festival: knownFestival(s.festival) }

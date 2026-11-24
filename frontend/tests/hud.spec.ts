@@ -41,7 +41,7 @@ async function busiest(
   // to 8 s) could land after the patch below and swap in today's real weather, so the reply is fixed too.
   const now = new Date()
   const at = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h).toISOString()
-  await page.route('**/api/city', (route) =>
+  await page.route('**/api/city*', (route) =>
     route.fulfill({
       json: {
         fetchedAt: now.toISOString(),

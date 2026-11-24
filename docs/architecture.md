@@ -116,8 +116,10 @@ shows them; a ghost's stay on the device.
 fog and light colours (recomputed every 30 s), `live/weatherFx.ts` adds rain, and `live/festivalFx.ts`
 draws the festival of the day (Sankranti kites, Diwali diyas, Holi colour, and since phase 4 the Gangaur and
 Teej processions) and its banner. The festival table is `backend/src/festivals.data.ts`; an entry is whole IST
-days, or IST minutes for New Year (31 Dec 18:00 to 1 Jan 06:00), and `/api/city` works the festival out from
-the clock as it serves, not from the last cron run. New Year hangs string lights across MI Road and on Ram Niwas
+days or IST minutes. It needs yearly upkeep: add the next year's dates by each December (a test checks it still
+covers 2028). New Year (31 Dec 18:00 to 1 Jan 06:00 IST) needs no entry: `festivalOn` works it out every year.
+`/api/city` works the festival out from the clock as it serves, not from the last cron run, and names a
+festival newer than the first six only to pages that ask with `?v=2` (see docs/deployment.md). New Year hangs string lights across MI Road and on Ram Niwas
 Bagh's gate (`stringLights` in the district's data; one instanced mesh and its wire, half the bulbs on the
 lowest tier, steady under reduced motion). Winter mornings (December to February, IST) are misty
 (`live/winter.ts`): from about 04:00, thickest 05:30 to 08:00, gone by 10:00, denser on dirty air or a fog

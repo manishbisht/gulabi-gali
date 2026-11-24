@@ -11,7 +11,7 @@ import { ERROR_IP_LIMIT, ERROR_MAX_BODY, purgeClientErrors, recordClientError } 
 import { listEnded, purgeEvidence } from './evidence'
 import { GATE_NAME, joinWaitlist, purgeWaitlist } from './gate'
 import { hashedList } from './filter/server'
-import { festivalOn } from './festivals'
+import { festivalForVersion, festivalOn } from './festivals'
 import { floating, inboxOf, openInbox, type Later } from './inbox'
 import { inviteIpLimit, ipLimit, ipWindowLimit, muteGate, purgeCounters, readLimit } from './limits'
 import type { CitySnapshot } from './protocol'
@@ -58,20 +58,24 @@ export async function handleCity(
   now: Date,
   origin: string | null = null,
   timeoutMs?: number,
+  /** The API version the page asked with (`?v=`); 1 when it gave none. See `festivalForVersion`. */
+  version = 1,
 ): Promise<Response> {
   const headers = { 'cache-control': CITY_CACHE }
+  const send = (s: CitySnapshot) =>
+    json({ ...s, festival: festivalForVersion(s.festival, version) }, 200, origin, headers)
   // A failed or garbled KV read is just a cache miss.
   const stored = await env.CITY.get<CitySnapshot>(CITY_KEY, 'json').catch(() => null)
   const age = stored ? now.getTime() - Date.parse(stored.fetchedAt) : Infinity
   // The festival is a matter of the clock alone (New Year starts at 18:00 IST, not at the next cron run).
-  if (stored && age <= MAX_AGE_MS) return json({ ...stored, festival: festivalOn(now) }, 200, origin, headers)
+  if (stored && age <= MAX_AGE_MS) return send({ ...stored, festival: festivalOn(now) })
   try {
     const live = await fetchSnapshot(fetcher, now, timeoutMs)
     // Serve the live snapshot even if storing it fails.
     await storeCity(env, live).catch((err) => console.error('city: KV put failed', err))
-    return json(live, 200, origin, headers)
+    return send(live)
   } catch {
-    return json(defaultSnapshot(now), 200, origin, headers)
+    return send(defaultSnapshot(now))
   }
 }
 
@@ -330,7 +334,10 @@ export default {
       // Public: hashes only, so the page can hint before sending. The server stays the authority.
       return json({ hashes: await hashedList() }, 200, origin, { 'cache-control': 'public, max-age=86400' })
     }
-    if (pathname === '/api/city') return handleCity(env, fetch, new Date(), origin)
+    if (pathname === '/api/city') {
+      const version = Math.floor(Number(url.searchParams.get('v'))) || 1
+      return handleCity(env, fetch, new Date(), origin, undefined, version)
+    }
     const later: Later = ctx ? (work) => ctx.waitUntil(work) : floating
     // Public: how many people others can see in the city now, rounded (see `cityCount`).
     if (pathname === '/api/count' && request.method === 'GET')

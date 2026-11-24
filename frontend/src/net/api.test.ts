@@ -133,7 +133,8 @@ it('strips trailing slashes from the API base', async () => {
   const fetchMock = vi.fn(() => Promise.reject(new TypeError('offline')))
   vi.stubGlobal('fetch', fetchMock)
   await fresh()
-  expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe('https://api.example.com/api/city')
+  // v=2: this page knows New Year (see festivalForVersion in the Worker)
+  expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe('https://api.example.com/api/city?v=2')
   vi.unstubAllEnvs()
 })
 

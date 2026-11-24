@@ -154,7 +154,7 @@ test.describe('on a phone', () => {
 })
 
 test('falls back when the weather API is down', async ({ page }) => {
-  await page.route('**/api/city', (route) => route.abort())
+  await page.route('**/api/city*', (route) => route.abort())
   await enterCity(page)
   await expect.poll(() => page.evaluate(() => window.__gg.framesSinceRestore())).toBeGreaterThan(5)
   await expect(page.locator('.hud-top .hud-chip').nth(1)).toHaveText('—')

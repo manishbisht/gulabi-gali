@@ -62,8 +62,30 @@ it('serves the stored snapshot with the festival as of now, not as of the last c
   // stored at 17:55 IST on 31 December, before New Year's lights; asked for at 18:05 IST
   const before = { ...stored, fetchedAt: '2026-12-31T12:25:00.000Z', festival: null }
   await env.CITY.put('now', JSON.stringify(before))
-  const res = await handleCity(env, rejecting, new Date('2026-12-31T12:35:00.000Z'))
+  const res = await handleCity(env, rejecting, new Date('2026-12-31T12:35:00.000Z'), null, undefined, 2)
   expect(await res.json()).toEqual({ ...before, festival: 'newyear' })
+})
+
+it('keeps New Year from pages that ask without ?v=2: they were built before it and cannot show it', async () => {
+  const fresh = { ...stored, fetchedAt: new Date().toISOString() }
+  await env.CITY.put('now', JSON.stringify(fresh))
+  // the route reads the version from the URL, and the clock is now; so fix the festival through the clock
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-12-31T13:00:00.000Z')) // 18:30 IST on New Year's Eve
+  try {
+    await env.CITY.put('now', JSON.stringify({ ...fresh, fetchedAt: new Date().toISOString() }))
+    const old = (await (await SELF.fetch('https://api.test/api/city')).json()) as CitySnapshot
+    expect(old.festival).toBeNull()
+    const v2 = (await (await SELF.fetch('https://api.test/api/city?v=2')).json()) as CitySnapshot
+    expect(v2.festival).toBe('newyear')
+    const junk = (await (await SELF.fetch('https://api.test/api/city?v=abc')).json()) as CitySnapshot
+    expect(junk.festival).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+  // the first six reach every page: a version-1 page on Diwali still sees it
+  const diwali = await handleCity(env, rejecting, new Date('2027-10-28T06:00:00.000Z'), null, undefined, 1)
+  expect(((await diwali.json()) as CitySnapshot).festival).toBe('diwali')
 })
 
 it('serves a default snapshot when upstream fails', async () => {
