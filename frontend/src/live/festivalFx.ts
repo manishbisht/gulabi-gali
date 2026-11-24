@@ -374,9 +374,8 @@ export function createFestivalFx(
       if (bulbs && wire) {
         bulbs.visible = wire.visible = next === 'newyear'
         bulbs.count = quality === 0 ? thinBulbs : bulbs.instanceMatrix.count
-        // steady at full brightness from the start, and again whenever twinkling stops
-        twinkling = false
-        glow(time, false)
+        // the sky repaints every 30 s: the bulbs carry on as they were (steady until the first twinkle), no flash
+        glow(time, twinkling)
       }
     },
     update(dt) {

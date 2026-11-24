@@ -276,6 +276,10 @@ describe('createFestivalFx: New Year', () => {
     for (let i = 0; i < 60; i++) fx.update(1 / 60) // one second of 60 fps frames
     expect(colours.version - from).toBeGreaterThanOrEqual(12)
     expect(colours.version - from).toBeLessThanOrEqual(16)
+    // the sky's repaint (every 30 s) does not flash every bulb back to full
+    const mid = Array.from(colours.array)
+    fx.set('newyear', 2)
+    expect(Array.from(colours.array)).toEqual(mid)
     fx.dispose()
     district.dispose()
   })

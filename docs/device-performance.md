@@ -198,6 +198,29 @@ chance event), and a real phone. The real-device checklist above, run with the e
 override on, and it changes only what that page shows; on a real festival day it is the live festival), is still
 owed.
 
+### Winter and New Year
+
+Run 2026-11-24, same machine and spec, no residents. `DEVICE_PERF_WINTER=1 npm run test:device` opens MI Road
+with the New Year override (`gg-festival=newyear`: 279 bulbs on 17 strands and their wire), then sets the clock
+to 05:45 IST on 1 January under a fog report and AQI 180, so the winter ground fog is near its thickest (scene
+fog 0.032, six mist sprites at 0.86 of full) while the lights are still up, and walks for 8 s as before.
+"Before" is the same scenario on the code before this work (no lights, no mist; the override did nothing).
+
+| Run                    | Walkable ms | Frames | p50 ms | p95 ms | p99 ms | Max ms | Over 33 ms | Tier after | Heap MB | Draw calls | Triangles | Programs | Main thread ms/frame (task, script) |
+| ---------------------- | ----------: | -----: | -----: | -----: | -----: | -----: | ---------: | ---------- | ------: | ---------: | --------: | -------: | ----------------------------------- |
+| Walled City, before    |        2636 |    544 |   16.7 |   16.7 |   16.8 |    167 |          1 | 2          |    11.5 |         51 |    61,770 |       11 | 2.2, 1.5                            |
+| Walled City, after     |        1756 |    543 |   16.7 |   16.7 |   16.8 |    233 |          1 | 2          |    11.5 |         51 |    61,770 |       11 | 2.1, 1.4                            |
+| Winter MI Road, before |        1731 |    543 |   16.7 |   16.7 |   16.8 |    167 |          1 | 2          |     9.0 |         46 |    49,870 |       11 | 1.8, 1.3                            |
+| Winter MI Road, 1      |        1784 |    545 |   16.7 |   16.7 |   16.8 |    133 |          1 | 2          |    10.5 |         52 |    55,418 |       14 | 2.4, 1.7                            |
+| Winter MI Road, 2      |        1816 |    543 |   16.7 |   16.7 |   16.8 |    150 |          1 | 2          |    10.7 |         52 |    55,418 |       14 | 1.8, 1.4                            |
+
+Each run has one long frame (the max) and no others over 33 ms. The lights and mist together cost 6
+draw calls (the bulbs, their wire, and the mist sprites in view), about 5,500 triangles (the bulbs), 3 shader
+programs, one 64 x 64 texture, and 0 to 0.6 ms of throttled main-thread time per frame (the run-to-run spread is
+about as wide). The twinkle is worked out 15 times a second, not every frame. On the lowest tier the mist
+sprites go (the scene fog alone carries the morning) and half the bulbs. Not measured: a real phone's fill rate
+under six large transparent sprites, which is what the lowest tier drops first.
+
 ### Phase 3: Clerk mode
 
 Run 2026-11-14, same machine and spec, against two builds of the same commit with test hooks on: one with no
