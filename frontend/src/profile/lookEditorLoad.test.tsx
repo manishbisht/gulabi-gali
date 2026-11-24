@@ -44,7 +44,7 @@ it('a dressing room that cannot load says so and closes itself; the page around 
   )
   await act(async () => vi.advanceTimersByTimeAsync(50))
   const line = host.querySelector('[role="alert"]')
-  expect(line?.textContent).toBe('Kapde badalne wala panna khul nahi paya. Thodi der mein phir try karo.')
+  expect(line?.textContent).toBe('Kapde badalne wala panna khul nahi paya. Page reload karke phir try karo.')
   expect(host.querySelector('#city')).not.toBeNull()
   expect(onCancel).not.toHaveBeenCalled()
   await act(async () => vi.advanceTimersByTimeAsync(4000))
@@ -58,7 +58,7 @@ it('the next open fetches it afresh, and it opens once the chunk is there', asyn
   )
   await act(async () => root.render(editor('en')))
   await act(async () => vi.advanceTimersByTimeAsync(50))
-  expect(host.textContent).toContain("Couldn't open the dressing room. Try again in a moment.")
+  expect(host.textContent).toContain("Couldn't open the dressing room. Reload the page and try again.")
   await act(async () => root.render(null))
 
   chunk.fail = false
