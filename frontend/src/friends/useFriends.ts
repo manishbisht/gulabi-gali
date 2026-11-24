@@ -139,8 +139,17 @@ export function useFriends({
   )
   const setSettings = useCallback(
     async (patch: Partial<FriendSettings>) => {
+      // the switch moves at once; the server's answer settles it, and a failure puts back what was patched
+      const keys = Object.keys(patch) as (keyof FriendSettings)[]
+      setLists((l) => l && { ...l, settings: { ...l.settings, ...patch } })
       const next = await withToken((tok) => putFriendSettings(tok, patch), null)
-      if (next) setLists((l) => l && { ...l, settings: next })
+      setLists((l) => {
+        if (!l) return l
+        if (next) return { ...l, settings: next }
+        const back = { ...l.settings }
+        for (const k of keys) back[k] = !patch[k]
+        return { ...l, settings: back }
+      })
       return next !== null
     },
     [withToken],

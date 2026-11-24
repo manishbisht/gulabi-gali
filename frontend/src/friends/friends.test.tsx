@@ -216,3 +216,22 @@ it('a chat\'s menu offers "Be friends" until it is asked, then says where it sta
   await done.click(done.button(/^More$/))
   expect(done.host.textContent).toContain("You're friends")
 })
+
+it('a switch moves at once, and goes back with a note when the save fails', async () => {
+  const { host, click } = await mount(<Panel />)
+  const fetcher = vi.mocked(fetch)
+  const real = fetcher.getMockImplementation()!
+  let release: (r: Response) => void = () => {}
+  fetcher.mockImplementation(async (url, init) =>
+    String(url).endsWith('/api/me/friend-settings')
+      ? new Promise<Response>((r) => (release = r))
+      : real(url as string, init),
+  )
+  const box = () => host.querySelector<HTMLInputElement>('input[data-field=chaiInvites]')!
+  await click(box())
+  expect(box().checked).toBe(false)
+  await act(async () => release(json({ error: 'rate' }, 429)))
+  await settle()
+  expect(box().checked).toBe(true)
+  expect(host.textContent).toContain("Couldn't save that. Try again.")
+})

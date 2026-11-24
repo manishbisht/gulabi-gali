@@ -123,7 +123,6 @@ export function FriendsPanel({ friends, lang }: Props) {
                 type="checkbox"
                 data-field={key}
                 checked={lists.settings[key]}
-                disabled={busy === key}
                 onChange={(e) =>
                   void act(
                     key,
