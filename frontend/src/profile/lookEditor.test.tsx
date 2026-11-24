@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Lang } from '../i18n/strings'
+import type { ProfileInput } from '../net/api'
 import { dressOfLook } from '../player/avatar'
 import type { AvatarLook } from '../world/types'
 import LookEditor, { type LookEditorMode } from './LookEditor'
@@ -187,7 +188,10 @@ describe('from the profile sheet', () => {
     stamps: [],
   }
 
-  async function sheet(complete: boolean, onSave = vi.fn(async () => ({ ok: true }) as const)) {
+  async function sheet(
+    complete: boolean,
+    onSave = vi.fn<(p: ProfileInput) => Promise<{ ok: true }>>(async () => ({ ok: true })),
+  ) {
     await act(async () =>
       root.render(
         <ProfileSheet

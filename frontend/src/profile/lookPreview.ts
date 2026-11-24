@@ -29,7 +29,7 @@ export function createLookPreview(
   let renderer: THREE.WebGLRenderer
   try {
     const attributes = { antialias: true, alpha: true, powerPreference: 'low-power' } as const
-    const context = canvas.getContext('webgl2', attributes)
+    const context = canvas.getContext('webgl2', attributes) as WebGL2RenderingContext | null
     if (!context) return null
     renderer = new THREE.WebGLRenderer({ canvas, context, ...attributes })
   } catch {
