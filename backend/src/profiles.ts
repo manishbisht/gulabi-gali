@@ -3,6 +3,7 @@ import type { Env } from './env'
 import { wordsOk } from './filter/server'
 import { cleanName, firstName } from './names'
 import { stampsOf } from './stamps'
+import { todayOf } from './today'
 import {
   compactLook,
   DRESS_LIMITS,
@@ -200,12 +201,15 @@ export async function getMe(env: Env, userId: string): Promise<Me> {
   const verified = await env.DB.prepare('SELECT verified FROM users WHERE id = ?')
     .bind(userId)
     .first<{ verified: number }>()
+  const today = await todayOf(env, userId)
   return {
     id: userId,
     // Your own link is yours to see and edit, verified or not.
     profile: row ? toFull(row, true, await stampsOf(env, userId)) : null,
     complete: row ? isComplete(row) : false,
     verified: verified?.verified === 1,
+    // "Aaj ka Darshan": only once there is a day to show, and only ever on your own `Me`
+    ...(today ? { today } : {}),
   }
 }
 

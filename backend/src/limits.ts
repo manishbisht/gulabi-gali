@@ -128,6 +128,18 @@ export async function stampLimit(env: Env, userId: string, now = Date.now()): Pr
   return (await allow(env, userId, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
 }
 
+/**
+ * `PUT /api/me/today` per account: a page marks the day's goal once when it is done (and again on a reload
+ * that finds the mark unconfirmed), so 30 an hour is room for many reloads, and a stuck loop stops there.
+ */
+export const TODAY_LIMIT = { perWindow: 30, windowMs: 3600_000, bucket: 'today' } as const
+
+/** One "Aaj ka Darshan" mark's allowance (see `TODAY_LIMIT`). Null while within it, else the 429. */
+export async function todayLimit(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
+  const { perWindow, windowMs, bucket } = TODAY_LIMIT
+  return (await allow(env, userId, bucket, perWindow, windowMs, now)) ? null : rateLimited(windowMs, now)
+}
+
 /** One chat message's allowance against the per-minute cap. Null while within it, else the 429. */
 export async function messageLimit(env: Env, userId: string, now = Date.now()): Promise<Response | null> {
   const { messagesPerMinute } = ACCOUNT_LIMIT

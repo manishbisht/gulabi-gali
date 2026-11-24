@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Lang } from '../i18n/strings'
 import { t } from '../i18n/strings'
 import { putStamps } from '../net/api'
+import { emitDeed } from './deeds'
 import type { LandmarkDef, Vec2 } from './types'
 import {
   claim,
@@ -148,6 +149,7 @@ export function useStamps(lang: Lang, account: StampAccount | null) {
       if (found?.id !== nearRef.current?.id) {
         nearRef.current = found
         setNear(found)
+        if (found) emitDeed({ kind: 'darshan', stamp: found.id })
       }
       if (pressed) collectHere()
       return found

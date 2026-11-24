@@ -599,8 +599,8 @@ export const STRINGS = {
   privacyTitle: { hi: 'Aapki privacy', en: 'Your privacy' },
   privacyStoredTitle: { hi: 'Kya save hota hai', en: 'What we keep' },
   privacyStored: {
-    hi: 'Aapka profile (naam, avatar, mohalla, status, about, link, Jaipur Darshan ke stamps), aapke bheje aur mile requests, aapki 1:1 chats, aur aapke dwara ya aapke khilaaf ki gayi reports ke record.',
-    en: 'Your profile (name, avatar, neighbourhood, status, about, link, Jaipur Darshan stamps), the requests you sent and got, your 1:1 chats, and the records of reports you filed or that were filed about you.',
+    hi: 'Aapka profile (naam, avatar, mohalla, status, about, link, Jaipur Darshan ke stamps, Aaj ka Darshan ki ginti), aapke bheje aur mile requests, aapki 1:1 chats, aur aapke dwara ya aapke khilaaf ki gayi reports ke record.',
+    en: "Your profile (name, avatar, neighbourhood, status, about, link, Jaipur Darshan stamps, your Today's Darshan count), the requests you sent and got, your 1:1 chats, and the records of reports you filed or that were filed about you.",
   },
   privacyStoredHeld: {
     hi: 'Jab koi chat unmatch ya block se khatam hoti hai, uske aakhri 30 messages 30 din tak rakhe jaate hain, taaki dono mein se koi bhi use report kar sake. Sirf moderator unhe padh sakta hai, aur woh bhi tabhi jab report ho.',
@@ -660,16 +660,16 @@ export const STRINGS = {
   },
   privacyDeleteTitle: { hi: 'Account delete karna', en: 'Deleting your account' },
   privacyDelete: {
-    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile aur stamps, invite codes, deewar ke poster, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye gulabi-gali@manishbisht.me pe likhiye.',
-    en: 'Open your profile and press "Delete my account" at the bottom. Your profile and stamps, invite codes, posters, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to gulabi-gali@manishbisht.me to have it removed.',
+    hi: 'Apna profile kholo aur neeche "Account delete karo" dabao. Aapka profile, stamps aur Aaj ka Darshan ki ginti, invite codes, deewar ke poster, khuli aur accept hui requests, aur aapke kiye hue blocks mita diye jaate hain. Jo requests mana hui thi, woh 14 din tak rehti hain (unka message mita ke), taaki 14 din ka intezaar bana rahe. Aapki chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mita diye jaate hain. Jisne aapko block kiya tha, uski apni block list mein aapka sirf pehla naam rehta hai, jab tak woh unblock na kare (delete ke baad naam bhi hat jaata hai). Aapka login email Clerk (hamari login service) ke paas rehta hai; use hatwane ke liye gulabi-gali@manishbisht.me pe likhiye.',
+    en: 'Open your profile and press "Delete my account" at the bottom. Your profile, stamps and Today\'s Darshan count, invite codes, posters, open and accepted requests, and the blocks you made are erased. Requests that were turned down stay for up to 14 days with their message blanked, so the 14-day wait still holds. The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Someone who blocked you keeps only your first name on their own block list until they unblock (after a delete, even that name is blanked). Your sign-in email stays with Clerk, our sign-in service; write to gulabi-gali@manishbisht.me to have it removed.',
   },
   privacyContactTitle: { hi: 'Sawaal ya shikayat', en: 'Questions or complaints' },
   privacyContact: { hi: 'Likhiye: gulabi-gali@manishbisht.me', en: 'Write to: gulabi-gali@manishbisht.me' },
   privacyClose: { hi: 'Theek hai', en: 'OK' },
   deleteTitle: { hi: 'Account delete karo', en: 'Delete my account' },
   deleteWhat: {
-    hi: 'Yeh wapas nahi aayega. Profile, invite codes, poster, requests, Jaipur Darshan ke stamps aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye gulabi-gali@manishbisht.me pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
-    en: "This cannot be undone. Your profile, invite codes, posters, requests, Jaipur Darshan stamps and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to gulabi-gali@manishbisht.me to remove it. You can start again fresh, though a moderator's ban or mute stays.",
+    hi: 'Yeh wapas nahi aayega. Profile, invite codes, poster, requests, Jaipur Darshan ke stamps, Aaj ka Darshan ki ginti aur aapke kiye hue blocks mit jayenge (mana hui requests 14 din tak rehti hain, message mita ke). Chats ke aakhri messages 30 din tak rakhe jaate hain, taaki doosra insaan unhe report kar sake, phir mit jaate hain. Login email Clerk ke paas rehta hai; use hatwane ke liye gulabi-gali@manishbisht.me pe likhiye. Aap naye sire se shuru kar sakte ho, bas moderator ka ban ya mute bana rehta hai.',
+    en: "This cannot be undone. Your profile, invite codes, posters, requests, Jaipur Darshan stamps, Today's Darshan count and the blocks you made will be erased (turned-down requests stay up to 14 days, message blanked). The last messages of your chats are kept for 30 days so the other person can still report them, then erased. Your sign-in email stays with Clerk; write to gulabi-gali@manishbisht.me to remove it. You can start again fresh, though a moderator's ban or mute stays.",
   },
   deleteTypeLabel: { hi: 'Confirm karne ke liye DELETE likho', en: 'Type DELETE to confirm' },
   deleteConfirm: { hi: 'Hamesha ke liye delete karo', en: 'Delete forever' },
@@ -1073,6 +1073,81 @@ export const STRINGS = {
   chaiNotNow: { hi: 'Abhi nahi', en: 'Not now' },
   /** The lock screen's words for an invite (public/sw.js holds the same, checked by sw.test.ts): nobody named. */
   pushChai: { hi: 'Ek dost ne chai pe bulaya', en: 'A friend invited you for chai' },
+
+  /* "Aaj ka Darshan": one small goal a day (world/today.ts). Every goal can be done alone, as a ghost. */
+  todayTitle: { hi: 'Aaj ka Darshan', en: "Today's Darshan" },
+  /** The chip's name (it shows an icon only), and the welcome screen's line. */
+  todayChip: { hi: 'Aaj ka Darshan: {goal}', en: "Today's Darshan: {goal}" },
+  todayChipDone: { hi: 'Aaj ka Darshan ho gaya: {goal}', en: "Today's Darshan, done: {goal}" },
+  todayGoalDarshan: { hi: '{place} ke darshan karo', en: 'Go and see {place}' },
+  todayHintDarshan: {
+    hi: '{district} mein hai. Paas pahunchte hi ho jaata hai; naksha raasta dikhata hai.',
+    en: "It's in {district}. It counts as soon as you get there; the map shows the way.",
+  },
+  todayGoalTapri: { hi: 'Kisi chai ki tapri ya bench tak jao', en: 'Walk up to a chai stall or a bench' },
+  todayHintTapri: {
+    hi: 'Har mohalle mein hain, naksha mein bhi dikhti hain. Baithna zaroori nahi.',
+    en: 'Every neighbourhood has some, and the map shows them. No need to sit.',
+  },
+  todayGoalRide: {
+    hi: 'Metro ya bus se kisi aur mohalle jao',
+    en: 'Take the metro or the bus to another neighbourhood',
+  },
+  todayHintRide: {
+    hi: 'Station pe "Metro" dabao (Amer aur Nahargarh mein "Bus"), aur koi mohalla chuno.',
+    en: 'Press "Metro" at the station ("Bus" in Amer and Nahargarh) and pick a neighbourhood.',
+  },
+  todayGoalAuto: { hi: 'Auto lekar kisi landmark tak jao', en: 'Ride an auto to a landmark' },
+  todayHintAuto: {
+    hi: 'Auto stand pe "Le chalo" dabao aur jagah chuno.',
+    en: 'Press "Take a ride" at an auto stand and pick a place.',
+  },
+  todayGoalPhoto: { hi: 'Photo mode mein ek photo khincho', en: 'Take a photo in photo mode' },
+  todayHintPhoto: {
+    hi: 'Upar 📷 dabao, frame set karo, phir shutter.',
+    en: 'Press 📷 at the top, frame your shot, then the shutter.',
+  },
+  todayGoalRoof: { hi: 'Kisi chhat pe chadh ke shahar dekho', en: 'Climb up to a rooftop and look out' },
+  todayHintRoof: {
+    hi: 'Har mohalle mein ek chhat ki seedhi hai; uske paas "Chhat pe chalo" aata hai.',
+    en: 'Every neighbourhood has a rooftop stair; by it you get "Up to the roof".',
+  },
+  todayGoalMap: { hi: 'Naksha kholo aur koi jagah chuno', en: 'Open the map and pick a place to head for' },
+  todayHintMap: {
+    hi: 'Upar jagah ke naam wala chip dabao, phir koi jagah chuno.',
+    en: 'Tap the place name at the top, then pick somewhere.',
+  },
+  todayGoalAnimal: { hi: 'Gali ke kisi jaanwar se dosti karo', en: 'Make friends with a street animal' },
+  todayHintAnimal: {
+    hi: 'Kutte ya billi ko "Saath chalo" bolo, ya gaay ko namaste karo.',
+    en: 'Ask a dog or a cat to "Come along", or greet a cow.',
+  },
+  todayDone: { hi: 'Aaj ka ho gaya ✓', en: 'Done for today ✓' },
+  todayPending: {
+    hi: 'Abhi baaki hai. Koi jaldi nahi.',
+    en: 'Still to do. No rush.',
+  },
+  todayStreak: { hi: 'Lagataar {n} din · sabse lamba {best}', en: '{n} days in a row · longest {best}' },
+  todayStreakOne: { hi: 'Abhi tak 1 din · sabse lamba {best}', en: '1 day so far · longest {best}' },
+  todayStreakNone: {
+    hi: 'Roz ek chhota sa kaam. Lagataar karne pe ginti badhti hai.',
+    en: 'One small thing a day. Do it on days in a row and the count grows.',
+  },
+  todayNewDay: {
+    hi: 'Naya Darshan roz raat 12 baje (India ka time). Sabke liye ek hi.',
+    en: 'A new one every midnight, India time. The same one for everyone.',
+  },
+  todayLocal: {
+    hi: 'Yeh ginti sirf is phone pe hai. Login karne pe aage se har phone pe saath rahegi.',
+    en: 'This count lives on this phone only. Sign in and from then on it goes with you.',
+  },
+  todayToast: {
+    hi: 'Aaj ka Darshan ho gaya! Lagataar {n} din',
+    en: "Today's Darshan, done! {n} days in a row",
+  },
+  todayToastFirst: { hi: 'Aaj ka Darshan ho gaya!', en: "Today's Darshan, done!" },
+  /** Added to the stamps chip's tooltip while a run of `STREAK_ACCENT` days or more is alive. */
+  todayStreakBadge: { hi: 'Lagataar {n} din ka Darshan', en: '{n}-day Darshan run' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

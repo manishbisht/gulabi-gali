@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { StringKey } from '../i18n/strings'
 import type { AnimalHooks, AnimalInfo } from './animals'
+import { emitDeed } from './deeds'
 
 const NOTICE_MS = 3500
 
@@ -34,8 +35,12 @@ export function useAnimals() {
   const hooks = useMemo<AnimalHooks>(
     () => ({
       near: setNear,
-      following: setFollowing,
+      following(animal) {
+        setFollowing(animal)
+        if (animal) emitDeed({ kind: 'animal' })
+      },
       notice(n) {
+        if (n.kind === 'cow') emitDeed({ kind: 'animal' })
         clearTimeout(timer.current)
         setNotice(
           n.kind === 'cow' ? { key: COW_KEYS[n.line]! } : { key: 'animalWaiting', vars: { name: n.name } },

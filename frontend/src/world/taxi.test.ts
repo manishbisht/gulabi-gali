@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { onDeed } from './deeds'
+import type { Deed } from './today'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DistrictId } from '../net/protocol'
 import { createControls } from '../player/controls'
@@ -218,6 +220,23 @@ describe('a ride', () => {
     const out = player.position()
     run(500)
     expect(player.position()).toEqual(out)
+  })
+
+  it('a ride that reaches its stop is an auto ride done for Aaj ka Darshan; one sent back to the stand is not', () => {
+    const deeds: Deed[] = []
+    const off = onDeed((d) => deeds.push(d))
+    const arrived = setup()
+    arrived.taxi.go('hawa-mahal')
+    arrived.run(TAXI_FADE_MS + 400)
+    expect(deeds).toEqual([]) // not while still on the way
+    arrived.taxi.skip()
+    expect(deeds).toEqual([{ kind: 'auto' }])
+    const back = setup()
+    back.taxi.go('hawa-mahal')
+    back.run(TAXI_FADE_MS + 400)
+    back.taxi.refused()
+    off()
+    expect(deeds).toEqual([{ kind: 'auto' }])
   })
 
   it('a skip sets the player down beside the landmark at once', () => {

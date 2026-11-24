@@ -102,8 +102,8 @@ async function laidOut(items: Record<string, Locator>, inside: [string, string][
   // one line each, not squeezed into a column of words
   for (const k of ['place', 'weather', 'stamps'])
     expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
-  // thumb-sized switches
-  for (const k of ['lang', 'sound', 'bandar', 'look'].filter((k) => k in boxes)) {
+  // thumb-sized switches (the "Aaj ka Darshan" chip is one too)
+  for (const k of ['lang', 'sound', 'bandar', 'look', 'today'].filter((k) => k in boxes)) {
     expect.soft(boxes[k]!.width, `${k} width`).toBeGreaterThanOrEqual(44)
     expect.soft(boxes[k]!.height, `${k} height`).toBeGreaterThanOrEqual(44)
   }
@@ -145,6 +145,8 @@ function common(page: Page, place = 'Gulabi Shahar', lang: L = 'hi'): Record<str
     line: page.locator('.city-line'),
     // the card's own box, not only the lines in it
     news: page.locator('.hud-news'),
+    // "Aaj ka Darshan": every visitor's, at the end of the identity row
+    today: page.locator('.hud-identity .today-chip'),
   }
 }
 
@@ -315,15 +317,22 @@ for (const lang of LANGS) {
   test(`with every stamp the busiest HUD still fits in ${place} (${lang}), the chip on the place's row`, async ({
     page,
   }) => {
+    // and today's goal done, five days running: the chip's tick and the stamps chip's accent are on too
+    await page.addInitScript(() => {
+      const day = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)
+      localStorage.setItem('gg-today', JSON.stringify({ last: day, streak: 5, best: 5 }))
+    })
     await busiest(page, 'malviya-nagar', lang, 'gangaur', ALL_STAMPS)
     const items: Record<string, Locator> = {
       ...common(page, place, lang),
       ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
       signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
       look: page.locator('.hud-toggles .look-button'),
+      tick: page.locator('.today-chip .today-tick'),
     }
     await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(13\/13\)$/)
-    await laidOut(items, NEWS)
+    await expect(page.locator('.stamp-count')).toHaveAttribute('data-streak', '')
+    await laidOut(items, [['today', 'tick'], ...NEWS])
     await oneRow(page, items.place!)
     await shot(page, `guest-${lang}-malviya-nagar-all-stamps`)
   })

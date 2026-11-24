@@ -194,9 +194,9 @@ strings, double-sided quads high in the sky, so overdraw is low) and the process
 system drops the kites to 60 and 25, the procession to 20 and 8, and the shadows, as it steps down. Not
 measured here: the kite fight itself (a separate mode that freezes walking), the bandar's rooftop run (a
 chance event), and a real phone. The real-device checklist above, run with the extras on
-(`?gg-test=1&gg-festival=sankranti`, on any build, the shipped one included: `?gg-test=1` alone switches the
-override on, and it changes only what that page shows; on a real festival day it is the live festival), is still
-owed.
+(`?gg-test=1&gg-festival=sankranti`, which needs a build made with `VITE_TEST_HOOKS=1`: the shipped build ignores
+the override, so a link can never change what someone's city shows; on a real festival day it is the live
+festival), is still owed.
 
 ### Winter and New Year
 

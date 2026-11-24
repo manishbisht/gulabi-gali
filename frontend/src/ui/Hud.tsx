@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { t, type Lang } from '../i18n/strings'
 import type { CitySnapshot } from '../net/protocol'
+import { STREAK_ACCENT } from '../world/today'
 
 interface Props {
   /** The district's name, already in the current language. */
@@ -42,6 +43,13 @@ interface Props {
   photo?: boolean
   /** Opens the dressing room on this device; present for anyone walking with this device's look (no finished profile). */
   onLook?: () => void
+  /** The "Aaj ka Darshan" chip, at the end of the identity row (every visitor has one). */
+  today?: ReactNode
+  /**
+   * The run of days the day's goal has been done: from `STREAK_ACCENT` on, the stamps chip wears a small
+   * marigold accent (and says so in its tooltip). Nothing new in the HUD.
+   */
+  streak?: number
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
   bottom?: ReactNode
@@ -70,6 +78,8 @@ export function Hud({
   onPhoto,
   photo = false,
   onLook,
+  today,
+  streak = 0,
   top,
   bottom,
 }: Props) {
@@ -79,6 +89,8 @@ export function Hud({
   const [got, all] = stamps.split('/')
   const done = !!got && got === all
   const shown = done ? `✓ ${all}` : stamps
+  const run = streak >= STREAK_ACCENT
+  const runNote = run ? ` · ${t('todayStreakBadge', lang, { n: streak })}` : ''
   return (
     <div className="hud">
       <div className="hud-head">
@@ -104,20 +116,25 @@ export function Hud({
               <button
                 type="button"
                 className="hud-chip stamp-count"
-                title={t('stampCount', lang)}
+                title={`${t('stampCount', lang)}${runNote}`}
                 aria-label={`${t('darshanOpen', lang)} (${stamps})`}
                 data-done={done ? '' : undefined}
+                data-streak={run ? '' : undefined}
                 onClick={onStamps}
               >
                 {shown}
               </button>
             ) : (
-              <span className="hud-chip stamp-count" title={`${t('stampCount', lang)}: ${stamps}`}>
+              <span
+                className="hud-chip stamp-count"
+                title={`${t('stampCount', lang)}: ${stamps}${runNote}`}
+                data-streak={run ? '' : undefined}
+              >
                 {shown}
               </span>
             )}
           </div>
-          {(visibility || onProfile || onInvite || onConnections) && (
+          {(visibility || onProfile || onInvite || onConnections || today) && (
             <div className="hud-identity">
               {visibility}
               {onProfile && (
@@ -150,6 +167,7 @@ export function Hud({
                   )}
                 </button>
               )}
+              {today}
             </div>
           )}
           {(banner || procession || line) && (

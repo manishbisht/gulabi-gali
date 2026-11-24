@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BenchLine } from '../net/protocol'
+import { emitDeed } from './deeds'
 import type { Bench, BenchHooks, BenchRefusal, BenchSeat } from './benches'
 
 /** What the bench UI says when a sit or a line did not go through. `ghost` stays until dealt with. */
@@ -43,6 +44,7 @@ export function useBench() {
     () => ({
       near(bench) {
         setNear(bench)
+        if (bench) emitDeed({ kind: 'tapri' })
         // the "be seen first" card belongs to the bench it was asked at
         if (!bench) setNotice((n) => (n === 'ghost' ? null : n))
       },

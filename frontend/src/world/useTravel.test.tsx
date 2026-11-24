@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { storage } from '../storage'
+import { onDeed } from './deeds'
 import { RIDE_MS } from './metroRide'
 import { FADE_MS, savedDistrict, STATION_RANGE, useTravel, type Swap } from './useTravel'
 
@@ -125,9 +126,12 @@ describe('travelTo', () => {
     vi.useFakeTimers()
     const travel = mount()
     travel.bind(() => Promise.reject(new Error('offline')))
+    const deeds = vi.fn()
+    const off = onDeed(deeds)
     const trip = travel.travelTo('university')
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
     await act(() => trip)
+    expect(deeds).not.toHaveBeenCalled() // a ride that never got there is no ride for Aaj ka Darshan
     expect(localStorage.getItem('gg-district')).toBeNull()
     expect(travel.fading).toBe(false)
     expect(travel.failed).toBe('university')
@@ -140,6 +144,8 @@ describe('travelTo', () => {
     await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
     await act(() => again)
     expect(swap).toHaveBeenCalled()
+    off()
+    expect(deeds.mock.calls).toEqual([[{ kind: 'ride' }]]) // the one that arrived
   })
 })
 
