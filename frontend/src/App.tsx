@@ -39,7 +39,8 @@ import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
 import { useStamps } from './world/useStamps'
-import { goalById, goalFor, istDay, type Goal } from './world/today'
+import { goalFor, istDay } from './world/today'
+import { festivalOverride, todayOverride } from './overrides'
 import { goalText } from './world/todayText'
 import { useToday } from './world/useToday'
 import { TodayChip, TodaySheet } from './ui/Today'
@@ -104,20 +105,6 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
   diwali: 'festivalDiwali',
   jlf: 'festivalJlf',
   newyear: 'festivalNewYear',
-}
-
-/** `?gg-today=<goal id>` stands in for the day's own "Aaj ka Darshan" goal, in test mode only. */
-function todayOverride(): Goal | null {
-  const q = new URLSearchParams(location.search)
-  const id = q.get('gg-today')
-  return q.get('gg-test') === '1' && id ? goalById(id) : null
-}
-
-/** `?gg-festival=<id>` stands in for the live festival, in test mode only. */
-function festivalOverride(): FestivalId | null {
-  const q = new URLSearchParams(location.search)
-  const id = q.get('gg-festival')
-  return q.get('gg-test') === '1' && id && Object.hasOwn(FESTIVALS, id) ? (id as FestivalId) : null
 }
 
 export default function App() {
@@ -331,7 +318,7 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [residentId])
-  const [override] = useState(festivalOverride)
+  const [override] = useState(() => festivalOverride(FESTIVALS))
   const festival = override ?? snapshot?.festival ?? null
   const processionKey = processionLine(festival, here)
   /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
