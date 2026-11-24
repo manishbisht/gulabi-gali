@@ -179,6 +179,42 @@ test('kite sky on Sankranti', async ({ page }) => {
   await expect(page.getByText('Makar Sankranti mubarak! Aasmaan dekho')).toBeVisible()
 })
 
+test('New Year on MI Road: the greeting is up and the lit street draws without an error', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.addInitScript(() => localStorage.setItem('gg-district', 'mi-road'))
+  await page.goto('/?gg-test=1&gg-festival=newyear')
+  await page.getByRole('button', { name: 'Padharo!' }).click()
+  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  expect(await page.evaluate(() => window.__gg.district())).toBe('mi-road')
+  expect(await page.evaluate(() => window.__gg.festival())).toBe('newyear')
+  await expect(page.getByText('Naya saal mubarak, Jaipur!')).toBeVisible()
+  // the street, strung with lights, keeps drawing (the lights themselves: festivalFx.test.ts)
+  await expect.poll(() => page.evaluate(() => window.__gg.renderInfo().calls)).toBeGreaterThan(0)
+  expect(errors).toEqual([])
+})
+
+test('a winter morning is misty at dawn and clear by mid-morning, whatever the air', async ({ page }) => {
+  await enterCity(page)
+  const skyAt = (iso: string) =>
+    page.evaluate((at) => {
+      window.__gg.setSnapshot({ aqiBand: 'unhealthy', aqi: 190, condition: 'clear', stale: false })
+      window.__gg.setNow(at)
+      return window.__gg.sky()
+    }, iso)
+  const dawn = await skyAt('2027-01-10T01:30:00Z') // 07:00 IST
+  expect(dawn.groundFog).toBeGreaterThan(0.5)
+  expect(dawn.fogDensity).toBeGreaterThan(0.02) // thicker than the air's own haze
+  expect(dawn.fogDensity).toBeLessThanOrEqual(0.03) // never so thick the street goes
+  const late = await skyAt('2027-01-10T05:00:00Z') // 10:30 IST
+  expect(late.groundFog).toBe(0)
+  expect(late.fogDensity).toBe(0.02)
+  const spring = await skyAt('2027-04-10T01:30:00Z') // 07:00 IST in April: no winter
+  expect(spring.groundFog).toBe(0)
+})
+
 test('E by the station opens the metro on a desktop', async ({ page }) => {
   await enterCity(page)
   await page.evaluate(() => window.__gg.teleport(-7.2, 11))

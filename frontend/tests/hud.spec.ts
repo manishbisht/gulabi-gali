@@ -232,6 +232,42 @@ for (const lang of LANGS)
       })
     }
 
+// New Year: the greeting has no procession under it; it fits on MI Road, where its lights are, and in the
+// district with the longest name, in each language.
+const NEW_YEAR = {
+  hi: 'Naya saal mubarak, Jaipur! 🎆',
+  en: 'Happy New Year, Jaipur! 🎆',
+}
+for (const lang of LANGS)
+  for (const [id, hi, en] of DISTRICTS.filter(([d]) => d === 'mi-road' || d === 'malviya-nagar')) {
+    const place = lang === 'en' ? en : hi
+    test(`New Year's greeting fits in ${place} (${lang}): festival, city line, sign-in nudge`, async ({
+      page,
+    }) => {
+      await busiest(page, id, lang, 'newyear')
+      const items = common(page, place, lang)
+      delete items.procession
+      await expect(page.locator('.procession-line')).toHaveCount(0)
+      await expect(items.banner!).toHaveText(NEW_YEAR[lang])
+      await laidOut(
+        {
+          ...items,
+          ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+          signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+        },
+        NEWS.filter(([, k]) => k !== 'procession'),
+      )
+      // the greeting keeps to one line of the card
+      const lines = await items.banner!.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size
+      })
+      expect(lines).toBe(1)
+      await shot(page, `guest-${lang}-${id}-newyear`)
+    })
+  }
+
 /** The stamps chip on the place's row, not wrapped onto one of its own. */
 async function oneRow(page: Page, place: Locator) {
   const a = (await place.boundingBox())!

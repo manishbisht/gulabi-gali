@@ -232,6 +232,12 @@ const stringLights: StringLight[] = [
     b: { x, z: LIGHTS_S },
     y: LIGHTS_Y,
   })),
+  // two swags across the face of Ram Niwas Bagh's gate, just under its parapet: what you see on arriving
+  ...[-1, 1].map((s): StringLight => ({
+    a: { x: s * 4.7, z: GATE_AT.z + RAM_NIWAS_GATE.d / 2 - 0.15 },
+    b: { x: 0, z: GATE_AT.z + RAM_NIWAS_GATE.d / 2 - 0.15 },
+    y: 7.2,
+  })),
   // swags along the south shop fronts facing the gate, where the metro brings people up
   ...[-11, -3, 5, 13, 21, 29].map((x): StringLight => ({
     a: { x, z: LIGHTS_S },

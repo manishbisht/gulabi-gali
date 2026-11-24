@@ -193,14 +193,20 @@ describe("MI Road's New Year lights", () => {
       return b.style !== 'wall' && Math.abs(x - b.x) <= hw && Math.abs(z - b.z) <= hd
     })
 
-  it('ties every strand at both ends to a shop front tall enough to hold it', () => {
+  /** The landmark (Ram Niwas Bagh's gate) whose footprint a point lies on or just off, if any. */
+  const onLandmark = (x: number, z: number) =>
+    miRoad.landmarks.find(
+      ({ footprint: f }) => x >= f.minX - 0.3 && x <= f.maxX + 0.3 && z >= f.minZ - 0.3 && z <= f.maxZ + 0.3,
+    )
+
+  it('ties every strand at both ends to a shop front tall enough to hold it, or to the garden gate', () => {
     const strands = miRoad.stringLights!
     expect(strands.length).toBeGreaterThan(8)
     for (const s of strands)
       for (const end of [s.a, s.b]) {
         const b = tiedTo(end.x, end.z)
-        expect(b, `strand end at (${end.x}, ${end.z})`).toBeDefined()
-        expect(b!.floors * FLOOR_H).toBeGreaterThanOrEqual(s.y)
+        if (b) expect(b.floors * FLOOR_H).toBeGreaterThanOrEqual(s.y)
+        else expect(onLandmark(end.x, end.z)?.id, `strand end at (${end.x}, ${end.z})`).toBe('ram-niwas-gate')
       }
   })
 
@@ -218,9 +224,9 @@ describe("MI Road's New Year lights", () => {
     }
   })
 
-  it('says so in both languages, short enough for the HUD card', () => {
+  it('greets the city in both languages, short enough for the HUD card', () => {
     for (const lang of ['hi', 'en'] as const) {
-      expect(t('festivalNewYear', lang)).toMatch(/MI Road/)
+      expect(t('festivalNewYear', lang)).toMatch(/Jaipur/)
       expect(t('festivalNewYear', lang).length).toBeLessThanOrEqual(44)
     }
   })

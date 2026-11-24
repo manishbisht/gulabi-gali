@@ -68,8 +68,8 @@ export const STRINGS = {
   festivalJlf: { hi: 'Jaipur Literature Festival ki dhoom! 📚', en: 'Jaipur Literature Festival is on! 📚' },
   // New Year's Eve to New Year's morning (IST): MI Road's string lights are up
   festivalNewYear: {
-    hi: 'Naya saal mubarak! MI Road roshan hai 🎆',
-    en: 'Happy New Year! MI Road is all lit up 🎆',
+    hi: 'Naya saal mubarak, Jaipur! 🎆',
+    en: 'Happy New Year, Jaipur! 🎆',
   },
   npcNotReal: {
     hi: 'Ye ek kirdaar hai, asli insaan nahi — asli log jald aa rahe hain.',
