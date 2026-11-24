@@ -129,6 +129,8 @@ export const STRINGS = {
   /** Amer has no metro: a bus runs there from every station (see `rideBy`). */
   bus: { hi: 'Bus', en: 'Bus' },
   mapBus: { hi: 'Bus stand', en: 'Bus stop' },
+  /** A rooftop viewpoint worth a signpost and a map pin (Nahargarh's bastion over the city). */
+  sunsetPoint: { hi: 'Sunset Point', en: 'Sunset point' },
   busNext: { hi: 'Agla stop: {station}', en: 'Next stop: {station}' },
   busGhat: {
     hi: 'Aage ghaati ke mod hain. Handle pakad ke baitho.',

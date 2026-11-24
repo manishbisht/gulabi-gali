@@ -102,6 +102,13 @@ it.each([amer, nahargarh])(
   },
 )
 
+it("Nahargarh's map shows its sunset point, at the stair up to it; the others name no viewpoint", () => {
+  const spot = mapItems(nahargarh, []).find((i) => i.kind === 'viewpoint')!
+  expect(spot).toMatchObject({ id: 'viewpoint', name: { hi: 'Sunset Point', en: 'Sunset point' } })
+  expect(spot.at).toEqual(nahargarh.roof!.stair)
+  expect(mapItems(amer, []).some((i) => i.kind === 'viewpoint')).toBe(false)
+})
+
 const person = (id: string, x: number, z: number): LivePerson => ({
   id,
   name: id,

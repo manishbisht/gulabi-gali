@@ -190,6 +190,18 @@ it('a report card shows the evidence as text, with the sender and time, and mark
   expect(host.textContent).toContain('Waiting for room: 2')
 })
 
+it('a district this page does not know yet (a newer Worker) is listed by its id, not a crash', async () => {
+  const newer = {
+    ...stats,
+    districts: [...stats.districts, { id: 'somewhere-new', residents: 2, ghosts: 0 }],
+  }
+  stubApi(ADMIN_ROUTES({ 'GET /api/admin/stats': () => json(newer) }))
+  const host = await render()
+  const rows = [...host.querySelectorAll('.admin-stats li')].map((li) => li.textContent)
+  expect(rows).toContainEqual(expect.stringContaining('somewhere-new'))
+  expect(rows).toContainEqual(expect.stringContaining('Nahargarh'))
+})
+
 it('evidence lives only in the report card', async () => {
   stubApi(
     ADMIN_ROUTES({

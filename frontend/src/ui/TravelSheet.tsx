@@ -14,8 +14,8 @@ interface Props {
 
 /**
  * The trips from here, in the same bottom-card slot as a landmark's. Picking one rides the Pink Line there, or
- * the bus when either end has no metro (Amer): a bus stop wears its own colour and a "Bus" tag, and is named
- * by what it shows ("Amer Bus").
+ * the bus when either end has no metro (`byBus`): a bus stop wears its own colour and a "Bus" tag, and is
+ * named by what it shows ("Amer Bus").
  */
 export function TravelSheet({ here, lang, onPick, onClose }: Props) {
   return (

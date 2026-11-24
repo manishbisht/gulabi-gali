@@ -31,7 +31,11 @@ describe.each(DISTRICTS)('%s: signposts', (id) => {
     const { def } = await load(id)
     const posts = signpostsOf(def)
     expect(posts.length).toBeGreaterThanOrEqual(2)
-    const places = [...def.landmarks.map((l) => ({ id: l.id, at: l.at })), { id: 'metro', at: def.station }]
+    const places = [
+      ...def.landmarks.map((l) => ({ id: l.id, at: l.at })),
+      { id: 'metro', at: def.station },
+      ...(def.roofName ? [{ id: 'viewpoint', at: def.roof!.stair }] : []),
+    ]
     for (const post of posts) {
       expect(post.boards.map((b) => b.id).sort()).toEqual(places.map((p) => p.id).sort())
       for (const board of post.boards) {
@@ -128,6 +132,22 @@ it("Amer's and Nahargarh's boards point at their bus stands, not a metro they do
   }
   const { def: pink } = await load('walled-city')
   expect(signpostsOf(pink)[0]!.boards.find((b) => b.id === 'metro')!.name.en).toBe('Metro station')
+})
+
+it("Nahargarh's boards point the way to its sunset point too, by name; no other district names its roof", async () => {
+  for (const id of DISTRICTS) {
+    const { def } = await load(id)
+    const boards = signpostsOf(def).flatMap((p) => p.boards.filter((b) => b.id === 'viewpoint'))
+    if (id !== 'nahargarh') {
+      expect(boards, id).toEqual([])
+      continue
+    }
+    expect(boards).toHaveLength(def.signposts!.length)
+    for (const b of boards) {
+      expect(b.name).toEqual({ hi: 'Sunset Point', en: 'Sunset point' })
+      expect(b.to).toEqual(def.roof!.stair)
+    }
+  }
 })
 
 it('a district without crossings listed has no signposts, and builds nothing', () => {

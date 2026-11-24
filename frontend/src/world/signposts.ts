@@ -7,7 +7,7 @@ import type { AABB, DistrictDef, Vec2 } from './types'
 
 /*
  * Direction boards at a district's main crossings (`DistrictDef.signposts`): one arrow-shaped board per landmark
- * and one for the metro, each turned to point straight at it, with its name in both languages and how far it
+ * and one for the metro (and one for a named viewpoint's stair), each turned to point straight at it, with its name in both languages and how far it
  * is. Everything is read from the district's own data, so a landmark that moves takes its boards with it. A
  * district's posts are two meshes in all: the wood and paint (vertex colours), and the lettering (one canvas
  * shared by every board).
@@ -15,7 +15,7 @@ import type { AABB, DistrictDef, Vec2 } from './types'
 
 /** One board: where it points, what it says, and how it is turned. */
 export interface Board {
-  /** The landmark's id, or `metro`. */
+  /** The landmark's id, `metro`, or `viewpoint`. */
   id: string
   name: Record<Lang, string>
   to: Vec2
@@ -57,6 +57,8 @@ export function signpostsOf(def: DistrictDef): Signpost[] {
   const places = [
     ...def.landmarks.map((l) => ({ id: l.id, name: l.name, to: l.at })),
     { id: 'metro', name: stopName(def.id), to: def.station },
+    // a named viewpoint (Nahargarh's sunset point): the board points at its stair
+    ...(def.roof && def.roofName ? [{ id: 'viewpoint', name: def.roofName, to: def.roof.stair }] : []),
   ]
   return (def.signposts ?? []).map((at) => ({
     at,

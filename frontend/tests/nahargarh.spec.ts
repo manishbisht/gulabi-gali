@@ -98,6 +98,9 @@ test('Nahargarh: at the fort gateway its card opens and the stamp is the elevent
   await page.getByRole('button', { name: 'Naksha · Nahargarh', exact: true }).tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Nahargarh' })
   await expect(map.getByRole('button', { name: 'Bus stand', exact: true }).first()).toBeVisible()
+  // the sunset point has its own pin, and a row in the list, by name
+  await expect(map.locator('.map-item[data-kind="viewpoint"]')).toHaveAccessibleName('Sunset Point')
+  await expect(map.locator('li button[data-kind="viewpoint"]')).toContainText('Sunset Point')
   await shot(page, 'nahargarh-map')
 })
 

@@ -14,7 +14,7 @@ import type { AABB, DistrictDef, Vec2 } from './types'
 /** Within this many metres of a target, it has been reached and the compass clears. */
 export const ARRIVE_M = 6
 
-export type MapItemKind = 'landmark' | 'metro' | 'bench' | 'tapri' | 'poster'
+export type MapItemKind = 'landmark' | 'metro' | 'viewpoint' | 'bench' | 'tapri' | 'poster'
 
 /** A place on the map that can be picked as the compass's target. */
 export interface MapTarget {
@@ -32,19 +32,25 @@ export interface MapItem extends MapTarget {
   stamped?: boolean
 }
 
-const NAMES: Record<Exclude<MapItemKind, 'landmark' | 'metro'>, StringKey> = {
+const NAMES: Record<Exclude<MapItemKind, 'landmark' | 'metro' | 'viewpoint'>, StringKey> = {
   bench: 'mapBench',
   tapri: 'mapTapri',
   poster: 'mapPoster',
 }
 
 /** A place's name in both languages; `n` numbers one of many (`Chai tapri 2`), so a screen reader tells them apart. */
-const named = (kind: Exclude<MapItemKind, 'landmark' | 'metro'>, n?: number): Record<Lang, string> => ({
+const named = (
+  kind: Exclude<MapItemKind, 'landmark' | 'metro' | 'viewpoint'>,
+  n?: number,
+): Record<Lang, string> => ({
   hi: t(NAMES[kind], 'hi', { n: n ?? '' }),
   en: t(NAMES[kind], 'en', { n: n ?? '' }),
 })
 
-/** Every place on a district's map: its landmarks (with `stamped`), the metro, its benches and tapris, its poster walls. */
+/**
+ * Every place on a district's map: its landmarks (with `stamped`), the metro, a named rooftop viewpoint (at its
+ * stair), its benches and tapris, its poster walls.
+ */
 export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[] {
   const count = { bench: 0, tapri: 0 }
   return [
@@ -56,8 +62,11 @@ export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[
       area: l.footprint,
       stamped: stamped.includes(l.id),
     })),
-    // under the same id and kind everywhere; Amer's is a bus stand, and says so
+    // under the same id and kind everywhere; a bus-only district's is a bus stand, and says so
     { id: 'metro', kind: 'metro', name: stopName(def.id), at: def.station },
+    ...(def.roof && def.roofName
+      ? [{ id: 'viewpoint', kind: 'viewpoint', name: def.roofName, at: def.roof.stair } satisfies MapItem]
+      : []),
     ...benchesOf(def).map((b): MapItem => ({
       id: b.id,
       kind: b.kind,

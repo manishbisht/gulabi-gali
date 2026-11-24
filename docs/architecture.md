@@ -106,8 +106,11 @@ the roof of a bastion on the rampart by the lake, turned to look across the wate
 Nahargarh stands on the ridge above the city: `DistrictDef.ridgeWest` stops the ground at its west wall, and
 `DistrictDef.scenery` (`world/landmarks/cityBelow.ts`) draws what lies past it, a low parapet on the edge, a rocky
 slope falling 60 m and the city's blocks spread over the plain below. It is only looked at: two meshes, a few
-thousand triangles, no colliders, faded by the scene's fog (so the haze takes it on a smoggy day), its lights on
-after dark. The rooftop viewpoint there is a bastion on the terrace by the edge, facing west: the sunset point.
+thousand triangles, no colliders, faded by the scene's fog at a lighter density (`CITY_FOG`, a constant in its
+shader), so it is hazier the worse the air but still there on a poor day; its lights come on after dark. The
+rooftop viewpoint there is a bastion on the terrace by the edge, facing west: the sunset point. Its
+`DistrictDef.roofName` makes it a place: the signposts point at its stair, the map pins it (kind `viewpoint`),
+and a link (`?at=nahargarh:viewpoint`) stands someone at the stair's foot.
 The new district is loaded first, and only
 once it is in does the old one leave; if loading fails the player stays where they were. Three.js is its own
 `three` chunk (`vite.config.ts`), so its hash survives deploys that only touch the app.

@@ -6,7 +6,8 @@ import { bakeHex, box, merge } from '../kit/parts'
  * What Nahargarh looks out over: past the ridge's west edge the ground falls away down a rocky slope to the plain,
  * and the city spreads across it, far below. Drawn cheaply, and only to be looked at: two meshes (the land, and
  * the city's blocks, whose lights come on after dark), a few thousand triangles, no colliders. The scene's fog
- * fades it into the haze with distance, so on a dusty or smoggy day the city goes the way the real one does.
+ * fades it into the haze with distance, a little more thinly than the street (`CITY_FOG`), so on a dusty or
+ * smoggy day the city goes hazy the way the real one does without vanishing from the view.
  */
 
 const ROCK = '#9A7B57'
@@ -21,6 +22,30 @@ const CITY_FROM = 4 // the nearest houses, out from the foot of the slope
 const CITY_TO = 260
 const CITY_HALF_WIDTH = 240
 const BLOCKS = 380
+
+/**
+ * The city below takes this share of the scene's fog density, so the headline view stays legible: still hazy,
+ * and thicker on a bad-air day, but not gone at "poor" the way the street's own distance is.
+ */
+export const CITY_FOG = 0.45
+
+/** How much of something `distance` m off the city's thinner fog hides (exponential-squared, at the scene's `density`). */
+export const cityFogFactor = (density: number, distance: number): number =>
+  1 - Math.exp(-((density * CITY_FOG * distance) ** 2))
+
+/** The fog chunk with the density scaled by `CITY_FOG`: a constant in the shader, nothing per frame. */
+const THIN_FOG = THREE.ShaderChunk.fog_fragment.replace(
+  'fogDensity * fogDensity',
+  `fogDensity * fogDensity * ${(CITY_FOG * CITY_FOG).toFixed(4)}`,
+)
+
+/** Gives a material of the city below its thinner fog (its own shader program, shared by both meshes). */
+export function thinFog(m: THREE.Material): void {
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace('#include <fog_fragment>', THIN_FOG)
+  }
+  m.customProgramCacheKey = () => 'city-below-thin-fog'
+}
 
 /** The low parapet along the edge: how tall, and how thick (it stands just past the district's west wall). */
 const PARAPET_H = 1.1
@@ -90,9 +115,11 @@ function city(edge: number, drop: number, rand: () => number) {
  */
 export function buildCityBelow(edge: number, half: number, drop = 60, reach = 250): THREE.Group {
   const rand = seeded(4021)
+  const ground = new THREE.MeshLambertMaterial({ vertexColors: true })
+  thinFog(ground)
   const land = new THREE.Mesh(
     merge([slope(edge, drop, reach, rand), plain(edge, drop, reach), ...parapet(edge, half)]),
-    new THREE.MeshLambertMaterial({ vertexColors: true }),
+    ground,
   )
   land.name = 'city-below-land'
   land.receiveShadow = true
@@ -102,6 +129,7 @@ export function buildCityBelow(edge: number, half: number, drop = 60, reach = 25
     emissive: '#FFB86B',
     emissiveIntensity: 0,
   })
+  thinFog(lights)
   lights.userData.nightGlow = 0.35 // the city's lights come on after dark; `applySky` turns them up
   const blocks = new THREE.Mesh(city(edge, drop, rand), lights)
   blocks.name = 'city-below-blocks'

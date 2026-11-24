@@ -26,7 +26,7 @@ export type AvatarLook = {
   head: 'none' | 'safa' | 'cap' | 'dupatta' | 'bun'
 }
 export interface PropSpec {
-  /** `station`: a metro entrance; `bus-stop`: the bus stand of a district the metro does not reach (Amer). */
+  /** `station`: a metro entrance; `bus-stop`: the bus stand of a district the metro does not reach (`byBus`). */
   kind: 'tapri' | 'tree' | 'lamp' | 'auto' | 'bench' | 'poster-wall' | 'station' | 'bus-stop'
   at: Vec2
   /** Degrees, the same turn as `BuildingSpec.rot`: 90 sends the front (+z) to -x. */
@@ -102,6 +102,11 @@ export interface DistrictDef {
   signposts?: Vec2[]
   /** The rooftop viewpoint (see rooftop.ts). */
   roof?: RoofDef
+  /**
+   * The rooftop viewpoint's name, when it is a place in its own right (Nahargarh's sunset point): then the
+   * signposts point at its stair, the map shows it, and a link can stand someone there (place id `viewpoint`).
+   */
+  roofName?: { hi: string; en: string }
   /** Open water nobody walks into (Amer's lake): colliders with no building, drawn by the district's paving. */
   water?: AABB[]
   /**

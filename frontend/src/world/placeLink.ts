@@ -13,7 +13,7 @@ import type { AABB, Vec2 } from './types'
  * who shared it, when, or from where. Opening one enters that district and stands the visitor at the place
  * (after "Padharo"); a place the district does not have falls back to the normal spawn.
  *
- * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `poster-<n>`; a bench or tapri is
+ * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `viewpoint`, `poster-<n>`; a bench or tapri is
  * `bench-<n>` / `tapri-<n>`, its number as the server counts seats (the map's `<district>:<n>` without the
  * district, which the link already says).
  */
@@ -102,13 +102,24 @@ function besideProp(
 
 /**
  * Where a link to `place` stands the visitor in a district, and the way they face: by a landmark where the
- * auto-taxi sets riders down (in its ring, so its card opens), at the metro station, by a bench or tapri (in
+ * auto-taxi sets riders down (in its ring, so its card opens), at the metro station, at a named viewpoint's
+ * stair, by a bench or tapri (in
  * reach to sit) or in front of a poster wall, clear of everything. Null for a place the district does not have,
  * or (never, in the districts as built: see the tests) one with no clear spot by it.
  */
 export function placeSpot(district: Pick<District, 'def' | 'colliders'>, place: string): Pose | null {
   const { def, colliders } = district
   if (place === 'metro') return { x: def.station.x, z: def.station.z, ry: 0 }
+  if (place === 'viewpoint') {
+    // at the stair's foot, where E climbs, facing out the way the building (and the view from it) looks
+    const { roof } = def
+    if (!roof || !def.roofName) return null
+    return {
+      x: roof.stair.x,
+      z: roof.stair.z,
+      ry: Math.atan2(roof.out.x, roof.out.z),
+    }
+  }
   const landmark = def.landmarks.find((l) => l.id === place)
   if (landmark) {
     const drop = TAXI[def.id].drops[landmark.id]

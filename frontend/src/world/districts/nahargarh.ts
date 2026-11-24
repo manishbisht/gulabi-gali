@@ -1,3 +1,4 @@
+import { t } from '../../i18n/strings'
 import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { buildCityBelow } from '../landmarks/cityBelow'
@@ -242,6 +243,7 @@ const nahargarh: DistrictDef = {
   ],
   /** The bastion on the terrace: its roof looks west, over the parapet, at the city below. */
   roof: roofAt(buildings, BASTION, 1),
+  roofName: { hi: t('sunsetPoint', 'hi'), en: t('sunsetPoint', 'en') },
   ridgeWest: -HALF,
   scenery: () => buildCityBelow(-HALF, HALF),
 }
