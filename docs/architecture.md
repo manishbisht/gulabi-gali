@@ -101,8 +101,17 @@ have no metro (`BUS_ONLY` in `world/metroRide.ts`): a bus runs there from every 
 takes the same trip, with its own look: a marigold "Bus" row in the sheet, a "Bus" button at the district's bus
 stand (its `station`, a `bus-stop` prop), a bus cab instead of the coach, and "Bus stand" on its map and
 signposts (the place id stays `metro`).
-Amer's lake is `DistrictDef.water`: colliders with no building, drawn by the paving. Its rooftop viewpoint is
-the roof of a bastion on the rampart by the lake, turned to look across the water at the fort on its hill.
+Amer's lakes are `DistrictDef.water`: colliders with no building, drawn by the paving. Its rooftop viewpoint is
+the roof of a bastion on the rampart by Maota lake, turned to look across the water at the fort on its hill.
+South-west of Amer's road, on the city side, Man Sagar runs out to the district's walls (the water drawn goes on
+past them), with Jal Mahal (`world/landmarks/jalMahal.ts`) out in it a few metres off a promenade along the road:
+nobody reaches the palace, so its ring (centred on it, like Hawa Mahal's) is wide enough to take in the
+promenade in front of it, where the card opens, the stamp is earned and the taxi sets riders down. Amer has one
+rooftop viewpoint, so the promenade is not a second one: benches there look out across the water.
+The City Palace (`world/landmarks/cityPalace.ts`) is the Walled City's fifth landmark: one footprint for its walled
+precinct in the north-west, north of Jantar Mantar and of Tripolia (its royal gate on the bazaar), clear of the
+bazaars, the procession and every walk. The ring is outside its courtyard gateway, facing the lane; Chandra
+Mahal's tiers rise over the precinct wall behind it.
 Nahargarh stands on the ridge above the city: `DistrictDef.ridgeWest` stops the ground at its west wall, and
 `DistrictDef.scenery` (`world/landmarks/cityBelow.ts`) draws what lies past it, a low parapet on the edge, a rocky
 slope falling 60 m and the city's blocks spread over the plain below. It is only looked at: two meshes, a few
@@ -115,7 +124,7 @@ The new district is loaded first, and only
 once it is in does the old one leave; if loading fails the player stays where they were. Three.js is its own
 `three` chunk (`vite.config.ts`), so its hash survives deploys that only touch the app.
 
-The remembered district and the collected stamps (11 landmarks) live in `localStorage` (`src/storage.ts`). A
+The remembered district and the collected stamps (13 landmarks) live in `localStorage` (`src/storage.ts`). A
 resident's stamps are also kept on the server (see "Jaipur Darshan stamps" under phase 4), so a second device
 shows them; a ghost's stay on the device.
 
@@ -548,7 +557,8 @@ the next run while the plan is still ahead. Someone who says it inside the last 
 
 The stamp list is one data file, `backend/src/stamps.json` (id plus the landmark's Hinglish and English name),
 with a byte-for-byte copy at `frontend/src/world/stamps.json` (checked by `check:protocol`; a frontend test checks
-it against the districts' landmarks). D1 keeps `user_stamps(user_id, stamp, at)` (migration `0005`).
+it against the districts' landmarks). It is in the order stamps were added, not district order: a new landmark's
+stamp goes last (Jal Mahal and the City Palace after Nahargarh), so a stored list keeps its meaning. D1 keeps `user_stamps(user_id, stamp, at)` (migration `0005`).
 `PUT /api/me/stamps {stamps}` is for residents (`ACTIVE`; anyone else 403 `ghost`), 30 an hour per account: it
 refuses an unknown id or more ids than there are stamps (400 `invalid`), adds the rest (never removes one) and
 answers the whole set, so an empty list is a read. A profile (`GET /api/me`, `GET /api/profiles/:id`) carries
@@ -558,7 +568,7 @@ deletes the rows.
 The page keeps `gg-stamps` as before. For a resident, `useStamps` merges the profile's `stamps` into it, and
 pushes the local set whenever it holds one the server has not confirmed (after sign-in, after each new stamp);
 the answer is merged in too. A failed push is silent and is tried again on the next stamp or the next load. The
-person card and your own profile sheet show "Jaipur Darshan · n/11" and the landmarks by name (`ui/StampsLine.tsx`).
+person card and your own profile sheet show "Jaipur Darshan · n/13" and the landmarks by name (`ui/StampsLine.tsx`).
 
 ### The client-only extras: nothing is broadcast
 
