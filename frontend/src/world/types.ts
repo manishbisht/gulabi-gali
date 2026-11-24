@@ -104,4 +104,12 @@ export interface DistrictDef {
   roof?: RoofDef
   /** Open water nobody walks into (Amer's lake): colliders with no building, drawn by the district's paving. */
   water?: AABB[]
+  /** New Year's string lights (see festivalFx.ts): strands hung between building fronts, both ends `y` m up. */
+  stringLights?: StringLight[]
+}
+/** One strand of string lights, sagging between its two ends. */
+export interface StringLight {
+  a: Vec2
+  b: Vec2
+  y: number
 }

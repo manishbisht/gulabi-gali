@@ -6,12 +6,16 @@ import { FLOOR_H } from '../world/kit/parts'
 import type { BuildingSpec } from '../world/types'
 import type { SkyParams } from './sky'
 import {
+  BULB_COLOURS,
   createFestivalFx,
   festivalParticleCount,
   festivalSky,
   processionCount,
   roofDiyas,
+  stringBulbs,
 } from './festivalFx'
+import miRoad from '../world/districts/miRoad'
+import { t } from '../i18n/strings'
 
 describe('festivalParticleCount', () => {
   it('scales particles by quality tier', () => {
@@ -148,5 +152,134 @@ describe('createFestivalFx', () => {
     expect(scene.getObjectByName('procession')).toBeUndefined()
     fx.dispose()
     district.dispose()
+  })
+})
+
+describe('stringBulbs', () => {
+  const across = { a: { x: 0, z: 0 }, b: { x: 0, z: 20 }, y: 6 }
+
+  it('hangs a strand from end to end, sagging most in the middle and never below the camera', () => {
+    const { bulbs } = stringBulbs([across])
+    const ys = bulbs.map((b) => b.y)
+    expect(Math.max(...ys)).toBeCloseTo(6)
+    expect(Math.min(...ys)).toBeCloseTo(6 - 1.2) // a long strand sags its most
+    expect(bulbs.some((b) => b.z === 0) && bulbs.some((b) => b.z === 20)).toBe(true)
+    expect(bulbs.every((b) => b.x === 0)).toBe(true)
+    const swag = stringBulbs([{ a: { x: 0, z: 0 }, b: { x: 8, z: 0 }, y: 6 }]).bulbs
+    expect(Math.min(...swag.map((b) => b.y))).toBeCloseTo(6 - 8 * 0.08, 1) // a short one sags less
+  })
+
+  it('puts every other bulb first, for the thin tier, and gives neighbours different colours', () => {
+    const { bulbs, thin } = stringBulbs([across, { ...across, a: { x: 5, z: 0 }, b: { x: 5, z: 20 } }])
+    expect(thin).toBeGreaterThan(bulbs.length * 0.45)
+    expect(thin).toBeLessThan(bulbs.length * 0.55)
+    // the thin half still runs the whole length of each strand
+    const firstHalf = bulbs.slice(0, thin).filter((b) => b.x === 0)
+    expect(Math.min(...firstHalf.map((b) => b.z))).toBe(0)
+    expect(Math.max(...firstHalf.map((b) => b.z))).toBe(20)
+    const strand = bulbs.filter((b) => b.x === 0).sort((p, q) => p.z - q.z)
+    for (let i = 1; i < strand.length; i++) expect(strand[i]!.colour).not.toBe(strand[i - 1]!.colour)
+    expect(new Set(bulbs.map((b) => b.colour)).size).toBe(BULB_COLOURS.length)
+  })
+})
+
+describe("MI Road's New Year lights", () => {
+  /** The building whose footprint (turned as the kit turns it) a point lies on or just off, if any. */
+  const tiedTo = (x: number, z: number) =>
+    miRoad.buildings.find((b) => {
+      const turned = b.rot === 90 || b.rot === 270
+      const hw = (turned ? b.d : b.w) / 2 + 0.3
+      const hd = (turned ? b.w : b.d) / 2 + 0.3
+      return b.style !== 'wall' && Math.abs(x - b.x) <= hw && Math.abs(z - b.z) <= hd
+    })
+
+  it('ties every strand at both ends to a shop front tall enough to hold it', () => {
+    const strands = miRoad.stringLights!
+    expect(strands.length).toBeGreaterThan(8)
+    for (const s of strands)
+      for (const end of [s.a, s.b]) {
+        const b = tiedTo(end.x, end.z)
+        expect(b, `strand end at (${end.x}, ${end.z})`).toBeDefined()
+        expect(b!.floors * FLOOR_H).toBeGreaterThanOrEqual(s.y)
+      }
+  })
+
+  it('hangs high over MI Road, clear of the chase camera and the lamps', () => {
+    const { bulbs } = stringBulbs(miRoad.stringLights!)
+    expect(Math.min(...bulbs.map((b) => b.y))).toBeGreaterThan(5)
+    expect(bulbs.length).toBeLessThan(400)
+  })
+
+  it('only MI Road hangs them', async () => {
+    for (const id of ['walled-city', 'university', 'malviya-nagar', 'amer'] as const) {
+      const d = await loadDistrict(id)
+      expect(d.def.stringLights ?? []).toEqual([])
+      d.dispose()
+    }
+  })
+
+  it('says so in both languages, short enough for the HUD card', () => {
+    for (const lang of ['hi', 'en'] as const) {
+      expect(t('festivalNewYear', lang)).toMatch(/MI Road/)
+      expect(t('festivalNewYear', lang).length).toBeLessThanOrEqual(44)
+    }
+  })
+})
+
+describe('createFestivalFx: New Year', () => {
+  const lights = (scene: THREE.Scene) => scene.getObjectByName('newyear-lights') as THREE.InstancedMesh
+
+  it('lights MI Road on New Year, sparser on the lowest tier, and puts them away after', async () => {
+    const scene = new THREE.Scene()
+    const district = await loadDistrict('mi-road')
+    const fx = createFestivalFx({ scene } as Stage, district, { reducedMotion: () => false })
+    const all = stringBulbs(district.def.stringLights!)
+    expect(lights(scene).visible).toBe(false)
+    fx.set('newyear', 2)
+    expect(lights(scene).visible).toBe(true)
+    expect(scene.getObjectByName('newyear-wire')!.visible).toBe(true)
+    expect(lights(scene).count).toBe(all.bulbs.length)
+    fx.set('newyear', 0)
+    expect(lights(scene).count).toBe(all.thin)
+    fx.set(null, 0)
+    expect(lights(scene).visible).toBe(false)
+    expect(scene.getObjectByName('newyear-wire')!.visible).toBe(false)
+    fx.dispose()
+    expect(scene.getObjectByName('newyear-lights')).toBeUndefined()
+    district.dispose()
+  })
+
+  it('makes no lights in a district that hangs none', async () => {
+    const scene = new THREE.Scene()
+    const district = await loadDistrict('walled-city')
+    const fx = createFestivalFx({ scene } as Stage, district)
+    fx.set('newyear', 2)
+    fx.update(1 / 30)
+    expect(scene.getObjectByName('newyear-lights')).toBeUndefined()
+    fx.dispose()
+    district.dispose()
+  })
+
+  it('twinkles, writing into the same colour buffer, and holds steady under reduced motion', async () => {
+    for (const reduced of [false, true]) {
+      const scene = new THREE.Scene()
+      const district = await loadDistrict('mi-road')
+      const fx = createFestivalFx({ scene } as Stage, district, { reducedMotion: () => reduced })
+      fx.set('newyear', 2)
+      const colours = lights(scene).instanceColor!
+      const buffer = colours.array
+      const before = Array.from(buffer)
+      for (let i = 0; i < 20; i++) fx.update(1 / 30)
+      expect(lights(scene).instanceColor!.array).toBe(buffer)
+      const after = Array.from(buffer)
+      if (reduced) expect(after).toEqual(before)
+      else {
+        expect(after).not.toEqual(before)
+        // dimmer, never brighter than the bulb's own colour
+        expect(after.every((v, i) => v <= before[i]! + 1e-6)).toBe(true)
+      }
+      fx.dispose()
+      district.dispose()
+    }
   })
 })

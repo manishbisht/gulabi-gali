@@ -96,6 +96,7 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
   teej: 'festivalTeej',
   diwali: 'festivalDiwali',
   jlf: 'festivalJlf',
+  newyear: 'festivalNewYear',
 }
 
 /** `?gg-festival=<id>` stands in for the live festival, in test mode only. */

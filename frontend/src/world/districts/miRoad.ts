@@ -3,7 +3,7 @@ import { DISTRICT_NAMES } from '../districtNames'
 import { ALBERT_HALL, buildAlbertHall } from '../landmarks/albertHall'
 import { buildRamNiwasGate, RAM_NIWAS_GATE } from '../landmarks/ramNiwasGate'
 import { roofAt } from '../rooftop'
-import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
+import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec, StringLight } from '../types'
 import { centred, createFill, grow, placed, rect, wall, type Facing } from './layout'
 
 /*
@@ -218,6 +218,28 @@ const props: PropSpec[] = [
   ...[-70, -30, 30, 70].map((x): PropSpec => ({ kind: 'tree', at: { x, z: LANE[0] - 2 } })),
 ]
 
+// ---- New Year's string lights -----------------------------------------------------------------
+
+/** How high up the shop fronts the strands are tied: under the two-storey roofs, well over the camera. */
+const LIGHTS_Y = 6.3
+/** Just off the facades either side of MI Road. */
+const LIGHTS_N = NORTH + 0.15
+const LIGHTS_S = SOUTH - 0.15
+const stringLights: StringLight[] = [
+  // across the road, where shops face each other (the garden's apron and the side roads leave gaps)
+  ...[-91, -62, -54, -45, 41, 48, 56, 65, 90].map((x): StringLight => ({
+    a: { x, z: LIGHTS_N },
+    b: { x, z: LIGHTS_S },
+    y: LIGHTS_Y,
+  })),
+  // swags along the south shop fronts facing the gate, where the metro brings people up
+  ...[-11, -3, 5, 13, 21, 29].map((x): StringLight => ({
+    a: { x, z: LIGHTS_S },
+    b: { x: x + 8, z: LIGHTS_S },
+    y: LIGHTS_Y,
+  })),
+]
+
 // ---- the cast --------------------------------------------------------------------------------
 
 const npcs: NpcDef[] = [
@@ -274,6 +296,7 @@ const miRoad: DistrictDef = {
     { x: -74.5, z: 44 },
     { x: 75, z: 44 },
   ],
+  stringLights,
   /** A three-storey shop on MI Road just east of the gate's apron, looking over the garden to Albert Hall. */
   roof: roofAt(buildings, { x: 40.5, z: 36.5 }, -1, HALL_AT),
 }
