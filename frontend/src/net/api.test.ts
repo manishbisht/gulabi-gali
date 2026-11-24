@@ -20,6 +20,16 @@ it('fetchCity falls back on an unparseable body', async () => {
   expect((await fetchCity()).stale).toBe(true)
 })
 
+it("fetchCity reads a festival this build does not know as none, so a newer Worker's festival cannot break it", async () => {
+  const live = { stale: false, condition: 'clear', aqiBand: 'good' }
+  vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ ...live, festival: 'some-new-festival' })))
+  expect((await fetchCity()).festival).toBeNull()
+  vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ ...live, festival: 'newyear' })))
+  expect((await fetchCity()).festival).toBe('newyear')
+  vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ ...live, festival: 'toString' })))
+  expect((await fetchCity()).festival).toBeNull()
+})
+
 it('fetchCity returns the live snapshot when the API answers', async () => {
   // the stub goes in first: nothing here may reach a real network
   vi.stubGlobal('fetch', () => Promise.resolve(Response.json({})))
@@ -123,7 +133,8 @@ it('strips trailing slashes from the API base', async () => {
   const fetchMock = vi.fn(() => Promise.reject(new TypeError('offline')))
   vi.stubGlobal('fetch', fetchMock)
   await fresh()
-  expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe('https://api.example.com/api/city')
+  // v=2: this page knows New Year (see festivalForVersion in the Worker)
+  expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe('https://api.example.com/api/city?v=2')
   vi.unstubAllEnvs()
 })
 

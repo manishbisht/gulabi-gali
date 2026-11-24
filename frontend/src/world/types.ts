@@ -123,4 +123,12 @@ export interface DistrictDef {
   ridgeWest?: number
   /** Far scenery outside the district's walls (Nahargarh's city below the ridge): drawn, never walked or hit. */
   scenery?: () => THREE.Group
+  /** New Year's string lights (see festivalFx.ts): strands hung between building fronts, both ends `y` m up. */
+  stringLights?: StringLight[]
+}
+/** One strand of string lights, sagging between its two ends. */
+export interface StringLight {
+  a: Vec2
+  b: Vec2
+  y: number
 }

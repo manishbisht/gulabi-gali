@@ -3,7 +3,7 @@ import type { Stage } from '../engine/stage'
 import type { FestivalId } from '../net/protocol'
 import { FLOOR_H } from '../world/kit/parts'
 import type { District } from '../world/district'
-import type { BuildingSpec, BuildingStyle } from '../world/types'
+import type { BuildingSpec, BuildingStyle, StringLight } from '../world/types'
 import { PALETTE } from '../world/palette'
 import { createProcession, processionCount, type Procession, type ProcessionKind } from './procession'
 import type { SkyParams } from './sky'
@@ -111,11 +111,80 @@ export function roofDiyas(buildings: BuildingSpec[], limit: number): Diya[] {
   return Array.from({ length: limit }, (_, i) => spots[Math.floor(i * step)]!)
 }
 
+/** New Year's bulbs: one every so many metres along a strand, in a few festive colours. */
+const BULB_SPACING = 0.9
+export const BULB_COLOURS = ['#FFC24B', '#FF5FA2', '#57D9E0', '#FFF1D0', '#8CE36B']
+/** How much a strand sags at its middle, per metre of its span, and at the most. */
+const SAG_PER_M = 0.08
+const MAX_SAG = 1.2
+/** The twinkle: how fast each bulb breathes (radians a second) and how dim it gets at its lowest. */
+const TWINKLE = 2.2
+const TWINKLE_LOW = 0.45
+/** The twinkle is a slow breath: worked out about 15 times a second, not every frame, it looks the same. */
+const TWINKLE_STEP = 1 / 15
+
+/** One New Year bulb, in world space, and which of `BULB_COLOURS` it is. */
+export interface Bulb extends Diya {
+  colour: number
+}
+
+/** One strand's bulbs, in order from `a` to `b`, sagging between them (a parabola: at this sag, a catenary). */
+function strandBulbs({ a, b, y }: StringLight, first: number): Bulb[] {
+  const span = Math.hypot(b.x - a.x, b.z - a.z)
+  const sag = Math.min(span * SAG_PER_M, MAX_SAG)
+  const n = Math.max(2, Math.round(span / BULB_SPACING))
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: y - 4 * sag * t * (1 - t),
+      z: a.z + (b.z - a.z) * t,
+      colour: (first + i) % BULB_COLOURS.length,
+    }
+  })
+}
+
+/**
+ * The bulbs along New Year's strands, in world space; neighbours along a strand never share a colour. Every
+ * other bulb of each strand comes first: the lowest quality tier draws only those (`thin` of them), so its
+ * strands are as long, only sparser.
+ */
+export function stringBulbs(strands: readonly StringLight[]): { bulbs: Bulb[]; thin: number } {
+  const even: Bulb[] = []
+  const odd: Bulb[] = []
+  strands.forEach((s, k) => strandBulbs(s, k).forEach((b, i) => (i % 2 === 0 ? even : odd).push(b)))
+  return { bulbs: [...even, ...odd], thin: even.length }
+}
+
+/** The wire the bulbs hang from: line-segment pairs from bulb to bulb along each strand, just above them. */
+function wirePositions(strands: readonly StringLight[]): Float32Array {
+  const out: number[] = []
+  for (const s of strands) {
+    const line = strandBulbs(s, 0)
+    for (let i = 1; i < line.length; i++) {
+      const p = line[i - 1]!
+      const q = line[i]!
+      out.push(p.x, p.y + 0.06, p.z, q.x, q.y + 0.06, q.z)
+    }
+  }
+  return new Float32Array(out)
+}
+
 /**
  * Festival dressing: Sankranti kites over the rooftops, Diwali diyas on the parapets, Holi colour
- * at the district's centre. Instanced throughout and nothing allocates per frame.
+ * at the district's centre, New Year's string lights where the district hangs them (MI Road). Instanced
+ * throughout and nothing allocates per frame. Under `prefers-reduced-motion` the string lights hold steady.
  */
-export function createFestivalFx(stage: Stage, district: District): FestivalFx {
+export function createFestivalFx(
+  stage: Stage,
+  district: District,
+  opts: { reducedMotion?: () => boolean } = {},
+): FestivalFx {
+  const query =
+    typeof matchMedia === 'function' && !opts.reducedMotion
+      ? matchMedia('(prefers-reduced-motion: reduce)')
+      : null
+  const still = opts.reducedMotion ?? (() => query?.matches ?? false)
   const group = new THREE.Group()
   group.name = 'festival-fx'
   stage.scene.add(group)
@@ -204,6 +273,69 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
   diyas.instanceMatrix.needsUpdate = true
   group.add(diyas)
 
+  // ---- New Year: string lights, only in a district that hangs them (nothing is made elsewhere)
+  const strands = district.def.stringLights ?? []
+  let bulbs: THREE.InstancedMesh | null = null
+  let wire: THREE.LineSegments | null = null
+  let bulbBase: Float32Array | null = null
+  let bulbPhase: Float32Array | null = null
+  let thinBulbs = 0
+  if (strands.length) {
+    const { bulbs: spots, thin } = stringBulbs(strands)
+    thinBulbs = thin
+    bulbs = new THREE.InstancedMesh(
+      track(new THREE.IcosahedronGeometry(0.11, 0)),
+      track(new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false })),
+      spots.length,
+    )
+    bulbs.frustumCulled = false
+    bulbs.visible = false
+    bulbs.name = 'newyear-lights'
+    bulbBase = new Float32Array(spots.length * 3)
+    bulbPhase = new Float32Array(spots.length)
+    spots.forEach((b, i) => {
+      dummy.position.set(b.x, b.y, b.z)
+      dummy.rotation.set(0, 0, 0)
+      dummy.scale.setScalar(1)
+      dummy.updateMatrix()
+      bulbs!.setMatrixAt(i, dummy.matrix)
+      colour.set(BULB_COLOURS[b.colour]!)
+      bulbs!.setColorAt(i, colour)
+      bulbBase![i * 3] = colour.r
+      bulbBase![i * 3 + 1] = colour.g
+      bulbBase![i * 3 + 2] = colour.b
+      bulbPhase![i] = rand(Math.PI * 2)
+    })
+    bulbs.instanceMatrix.needsUpdate = true
+    const wireGeometry = track(new THREE.BufferGeometry())
+    wireGeometry.setAttribute('position', new THREE.BufferAttribute(wirePositions(strands), 3))
+    wire = new THREE.LineSegments(
+      wireGeometry,
+      track(new THREE.LineBasicMaterial({ color: '#2A2218', transparent: true, opacity: 0.7 })),
+    )
+    wire.frustumCulled = false
+    wire.visible = false
+    wire.name = 'newyear-wire'
+    group.add(bulbs, wire)
+  }
+  /** Each bulb at `k` of its full brightness (1 when twinkling stops). */
+  const glow = (time: number, twinkle: boolean) => {
+    if (!bulbs || !bulbBase || !bulbPhase || !bulbs.instanceColor) return
+    const out = bulbs.instanceColor.array as Float32Array
+    const n = bulbs.count
+    for (let i = 0; i < n; i++) {
+      const k = twinkle
+        ? TWINKLE_LOW + (1 - TWINKLE_LOW) * (0.5 + 0.5 * Math.sin(time * TWINKLE + bulbPhase[i]!))
+        : 1
+      out[i * 3] = bulbBase[i * 3]! * k
+      out[i * 3 + 1] = bulbBase[i * 3 + 1]! * k
+      out[i * 3 + 2] = bulbBase[i * 3 + 2]! * k
+    }
+    bulbs.instanceColor.needsUpdate = true
+  }
+  let twinkling = false
+  let sinceGlow = 0
+
   // ---- Gangaur and Teej: the procession, rebuilt only when the festival or the tier changes
   let procession: Procession | null = null
   let processionKey = ''
@@ -239,12 +371,27 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
       }
       if (next === 'holi') puffs.count = n
       if (next === 'diwali') diyas.count = Math.min(n, diyaSpots.length)
+      if (bulbs && wire) {
+        bulbs.visible = wire.visible = next === 'newyear'
+        bulbs.count = quality === 0 ? thinBulbs : bulbs.instanceMatrix.count
+        // the sky repaints every 30 s: the bulbs carry on as they were (steady until the first twinkle), no flash
+        glow(time, twinkling)
+      }
     },
     update(dt) {
       procession?.update(dt)
       if (!id) return
       time += dt
-      if (id === 'sankranti') {
+      if (id === 'newyear') {
+        const twinkle = !still()
+        sinceGlow += dt
+        // steady again at once when reduced motion comes on; otherwise a step now and then
+        if ((twinkle && sinceGlow >= TWINKLE_STEP) || (!twinkle && twinkling)) {
+          glow(time, twinkle)
+          sinceGlow = 0
+        }
+        twinkling = twinkle
+      } else if (id === 'sankranti') {
         const n = kites.count
         for (let i = 0; i < n; i++) {
           let x = kx[i]! + KITE_WIND * dt
@@ -301,6 +448,7 @@ export function createFestivalFx(stage: Stage, district: District): FestivalFx {
       kites.dispose()
       puffs.dispose()
       diyas.dispose()
+      bulbs?.dispose()
       for (const d of disposables) d.dispose()
     },
   }

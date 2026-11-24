@@ -58,6 +58,10 @@ database and two Durable Objects; the Durable Object classes are created by the 
    change.
 5. Check it: `curl https://api.gulabi-gali.manishbisht.me/health` returns `{"ok":true}`, and
    `/api/city` returns the snapshot. The 15-minute cron fills KV; until its first run `/api/city` fetches live.
+   Its `festival` field is versioned: a page built before a festival existed throws on an id it does not know,
+   so `/api/city` without `?v=` gives only the first six (Sankranti, Holi, Gangaur, Teej, Diwali, JLF), and New
+   Year only to `?v=2` (`festivalForVersion` in `backend/src/festivals.ts`). Any future new festival id must go
+   behind a version bump in the same way: the Worker deploys first, and old tabs stay open.
 
 ### 1a. The D1 database
 

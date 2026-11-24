@@ -1,3 +1,4 @@
+import { istClock } from '../live/winter'
 import type { FestivalId } from '../net/protocol'
 import { sharedAudio, soundOn } from './horn'
 
@@ -78,8 +79,24 @@ export function phaseOf(sky: AmbientSky): Phase {
   return sky.sunAzimuthDeg < 180 ? 'dawn' : 'dusk'
 }
 
-/** What plays now: pure, from the district, the sky and the festival. Every level is 0 to 1. */
-export function mixFor(district: string, sky: AmbientSky, festival: FestivalId | null): Mix {
+/** New Year's drums stop at this minute of the night (IST); its string lights stay up until 06:00. */
+const NEW_YEAR_DRUMS_UNTIL = 60
+
+/** Whether the festival's drums play at `now`: every festival's do, New Year's only until about 01:00 IST. */
+export function festivalDrums(festival: FestivalId | null, now: Date): boolean {
+  if (!festival) return false
+  if (festival !== 'newyear') return true
+  const { minutes } = istClock(now)
+  return minutes < NEW_YEAR_DRUMS_UNTIL || minutes >= 12 * 60 // the evening, and midnight's first hour
+}
+
+/** What plays now: pure, from the district, the sky, the festival and the clock. Every level is 0 to 1. */
+export function mixFor(
+  district: string,
+  sky: AmbientSky,
+  festival: FestivalId | null,
+  now: Date = new Date(),
+): Mix {
   const bed = BED[district] ?? DEFAULT_BED
   const phase = phaseOf(sky)
   return {
@@ -87,7 +104,7 @@ export function mixFor(district: string, sky: AmbientSky, festival: FestivalId |
     birds: phase === 'day' || phase === 'dawn' ? bed.nature : 0,
     crickets: phase === 'night' || phase === 'dusk' ? bed.nature : 0,
     bells: phase === 'dawn' || phase === 'dusk' ? 1 : 0,
-    drums: festival ? 1 : 0,
+    drums: festivalDrums(festival, now) ? 1 : 0,
     wind: bed.wind ?? 0,
   }
 }
@@ -125,6 +142,8 @@ export interface AmbienceDeps {
   district: string
   sky(): AmbientSky
   festival(): FestivalId | null
+  /** The clock the festival's hours run on (the sky's: a test can freeze it); `new Date()` by default. */
+  now?(): Date
   /** Whether sound is on: the sound switch, unless a test says otherwise. */
   enabled?(): boolean
   /** The audio context, asked for only from inside a gesture. */
@@ -292,7 +311,7 @@ export function createAmbience(deps: AmbienceDeps) {
       masterTarget = duckTo
       master.gain.setTargetAtTime(duckTo, t, 0.5)
     }
-    let mix = mixFor(deps.district, deps.sky(), deps.festival())
+    let mix = mixFor(deps.district, deps.sky(), deps.festival(), deps.now?.() ?? new Date())
     if (tier === 0) mix = thinMix(mix)
     for (const k of LAYERS) setLevel(k, on ? mix[k] : 0, t)
     if (!on) return

@@ -1,6 +1,6 @@
 export type DistrictId = 'walled-city' | 'mi-road' | 'university' | 'malviya-nagar' | 'amer' | 'nahargarh'
 
-export type FestivalId = 'sankranti' | 'holi' | 'gangaur' | 'teej' | 'diwali' | 'jlf'
+export type FestivalId = 'sankranti' | 'holi' | 'gangaur' | 'teej' | 'diwali' | 'jlf' | 'newyear'
 export type Condition = 'clear' | 'cloudy' | 'fog' | 'rain' | 'storm' | 'dust'
 export type AqiBand = 'good' | 'moderate' | 'poor' | 'unhealthy' | 'severe'
 export interface CitySnapshot {

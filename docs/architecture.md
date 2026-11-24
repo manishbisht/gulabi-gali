@@ -133,7 +133,19 @@ shows them; a ghost's stay on the device.
 `useLiveCity` fetches `/api/city` and refreshes it; `live/sky.ts` turns the snapshot and the clock into sky,
 fog and light colours (recomputed every 30 s), `live/weatherFx.ts` adds rain, and `live/festivalFx.ts`
 draws the festival of the day (Sankranti kites, Diwali diyas, Holi colour, and since phase 4 the Gangaur and
-Teej processions) and its banner. The festival table is `backend/src/festivals.data.ts`.
+Teej processions) and its banner. The festival table is `backend/src/festivals.data.ts`; an entry is whole IST
+days or IST minutes. It needs yearly upkeep: add the next year's dates by each December (a test checks it still
+covers 2028). New Year (31 Dec 18:00 to 1 Jan 06:00 IST) needs no entry: `festivalOn` works it out every year.
+`/api/city` works the festival out from the clock as it serves, not from the last cron run, and names a
+festival newer than the first six only to pages that ask with `?v=2` (see docs/deployment.md). New Year hangs string lights across MI Road and on Ram Niwas
+Bagh's gate (`stringLights` in the district's data; one instanced mesh and its wire, half the bulbs on the
+lowest tier, steady under reduced motion). Winter mornings (December to February, IST) are misty
+(`live/winter.ts`): from about 04:00, thickest 05:30 to 08:00, gone by 10:00, denser on dirty air or a fog
+report, and never past `WINTER_MAX` (0.022), so a landmark 25 m off keeps at least 0.6 of itself through the
+scene fog and a mist bank together; `live/groundFog.ts` lays six soft sprites of mist low around the camera, on
+the ground the player stands on (a roof, up there) and never off the district or over water (none on the
+lowest tier, still under reduced motion). The city line speaks of the mist on such a morning over clean or
+middling air, and New Year's drums stop at 01:00 IST while its lights stay until 06:00.
 
 The HUD (`ui/Hud.tsx`) keeps to one block at the top of the screen: place, weather and stamps; who can see you;
 one card holding the festival greeting, the procession line and the city line; and a group of small switches

@@ -44,7 +44,7 @@ async function busiest(
   // to 8 s) could land after the patch below and swap in today's real weather, so the reply is fixed too.
   const now = new Date()
   const at = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h).toISOString()
-  await page.route('**/api/city', (route) =>
+  await page.route('**/api/city*', (route) =>
     route.fulfill({
       json: {
         fetchedAt: now.toISOString(),
@@ -237,6 +237,70 @@ for (const lang of LANGS)
         await shot(page, `signed-${lang}-${id}-${festival}`)
       })
     }
+
+// New Year: the greeting has no procession under it; it fits on MI Road, where its lights are, and in the
+// district with the longest name, in each language.
+const NEW_YEAR = {
+  hi: 'Naya saal mubarak, Jaipur! 🎆',
+  en: 'Happy New Year, Jaipur! 🎆',
+}
+for (const lang of LANGS)
+  for (const [id, hi, en] of DISTRICTS.filter(([d]) => d === 'mi-road' || d === 'malviya-nagar')) {
+    const place = lang === 'en' ? en : hi
+    test(`New Year's greeting fits in ${place} (${lang}): festival, city line, sign-in nudge`, async ({
+      page,
+    }) => {
+      await busiest(page, id, lang, 'newyear')
+      const items = common(page, place, lang)
+      delete items.procession
+      await expect(page.locator('.procession-line')).toHaveCount(0)
+      await expect(items.banner!).toHaveText(NEW_YEAR[lang])
+      await laidOut(
+        {
+          ...items,
+          ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+          signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+        },
+        NEWS.filter(([, k]) => k !== 'procession'),
+      )
+      // the greeting keeps to one line of the card
+      const lines = await items.banner!.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size
+      })
+      expect(lines).toBe(1)
+      await shot(page, `guest-${lang}-${id}-newyear`)
+    })
+  }
+
+// A misty winter dawn over clean air: the city line speaks of the fog. With a Gangaur procession too, in the
+// district with the longest name, in each language.
+const MIST_LINE = {
+  hi: 'Kohre wali subah — garam chai ka time.',
+  en: 'A foggy winter morning. Hot chai weather.',
+}
+for (const lang of LANGS) {
+  const place = lang === 'en' ? 'Malviya Nagar & WTP' : 'Malviya Nagar–WTP'
+  test(`a misty winter morning's city line fits in ${place} (${lang})`, async ({ page }) => {
+    await busiest(page, 'malviya-nagar', lang, 'gangaur')
+    await page.evaluate(() => {
+      window.__gg.setNow('2027-01-10T01:30:00Z') // 07:00 IST
+      window.__gg.setSnapshot({ aqi: 40, aqiBand: 'good' })
+    })
+    const items = common(page, place, lang)
+    await expect(items.line!).toHaveText(MIST_LINE[lang])
+    await laidOut(
+      {
+        ...items,
+        ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+        signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+      },
+      NEWS,
+    )
+    await shot(page, `guest-${lang}-malviya-nagar-mist`)
+  })
+}
 
 /** The stamps chip on the place's row, not wrapped onto one of its own. */
 async function oneRow(page: Page, place: Locator) {

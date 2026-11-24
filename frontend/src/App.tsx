@@ -99,6 +99,7 @@ const FESTIVALS: Record<FestivalId, StringKey> = {
   teej: 'festivalTeej',
   diwali: 'festivalDiwali',
   jlf: 'festivalJlf',
+  newyear: 'festivalNewYear',
 }
 
 /** `?gg-festival=<id>` stands in for the live festival, in test mode only. */
@@ -636,7 +637,7 @@ export default function App() {
         }
         placeShort={typeof place === 'string' ? undefined : DISTRICT_SHORT_NAMES[here][lang]}
         snapshot={snapshot}
-        line={snapshot && !snapshot.stale ? cityLine(snapshot, lang) : undefined}
+        line={snapshot && !snapshot.stale ? cityLine(snapshot, lang, now()) : undefined}
         banner={festival ? t(FESTIVALS[festival], lang) : undefined}
         procession={processionKey && t(processionKey, lang)}
         stamps={`${have.length}/${TOTAL_STAMPS}`}

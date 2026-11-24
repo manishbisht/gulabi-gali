@@ -1,7 +1,15 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FestivalId } from '../net/protocol'
 import { storage } from '../storage'
-import { createAmbience, mixFor, phaseOf, setAmbienceDuck, thinMix, type AmbientCtx } from './ambience'
+import {
+  createAmbience,
+  festivalDrums,
+  mixFor,
+  phaseOf,
+  setAmbienceDuck,
+  thinMix,
+  type AmbientCtx,
+} from './ambience'
 import { resetHorn, setSoundOn } from './horn'
 
 const DAY = { sunElevationDeg: 50, sunAzimuthDeg: 200 }
@@ -395,4 +403,28 @@ it('disposes everything on leave: sources stopped, graph cut, no timers, no list
   vi.advanceTimersByTime(5000)
   expect(c.sources).toBe(started)
   a.dispose() // twice is harmless
+})
+
+describe("New Year's drums", () => {
+  const at = (iso: string) => new Date(iso)
+  it('play through the evening and the first hour after midnight (IST), then stop while the lights stay', () => {
+    expect(festivalDrums('newyear', at('2026-12-31T18:00:00+05:30'))).toBe(true)
+    expect(festivalDrums('newyear', at('2026-12-31T23:59:00+05:30'))).toBe(true)
+    expect(festivalDrums('newyear', at('2027-01-01T00:59:00+05:30'))).toBe(true)
+    expect(festivalDrums('newyear', at('2027-01-01T01:00:00+05:30'))).toBe(false)
+    expect(festivalDrums('newyear', at('2027-01-01T05:30:00+05:30'))).toBe(false)
+    expect(mixFor('mi-road', DAY, 'newyear', at('2027-01-01T03:00:00+05:30')).drums).toBe(0)
+    expect(mixFor('mi-road', DAY, 'newyear', at('2026-12-31T21:00:00+05:30')).drums).toBe(1)
+  })
+
+  it('leave every other festival drumming all its hours, whatever the device timezone', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    try {
+      expect(festivalDrums('diwali', at('2027-10-28T03:00:00+05:30'))).toBe(true)
+      expect(festivalDrums('newyear', at('2026-12-31T20:00:00Z'))).toBe(false) // 01:30 IST
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    expect(festivalDrums(null, at('2026-12-31T21:00:00+05:30'))).toBe(false)
+  })
 })

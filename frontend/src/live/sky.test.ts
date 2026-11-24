@@ -89,6 +89,53 @@ describe('skyParams', () => {
   })
 })
 
+describe('winter mornings', () => {
+  // a January day in Jaipur: sunrise 07:13 IST, sunset 17:52 IST
+  const jan = {
+    ...base,
+    sunrise: '2027-01-10T01:43:00.000Z',
+    sunset: '2027-01-10T12:22:00.000Z',
+    aqi: 60,
+    aqiBand: 'moderate',
+  } as CitySnapshot
+  const at = (local: string) => new Date(`2027-01-10T${local}+05:30`)
+
+  it('thickens the haze at dawn and leaves it as it was by mid-morning', () => {
+    const dawn = skyParams(jan, at('07:30:00'))
+    expect(dawn.groundFog).toBeGreaterThan(0)
+    expect(dawn.fogDensity).toBeGreaterThan(0.008)
+    expect(dawn.fogDensity).toBeLessThanOrEqual(0.022)
+    const late = skyParams(jan, at('10:30:00'))
+    expect(late.groundFog).toBe(0)
+    expect(late.fogDensity).toBe(0.008)
+    // November mornings have no ground fog
+    expect(skyParams(base, new Date('2026-11-14T02:00:00Z')).groundFog).toBe(0)
+  })
+
+  it('never makes the worst air thicker than it already was', () => {
+    const worst = { ...jan, aqi: 400, aqiBand: 'severe', condition: 'fog' } as CitySnapshot
+    expect(skyParams(worst, at('07:00:00')).fogDensity).toBe(skyParams(worst, at('12:00:00')).fogDensity)
+  })
+
+  it('pales the horizon toward mist while it lies', () => {
+    const spread = (hex: string) => {
+      const c = new THREE.Color(hex)
+      return Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)
+    }
+    // the same sun 59 days later (10 March), when there is no winter mist: only the mist differs
+    const later = (iso: string) => new Date(Date.parse(iso) + 59 * 86_400_000).toISOString()
+    const march = { ...jan, sunrise: later(jan.sunrise), sunset: later(jan.sunset) }
+    for (const time of ['06:30:00', '08:00:00']) {
+      const misty = skyParams(jan, at(time))
+      const plain = skyParams(march, new Date(later(at(time).toISOString())))
+      expect(misty.groundFog).toBeGreaterThan(0)
+      expect(plain.groundFog).toBe(0)
+      expect(plain.sunElevationDeg).toBeCloseTo(misty.sunElevationDeg)
+      expect(spread(misty.skyHorizon)).toBeLessThan(spread(plain.skyHorizon))
+    }
+  })
+})
+
 describe('applySky', () => {
   it('sets fog, lights and the night glow of tagged materials', () => {
     const scene = new THREE.Scene()

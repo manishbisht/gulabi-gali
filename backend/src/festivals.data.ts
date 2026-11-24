@@ -2,14 +2,20 @@ import type { FestivalId } from './protocol'
 
 export interface FestivalEntry {
   id: FestivalId
-  start: string // YYYY-MM-DD, IST, inclusive
-  end: string // YYYY-MM-DD, IST, inclusive
+  /** YYYY-MM-DD (IST, the whole day), or YYYY-MM-DDTHH:MM (IST, from that minute). */
+  start: string
+  /** YYYY-MM-DD (IST, the whole day, inclusive), or YYYY-MM-DDTHH:MM (IST, over at that minute). */
+  end: string
 }
 
 // Sources: drikpanchang.com (New Delhi reference; Rajasthan observes the same civil day) cross-checked with
 // dekhopanchang.com, hindu-blog.com 2027 calendar and publicholidays.in. Gazetted Rajasthan lists are not
 // yet published for these years. Windows: sankranti = day before + day; holi = Holika Dahan..Dhulandi;
-// gangaur and teej = festival day + following day (Jaipur processions); diwali = Dhanteras..Bhai Dooj.
+// gangaur and teej = festival day + following day (Jaipur processions); diwali = Dhanteras..Bhai Dooj;
+// newyear is not listed: festivals.ts works it out for any year (New Year's Eve 18:00 to 06:00 IST on 1 January).
+//
+// UPKEEP, once a year (by each December): add the next year's entries from the sources below. When the table
+// runs out, the city simply has no festivals; festivals.test.ts checks it covers at least 2028.
 //
 // 2027
 //  - Sankranti Jan 14: publicholidays.in + dekhopanchang.com (hindu-blog says rituals may run into Jan 15).

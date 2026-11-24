@@ -41,7 +41,35 @@ it('keeps every line short enough for one row of the HUD card on a 360 px phone'
     { ...base, tempC: 44 },
   ]
   for (const s of snaps)
-    for (const lang of ['hi', 'en'] as const) expect(cityLine(s, lang).length).toBeLessThanOrEqual(44)
+    for (const lang of ['hi', 'en'] as const) {
+      expect(cityLine(s, lang).length).toBeLessThanOrEqual(44)
+      expect(cityLine(s, lang, WINTER_DAWN).length).toBeLessThanOrEqual(44)
+    }
+})
+
+/** 07:00 IST on 10 January: the winter mist at its thickest. */
+const WINTER_DAWN = new Date('2027-01-10T07:00:00+05:30')
+
+it('speaks of the mist on a winter morning, over clean or middling air', () => {
+  expect(cityLine(base, 'hi', WINTER_DAWN)).toBe('Kohre wali subah — garam chai ka time.')
+  expect(cityLine({ ...base, aqiBand: 'moderate' }, 'en', WINTER_DAWN)).toBe(
+    'A foggy winter morning. Hot chai weather.',
+  )
+  // by mid-morning, in the afternoon and outside winter, the air speaks again
+  for (const at of ['2027-01-10T10:30:00+05:30', '2027-01-10T15:00:00+05:30', '2027-04-10T07:00:00+05:30'])
+    expect(cityLine(base, 'en', new Date(at))).toBe('Clear air — you can see Nahargarh.')
+  // without a clock, as before
+  expect(cityLine(base, 'en')).toBe('Clear air — you can see Nahargarh.')
+})
+
+it('keeps hazy or bad air, rain, dust and heat ahead of the mist', () => {
+  expect(cityLine({ ...base, aqiBand: 'poor' }, 'en', WINTER_DAWN)).toBe(
+    'A bit hazy today. Keep a mask handy.',
+  )
+  expect(cityLine({ ...base, aqiBand: 'severe' }, 'hi', WINTER_DAWN)).toBe(
+    'Hawa kharab hai, Hukum — ghar pe raho.',
+  )
+  expect(cityLine({ ...base, condition: 'rain' }, 'en', WINTER_DAWN)).toBe("It's raining! Pakora time.")
 })
 
 it('never counts a missing temperature as heat', () => {

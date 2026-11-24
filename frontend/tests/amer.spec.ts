@@ -10,7 +10,7 @@ test.use({ viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile
 async function enterOffline(page: Page, district?: string) {
   await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
   // a fixed clear day, whatever the weather (see hud.spec.ts), round the midday the pictures are taken at
-  await page.route('**/api/city', (route) =>
+  await page.route('**/api/city*', (route) =>
     route.fulfill({
       json: {
         fetchedAt: new Date().toISOString(),
