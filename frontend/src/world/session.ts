@@ -402,6 +402,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         district: district.def.id,
         sky: sky.params,
         festival: hooks.festival,
+        now: hooks.live.now,
         quality: () => stage.quality,
         onQuality: stage.onQuality,
       }),
