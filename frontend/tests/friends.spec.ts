@@ -34,7 +34,8 @@ async function matched(a: Resident, b: Resident) {
 
 /** Opens `r`'s profile sheet, and its friends. */
 async function friendsOf(r: Resident) {
-  await r.page.getByRole('button', { name: 'Profile', exact: true }).click()
+  // its name carries the count of asks waiting, when there are any
+  await r.page.getByRole('button', { name: /^Profile/ }).click()
   const sheet = r.page.getByRole('dialog', { name: 'Apni pehchaan banao' })
   return { sheet, panel: sheet.getByRole('region', { name: 'Dost' }) }
 }
@@ -56,7 +57,8 @@ test('Dost banao from a chat, a yes from the profile, then Chai pe bulao from a 
   await expect(sheetA.getByText('Dosti ki request bhej di.')).toBeVisible()
   await sheetA.getByRole('button', { name: 'Band karo' }).click()
 
-  // B says yes in their profile: A is a friend now, out on the street in the Pink City
+  // B's Profile button counts the ask; B says yes there: A is a friend now, out on the street in the Pink City
+  await expect(b.page.getByRole('button', { name: 'Profile 1 dosti ki request' })).toBeVisible()
   const { sheet: profileB, panel } = await friendsOf(b)
   await expect(panel.getByText('Dost banna chahte hain')).toBeVisible()
   await panel.getByRole('button', { name: 'Haan' }).click()
