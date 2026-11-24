@@ -50,6 +50,7 @@ test.describe('on a phone, offline', () => {
       'Jantar Mantar',
       'Tripolia Gate',
       'Badi Chaupar',
+      'City Palace',
       'Rehne do',
     ])
     // the list has the row beside the joystick to itself: no second way into it, and no "Auto chalao" on it

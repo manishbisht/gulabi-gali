@@ -25,6 +25,8 @@ const ALL_STAMPS = [
   'wtp',
   'amer-fort',
   'nahargarh-fort',
+  'jal-mahal',
+  'city-palace',
 ]
 
 async function busiest(
@@ -256,7 +258,7 @@ for (const lang of LANGS) {
       signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
       look: page.locator('.hud-toggles .look-button'),
     }
-    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(11\/11\)$/)
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(13\/13\)$/)
     await laidOut(items, NEWS)
     await oneRow(page, items.place!)
     await shot(page, `guest-${lang}-malviya-nagar-all-stamps`)
@@ -273,14 +275,14 @@ for (const lang of LANGS) {
       profile: page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
       invite: page.locator('.invite-button'),
     }
-    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(11\/11\)$/)
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(13\/13\)$/)
     await laidOut(items, NEWS)
     await oneRow(page, items.place!)
     await shot(page, `signed-${lang}-malviya-nagar-all-stamps`)
   })
 }
 
-// One stamp short of all of them, the chip says the whole "10/11": as wide as the count gets, and it has to fit too.
+// One stamp short of all of them, the chip says the whole "12/13": as wide as the count gets, and it has to fit too.
 for (const lang of LANGS) {
   const place = lang === 'en' ? 'Malviya Nagar & WTP' : 'Malviya Nagar–WTP'
   test(`one stamp short, the widest count still fits in ${place} (${lang}), guest and signed in`, async ({
