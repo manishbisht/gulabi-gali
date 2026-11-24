@@ -166,6 +166,22 @@ describe('DistrictDO', () => {
     await watcher.next('leave', (m) => m.id === 'dev:arrive-anu')
   })
 
+  it('a dressed look goes out on join as small numbers, with the older fields an older client draws', async () => {
+    const watcher = await live('amer')
+    await watcher.next('welcome')
+    const look = { skin: 1, outfit: 'teal', head: 'none', tone: 4, hat: 1, hatC: 3, dup: 2, dupC: 5, hair: 4 }
+    const a = await live('amer', { token: await resident('Dressed Devi', { look }) })
+    await a.next('welcome')
+    a.send({ t: 'move', x: 1, z: 1, ry: 0 })
+    const join = await watcher.next('join', (m) => m.p.id === 'dev:dressed-devi')
+    // tone 4 is nearest the older skin 3; a safa is the older head
+    expect(join.p.look).toEqual({ ...look, skin: 3, head: 'safa' })
+    // no colour strings, no names of options: the whole look is a few dozen bytes
+    expect(JSON.stringify(join.p.look).length).toBeLessThan(100)
+    expect(JSON.stringify(join.p.look)).not.toMatch(/#|pagdi|plait|shoulders/)
+    a.close()
+  })
+
   it('moves are only relayed within 60 m', async () => {
     const a = await live('malviya-nagar', { token: await resident('Near Neha') })
     const b = await live('malviya-nagar', { token: await resident('Near Bina') })
