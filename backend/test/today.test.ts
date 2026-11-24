@@ -39,7 +39,8 @@ describe('Aaj ka Darshan on the server', () => {
 
   it('refuses any day but today in IST, numbers, and garbage', async () => {
     const t = await resident('Today Tarun')
-    const y = istDay(new Date(Date.now() - 24 * 3600_000))
+    // the day before yesterday: yesterday itself is taken for five minutes after midnight (see below)
+    const y = istDay(new Date(Date.now() - 2 * 24 * 3600_000))
     const tomorrow = istDay(new Date(Date.now() + 24 * 3600_000))
     for (const body of [
       { day: y },
@@ -89,6 +90,44 @@ describe('Aaj ka Darshan on the server', () => {
     await resident('Today Clock')
     const res = await putToday(testEnv, devId('Today Clock'), { day: '2026-11-20' }, noon('2026-11-21'))
     expect(res.status).toBe(400)
+  })
+
+  it("takes yesterday's mark for five minutes after IST midnight, and never moves the day back", async () => {
+    await resident('Today Late')
+    const id = devId('Today Late')
+    const at = (iso: string) => Date.parse(iso)
+    expect(await mark(id, '2026-11-20')).toEqual({ last: '2026-11-20', streak: 1, best: 1 })
+    // done at 23:59 on the 21st, heard at 00:03 on the 22nd: it counts for the 21st
+    expect(await mark(id, '2026-11-21', at('2026-11-22T00:03:00+05:30'))).toEqual({
+      last: '2026-11-21',
+      streak: 2,
+      best: 2,
+    })
+    // at 00:06 the 21st is gone
+    await resident('Today Later')
+    const res = await putToday(
+      testEnv,
+      devId('Today Later'),
+      { day: '2026-11-21' },
+      at('2026-11-22T00:06:00+05:30'),
+    )
+    expect(res.status).toBe(400)
+    // the 22nd marked first, then the 21st's late mark arrives inside the grace: nothing moves back
+    await resident('Today Order')
+    const order = devId('Today Order')
+    expect(await mark(order, '2026-11-22', at('2026-11-22T00:01:00+05:30'))).toEqual({
+      last: '2026-11-22',
+      streak: 1,
+      best: 1,
+    })
+    expect(await mark(order, '2026-11-21', at('2026-11-22T00:02:00+05:30'))).toEqual({
+      last: '2026-11-22',
+      streak: 1,
+      best: 1,
+    })
+    // and a day before yesterday is never taken, even a minute past midnight
+    const old = await putToday(testEnv, order, { day: '2026-11-20' }, at('2026-11-22T00:01:00+05:30'))
+    expect(old.status).toBe(400)
   })
 
   it('is for residents only: a ghost is 403 ghost, a banned one 403 banned, and nothing is stored', async () => {

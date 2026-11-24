@@ -28,14 +28,42 @@ export interface TodayAccount {
   today?: TodayRecord
 }
 
-/** Today's IST date, turning over at midnight IST with a single timer (never a per-frame check). */
-function useIstDay(): string {
+/**
+ * Today's IST date, and a way to read it afresh now. It turns over at midnight IST with a single timer (never a
+ * per-frame check); a timer that fires early (or not at all while the phone sleeps or the page is frozen) is
+ * caught up when the page shows again (`visibilitychange`, `pageshow`) and is armed again when it finds the day
+ * unchanged.
+ */
+function useIstDay(): [string, () => string] {
   const [day, setDay] = useState(() => istDay(Date.now()))
+  /** Bumped by a timer that fired with the day unchanged, so it is armed again. */
+  const [tick, setTick] = useState(0)
+  const refresh = useCallback(() => {
+    const fresh = istDay(Date.now())
+    setDay(fresh)
+    return fresh
+  }, [])
   useEffect(() => {
-    const timer = setTimeout(() => setDay(istDay(Date.now())), nextIstMidnight(Date.now()) - Date.now() + 50)
+    const wait = Math.max(1000, nextIstMidnight(Date.now()) - Date.now() + 50)
+    const timer = setTimeout(() => {
+      const fresh = istDay(Date.now())
+      if (fresh !== day) setDay(fresh)
+      else setTick((n) => n + 1)
+    }, wait)
     return () => clearTimeout(timer)
-  }, [day])
-  return day
+  }, [day, tick])
+  useEffect(() => {
+    const wake = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    document.addEventListener('visibilitychange', wake)
+    window.addEventListener('pageshow', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', wake)
+      window.removeEventListener('pageshow', refresh)
+    }
+  }, [refresh])
+  return [day, refresh]
 }
 
 const keyOf = (r: TodayRecord | undefined) => (r ? `${r.last}|${r.streak}|${r.best}` : '')
@@ -50,7 +78,7 @@ const keyOf = (r: TodayRecord | undefined) => (r ? `${r.last}|${r.streak}|${r.be
  * toast's time starts.
  */
 export function useToday(account: TodayAccount | null, visible: boolean, override: Goal | null = null) {
-  const day = useIstDay()
+  const [day, refreshDay] = useIstDay()
   const goal = useMemo(() => override ?? goalFor(day), [override, day])
   const user = account?.id ?? null
   const serverKey = keyOf(account?.today)
@@ -60,6 +88,8 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
   const [toast, setToast] = useState<number | null>(null)
 
   const fromServer = useRef(account?.today)
+  /** The server's last word on this resident's record: the profile's, then each answer. */
+  const serverRecord = useRef<TodayRecord>(account?.today ?? NO_RECORD)
   const tokenRef = useRef(account?.token)
   const userRef = useRef(user)
   const today = account?.today
@@ -69,6 +99,9 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
     tokenRef.current = token
     userRef.current = user
   }, [today, token, user])
+  useEffect(() => {
+    serverRecord.current = fromServer.current ?? NO_RECORD
+  }, [user, serverKey])
 
   // whose record it is: a ghost's from the device, a resident's from the server's last word
   useEffect(() => {
@@ -76,14 +109,19 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
     setRecord(user ? (fromServer.current ?? NO_RECORD) : localRecord())
   }, [user, serverKey])
 
-  /** Marks `on` done on the server for `who`; the answer replaces the record, a failure stays pending. */
+  /**
+   * Marks `on` done on the server for `who`; the answer replaces the record. A failure worth trying again stays
+   * pending; one the server refused for good (a day it will not take, a phone clock that is off) is dropped,
+   * and the record falls back to the server's, so a done day it never took is not kept as done.
+   */
   const mark = useCallback(async (who: string, on: string) => {
     setPendingDay(who, on)
     const tok = await tokenRef.current?.().catch(() => null)
     const answer = tok ? await putToday(tok, on) : null
     if (!answer || userRef.current !== who) return
     setPendingDay(who, '')
-    setRecord(answer)
+    if (answer !== 'refused') serverRecord.current = answer
+    setRecord(serverRecord.current)
   }, [])
 
   // a resident's load: a mark that never reached the server, or today's done as a ghost here, goes up now
@@ -103,25 +141,28 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
     }
   }, [user, serverKey, day, mark])
 
-  // the deeds: today's goal, met, is done (once)
-  const now = useRef({ goal, day, record })
+  // the deeds: today's goal, met, is done (once). The day is read afresh at each deed, so a page left open
+  // across midnight (a timer late, a phone asleep) matches the new day's goal, never yesterday's.
+  const now = useRef({ override, record })
   useEffect(() => {
-    now.current = { goal, day, record }
-  }, [goal, day, record])
+    now.current = { override, record }
+  }, [override, record])
   useEffect(
     () =>
       onDeed((deed) => {
-        const { goal, day, record } = now.current
+        const day = refreshDay()
+        const { override, record } = now.current
+        const goal = override ?? goalFor(day)
         if (record.last === day || !meets(goal, deed)) return
         const next = advance(record, day)
-        now.current = { goal, day, record: next }
+        now.current = { override, record: next }
         setRecord(next)
         setToast(next.streak)
         const who = userRef.current
         if (who) void mark(who, day)
         else saveLocalRecord(next)
       }),
-    [mark],
+    [mark, refreshDay],
   )
 
   // the toast's time runs only while it can be seen (not in photo mode, not mid-ride)

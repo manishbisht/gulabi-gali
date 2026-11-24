@@ -16,6 +16,12 @@ function dayBefore(day: string): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) - 24 * 3600_000).toISOString().slice(0, 10)
 }
 
+/**
+ * How long after IST midnight a mark for the day that just ended is still taken: a goal done at 23:59 whose mark
+ * reaches the server a moment after midnight (a slow network, a phone waking up) still counts for its day.
+ */
+export const TODAY_GRACE_MS = 5 * 60_000
+
 /** A resident's record, or undefined before their first day. */
 export async function todayOf(env: Env, userId: string): Promise<TodayRecord | undefined> {
   const row = await env.DB.prepare('SELECT last_day, streak, best FROM user_today WHERE user_id = ?')
@@ -25,23 +31,26 @@ export async function todayOf(env: Env, userId: string): Promise<TodayRecord | u
 }
 
 /**
- * `PUT /api/me/today {day}`: today's goal is done. `day` must be today's IST date as the server reckons it
- * (`now`), else 400 `invalid`; nothing else in the body is read. The same day again changes nothing; the day
- * after `last` adds one to the run; any later day starts it again at 1. `best` keeps the longest. One upsert, so
- * two devices at once agree. A resident only (`ACTIVE`; a hidden one too): anyone else 403 `ghost` (a banned
- * one 403 `banned`, the route's `bannedGate`); 429 past `TODAY_LIMIT`. Answers the record.
+ * `PUT /api/me/today {day}`: that day's goal is done. `day` must be today's IST date as the server reckons it
+ * (`now`), or yesterday's within `TODAY_GRACE_MS` of IST midnight; else 400 `invalid`. Nothing else in the body
+ * is read. The same day again changes nothing; the day after `last` adds one to the run; any later day starts it
+ * again at 1; an earlier one (yesterday's late mark after today's) changes nothing, so `last` never goes back.
+ * `best` keeps the longest. One upsert, so two devices at once agree. A resident only (`ACTIVE`; a hidden one
+ * too): anyone else 403 `ghost` (a banned one 403 `banned`, the route's `bannedGate`); 429 past `TODAY_LIMIT`.
+ * Answers the record.
  */
 export async function putToday(env: Env, userId: string, raw: unknown, now = Date.now()): Promise<Response> {
   if (!(await activeRow(env, userId))) return Response.json({ error: 'ghost' }, { status: 403 })
   const slow = await todayLimit(env, userId, now)
   if (slow) return slow
-  const day = istDay(new Date(now))
-  if ((raw as { day?: unknown } | null)?.day !== day)
-    return Response.json({ error: 'invalid' }, { status: 400 })
-  const run = 'CASE WHEN last_day = ?2 THEN streak WHEN last_day = ?3 THEN streak + 1 ELSE 1 END'
+  const day = (raw as { day?: unknown } | null)?.day
+  const ok = day === istDay(new Date(now)) || day === istDay(new Date(now - TODAY_GRACE_MS))
+  if (!ok || typeof day !== 'string') return Response.json({ error: 'invalid' }, { status: 400 })
+  // YYYY-MM-DD strings order as dates do: `last_day >= ?2` is "this day or a later one is already in"
+  const run = 'CASE WHEN last_day >= ?2 THEN streak WHEN last_day = ?3 THEN streak + 1 ELSE 1 END'
   const row = await env.DB.prepare(
     `INSERT INTO user_today (user_id, last_day, streak, best) VALUES (?1, ?2, 1, 1)
-     ON CONFLICT (user_id) DO UPDATE SET streak = ${run}, best = MAX(best, ${run}), last_day = ?2
+     ON CONFLICT (user_id) DO UPDATE SET streak = ${run}, best = MAX(best, ${run}), last_day = MAX(last_day, ?2)
      RETURNING last_day, streak, best`,
   )
     .bind(userId, day, dayBefore(day))

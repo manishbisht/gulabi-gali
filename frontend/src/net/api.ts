@@ -189,16 +189,18 @@ export async function putStamps(token: string, stamps: readonly string[]): Promi
 }
 
 /**
- * "Aaj ka Darshan": tells the server today's goal is done (`day` is today's IST date; it refuses any other) and
- * gets back its record, with the streak it worked out. Null for any failure. Never rejects.
+ * "Aaj ka Darshan": tells the server that `day`'s goal is done and gets back its record, with the streak it
+ * worked out. `refused` when the server says no for good (a 4xx: a day it will not take, a phone clock that is
+ * off, not a resident); null for a failure worth trying again (offline, a 5xx, 401, 408, 429). Never rejects.
  */
-export async function putToday(token: string, day: string): Promise<TodayRecord | null> {
+export async function putToday(token: string, day: string): Promise<TodayRecord | 'refused' | null> {
   try {
     const res = await fetch(`${API_BASE}/api/me/today`, {
       method: 'PUT',
       headers: { ...bearer(token), 'Content-Type': 'application/json' },
       body: JSON.stringify({ day }),
     })
+    if (res.status >= 400 && res.status < 500 && ![401, 408, 429].includes(res.status)) return 'refused'
     if (!res.ok) return null
     const body = (await res.json()) as Partial<TodayRecord>
     return typeof body.last === 'string' && typeof body.streak === 'number' && typeof body.best === 'number'

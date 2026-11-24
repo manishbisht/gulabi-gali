@@ -208,8 +208,9 @@ export interface Me {
 /**
  * "Aaj ka Darshan", a resident's daily-goal record as the server keeps it: `last` the last IST day (YYYY-MM-DD)
  * they did the day's goal, `streak` the run of consecutive IST days ending on `last` (a page shows 0 once a day
- * has been missed), `best` the longest run. `PUT /api/me/today {day}` marks today's done: `day` must be today's
- * IST date (else 400 `invalid`); a ghost is 403 `ghost`. It answers the record; the numbers are the server's own.
+ * has been missed), `best` the longest run. `PUT /api/me/today {day}` marks a day done: `day` must be today's
+ * IST date, or yesterday's for five minutes after IST midnight (else 400 `invalid`); a ghost is 403 `ghost`. It
+ * answers the record; the numbers are the server's own.
  */
 export interface TodayRecord {
   last: string

@@ -41,10 +41,10 @@ function server(start: TodayRecord | null = null, fail = false) {
   return fetchMock
 }
 
-function mount(account: Account, visible = true, override = 'photo') {
+function mount(account: Account, visible = true, override: string | null = 'photo') {
   const out = {} as ReturnType<Hooks['useToday']>
   let root!: Root
-  const goal = today.goalById(override)
+  const goal = override ? today.goalById(override) : null
   function Probe({ acc, vis }: { acc: Account; vis: boolean }) {
     Object.assign(out, hooks.useToday(acc, vis, goal))
     return null
@@ -178,4 +178,83 @@ it('the toast waits while the HUD is hidden (photo mode), then stays its few sec
   expect(page.out.toast).toBe(1) // still to be seen
   act(() => vi.advanceTimersByTime(4_100))
   expect(page.out.toast).toBeNull()
+})
+
+/** An instant on the IST clock. */
+const ist = (iso: string) => new Date(`${iso}+05:30`)
+/** A deed that does `goal`. */
+const deedFor = (goal: ReturnType<Today['goalFor']>) =>
+  (goal.kind === 'darshan' ? { kind: 'darshan', stamp: goal.stamp! } : { kind: goal.kind }) as Parameters<
+    Deeds['emitDeed']
+  >[0]
+
+it("a phone asleep across midnight: the timer never ran, yet a deed matches the new day's goal, and showing the page catches the chip up", () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(ist('2026-11-24T23:50:00'))
+  const { out } = mount(null, true, null)
+  expect(out.day).toBe('2026-11-24')
+  expect(out.goal).toEqual(today.goalFor('2026-11-24'))
+  // asleep for two hours: the wall clock moves, no timer fires
+  vi.setSystemTime(ist('2026-11-25T01:50:00'))
+  expect(out.day).toBe('2026-11-24')
+  // yesterday's goal is no longer today's: doing it is nothing (unless the two days share a kind, which they never do)
+  act(() => deeds.emitDeed(deedFor(today.goalFor('2026-11-24'))))
+  expect(out.day).toBe('2026-11-25') // read afresh at the deed
+  expect(out.done).toBe(false)
+  act(() => deeds.emitDeed(deedFor(today.goalFor('2026-11-25'))))
+  expect(out.done).toBe(true)
+  expect(today.localRecord().last).toBe('2026-11-25')
+})
+
+it('the page shown again after midnight (visibilitychange, pageshow) turns the chip to the new day', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(ist('2026-11-24T23:50:00'))
+  const { out } = mount(null, true, null)
+  vi.setSystemTime(ist('2026-11-25T07:00:00'))
+  act(() => void document.dispatchEvent(new Event('visibilitychange')))
+  expect(out.day).toBe('2026-11-25')
+  expect(out.goal).toEqual(today.goalFor('2026-11-25'))
+  vi.setSystemTime(ist('2026-11-26T07:00:00'))
+  act(() => void window.dispatchEvent(new Event('pageshow')))
+  expect(out.day).toBe('2026-11-26')
+})
+
+it('a midnight timer that fires early arms itself again, and turns the day when midnight comes', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(ist('2026-11-24T23:00:00'))
+  const { out } = mount(null, true, null)
+  // the phone's clock is set back ten minutes: the timer, due in an hour, fires at 23:50 by the wall clock
+  vi.setSystemTime(ist('2026-11-24T22:50:00'))
+  act(() => vi.advanceTimersByTime(60 * 60_000 + 100))
+  expect(out.day).toBe('2026-11-24')
+  // armed again: it turns the day once midnight really comes
+  act(() => vi.advanceTimersByTime(10 * 60_000 + 100))
+  expect(out.day).toBe('2026-11-25')
+})
+
+it('a mark the server refuses for good (a 400 near midnight, a phone clock that is off) is not kept as done', async () => {
+  const fetchMock = vi.fn(async () => json({ error: 'invalid' }, 400))
+  vi.stubGlobal('fetch', fetchMock)
+  const server = { last: yesterday(), streak: 3, best: 3 }
+  const { out, settle } = mount(resident(server))
+  act(() => deeds.emitDeed({ kind: 'photo' }))
+  expect(out.done).toBe(true) // shown at once, as ever
+  await settle()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  // back to what the server holds: not done, the run as it was, nothing pending to send again
+  expect(out.done).toBe(false)
+  expect(out.streak).toBe(3)
+  expect(today.pendingDay('dev:asha')).toBe('')
+})
+
+it('a mark that fails for now (offline, 429) stays pending and stays shown', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => json({ error: 'rate' }, 429)),
+  )
+  const { out, settle } = mount(resident())
+  act(() => deeds.emitDeed({ kind: 'photo' }))
+  await settle()
+  expect(out.done).toBe(true)
+  expect(today.pendingDay('dev:asha')).toBe(day())
 })

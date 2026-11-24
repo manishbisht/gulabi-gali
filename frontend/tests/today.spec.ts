@@ -115,7 +115,7 @@ test("a resident's day is the server's: it counts it, and another load (or phone
   // the page cannot set its own count, nor mark another day
   const forged = await page.request.put(`${API}/api/me/today`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { day: yesterday(), streak: 40 },
+    data: { day: istDay(Date.now() - 2 * 24 * 3600_000), streak: 40 },
   })
   expect(forged.status()).toBe(400)
 
