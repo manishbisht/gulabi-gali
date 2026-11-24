@@ -218,7 +218,8 @@ Each run has one long frame (the max) and no others over 33 ms. The lights and m
 draw calls (the bulbs, their wire, and the mist sprites in view), about 5,500 triangles (the bulbs), 3 shader
 programs, one 64 x 64 texture, and 0 to 0.6 ms of throttled main-thread time per frame (the run-to-run spread is
 about as wide). The twinkle is worked out 15 times a second, not every frame. On the lowest tier the mist
-sprites go (the scene fog alone carries the morning) and half the bulbs. Not measured: a real phone's fill rate
+sprites go (the scene fog alone carries the morning) and half the bulbs. (These runs predate a review that thinned the winter fog to at most 0.022 and the mist sprites' opacity
+to 0.16: the same draws and the same work per frame.) Not measured: a real phone's fill rate
 under six large transparent sprites, which is what the lowest tier drops first.
 
 ### Phase 3: Clerk mode

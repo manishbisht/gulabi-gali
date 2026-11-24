@@ -123,8 +123,11 @@ festival newer than the first six only to pages that ask with `?v=2` (see docs/d
 Bagh's gate (`stringLights` in the district's data; one instanced mesh and its wire, half the bulbs on the
 lowest tier, steady under reduced motion). Winter mornings (December to February, IST) are misty
 (`live/winter.ts`): from about 04:00, thickest 05:30 to 08:00, gone by 10:00, denser on dirty air or a fog
-report, and never past the worst haze's density; `live/groundFog.ts` lays six soft sprites of mist low around
-the camera (none on the lowest tier, still under reduced motion).
+report, and never past `WINTER_MAX` (0.022), so a landmark 25 m off keeps at least 0.6 of itself through the
+scene fog and a mist bank together; `live/groundFog.ts` lays six soft sprites of mist low around the camera, on
+the ground the player stands on (a roof, up there) and never off the district or over water (none on the
+lowest tier, still under reduced motion). The city line speaks of the mist on such a morning over clean or
+middling air, and New Year's drums stop at 01:00 IST while its lights stay until 06:00.
 
 The HUD (`ui/Hud.tsx`) keeps to one block at the top of the screen: place, weather and stamps; who can see you;
 one card holding the festival greeting, the procession line and the city line; and a group of small switches
