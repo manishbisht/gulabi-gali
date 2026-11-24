@@ -104,10 +104,12 @@ signposts (the place id stays `metro`).
 Amer's lakes are `DistrictDef.water`: colliders with no building, drawn by the paving. Its rooftop viewpoint is
 the roof of a bastion on the rampart by Maota lake, turned to look across the water at the fort on its hill.
 South-west of Amer's road, on the city side, Man Sagar runs out to the district's walls (the water drawn goes on
-past them), with Jal Mahal (`world/landmarks/jalMahal.ts`) out in it a few metres off a promenade along the road:
-nobody reaches the palace, so its ring (centred on it, like Hawa Mahal's) is wide enough to take in the
-promenade in front of it, where the card opens, the stamp is earned and the taxi sets riders down. Amer has one
-rooftop viewpoint, so the promenade is not a second one: benches there look out across the water.
+past them). A promenade runs along the road's south side (benches there look out across the water), and from
+it a stone ghat runs out into the lake; the water is three colliders round the ghat. Jal Mahal
+(`world/landmarks/jalMahal.ts`) stands in the lake 4 m off the ghat's end, its front turned to it: nobody
+reaches the palace. Its ring is centred on it (like Hawa Mahal's) and reaches only the ghat's end, where the card
+opens, the stamp is earned and the taxi sets riders down facing the palace; the promenade lies outside it. Amer
+has one rooftop viewpoint (the bastion over Maota), so the ghat is a landmark ring, not a second viewpoint.
 The City Palace (`world/landmarks/cityPalace.ts`) is the Walled City's fifth landmark: one footprint for its walled
 precinct in the north-west, north of Jantar Mantar and of Tripolia (its royal gate on the bazaar), clear of the
 bazaars, the procession and every walk. The ring is outside its courtyard gateway, facing the lane; Chandra

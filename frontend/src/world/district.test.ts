@@ -164,7 +164,22 @@ describe('the city', () => {
     const landmarks = all.flatMap((d) => d.def.landmarks.map((l) => ({ id: l.id, ...l.name })))
     // in the order stamps were added (new ones go last, so a stored list keeps its meaning), not district order
     expect([...STAMPS].sort(byId)).toEqual(landmarks.sort(byId))
-    expect(STAMPS.slice(-3).map((s) => s.id)).toEqual(['nahargarh-fort', 'jal-mahal', 'city-palace'])
+    // the order itself is pinned: a stored list (and the server's) keeps its meaning only if nothing moves
+    expect(STAMPS.map((s) => s.id)).toEqual([
+      'hawa-mahal',
+      'jantar-mantar',
+      'tripolia-gate',
+      'badi-chaupar',
+      'albert-hall',
+      'ram-niwas-gate',
+      'university-gate',
+      'jkk',
+      'wtp',
+      'amer-fort',
+      'nahargarh-fort',
+      'jal-mahal',
+      'city-palace',
+    ])
   })
 
   it.each(DISTRICTS)('%s: names itself the way the metro lists it', async (id) => {

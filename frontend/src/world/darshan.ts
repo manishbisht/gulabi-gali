@@ -70,8 +70,8 @@ export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
     en: 'A royal house out in the middle of a lake, most of whose storeys sleep under the water.',
   },
   'city-palace': {
-    hi: 'Shahar ke beech saat manzila mahal; chhat pe jhanda lehraye to samjho shahi parivaar ghar pe hai.',
-    en: 'Seven storeys of a royal home at the heart of town; when the flag flies on its roof, the family is in.',
+    hi: 'Shahar ke beech saat manzila mahal, jiski chhat pe jhanda lehrata hai; aaj bhi ek shahi parivaar ka ghar.',
+    en: "Seven storeys at the heart of town, a flag on the roof; still a royal family's home.",
   },
 }
 
