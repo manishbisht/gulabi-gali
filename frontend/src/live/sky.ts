@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Stage } from '../engine/stage'
 import type { AqiBand, CitySnapshot } from '../net/protocol'
 import type { District } from '../world/district'
+import { winterFog } from './winter'
 
 export interface SkyParams {
   sunElevationDeg: number
@@ -10,6 +11,8 @@ export interface SkyParams {
   skyTop: string
   skyHorizon: string
   fogDensity: number
+  /** A winter morning's ground fog, 0 (none) to 1 (the thickest it gets): see `winterFog`. */
+  groundFog: number
   sunIntensity: number
   ambientIntensity: number
   /** Lamps, tapri bulbs and each district's floodlit landmark (materials tagged `nightGlow`). */
@@ -31,6 +34,10 @@ const FOG: Record<AqiBand, number> = {
 const FOG_WEATHER = 1.6
 const RAIN_DARKEN = 0.65
 const DUST_HORIZON = '#d9b98c'
+/** A winter morning's mist, in daylight; darker before the sun is up. */
+const MIST = new THREE.Color('#D6DADE')
+/** How far the horizon goes toward the mist when the ground fog is at its thickest. */
+const MIST_HORIZON = 0.55
 
 const DAY_TOP = new THREE.Color('#6FA6D2')
 const DAY_HORIZON = new THREE.Color('#BFD6DE')
@@ -72,6 +79,9 @@ export function skyParams(s: CitySnapshot, now: Date): SkyParams {
     top.multiplyScalar(RAIN_DARKEN)
     horizon.multiplyScalar(RAIN_DARKEN)
   }
+  const winter = winterFog(s, now)
+  if (winter.ground > 0)
+    horizon.lerp(MIST.clone().multiplyScalar(0.3 + 0.7 * day), winter.ground * MIST_HORIZON)
 
   const dim = rain ? 0.35 : s.condition === 'cloudy' || s.condition === 'fog' ? 0.55 : dust ? 0.7 : 1
   return {
@@ -79,7 +89,9 @@ export function skyParams(s: CitySnapshot, now: Date): SkyParams {
     sunAzimuthDeg: azimuth,
     skyTop: `#${top.getHexString()}`,
     skyHorizon: `#${horizon.getHexString()}`,
-    fogDensity: FOG[s.aqiBand] * (s.condition === 'fog' ? FOG_WEATHER : 1),
+    // a winter morning's fog never thins the haze, and never takes it past WINTER_MAX (see winter.ts)
+    fogDensity: Math.max(FOG[s.aqiBand] * (s.condition === 'fog' ? FOG_WEATHER : 1), winter.density),
+    groundFog: winter.ground,
     sunIntensity: 0.25 + 1.95 * day * dim, // the 0.25 is moonlight
     ambientIntensity: 0.5 + 1.1 * day * (0.7 + 0.3 * dim),
     nightLights: t < rise + LIGHTS_MARGIN_MS || t > set - LIGHTS_MARGIN_MS,
