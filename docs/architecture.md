@@ -582,6 +582,32 @@ pushes the local set whenever it holds one the server has not confirmed (after s
 the answer is merged in too. A failed push is silent and is tried again on the next stamp or the next load. The
 person card and your own profile sheet show "Jaipur Darshan · n/13" and the landmarks by name (`ui/StampsLine.tsx`).
 
+### Aaj ka Darshan: one small goal a day (`today.ts`, `frontend/src/world/today.ts`, `useToday.ts`)
+
+One goal a day, the same for everyone on a given IST day (so friends can talk about it), picked from the date
+alone: the kinds (`darshan`, `tapri`, `ride`, `auto`, `photo`, `roof`, `map`, `animal`, ids stable) come once
+each in every run of eight days, shuffled from the run's number and never the same two days running; a darshan
+day's landmark goes round the stamps in order, one per run. Every goal can be done alone, as a ghost, on a quiet
+day: reach a landmark's ring, a tapri or bench in reach (no sitting: a ghost cannot), a metro or bus ride that
+arrives, an auto ride that reaches its stop, a photo taken, up on a rooftop, a place picked on the map, a dog or
+cat coming along or a cow's namaste. Nothing asks for another person, and the bandar is left out (it can be
+switched off, and takes only headgear). The hooks that already know each moment emit it once on a tiny bus
+(`world/deeds.ts`); `useToday` listens. Nothing polls or runs per frame; one timer turns the day at IST midnight.
+
+The chip is an icon at the end of the identity row (a guest's visibility line and sign-in button flow there as
+items of their own, so it never takes a line of its own); its sheet says the goal, a hint, today's status and
+the run. Done: a short toast (it waits while photo mode or a ride hides the HUD) and a tick on the chip. From
+three days running the stamps chip wears a marigold glow. The welcome screen has one line naming the day's goal.
+No push and no reminder of any kind.
+
+A ghost's record (`{last, streak, best}`) is `gg-today` on the device. A resident's is the server's:
+`user_today` (migration `0011`); `PUT /api/me/today {day}` takes only today's IST date (anything else is 400
+`invalid`, a ghost 403 `ghost`), 30 an hour, and works the run out itself in one upsert (the day after `last`
+adds one, the same day changes nothing, any later day starts at 1). `GET /api/me` carries `today` once there is
+one; it is never on anyone else's profile. A mark that fails waits in `gg-today-pending:<id>` and goes up on the
+next load, the same IST day only. A ghost who did today's goal and then signs in brings that day along (only
+today's: the server cannot check the days before). Deleting the account deletes the row.
+
 ### The client-only extras: nothing is broadcast
 
 The animals, the procession, the kite fight, the bandar and the metro ride are drawn and decided on this page

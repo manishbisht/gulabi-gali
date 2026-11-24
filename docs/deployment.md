@@ -452,6 +452,11 @@ account deletion read these tables): from `backend/`, `npx wrangler d1 migration
 then `npx wrangler deploy`, then dispatch the `pages` workflow. The invite push rides on the push setup above
 (no new secret), and the 15-minute cron sweeps old asks and invites in one more D1 call.
 
+**Migration `0011_today.sql` ("Aaj ka Darshan").** It adds `user_today` (a resident's last done IST day, run and
+best). It depends on nothing after `0008`. Apply it before the Worker that needs it ships (`/api/me` and an
+account deletion read it): from `backend/`, `npx wrangler d1 migrations apply gulabi-gali --remote`, then
+`npx wrangler deploy`, then dispatch the `pages` workflow. No secret, no cron, no push.
+
 **CI caveats.** The `deploy-api` job applies the migrations and deploys the Worker only when the `backend`
 environment holds `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID`); without them its steps skip quietly and
 the job still reports success, so a green run has deployed nothing to Cloudflare. And pushes to `main` do not
@@ -483,6 +488,7 @@ running between the two steps works against the migrated database.
   additive.
 - After pulling the friends work, run the migrations command once more: `0010` (friends, asks, switches and
   invites for chai) is additive.
+- After pulling "Aaj ka Darshan", run it once more: `0011` (`user_today`) is additive.
 - `npm run dev -w backend -- --var DEV_AUTH:1`: the Worker on `http://127.0.0.1:8787`, with name-only dev
   sign-in. Without the var the API answers 401 to everything but `/api/city`, `/health`, the word list, the
   waitlist, each district's poster list (`/api/districts/:id/posters`, public by design) and the live sockets,
