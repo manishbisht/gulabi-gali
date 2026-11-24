@@ -32,6 +32,7 @@ import { listPosters, pinPoster, publicPosters, purgePosters, removeOwnPoster } 
 import { deleteGoing, getGoing, putGoing, remindMeetups } from './meetups'
 import { fileReport, purgeReportEvidence } from './reports'
 import { putStamps } from './stamps'
+import { putToday } from './today'
 import { devVerify, listInvites, redeemInvite } from './trust'
 import { activeRow, bannedGate, devLogin, getMe, userExists, getProfile, putProfile } from './profiles'
 import { acceptRequest, expireRequests, ignoreRequest, listRequests, sendRequest } from './requests'
@@ -234,6 +235,9 @@ async function handleApi(request: Request, env: Env, url: URL, later: Later): Pr
     )
   if (pathname === '/api/me/stamps' && method === 'PUT')
     return (await bannedGate(env, user.id)) ?? putStamps(env, user.id, await readJson(request))
+  // "Aaj ka Darshan": today's goal done (see today.ts); the streak is the server's own count.
+  if (pathname === '/api/me/today' && method === 'PUT')
+    return (await bannedGate(env, user.id)) ?? putToday(env, user.id, await readJson(request))
   // This device's push subscription (see push.ts): on from the profile sheet, off there or on sign-out.
   if (pathname === '/api/me/push' && method === 'PUT')
     return (await bannedGate(env, user.id)) ?? putPush(env, user.id, await readJson(request))

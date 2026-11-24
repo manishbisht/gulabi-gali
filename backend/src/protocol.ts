@@ -201,6 +201,20 @@ export interface Me {
   complete: boolean
   /** Can send requests and sees others' links: redeemed an invite code, or an admin marked them. */
   verified: boolean
+  /** Their "Aaj ka Darshan" record, once they have done one day's goal. Only ever on their own `Me`. */
+  today?: TodayRecord
+}
+
+/**
+ * "Aaj ka Darshan", a resident's daily-goal record as the server keeps it: `last` the last IST day (YYYY-MM-DD)
+ * they did the day's goal, `streak` the run of consecutive IST days ending on `last` (a page shows 0 once a day
+ * has been missed), `best` the longest run. `PUT /api/me/today {day}` marks today's done: `day` must be today's
+ * IST date (else 400 `invalid`); a ghost is 403 `ghost`. It answers the record; the numbers are the server's own.
+ */
+export interface TodayRecord {
+  last: string
+  streak: number
+  best: number
 }
 
 /** One of a verified member's invite codes: 8 characters (the screen shows XXXX-XXXX). */
