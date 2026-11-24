@@ -13,6 +13,7 @@ import {
 import { PALETTE } from '../world/palette'
 import type { AvatarLook } from '../world/types'
 import {
+  BODY_CACHE,
   buildAvatar,
   buildBodyGeometry,
   disposeAvatarCache,
@@ -103,6 +104,63 @@ describe('avatar', () => {
     const made = loadOrCreateLook()
     expect(storage.getJSON('gg-look', null)).toEqual(made)
     expect(loadOrCreateLook()).toEqual(made)
+  })
+})
+
+describe('the body cache', () => {
+  /** A different body for each n: tone, kurta, hat and hair colour all vary. */
+  const nth = (n: number): AvatarLook =>
+    dressLook(
+      { skin: 0, outfit: OUTFITS[n % 10]!, head: 'none' },
+      { tone: Math.floor(n / 10) % 8, hat: 1, hatC: Math.floor(n / 80) % 10, hair: 2 },
+    )
+
+  it('frees the least recently used bodies nobody on a stage wears, and never one that is worn', () => {
+    disposeAvatarCache()
+    const scene = new THREE.Scene()
+    // the first ten stand on the street the whole time
+    const worn = Array.from({ length: 10 }, (_, n) => {
+      const m = buildAvatar(nth(n))
+      scene.add(m)
+      return m
+    })
+    const freed = vi.fn()
+    for (const m of worn) m.geometry.addEventListener('dispose', freed)
+    // a crowd passes: each joins, then leaves the street (its figure goes off the stage)
+    const passed: THREE.Mesh[] = []
+    const left = new Set<number>()
+    for (let n = 10; n < 10 + BODY_CACHE * 2; n++) {
+      const m = buildAvatar(nth(n))
+      scene.add(m)
+      m.removeFromParent()
+      passed.push(m)
+      m.geometry.addEventListener('dispose', () => left.add(n))
+    }
+    // the street's bodies are untouched and still the cached ones
+    expect(freed).not.toHaveBeenCalled()
+    worn.forEach((m, n) => expect(buildAvatar(nth(n)).geometry).toBe(m.geometry))
+    // the oldest of those who left were freed, and come back fresh when worn again
+    expect(left.has(10)).toBe(true)
+    expect(left.has(9 + BODY_CACHE * 2)).toBe(false)
+    expect(buildAvatar(nth(10)).geometry).not.toBe(passed[0]!.geometry)
+    // the newest who left is still there
+    expect(buildAvatar(nth(9 + BODY_CACHE * 2)).geometry).toBe(passed.at(-1)!.geometry)
+  })
+
+  it('a body whose figure is in a group that has left the scene is not worn any more', () => {
+    disposeAvatarCache()
+    const scene = new THREE.Scene()
+    const body = new THREE.Group()
+    const first = buildAvatar(nth(0))
+    body.add(first)
+    scene.add(body)
+    const freed = vi.fn()
+    first.geometry.addEventListener('dispose', freed)
+    for (let n = 1; n <= BODY_CACHE; n++) buildAvatar(nth(n)) // never staged
+    expect(freed).not.toHaveBeenCalled()
+    body.removeFromParent() // the person left: their body group is off the stage
+    buildAvatar(nth(BODY_CACHE + 1))
+    expect(freed).toHaveBeenCalledTimes(1)
   })
 })
 

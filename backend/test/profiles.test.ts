@@ -193,9 +193,24 @@ describe('profiles API', () => {
       // a client from before the dressing room sends back only what it knows: nothing is lost
       expect((await put(token, { skin: 0, outfit: 'ochre', head: 'safa' })).status).toBe(200)
       expect(await lookOf(token)).toEqual(stored)
-      // but a real change on it is a new, older look
+      // a new kurta colour from it changes the kurta only: the tone, the safa and its colour, the hair stay
       expect((await put(token, { skin: 0, outfit: 'teal', head: 'safa' })).status).toBe(200)
-      expect(await lookOf(token)).toEqual({ skin: 0, outfit: 'teal', head: 'safa' })
+      expect(await lookOf(token)).toEqual({ ...stored, outfit: 'teal' })
+      // another skin or head is a new, older look: the only terms that client can choose in
+      expect((await put(token, { skin: 3, outfit: 'teal', head: 'safa' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual({ skin: 3, outfit: 'teal', head: 'safa' })
+      expect((await put(token, dressed)).status).toBe(200)
+      expect((await put(token, { skin: 0, outfit: 'ochre', head: 'cap' })).status).toBe(200)
+      expect(await lookOf(token)).toEqual({ skin: 0, outfit: 'ochre', head: 'cap' })
+    })
+
+    it('a dressed look saved again whole replaces the stored one, outfit and all', async () => {
+      const token = await login('redress')
+      const first = { skin: 0, outfit: 'ochre', head: 'none', tone: 1, hat: 0, dup: 2, dupC: 4, hair: 3 }
+      expect((await put(token, first)).status).toBe(200)
+      const second = { skin: 0, outfit: 'grass', head: 'none', tone: 1, hat: 0, dup: 0, hair: 3 }
+      expect((await put(token, second)).status).toBe(200)
+      expect(await lookOf(token)).toEqual(second)
     })
 
     it('rejects any option that is not in the set: no free text, no colours of its own', async () => {

@@ -1103,6 +1103,8 @@ button {
 }
 
 .auth-sheet {
+  /* padding inside the width, so a sheet on a 360 px phone stays on the screen */
+  box-sizing: border-box;
   width: min(100%, 420px);
   max-height: 90dvh;
   overflow: auto;
@@ -2436,9 +2438,21 @@ button.stamp-count::after {
   z-index: 31;
 }
 
+/* the dressing room could not load: one line at the top, over whatever opened it */
+.look-failed {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 32;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  transform: translateX(-50%);
+}
+
 /* the figure and the buttons stay put; the choices between them scroll */
 .look-editor {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2456,15 +2470,20 @@ button.stamp-count::after {
   gap: 2px;
 }
 
-.look-preview {
+.look-canvas {
   width: 100%;
-  height: clamp(110px, 22dvh, 170px);
   touch-action: none;
   cursor: grab;
 }
 
-.look-preview[hidden] {
+.look-canvas[hidden] {
   display: none;
+}
+
+.look-preview {
+  display: block;
+  width: 100%;
+  height: clamp(110px, 22dvh, 170px);
 }
 
 .look-drag {
@@ -2498,38 +2517,48 @@ button.stamp-count::after {
 .look-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 2px;
 }
 
-/* a colour: the radio is the swatch */
+/* a colour: the radio is the swatch, a thumb-sized target with a smaller disc of its colour (--sw) in it */
 .look-swatch {
   appearance: none;
-  width: 36px;
-  height: 36px;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
   margin: 0;
-  border: 2px solid rgb(245 230 216 / 0.35);
+  border: 2px solid transparent;
   border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--sw) 0 15px,
+    rgb(245 230 216 / 0.35) 15px 16px,
+    transparent 16.5px
+  );
   cursor: pointer;
 }
 
 .look-swatch:checked {
   border-color: var(--cream);
-  box-shadow:
-    0 0 0 2px #2a1d24,
-    0 0 0 4px var(--cream);
 }
 
 .look-swatch:focus-visible {
   outline: 3px solid var(--cream);
-  outline-offset: 4px;
+  outline-offset: 1px;
 }
 
-/* a worded option: its radio covers the chip, unseen, so a tap anywhere on it picks it */
+/* a worded option: its radio covers the chip, unseen, so a tap anywhere on it picks it; the span is the chip */
 .look-chip {
   position: relative;
   display: inline-flex;
+  margin: 2px;
+}
+
+.look-chip span {
+  display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
+  box-sizing: border-box;
   padding: 0 12px;
   border: 2px solid rgb(245 230 216 / 0.35);
   border-radius: 12px;
@@ -2546,12 +2575,12 @@ button.stamp-count::after {
   cursor: pointer;
 }
 
-.look-chip:has(input:checked) {
+.look-chip input:checked + span {
   border-color: var(--cream);
   background: rgb(245 230 216 / 0.2);
 }
 
-.look-chip:has(input:focus-visible) {
+.look-chip input:focus-visible + span {
   outline: 3px solid var(--cream);
   outline-offset: 2px;
 }

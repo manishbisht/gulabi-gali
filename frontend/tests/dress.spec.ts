@@ -27,12 +27,12 @@ async function fits(page: Page, editor: Locator, save: string, cancel: string) {
   // the choices scroll up and down, never sideways
   expect(await options.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width)
-  // every radio can be brought into view inside the editor, and is big enough to tap
+  // every radio can be brought into view inside the editor, and is a thumb-sized target
   for (const r of await editor.getByRole('radio').all()) {
     await r.scrollIntoViewIfNeeded()
     const b = (await r.boundingBox())!
-    expect.soft(b.width, 'radio width').toBeGreaterThanOrEqual(32)
-    expect.soft(b.height, 'radio height').toBeGreaterThanOrEqual(32)
+    expect.soft(b.width, 'radio width').toBeGreaterThanOrEqual(44)
+    expect.soft(b.height, 'radio height').toBeGreaterThanOrEqual(44)
     expect.soft(b.x + b.width, 'radio right').toBeLessThanOrEqual(PHONE.width)
   }
 }
@@ -73,6 +73,11 @@ test.describe('on a small phone', () => {
       await tone(3).focus()
       await page.keyboard.press('ArrowRight')
       await expect(tone(4)).toBeChecked()
+      await expect(tone(4)).toBeFocused()
+      // the tones are the dialog's first stop: Shift+Tab wraps to its last control, never out of it
+      await page.keyboard.press('Shift+Tab')
+      await expect(editor.getByRole('button', { name: W.save })).toBeFocused()
+      await page.keyboard.press('Tab')
       await expect(tone(4)).toBeFocused()
       // Tab goes on to the next group, landing on its chosen colour
       await page.keyboard.press('Tab')
@@ -156,4 +161,22 @@ test('the guest chip opens the dressing room on a wide screen too, and Escape cl
   await expect(editor.locator('canvas.look-preview')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(editor).toBeHidden()
+})
+
+test('signed in without a finished profile, the walker wears this device look, and the chip dresses it', async ({
+  page,
+}) => {
+  await enterCity(page)
+  await page.getByRole('button', { name: 'Dikhna hai? Login karo' }).click()
+  await page.getByLabel('Aapka naam').fill(`Adha${Date.now() % 100000}`)
+  await page.getByRole('button', { name: 'Andar aao' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Apni pehchaan banao' })
+  await sheet.getByRole('button', { name: 'Baad mein' }).click()
+  await expect(sheet).toBeHidden()
+  await page.getByRole('button', { name: 'Apna roop badlo' }).click()
+  const editor = page.getByRole('dialog', { name: 'Apna roop' })
+  await editor.getByRole('radio', { name: 'Choti' }).check()
+  await editor.getByRole('button', { name: 'Save karo' }).click()
+  await expect(editor).toBeHidden()
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('gg-look')!))).toMatchObject({ hair: 4 })
 })

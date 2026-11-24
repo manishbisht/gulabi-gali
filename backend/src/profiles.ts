@@ -217,8 +217,9 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
   const field = (['name', 'status', 'about'] as const).find((f) => !wordsOk(p[f], f))
   if (field) return Response.json({ error: 'words', field }, { status: 400 })
   const now = Date.now()
-  // A client from before the dressing room sends back only the older fields. Sent back unchanged, they keep the
-  // dressing they stand for; any change to them is a new, older look.
+  // A client from before the dressing room sends back only the older fields. With the same skin and head, the
+  // dressing they stand for stays and only the kurta's colour is theirs to change; another skin or head is a new,
+  // older look (their choice, in the only terms that client knows).
   const older = dressed(p.look) ? 0 : 1
   await env.DB.batch([
     env.DB.prepare('INSERT OR IGNORE INTO users (id, created_at) VALUES (?, ?)').bind(userId, now),
@@ -226,9 +227,8 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
       `INSERT INTO profiles (user_id, name, look, home_area, status, here_for, about, link, adult, pledge, pause_requests, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET name = excluded.name,
-         look = CASE WHEN ? = 1 AND json_extract(profiles.look, '$.skin') = ?
-           AND json_extract(profiles.look, '$.outfit') = ? AND json_extract(profiles.look, '$.head') = ?
-           THEN profiles.look ELSE excluded.look END,
+         look = CASE WHEN ? = 1 AND json_extract(profiles.look, '$.skin') = ? AND json_extract(profiles.look, '$.head') = ?
+           THEN json_set(profiles.look, '$.outfit', ?) ELSE excluded.look END,
          home_area = excluded.home_area,
          status = excluded.status, here_for = excluded.here_for, about = excluded.about,
          link = CASE WHEN ? = 1 THEN excluded.link ELSE profiles.link END,
@@ -249,8 +249,8 @@ export async function putProfile(env: Env, userId: string, raw: unknown): Promis
       now,
       older,
       p.look.skin,
-      p.look.outfit,
       p.look.head,
+      p.look.outfit,
       p.link === undefined ? 0 : 1,
     ),
   ])

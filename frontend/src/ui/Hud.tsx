@@ -38,7 +38,7 @@ interface Props {
   /** Opens photo mode; while it is on (`photo`) the HUD draws nothing. */
   onPhoto?: () => void
   photo?: boolean
-  /** Opens the dressing room on this device; present for a guest, whose profile sheet it would otherwise be in. */
+  /** Opens the dressing room on this device; present for anyone walking with this device's look (no finished profile). */
   onLook?: () => void
   /** Under the top row (toasts), and the bottom row (joystick, landmark card). */
   top?: ReactNode
@@ -195,7 +195,7 @@ export function Hud({
             </button>
           )}
           {onLook && (
-            // a guest's dressing room (a resident's is in the profile sheet)
+            // the dressing room of anyone without a finished profile (a resident's is in the profile sheet)
             <button
               type="button"
               className="hud-chip look-button"

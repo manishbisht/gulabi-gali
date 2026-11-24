@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { WordsHint } from '../filter/WordsHint'
 import { t, type Lang } from '../i18n/strings'
 import { getBlocks, unblockPerson, type ProfileInput } from '../net/api'
@@ -356,15 +356,13 @@ export function ProfileSheet({
         {onDelete && me.profile && <DeleteAccount lang={lang} onDelete={onDelete} />}
       </section>
       {dressing && (
-        <Suspense fallback={null}>
-          <LookEditor
-            look={look}
-            lang={lang}
-            mode={p && me.complete ? 'save' : 'apply'}
-            onSave={keepLook}
-            onCancel={() => setDressing(false)}
-          />
-        </Suspense>
+        <LookEditor
+          look={look}
+          lang={lang}
+          mode={p && me.complete ? 'save' : 'apply'}
+          onSave={keepLook}
+          onCancel={() => setDressing(false)}
+        />
       )}
     </div>
   )

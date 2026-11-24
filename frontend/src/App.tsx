@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
 import { patangAvailable } from './games/patang'
 import { hasWebGL } from './engine/webgl'
@@ -273,8 +273,8 @@ export default function App() {
   // signing out shuts the sheet, so the next resident does not find it open
   if (!residentId && connOpen) setConnOpen(false)
   if (!residentId && inviteOpen) setInviteOpen(false)
-  // signing in takes the guest's dressing room away: the profile sheet has the resident's
-  if (auth.signedIn && me && lookOpen) setLookOpen(false)
+  // a finished profile takes the device's dressing room away: the profile sheet has the resident's
+  if (profileLook && lookOpen) setLookOpen(false)
   const connShown = connOpen && !!residentId
   /** Push notifications: a tapped one opens the inbox (once there is a resident), and each visit refreshes it. */
   const push = usePush({
@@ -646,7 +646,7 @@ export default function App() {
                 setPhoto(stageRef.current)
               }
         }
-        onLook={auth.signedIn && me ? undefined : () => setLookOpen(true)}
+        onLook={profileLook ? undefined : () => setLookOpen(true)}
         top={
           <>
             {slowed && (
@@ -961,21 +961,19 @@ export default function App() {
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
       {lookOpen && (
-        <Suspense fallback={null}>
-          <LookEditor
-            look={loadOrCreateLook()}
-            lang={lang}
-            mode="local"
-            onSave={(next) => {
-              // a guest's look lives on this device only, and the street shows it at once
-              saveLocalLook(next)
-              session.current?.setLook(next)
-              setLookOpen(false)
-              return true
-            }}
-            onCancel={() => setLookOpen(false)}
-          />
-        </Suspense>
+        <LookEditor
+          look={loadOrCreateLook()}
+          lang={lang}
+          mode="local"
+          onSave={(next) => {
+            // a guest's look lives on this device only, and the street shows it at once
+            saveLocalLook(next)
+            session.current?.setLook(next)
+            setLookOpen(false)
+            return true
+          }}
+          onCancel={() => setLookOpen(false)}
+        />
       )}
       <div className="fade" data-on={fading || roof.fading || taxi.dark || undefined} aria-hidden="true" />
       <RoofNotice notice={roof.notice} lang={lang} />

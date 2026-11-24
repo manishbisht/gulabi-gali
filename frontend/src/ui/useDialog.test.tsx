@@ -112,6 +112,37 @@ it('Tab skips controls that are hidden or inert', () => {
   expect(document.activeElement).toBe(el('h-e'))
 })
 
+/** Radio groups first and last: each group is one Tab stop, its checked radio (else its first). */
+function Radios() {
+  const ref = useDialog<HTMLElement>(() => {})
+  return (
+    <section ref={ref} role="dialog" aria-modal="true" aria-label="r">
+      <input type="radio" name="tone" id="r-t1" />
+      <input type="radio" name="tone" id="r-t2" defaultChecked />
+      <input type="radio" name="tone" id="r-t3" />
+      <button id="r-b">save</button>
+      <input type="radio" name="hair" id="r-h1" />
+      <input type="radio" name="hair" id="r-h2" />
+    </section>
+  )
+}
+
+it('takes a radio group as one stop: Shift+Tab from its checked radio wraps, and never leaves', () => {
+  act(() => root.render(<Radios />))
+  // the checked tone is the first stop, though "r-t1" comes before it
+  el('r-t2').focus()
+  expect(key('Tab', true).defaultPrevented).toBe(true)
+  // the last stop: the hair group, nothing checked, so its first radio
+  expect(document.activeElement).toBe(el('r-h1'))
+  // from anywhere in that last group, Tab wraps to the first stop
+  el('r-h2').focus()
+  expect(key('Tab').defaultPrevented).toBe(true)
+  expect(document.activeElement).toBe(el('r-t2'))
+  // in between, the browser moves focus as usual
+  el('r-b').focus()
+  expect(key('Tab').defaultPrevented).toBe(false)
+})
+
 it('focus goes to the HUD, not <body>, when the opener is gone', () => {
   act(() => root.unmount())
   document.body.innerHTML =

@@ -3,6 +3,7 @@ import {
   useId,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
@@ -52,7 +53,7 @@ const COLOUR_LABEL: Record<PaletteKey, StringKey> = {
  */
 export type LookEditorMode = 'save' | 'apply' | 'local'
 
-interface Props {
+export interface LookEditorProps {
   look: AvatarLook
   lang: Lang
   mode: LookEditorMode
@@ -81,7 +82,7 @@ function Swatch(props: { name: string; hex: string; label: string; checked: bool
       aria-label={props.label}
       checked={props.checked}
       onChange={props.onPick}
-      style={{ background: props.hex }}
+      style={{ '--sw': props.hex } as CSSProperties}
     />
   )
 }
@@ -105,25 +106,32 @@ const reduced = () =>
  * screen reader work as they do anywhere. The figure turns live above the choices; Cancel (or Escape) changes
  * nothing.
  */
-export default function LookEditor({ look, lang, mode, onSave, onCancel }: Props) {
+export default function LookEditor({ look, lang, mode, onSave, onCancel }: LookEditorProps) {
   const ref = useDialog<HTMLElement>(onCancel)
   const id = useId()
   const [draft, setDraft] = useState<AvatarLook>(() => dressLook(look, {}))
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   const [has3d, setHas3d] = useState(true)
-  const canvas = useRef<HTMLCanvasElement>(null)
+  const holder = useRef<HTMLDivElement>(null)
   const preview = useRef<LookPreview | null>(null)
   const drag = useRef<{ pointer: number; x: number } | null>(null)
   const d = dressOfLook(draft)
 
   useEffect(() => {
-    if (!canvas.current) return
-    const p = createLookPreview(canvas.current, draft, reduced())
+    if (!holder.current) return
+    // a canvas of its own each time: a context let go (see `dispose`) never comes back on the same element
+    const canvas = document.createElement('canvas')
+    canvas.className = 'look-preview'
+    canvas.setAttribute('aria-hidden', 'true')
+    holder.current.append(canvas)
+    const p = createLookPreview(canvas, draft, reduced())
     preview.current = p
-    if (!p) setHas3d(false)
+    setHas3d(!!p)
+    if (!p) canvas.remove()
     return () => {
       p?.dispose()
+      canvas.remove()
       preview.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- made once; `show` follows the draft below
@@ -135,7 +143,12 @@ export default function LookEditor({ look, lang, mode, onSave, onCancel }: Props
     setDraft((was) => dressLook(was, next, outfit))
   }
   // a dupatta over the head and headwear do not go together: picking one moves the dupatta to the shoulders
-  const pickHat = (hat: number) => change(hat && d.dup === 1 ? { hat, dup: 2 } : { hat })
+  const pickHat = (hat: number) => {
+    const next: Partial<Dress> = hat && d.dup === 1 ? { hat, dup: 2 } : { hat }
+    // put on fresh, it starts in the colour it always had: a white cap, a marigold safa or pagdi
+    if (!d.hat && hat) next.hatC = WIRE_OUTFITS.indexOf(hat === 3 ? 'white' : 'marigold')
+    change(next)
+  }
   const pickDup = (dup: number) => {
     const next: Partial<Dress> = dup === 1 && d.hat ? { dup, hat: 0 } : { dup }
     // put on fresh, it starts in a colour that shows against the kurta (the older looks wore the kurta's own)
@@ -154,11 +167,11 @@ export default function LookEditor({ look, lang, mode, onSave, onCancel }: Props
     if (!kept) setFailed(true)
   }
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     drag.current = { pointer: e.pointerId, x: e.clientX }
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
-  const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const at = drag.current
     if (!at || at.pointer !== e.pointerId) return
     preview.current?.turn((e.clientX - at.x) * 0.012)
@@ -193,10 +206,9 @@ export default function LookEditor({ look, lang, mode, onSave, onCancel }: Props
       >
         <h2 id={name('title')}>{t('lookTitle', lang)}</h2>
         <div className="look-stage">
-          <canvas
-            ref={canvas}
-            className="look-preview"
-            aria-hidden="true"
+          <div
+            ref={holder}
+            className="look-canvas"
             hidden={!has3d}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}

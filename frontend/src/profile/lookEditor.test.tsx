@@ -120,6 +120,19 @@ describe('the dressing room', () => {
     expect(radio('On the head', 'Nothing').checked).toBe(true)
   })
 
+  it('headwear put on fresh starts in its old colour: a white cap, a marigold safa; a change of style keeps the colour', async () => {
+    await open({ look: { skin: 1, outfit: 'teal', head: 'none' } })
+    const colour = 'Colour of the safa, pagdi or cap'
+    await pick(radio('On the head', 'Cap'))
+    expect(radio(colour, 'White').checked).toBe(true)
+    await pick(radio(colour, 'Blue'))
+    await pick(radio('On the head', 'Safa'))
+    expect(radio(colour, 'Blue').checked).toBe(true)
+    await pick(radio('On the head', 'Nothing'))
+    await pick(radio('On the head', 'Pagdi'))
+    expect(radio(colour, 'Marigold').checked).toBe(true)
+  })
+
   it('Save hands over every choice; Cancel and Escape change nothing', async () => {
     const { onSave, onCancel } = await open()
     await pick(radio('Skin tone', 'Tone 8'))
@@ -159,7 +172,8 @@ describe('the dressing room', () => {
     await open({ mode: 'local' })
     expect(dialog().textContent).toContain('This look stays on this phone')
     // happy-dom has no WebGL: the turning figure gives way to the flat one
-    expect(host.querySelector('canvas.look-preview')!.hasAttribute('hidden')).toBe(true)
+    expect(host.querySelector('canvas.look-preview')).toBeNull()
+    expect(host.querySelector('.look-canvas')!.hasAttribute('hidden')).toBe(true)
     expect(host.querySelector('.avatar-swatch')).not.toBeNull()
   })
 

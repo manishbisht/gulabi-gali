@@ -979,6 +979,10 @@ export const STRINGS = {
   lookApply: { hi: 'Theek hai', en: 'Done' },
   lookCancel: { hi: 'Rehne do', en: 'Cancel' },
   lookSaveFailed: { hi: 'Save nahi hua. Phir se try karo.', en: "Couldn't save. Try again." },
+  lookLoadFailed: {
+    hi: 'Kapde badalne wala panna khul nahi paya. Thodi der mein phir try karo.',
+    en: "Couldn't open the dressing room. Try again in a moment.",
+  },
   lookLocal: {
     hi: 'Ye roop sirf is phone pe rahega. Login karo to sabko dikhega.',
     en: 'This look stays on this phone. Sign in and everyone sees it.',

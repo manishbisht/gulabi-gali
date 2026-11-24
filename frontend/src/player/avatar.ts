@@ -141,8 +141,15 @@ export interface AvatarOptions {
 
 /** One vertex-coloured material for every avatar. Double-sided for the open dupatta. */
 let material: THREE.MeshLambertMaterial | null = null
-/** Merged bodies, one per distinct look; avatars with the same look share it. */
-const geometries = new Map<string, THREE.BufferGeometry>()
+/** How many distinct bodies are kept (a busy street of dressed people has far fewer on it at once). */
+export const BODY_CACHE = 64
+/** A merged body and the figures made with it (weakly: a figure that is gone does not keep it). */
+interface CachedBody {
+  geo: THREE.BufferGeometry
+  users: WeakRef<THREE.Mesh>[]
+}
+/** Merged bodies, one per distinct look, least recently used first; avatars with the same look share it. */
+const geometries = new Map<string, CachedBody>()
 
 /** A material for avatars: one vertex-coloured, flat-shaded Lambert, double-sided for the open dupatta. */
 export const avatarMaterial = (): THREE.MeshLambertMaterial =>
@@ -214,13 +221,45 @@ export function buildBodyGeometry(look: AvatarLook): THREE.BufferGeometry {
   return merge(parts)
 }
 
-function bodyGeometry(look: AvatarLook): THREE.BufferGeometry {
+/** Whether a figure is on a stage now: its tree reaches a scene (one removed, or never added, is not). */
+function onStage(mesh: THREE.Object3D): boolean {
+  let o = mesh
+  while (o.parent) o = o.parent
+  return (o as THREE.Scene).isScene === true
+}
+
+/** Whether any figure drawn with this body is on a stage; figures that are gone are forgotten on the way. */
+function inUse(entry: CachedBody): boolean {
+  entry.users = entry.users.filter((u) => u.deref() !== undefined)
+  return entry.users.some((u) => onStage(u.deref()!))
+}
+
+/**
+ * Keeps at most `BODY_CACHE` bodies, freeing the least recently used ones that no figure on a stage wears. One
+ * still worn is never freed (the cache may then run over until it is not); `keep` is the body just handed out.
+ */
+function trim(keep: string): void {
+  if (geometries.size <= BODY_CACHE) return
+  for (const [key, entry] of geometries) {
+    if (geometries.size <= BODY_CACHE) return
+    if (key === keep || inUse(entry)) continue
+    entry.geo.dispose()
+    geometries.delete(key)
+  }
+}
+
+function bodyGeometry(look: AvatarLook): [string, CachedBody] {
   const key = lookKey(look)
   const cached = geometries.get(key)
-  if (cached) return cached
-  const merged = buildBodyGeometry(look)
-  geometries.set(key, merged)
-  return merged
+  if (cached) {
+    // most recently used goes last
+    geometries.delete(key)
+    geometries.set(key, cached)
+    return [key, cached]
+  }
+  const entry: CachedBody = { geo: buildBodyGeometry(look), users: [] }
+  geometries.set(key, entry)
+  return [key, entry]
 }
 
 /**
@@ -230,8 +269,11 @@ function bodyGeometry(look: AvatarLook): THREE.BufferGeometry {
  */
 export function buildAvatar(look: AvatarLook, { castShadow = true }: AvatarOptions = {}): THREE.Mesh {
   material ??= avatarMaterial()
-  const mesh = new THREE.Mesh(bodyGeometry(look), material)
+  const [key, entry] = bodyGeometry(look)
+  const mesh = new THREE.Mesh(entry.geo, material)
   mesh.castShadow = castShadow
+  entry.users.push(new WeakRef(mesh))
+  trim(key)
   return mesh
 }
 
@@ -241,7 +283,7 @@ export function buildAvatar(look: AvatarLook, { castShadow = true }: AvatarOptio
  * rebuilds what it needs.
  */
 export function disposeAvatarCache(): void {
-  for (const g of geometries.values()) g.dispose()
+  for (const { geo } of geometries.values()) geo.dispose()
   geometries.clear()
   material?.dispose()
   material = null
