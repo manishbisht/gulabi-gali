@@ -206,6 +206,17 @@ change or a close at once.
 - The object learns a resident's name, look and status when their socket opens. A saved profile that changes
   any of them makes the client reconnect, and the new socket shows the new face to everyone (the socket's own
   `status` message works but the client does not use it).
+- A look (`AvatarLookWire`, stored as JSON in `profiles.look`, so no migration) is `skin` 0–4, an `outfit`
+  palette key and a `head`, which every client draws, plus the dressing room's optional small indices: `tone`
+  (eight skin tones; the older five are tones 1, 2, 3, 5, 6), `hat` (none, safa, pagdi, cap) and `hatC`,
+  `dup` (off, over the head, round the shoulders) and `dupC` (colours are indices into `OUTFITS`), `hair`
+  (crop, bun, short, long, plait). `PUT /api/me/profile` rejects any other value (400 `invalid`, `look`); a
+  dressed look is stored whole with `skin` and `head` set to the nearest older look (`compactLook`), which is
+  what a client from before the dressing room draws, and such a client sending its older fields back unchanged
+  keeps the dressing. A look without the new fields is drawn exactly as before (`dressOf`). A guest dresses up
+  from the 👕 chip, kept in `localStorage` (`gg-look`) only; a resident from the profile sheet, saved at once.
+  The editor (`LookEditor`, its own lazy chunk) turns the figure on a small WebGL canvas of its own, freed on
+  close; the profile sheet itself keeps the flat 2D swatch.
 - Moves are validated (finite, in range, at most 8 m/s with a one-second burst allowance), coalesced per
   person and sent out every 100 ms to sockets within 60 m of the mover's last point. A resident's client sends
   at most 10 a second, a ghost's 2; the client hides bodies more than 55 m away, and empties the street when
