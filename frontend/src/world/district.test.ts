@@ -486,6 +486,19 @@ describe('Nahargarh', () => {
       expect(c.minX < d.def.ridgeWest! - 10 && c.maxX < d.def.ridgeWest! - 10).toBe(false)
   })
 
+  it('frees the city below with the rest of the district', async () => {
+    const d = await loadDistrict('nahargarh')
+    const spies: ReturnType<typeof vi.fn>[] = []
+    d.root.getObjectByName('city-below')!.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      spies.push(vi.spyOn(o.geometry as THREE.BufferGeometry, 'dispose') as never)
+      spies.push(vi.spyOn(o.material as THREE.Material, 'dispose') as never)
+    })
+    expect(spies).toHaveLength(4)
+    d.dispose()
+    for (const s of spies) expect(s).toHaveBeenCalled()
+  })
+
   it('has a sunset point: the bastion on the terrace looks west, over the parapet, at the city', async () => {
     const d = await load('nahargarh')
     const roof = d.def.roof!

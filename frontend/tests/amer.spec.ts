@@ -63,7 +63,7 @@ test('no metro goes to Amer: the bus does, from the metro station, and back agai
   await expect(page.locator('.fade')).not.toHaveAttribute('data-on')
   await expect(page.getByRole('button', { name: 'Metro', exact: true })).toHaveCount(0)
   await back.tap()
-  await expect(sheet.locator('.travel-stop[data-by="bus"]')).toHaveCount(4)
+  await expect(sheet.locator('.travel-stop[data-by="bus"]')).toHaveCount(5)
   if (process.env.GG_AMER_SHOTS) {
     await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
     await shot(page, 'amer-sheet')
@@ -78,7 +78,7 @@ test('Amer: up the path to the fort gate its card opens and the stamp is the ten
 }) => {
   await enterOffline(page, 'amer')
   expect(await page.evaluate(() => window.__gg.district())).toBe('amer')
-  await expect(page.locator('.stamp-count')).toHaveText('0/10')
+  await expect(page.locator('.stamp-count')).toHaveText('0/11')
   // at the foot of the path, looking north up it to the gate, the lake and the fort on its hill to the left
   await page.evaluate(() => window.__gg.teleport(31.5, 22))
   await page.waitForTimeout(800)
@@ -88,7 +88,7 @@ test('Amer: up the path to the fort gate its card opens and the stamp is the ten
   const card = page.locator('section.landmark-card[aria-label="Amer ka Qila"]')
   await expect(card).toBeVisible()
   await card.getByRole('button', { name: 'Stamp lo' }).tap()
-  await expect(page.locator('.stamp-count')).toHaveText('1/10')
+  await expect(page.locator('.stamp-count')).toHaveText('1/11')
 
   await page.getByRole('button', { name: 'Naksha · Amer', exact: true }).tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Amer' })

@@ -15,12 +15,12 @@ const PLAIN = '#C7A383'
 const TINTS = ['#E4917A', '#E4917A', '#E4917A', '#D9B382', '#F6EFE4', '#B85C45'] as const
 
 /** How far the slope runs out west as it falls, and how far the plain and the city reach. */
-const SLOPE_RUN = 26
+const SLOPE_RUN = 40
 const PLAIN_REACH = 420
-const CITY_FROM = 8 // the nearest houses, out from the foot of the slope
-const CITY_TO = 230
+const CITY_FROM = 4 // the nearest houses, out from the foot of the slope
+const CITY_TO = 260
 const CITY_HALF_WIDTH = 240
-const BLOCKS = 240
+const BLOCKS = 380
 
 /** The low parapet along the edge: how tall, and how thick (it stands just past the district's west wall). */
 const PARAPET_H = 1.1
@@ -72,10 +72,10 @@ function city(edge: number, drop: number, rand: () => number) {
     const out = CITY_FROM + Math.pow(rand(), 1.4) * (CITY_TO - CITY_FROM)
     const x = foot - out
     const z = (rand() * 2 - 1) * CITY_HALF_WIDTH
-    const tall = rand() < 0.08
-    const h = tall ? 14 + rand() * 10 : 3 + rand() * 7
-    const w = 6 + rand() * 12
-    const d = 6 + rand() * 12
+    const tall = rand() < 0.05
+    const h = tall ? 10 + rand() * 8 : 2.5 + rand() * 4.5
+    const w = 5 + rand() * 7
+    const d = 5 + rand() * 7
     const g = new THREE.BoxGeometry(w, h, d)
     g.translate(x, -drop + h / 2, z)
     parts.push(bakeHex(g, TINTS[Math.floor(rand() * TINTS.length)]!))
@@ -88,7 +88,7 @@ function city(edge: number, drop: number, rand: () => number) {
  * `half`, the district's side), and the slope falling `drop` metres to the plain, the city spread over it, as
  * far north and south as the ground on the ridge reaches (`reach`).
  */
-export function buildCityBelow(edge: number, half: number, drop = 30, reach = 250): THREE.Group {
+export function buildCityBelow(edge: number, half: number, drop = 60, reach = 250): THREE.Group {
   const rand = seeded(4021)
   const land = new THREE.Mesh(
     merge([slope(edge, drop, reach, rand), plain(edge, drop, reach), ...parapet(edge, half)]),

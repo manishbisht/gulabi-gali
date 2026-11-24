@@ -90,23 +90,29 @@ pitch in e2e.
 
 ## How districts stream
 
-There are five districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`, `amer`). Each one's definition is a
+There are six districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`, `amer`, `nahargarh`). Each one's definition is a
 dynamic `import()` in `src/world/district.ts`, so each is its own small chunk, fetched only when the player
 first goes there. `loadDistrict(id)` builds the geometry from the definition: building blocks are merged per
 60 m cell (few draw calls, still culled off-screen), props are baked, and the district gets one hemisphere
 light and one sun whose shadow box follows the player (`district.focus`).
 
-Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`), except to and from Amer, which has no metro:
-a bus runs there from every station and back (`rideBy` in `world/metroRide.ts`). It takes the same trip, with
-its own look: a marigold "Bus" row in the sheet, a "Bus" button at Amer's bus stand (its `station`, a `bus-stop`
-prop), a bus cab instead of the coach, and "Bus stand" on its map and signposts (the place id stays `metro`).
+Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`), except to and from Amer and Nahargarh, which
+have no metro (`BUS_ONLY` in `world/metroRide.ts`): a bus runs there from every station and back (`rideBy`). It
+takes the same trip, with its own look: a marigold "Bus" row in the sheet, a "Bus" button at the district's bus
+stand (its `station`, a `bus-stop` prop), a bus cab instead of the coach, and "Bus stand" on its map and
+signposts (the place id stays `metro`).
 Amer's lake is `DistrictDef.water`: colliders with no building, drawn by the paving. Its rooftop viewpoint is
 the roof of a bastion on the rampart by the lake, turned to look across the water at the fort on its hill.
+Nahargarh stands on the ridge above the city: `DistrictDef.ridgeWest` stops the ground at its west wall, and
+`DistrictDef.scenery` (`world/landmarks/cityBelow.ts`) draws what lies past it, a low parapet on the edge, a rocky
+slope falling 60 m and the city's blocks spread over the plain below. It is only looked at: two meshes, a few
+thousand triangles, no colliders, faded by the scene's fog (so the haze takes it on a smoggy day), its lights on
+after dark. The rooftop viewpoint there is a bastion on the terrace by the edge, facing west: the sunset point.
 The new district is loaded first, and only
 once it is in does the old one leave; if loading fails the player stays where they were. Three.js is its own
 `three` chunk (`vite.config.ts`), so its hash survives deploys that only touch the app.
 
-The remembered district and the collected stamps (10 landmarks) live in `localStorage` (`src/storage.ts`). A
+The remembered district and the collected stamps (11 landmarks) live in `localStorage` (`src/storage.ts`). A
 resident's stamps are also kept on the server (see "Jaipur Darshan stamps" under phase 4), so a second device
 shows them; a ghost's stay on the device.
 
@@ -538,7 +544,7 @@ deletes the rows.
 The page keeps `gg-stamps` as before. For a resident, `useStamps` merges the profile's `stamps` into it, and
 pushes the local set whenever it holds one the server has not confirmed (after sign-in, after each new stamp);
 the answer is merged in too. A failed push is silent and is tried again on the next stamp or the next load. The
-person card and your own profile sheet show "Jaipur Darshan · n/10" and the landmarks by name (`ui/StampsLine.tsx`).
+person card and your own profile sheet show "Jaipur Darshan · n/11" and the landmarks by name (`ui/StampsLine.tsx`).
 
 ### The client-only extras: nothing is broadcast
 
@@ -719,7 +725,8 @@ stays up until it is used, dismissed or 10 s pass.
 A soft bed under the street, all synthesised in the page with Web Audio (filtered noise and a few oscillators):
 no recordings, no third-party audio, nothing downloaded. Each district has its own mix of bazaar murmur, birds
 by day, crickets at dusk and night, temple bells at dawn and dusk, and festival drums while a festival is on
-(`mixFor`, from the district, the live sky and the festival). It follows the HUD's one sound switch (`gg-sound`,
+(`mixFor`, from the district, the live sky and the festival); up on Nahargarh's ridge a low, gusting wind too,
+over the birds and the city's far hum. It follows the HUD's one sound switch (`gg-sound`,
 `soundOn`) and starts only after a gesture (the page resumes its audio context on the first tap, click or key, as
 phones require). It goes quiet while the tab is hidden (the context is suspended and its timer stopped), at the
 lowest quality tier it plays one steady layer and no blips (`thinMix`), and photo mode and the taxi ride duck it
