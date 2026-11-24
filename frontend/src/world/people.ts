@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { LivePerson, ServerMsg } from '../net/protocol'
-import { buildAvatar, lookFromWire } from '../player/avatar'
+import { buildAvatar, lookFromWire, lookKey as figureKey } from '../player/avatar'
 import { buildAutoGeometry } from './props'
 import type { AvatarLook, Vec2 } from './types'
 
@@ -58,7 +58,7 @@ interface Entry extends Remote {
   ver: number
 }
 
-const lookKey = (p: LivePerson) => `${p.look.skin}|${p.look.outfit}|${p.look.head}`
+const lookKey = (p: LivePerson) => figureKey(lookFromWire(p.look) ?? PLAIN)
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
 /**

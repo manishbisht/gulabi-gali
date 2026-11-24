@@ -2420,3 +2420,174 @@ button.stamp-count::after {
   position: absolute;
   inset: -6px -4px;
 }
+
+/* ---- The dressing room (LookEditor) and its ways in ---- */
+
+.hud-toggles .look-button {
+  font-size: 1.1rem;
+}
+
+.avatar-builder .look-open {
+  justify-self: center;
+}
+
+/* over the profile sheet it opens from */
+.look-scrim {
+  z-index: 31;
+}
+
+/* the figure and the buttons stay put; the choices between them scroll */
+.look-editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+
+.look-editor h2 {
+  margin-bottom: 4px;
+}
+
+.look-stage {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.look-preview {
+  width: 100%;
+  height: clamp(110px, 22dvh, 170px);
+  touch-action: none;
+  cursor: grab;
+}
+
+.look-preview[hidden] {
+  display: none;
+}
+
+.look-drag {
+  opacity: 0.75;
+  font-size: 0.8rem;
+}
+
+.look-options {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  margin: 8px -6px 0;
+  padding: 4px 6px;
+}
+
+.look-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.look-group legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.look-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* a colour: the radio is the swatch */
+.look-swatch {
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  border: 2px solid rgb(245 230 216 / 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.look-swatch:checked {
+  border-color: var(--cream);
+  box-shadow:
+    0 0 0 2px #2a1d24,
+    0 0 0 4px var(--cream);
+}
+
+.look-swatch:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 4px;
+}
+
+/* a worded option: its radio covers the chip, unseen, so a tap anywhere on it picks it */
+.look-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 2px solid rgb(245 230 216 / 0.35);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+}
+
+.look-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.look-chip:has(input:checked) {
+  border-color: var(--cream);
+  background: rgb(245 230 216 / 0.2);
+}
+
+.look-chip:has(input:focus-visible) {
+  outline: 3px solid var(--cream);
+  outline-offset: 2px;
+}
+
+.look-note {
+  flex: none;
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.look-actions {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.look-actions button,
+.avatar-builder .look-open {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  font: inherit;
+}
+
+.look-actions .look-save {
+  border-color: var(--pink);
+  background: var(--pink);
+  color: #2a1d24;
+  font-weight: 600;
+}
+
+.look-actions .look-save:disabled {
+  opacity: 0.6;
+}

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { stepToward, stationSpot, type Mover } from './animals'
 import { bakeHex, FLOOR_H, merge } from './kit/parts'
+import { headgearOf, withoutHeadgear, type Headgear } from '../player/avatar'
 import { storage } from '../storage'
 import type { AABB, AvatarLook, DistrictDef, LandmarkDef, Vec2 } from './types'
 
@@ -44,9 +45,8 @@ const WALK = 2.2
 const PAUSE_S = 1.2
 const CLIMB = 8
 const NO_WALLS: AABB[] = []
-const GEAR = ['safa', 'cap', 'dupatta'] as const
-export type Gear = (typeof GEAR)[number]
-const GEAR_HEX: Record<Gear, string> = { safa: '#E0A32E', cap: '#F4EFE6', dupatta: '#D94F7A' }
+/** What it takes: the headwear (a safa or pagdi is a "safa" here), else the dupatta or stole. */
+export type Gear = Headgear
 
 export type BandarEvent =
   | { kind: 'snatched'; gear: Gear }
@@ -88,8 +88,6 @@ export interface Bandar {
   peek(): { phase: Phase; x: number; z: number; y: number; speed: number; dropX: number; dropZ: number }
 }
 type Phase = 'idle' | 'drop' | 'run' | 'lying'
-
-const isGear = (h: AvatarLook['head']): h is Gear => (GEAR as readonly string[]).includes(h)
 
 function buildMonkey(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = []
@@ -163,7 +161,7 @@ export function createBandar(
   monkey.visible = false
   monkey.frustumCulled = false
   const gearGeo = new THREE.CylinderGeometry(0.22, 0.26, 0.2, 8)
-  const gearMat = new THREE.MeshLambertMaterial({ color: GEAR_HEX.safa, flatShading: true })
+  const gearMat = new THREE.MeshLambertMaterial({ color: '#F2A81D', flatShading: true })
   const gearMesh = new THREE.Mesh(gearGeo, gearMat)
   gearMesh.name = 'bandar-headgear'
   gearMesh.visible = false
@@ -176,6 +174,8 @@ export function createBandar(
   let checkIn = 0
   let t = 0 // seconds into the phase
   let gear: Gear = 'safa'
+  /** The colour of what was taken, for where it lies. */
+  let gearHex = '#F2A81D'
   let route: { x: number; z: number; y: number }[] = []
   let stop = 0
   let pause = 0
@@ -202,7 +202,7 @@ export function createBandar(
     if (bandarOff()) return false
     if (memory.last !== null && now() - memory.last < COOLDOWN_MS) return false
     if (opts.blocked?.() || player.driving()) return false
-    if (!isGear(opts.look().head)) return false
+    if (!headgearOf(opts.look())) return false
     const p = player.position()
     return !jantar || Math.hypot(p.x - jantar.at.x, p.z - jantar.at.z) <= NEAR_JANTAR
   }
@@ -224,7 +224,9 @@ export function createBandar(
         m.z = p.z + Math.sin(a) * DROP_AT
         m.y = reduced ? 0 : DROP_FROM
         m.ry = a + Math.PI
-        gear = opts.look().head as Gear
+        const taken = headgearOf(opts.look())!
+        gear = taken.gear
+        gearHex = taken.hex
         lastBefore = memory.last
         memory.last = now()
         phase = 'drop'
@@ -255,7 +257,7 @@ export function createBandar(
           return { kind: 'ended' }
         }
         // it lands, grabs the headgear off the player's head and is away
-        player.setLook({ ...opts.look(), head: 'none' })
+        player.setLook(withoutHeadgear(opts.look()))
         route = roofRoute(def, p)
         stop = 0
         pause = 0
@@ -314,7 +316,7 @@ export function createBandar(
     const spot = best ? stationSpot(best.at, opts.colliders) : { x: m.x, z: m.z }
     landX = spot.x
     landZ = spot.z
-    gearMat.color.set(GEAR_HEX[gear])
+    gearMat.color.set(gearHex)
     gearMesh.position.set(landX, 0.12, landZ)
     gearMesh.visible = true
     monkey.visible = false

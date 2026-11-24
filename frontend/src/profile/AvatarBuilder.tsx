@@ -1,89 +1,27 @@
-import { t, type Lang, type StringKey } from '../i18n/strings'
-import { HEADS, OUTFITS, SKINS } from '../player/avatar'
-import { PALETTE } from '../world/palette'
+import { t, type Lang } from '../i18n/strings'
 import type { AvatarLook } from '../world/types'
-
-const HEAD_LABEL: Record<AvatarLook['head'], StringKey> = {
-  none: 'headNone',
-  safa: 'headSafa',
-  cap: 'headCap',
-  dupatta: 'headDupatta',
-  bun: 'headBun',
-}
+import { FlatFigure } from './FlatFigure'
 
 interface Props {
   look: AvatarLook
   lang: Lang
-  onChange: (look: AvatarLook) => void
+  /** Opens the dressing room (`LookEditor`). */
+  onEdit: () => void
 }
 
 /**
- * Skin, outfit and head pickers over a flat 2D swatch of the figure. The preview is deliberately not a
- * second WebGL canvas: phones inside Instagram's browser can lose the one context they have.
+ * The profile sheet's avatar: a flat 2D swatch of the figure and the way into the dressing room. The swatch is
+ * deliberately not a WebGL canvas: phones inside Instagram's browser can lose the one context they have; the
+ * dressing room makes its own small one only while it is open.
  */
-export function AvatarBuilder({ look, lang, onChange }: Props) {
+export function AvatarBuilder({ look, lang, onEdit }: Props) {
   return (
     <fieldset className="avatar-builder">
       <legend>{t('profileLook', lang)}</legend>
-      <div className="avatar-swatch" aria-hidden="true">
-        <span className="swatch-head" style={{ background: SKINS[look.skin] }} data-head={look.head}>
-          {look.head !== 'none' && (
-            <i
-              style={{
-                background:
-                  look.head === 'bun'
-                    ? PALETTE.road
-                    : look.head === 'dupatta'
-                      ? PALETTE[look.outfit]
-                      : look.head === 'cap'
-                        ? PALETTE.white
-                        : PALETTE.marigold,
-              }}
-            />
-          )}
-        </span>
-        <span className="swatch-body" style={{ background: PALETTE[look.outfit] }} />
-        <span className="swatch-legs" style={{ background: PALETTE.road }} />
-      </div>
-      <div className="pick-row" role="group" aria-label={t('profileSkin', lang)}>
-        {SKINS.map((hex, i) => (
-          <button
-            key={hex}
-            type="button"
-            className="pick"
-            style={{ background: hex }}
-            aria-label={`${t('profileSkin', lang)} ${i + 1}`}
-            aria-pressed={look.skin === i}
-            onClick={() => onChange({ ...look, skin: i as AvatarLook['skin'] })}
-          />
-        ))}
-      </div>
-      <div className="pick-row" role="group" aria-label={t('profileOutfit', lang)}>
-        {OUTFITS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            className="pick"
-            style={{ background: PALETTE[key] }}
-            aria-label={`${t('profileOutfit', lang)}: ${key}`}
-            aria-pressed={look.outfit === key}
-            onClick={() => onChange({ ...look, outfit: key })}
-          />
-        ))}
-      </div>
-      <div className="pick-row" role="group" aria-label={t('profileHead', lang)}>
-        {HEADS.map((head) => (
-          <button
-            key={head}
-            type="button"
-            className="pick pick-text"
-            aria-pressed={look.head === head}
-            onClick={() => onChange({ ...look, head })}
-          >
-            {t(HEAD_LABEL[head], lang)}
-          </button>
-        ))}
-      </div>
+      <FlatFigure look={look} />
+      <button type="button" className="look-open" onClick={onEdit}>
+        {t('lookOpen', lang)}
+      </button>
     </fieldset>
   )
 }

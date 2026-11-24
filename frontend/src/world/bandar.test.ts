@@ -207,6 +207,69 @@ describe('the Galta bandar', () => {
     expect(s.player.setLook).toHaveBeenLastCalledWith(LOOK)
   })
 
+  it('from a dressed look it takes the pagdi only, and leaves it lying in its own colour', () => {
+    // a teal pagdi (OUTFITS[5]) over a stole and a plait
+    const dressed: AvatarLook = {
+      skin: 2,
+      outfit: 'pink',
+      head: 'safa',
+      tone: 3,
+      hat: 2,
+      hatC: 5,
+      dup: 2,
+      dupC: 0,
+      hair: 4,
+    }
+    const s = setup({ look: () => dressed })
+    s.untilSnatched()
+    expect(s.events.find((e) => e.kind === 'snatched')).toEqual({ kind: 'snatched', gear: 'safa' })
+    // everything else stays on: the stole, the plait, the tone
+    expect(s.player.setLook).toHaveBeenLastCalledWith({
+      skin: 2,
+      outfit: 'pink',
+      head: 'none',
+      tone: 3,
+      hat: 0,
+      dup: 2,
+      dupC: 0,
+      hair: 4,
+    })
+    s.run(61)
+    const lying = s.scene.getObjectByName('bandar-headgear') as THREE.Mesh
+    expect(lying.visible).toBe(true)
+    expect('#' + (lying.material as THREE.MeshLambertMaterial).color.getHexString()).toBe('#2f7f86')
+  })
+
+  it('takes a stole when there is no headwear, and leaves a bare head alone', () => {
+    const stole: AvatarLook = {
+      skin: 0,
+      outfit: 'teal',
+      head: 'none',
+      tone: 1,
+      hat: 0,
+      dup: 2,
+      dupC: 6,
+      hair: 2,
+    }
+    const s = setup({ look: () => stole })
+    s.untilSnatched()
+    expect(s.events.find((e) => e.kind === 'snatched')).toEqual({ kind: 'snatched', gear: 'dupatta' })
+    expect(s.player.setLook).toHaveBeenLastCalledWith({
+      skin: 0,
+      outfit: 'teal',
+      head: 'none',
+      tone: 1,
+      hat: 0,
+      dup: 0,
+      hair: 2,
+    })
+
+    const bun: AvatarLook = { skin: 1, outfit: 'teal', head: 'bun', tone: 1, hat: 0, dup: 0, hair: 1 }
+    const bare = setup({ look: () => bun })
+    bare.run(120)
+    expect(bare.kinds()).toEqual([])
+  })
+
   it('a dropped headgear nobody picks up is given back after a while', () => {
     const s = setup()
     s.untilSnatched()
