@@ -414,6 +414,10 @@ export type InboxNotice =
   | { t: 'accepted'; matchId: string; person: PublicPerson }
   | { t: 'message'; matchId: string; id: string }
   | { t: 'unmatched'; matchId: string }
+  /** A friend list changed for you: someone asked you to be friends, or accepted your ask. Nothing more. */
+  | { t: 'friend' }
+  /** A friend invited you for chai: fetch `GET /api/chai`. It names nobody. */
+  | { t: 'chai' }
 /**
  * `GET /api/ended`: a chat that ended in the last 30 days (an unmatch, a block, a deletion), which either
  * member can still report. `person.name` is their first name when it ended, or null when they had none.
@@ -695,3 +699,56 @@ export interface AdminErrorGroup {
   sample: { stack: string | null; build: string; district: DistrictId | null }
   ua: Record<string, number>
 }
+
+/*
+ * Friends ("Dost banao") and "Chai pe bulao" (backend/src/friends.ts, migration 0010). Friends are two matched
+ * residents who both agreed. Nothing here ever carries anyone hidden, banned, blocked either way, or a ghost.
+ */
+
+/**
+ * A friend as the other sees them: an id (to remove them, or invite them for chai), their first name, and `here`,
+ * the district they are in, only while they are on the street as someone others can see and have "dosto ko
+ * dikhao" on. Never where in it. Left out otherwise, whatever the reason: off, away, or waiting for room.
+ */
+export interface FriendView {
+  id: string
+  name: string
+  here?: DistrictId
+}
+/** An ask to be friends, either way: the other person's id and first name. A declined one reads as pending. */
+export interface FriendAsk {
+  id: string
+  name: string
+}
+/** A person's two switches, both on unless they turned them off. */
+export interface FriendSettings {
+  /** "Dosto ko dikhao ki main gali mein hoon". */
+  showPresence: boolean
+  /** "Chai ke bulaave lo". */
+  chaiInvites: boolean
+}
+/** `GET /api/friends`. */
+export interface FriendLists {
+  friends: FriendView[]
+  incoming: FriendAsk[]
+  sent: FriendAsk[]
+  settings: FriendSettings
+}
+/** Where an ask stands after `POST /api/friends` or an accept: friends now, or asked (and waiting). */
+export type FriendState = 'friends' | 'asked'
+/** A place to sit: the kind of prop a server bench id stands for. */
+export type BenchKind = 'bench' | 'tapri'
+/**
+ * `GET /api/chai`: a friend's invite to the bench they sit at. `name` is their first name; `bench` the server's
+ * bench id (`<district>:<n>`), in `district`; `at` when it was sent (ms). Shown for `CHAI_TTL_MS`.
+ */
+export interface ChaiInviteView {
+  id: string
+  name: string
+  bench: string
+  kind: BenchKind
+  district: DistrictId
+  at: number
+}
+/** How long an invite for chai stands. */
+export const CHAI_TTL_MS = 15 * 60_000

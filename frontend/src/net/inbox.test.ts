@@ -58,6 +58,16 @@ it('connects with the token, reports notices and every open', async () => {
   expect(last().sent).toEqual(['{"t":"ping"}'])
 })
 
+it('reports friend and chai notices too (each a bare nudge to look again)', async () => {
+  const { onNotice } = inbox()
+  await vi.advanceTimersByTimeAsync(0)
+  last().onopen!()
+  last().onmessage!({ data: JSON.stringify({ t: 'friend' }) })
+  last().onmessage!({ data: JSON.stringify({ t: 'chai' }) })
+  last().onmessage!({ data: JSON.stringify({ t: 'something-new' }) })
+  expect(onNotice.mock.calls).toEqual([[{ t: 'friend' }], [{ t: 'chai' }]])
+})
+
 it('reconnects with backoff and says it is open again, so the lists are fetched again', async () => {
   const { onOpen } = inbox()
   await vi.advanceTimersByTimeAsync(0)

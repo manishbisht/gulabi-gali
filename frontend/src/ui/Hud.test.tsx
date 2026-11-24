@@ -63,3 +63,26 @@ it('before a district is in (no onMap) the place is plain text', async () => {
   const chip = host.querySelector('.hud-top .hud-chip')!
   expect(chip.tagName).toBe('SPAN')
 })
+
+it('asks to be friends waiting are counted on the Profile button, and nothing shows at none', async () => {
+  const at = async (n?: number) => {
+    const host = document.body.appendChild(document.createElement('div'))
+    await act(async () =>
+      createRoot(host).render(
+        <Hud
+          place="Gulabi Shahar"
+          snapshot={null}
+          stamps="0/10"
+          lang="hi"
+          onLang={() => {}}
+          onProfile={() => {}}
+          profileBadge={n}
+        />,
+      ),
+    )
+    return host.querySelector('.profile-button .conn-badge')
+  }
+  expect((await at(2))!.getAttribute('aria-label')).toBe('2 dosti ki request')
+  expect(await at(0)).toBeNull()
+  expect(await at()).toBeNull()
+})

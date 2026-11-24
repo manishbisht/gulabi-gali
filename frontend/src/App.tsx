@@ -11,6 +11,8 @@ import { noteDistrict } from './net/errorBeacon'
 import { useRateNotice } from './net/useRateNotice'
 import { useBlock } from './connections/useBlock'
 import { useConnections } from './connections/useConnections'
+import { ChaiInvite } from './friends/ChaiInvite'
+import { useFriends } from './friends/useFriends'
 import { usePush } from './push/usePush'
 import { VisibilityChip } from './ui/VisibilityChip'
 import { loadOrCreateLook, lookFromWire, lookKey as figureKey, saveLocalLook } from './player/avatar'
@@ -42,9 +44,9 @@ import { processionLine } from './live/procession'
 import { DISTRICT_NAMES, DISTRICT_SHORT_NAMES } from './world/districtNames'
 import { byBus } from './world/metroRide'
 import { rememberDistrict, savedDistrict, useTravel } from './world/useTravel'
-import { dropPlaceLink, readPlaceLink } from './world/placeLink'
+import { dropPlaceLink, linkId, readPlaceLink } from './world/placeLink'
 import { mapItems } from './world/cityMap'
-import type { DistrictId, FestivalId } from './net/protocol'
+import type { ChaiInviteView, DistrictId, FestivalId } from './net/protocol'
 import type { DistrictDef, Vec2 } from './world/types'
 import { Hud } from './ui/Hud'
 import { PhotoMode } from './ui/PhotoMode'
@@ -267,6 +269,12 @@ export default function App() {
     session.current?.reconnectLive()
   }, [liveKey, auth.token])
   const conn = useConnections({ user: residentId, token: auth.token, onBanned: refresh })
+  const friends = useFriends({ user: residentId, token: auth.token, tick: conn.friendTick })
+  // each time the inbox comes (back) up, a look at the friend asks too, so one made while away shows on Profile
+  const refreshFriends = friends.refresh
+  useEffect(() => {
+    if (conn.reconnects > 0) void refreshFriends()
+  }, [conn.reconnects, refreshFriends])
   const slowed = useRateNotice()
   const { block, blockPoster, toast: blockToast } = useBlock(auth.token, lang)
   const [connOpen, setConnOpen] = useState(false)
@@ -576,6 +584,19 @@ export default function App() {
     )
 
   /** "Bulao" (as an icon: the cards' rows are full) for a place in the district the player is in, by its map id. */
+  /**
+   * "Chalo" on a friend's invite for chai: in this district, the compass points at their bench (as a map pick
+   * does); in another, the metro (or bus) takes you there and stands you by it (a place link's spot).
+   */
+  const chalo = async (c: ChaiInviteView): Promise<boolean> => {
+    setConnOpen(false)
+    if (!entered) return false
+    if (c.district !== here) return travelTo(c.district, here, linkId({ id: c.bench, kind: c.kind }))
+    const place = places?.get(c.bench)
+    if (place) map.pick(place)
+    return !!place
+  }
+
   const invite = (id: string) => {
     const place = places?.get(id)
     return hereDef && place && <PlaceInvite district={hereDef.id} place={place} lang={lang} compact />
@@ -632,6 +653,7 @@ export default function App() {
         }}
         visibility={visibility}
         onProfile={auth.signedIn && me ? () => setProfileOpen(true) : undefined}
+        profileBadge={residentId ? (friends.lists?.incoming.length ?? 0) : 0}
         onInvite={residentId ? () => setInviteOpen(true) : undefined}
         onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
         connectionsBadge={conn.badge}
@@ -864,6 +886,16 @@ export default function App() {
                         return done
                       }}
                       invite={invite(bench.seat.bench.id)}
+                      chai={
+                        residentId ? (
+                          <ChaiInvite
+                            bench={bench.seat.bench}
+                            friends={friends}
+                            lang={lang}
+                            token={auth.token}
+                          />
+                        ) : undefined
+                      }
                     />
                   )
                 ) : near ? (
@@ -920,6 +952,7 @@ export default function App() {
           onClose={closeProfile}
           onSignOut={leave}
           onPrivacy={() => setPrivacyOpen(true)}
+          friends={residentId ? friends : undefined}
           onDelete={async () => {
             const tok = await auth.token().catch(() => null)
             if (!tok || !(await deleteMyAccount(tok))) return false
@@ -957,6 +990,8 @@ export default function App() {
           token={auth.token}
           onBlock={block}
           onClose={() => setConnOpen(false)}
+          friends={friends}
+          onChalo={chalo}
         />
       )}
       {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}

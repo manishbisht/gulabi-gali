@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptRequest, getEnded, getMatches, getRequests, ignoreRequest, unmatch } from '../net/api'
+import { dismissChai, getChai } from '../net/friends'
 import { connectInbox } from '../net/inbox'
-import type { EndedChat, InboxNotice, MatchView, RequestLists } from '../net/protocol'
+import {
+  CHAI_TTL_MS,
+  type ChaiInviteView,
+  type EndedChat,
+  type InboxNotice,
+  type MatchView,
+  type RequestLists,
+} from '../net/protocol'
 import { storage } from '../storage'
 
 const READ_KEY = 'gg-read'
@@ -42,6 +50,14 @@ export interface Connections {
    * they can still be reported. Fetched with the request lists.
    */
   endedChats: EndedChat[]
+  /** Friends' invites for chai that still stand (see `CHAI_TTL_MS`), newest first: fetched on each `chai` notice. */
+  chai: ChaiInviteView[]
+  /** "Abhi nahi" (or "Chalo"): the invite goes from the list at once, and from the server's. */
+  dismissChai(id: string): void
+  /** Fetches the invites for chai again. */
+  refreshChai(): Promise<void>
+  /** Moves with each `friend` notice (an ask to you, or your ask accepted): a friend list looks again. */
+  friendTick: number
   /** The match id on success, null if it could not be accepted. The lists are fresh when it resolves. */
   accept(id: string): Promise<string | null>
   ignore(id: string): Promise<void>
@@ -76,10 +92,12 @@ export function useConnections({
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set())
   const [endedChats, setEndedChats] = useState<EndedChat[]>([])
   const [reconnects, setReconnects] = useState(0)
+  const [chai, setChai] = useState<ChaiInviteView[]>([])
+  const [friendTick, setFriendTick] = useState(0)
   /** Moves with every sign-out or user change: an answer from before it is dropped. */
   const gen = useRef(0)
   /** Each list's newest fetch: an older answer that lands after a newer one is dropped. */
-  const seq = useRef({ requests: 0, matches: 0, ended: 0 })
+  const seq = useRef({ requests: 0, matches: 0, ended: 0, chai: 0 })
   const tokenRef = useRef(token)
   const bannedRef = useRef(onBanned)
   const alive = useRef(true)
@@ -139,6 +157,17 @@ export function useConnections({
     [writeRead],
   )
 
+  /** The invites for chai, apart from the other lists: only a `chai` notice, a (re)connect or the sheet asks. */
+  const refreshChai = useCallback(async () => {
+    const g = gen.current
+    const c = ++seq.current.chai
+    const tok = await tokenRef.current().catch(() => null)
+    if (!tok || g !== gen.current) return
+    const got = await getChai(tok)
+    if (!alive.current || g !== gen.current || c !== seq.current.chai || !got) return
+    setChai(got)
+  }, [])
+
   useEffect(() => {
     if (!user) return
     const generation = gen
@@ -148,8 +177,12 @@ export function useConnections({
       onOpen: () => {
         setReconnects((n) => n + 1)
         void refresh()
+        void refreshChai()
       },
       onNotice: (n: InboxNotice) => {
+        // neither touches a request or a chat
+        if (n.t === 'chai') return void refreshChai()
+        if (n.t === 'friend') return setFriendTick((x) => x + 1)
         if (n.t === 'message') {
           setLatest((l) => ({ ...l, [n.matchId]: n.id }))
           setTicks((t) => ({ ...t, [n.matchId]: (t[n.matchId] ?? 0) + 1 }))
@@ -170,8 +203,9 @@ export function useConnections({
       setTicks({})
       setEnded(new Set())
       setEndedChats([])
+      setChai([])
     }
-  }, [user, refresh])
+  }, [user, refresh, refreshChai])
 
   const sent = useMemo(() => lists.sent.filter((r) => r.state === 'pending'), [lists.sent])
 
@@ -188,7 +222,9 @@ export function useConnections({
   const requestUnread = useCallback((id: string) => !seen.has(id), [seen])
 
   const badge =
-    lists.incoming.filter((r) => !seen.has(r.id)).length + matches.filter((m) => chatUnread(m.id)).length
+    lists.incoming.filter((r) => !seen.has(r.id)).length +
+    matches.filter((m) => chatUnread(m.id)).length +
+    chai.length
 
   const seeIncoming = useCallback(() => {
     setSeen((was) => {
@@ -246,7 +282,30 @@ export function useConnections({
     [refresh, writeRead],
   )
 
+  // an invite leaves the list when its time is up, as it does on the server (its clock, give or take this one's)
+  useEffect(() => {
+    if (!chai.length) return
+    const due = Math.min(...chai.map((c) => c.at + CHAI_TTL_MS)) - Date.now()
+    const timer = setTimeout(
+      () => setChai((was) => was.filter((c) => c.at + CHAI_TTL_MS > Date.now())),
+      Math.max(0, due) + 1000,
+    )
+    return () => clearTimeout(timer)
+  }, [chai])
+
+  const dropChai = useCallback((id: string) => {
+    setChai((was) => was.filter((c) => c.id !== id))
+    void (async () => {
+      const tok = await tokenRef.current().catch(() => null)
+      if (tok) await dismissChai(tok, id)
+    })()
+  }, [])
+
   return {
+    chai,
+    dismissChai: dropChai,
+    refreshChai,
+    friendTick,
     incoming: lists.incoming,
     sent,
     matches,

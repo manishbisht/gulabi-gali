@@ -3,7 +3,8 @@ import { t, type Lang, type StringKey } from '../i18n/strings'
 import { getMessages, sendMessage } from '../net/api'
 import { BlockConfirm } from './BlockConfirm'
 import { ReportSheet } from './ReportSheet'
-import { MAX_MESSAGE, type ChatMessage, type PublicPerson } from '../net/protocol'
+import { MAX_MESSAGE, type ChatMessage, type FriendState, type PublicPerson } from '../net/protocol'
+import type { FriendStanding } from '../friends/useFriends'
 
 interface Props {
   matchId: string
@@ -24,6 +25,10 @@ interface Props {
    * report, so the chat stays (ended) under the report form, and closing the form goes back to the list.
    */
   onBlock?(stay?: boolean): Promise<boolean>
+  /** Where you stand with them as friends (see `useFriends`), when it is known. */
+  friend?: FriendStanding
+  /** "Dost banao": asks them to be friends; where it stands then, or null when it did not go. */
+  onBefriend?(): Promise<FriendState | 'cooldown' | null>
 }
 
 /** A message the server has not confirmed yet. */
@@ -65,7 +70,11 @@ export function ChatView({
   onBack,
   onUnmatch,
   onBlock,
+  friend,
+  onBefriend,
 }: Props) {
+  /** What "Dost banao" came to, said under the menu. */
+  const [friendNote, setFriendNote] = useState<StringKey | null>(null)
   const [blocking, setBlocking] = useState(false)
   const [reporting, setReporting] = useState(false)
   /** Blocked from here with "Also report?": the form offers no block, and closing it goes back to the list. */
@@ -225,7 +234,43 @@ export function ChatView({
           <button type="button" className="person-close" onClick={() => pick(setReporting)}>
             {t('reportButton', lang)}
           </button>
+          {onBefriend && !ended && friend !== 'friends' && friend !== 'asked' && (
+            <button
+              type="button"
+              className="person-close"
+              onClick={() => {
+                setMenu(false)
+                setFriendNote(null)
+                void onBefriend().then((state) => {
+                  if (!alive.current) return
+                  setFriendNote(
+                    state === 'friends'
+                      ? 'friendAlready'
+                      : state === 'cooldown'
+                        ? 'friendAskLater'
+                        : state
+                          ? 'friendAsked'
+                          : 'friendAskFailed',
+                  )
+                })
+              }}
+            >
+              {t('friendAsk', lang)}
+            </button>
+          )}
+          {onBefriend && !ended && (friend === 'friends' || friend === 'asked') && (
+            <span className="chat-friend-state">
+              {friend === 'friends'
+                ? t('friendAlready', lang)
+                : t('friendWaiting', lang, { name: person.name })}
+            </span>
+          )}
         </div>
+      )}
+      {friendNote && (
+        <p className="chat-note" role="status">
+          {t(friendNote, lang)}
+        </p>
       )}
       {reporting && (
         <ReportSheet

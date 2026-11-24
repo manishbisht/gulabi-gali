@@ -28,6 +28,8 @@ interface Props {
   visibility?: ReactNode
   /** Present only when a user is signed in. */
   onProfile?: () => void
+  /** Asks to be friends waiting for an answer, counted on the Profile button (where they are answered). */
+  profileBadge?: number
   /** Present only for a resident: opens the invite code sheet (enter a code, or share your own). */
   onInvite?: () => void
   /** Present only for a resident: opens Connections, with the count of unread things on its badge. */
@@ -60,6 +62,7 @@ export function Hud({
   bandar,
   visibility,
   onProfile,
+  profileBadge = 0,
   onInvite,
   onConnections,
   connectionsBadge = 0,
@@ -120,6 +123,11 @@ export function Hud({
               {onProfile && (
                 <button type="button" className="hud-chip profile-button" onClick={onProfile}>
                   {t('profileOpen', lang)}
+                  {profileBadge > 0 && (
+                    <span className="conn-badge" aria-label={t('friendsAsking', lang, { n: profileBadge })}>
+                      {profileBadge}
+                    </span>
+                  )}
                 </button>
               )}
               {onInvite && (

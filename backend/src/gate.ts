@@ -20,6 +20,9 @@ export const QUEUE_DROP_MS = 10 * 60_000
 /** While anything is held, the alarm comes round at least this often. */
 export const SWEEP_MS = 60_000
 
+/** The most people one `where` asks about: a friend list's length. */
+export const WHERE_MAX = 100
+
 export type Admit = { ok: true } | { ok: false; position: number }
 /** A heartbeat's answer: each waiting person's position, and those of them who hold a slot after all. */
 export interface Heartbeat {
@@ -87,6 +90,27 @@ export class GateDO extends DurableObject<Env> {
     return this.sql
       .exec<{ n: number }>("SELECT COUNT(DISTINCT user_id) AS n FROM slots WHERE district != ''")
       .one().n
+  }
+
+  /**
+   * For a friend list (see `listFriends`): of `ids` (at most `WHERE_MAX`; the caller has already narrowed them to
+   * friends who share it), those a district holds as residents now, each with that district (the one they were
+   * most recently vouched for in, should they have two open). Never a hold, a place in line, or anyone not
+   * asked about. Reads only: it schedules nothing, so asking keeps nothing awake.
+   */
+  where(ids: string[]): Record<string, string> {
+    const out: Record<string, string> = {}
+    const asked = ids.slice(0, WHERE_MAX)
+    if (!asked.length) return out
+    for (const { user_id, district } of this.sql
+      .exec<{ user_id: string; district: string }>(
+        `SELECT user_id, district FROM slots WHERE district != '' AND user_id IN (SELECT value FROM json_each(?))
+         ORDER BY seen`,
+        JSON.stringify(asked),
+      )
+      .toArray())
+      out[user_id] = district
+    return out
   }
 
   /** For the admin page: who holds a slot, and how many wait. */

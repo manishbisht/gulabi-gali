@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { storage } from '../storage'
 import { RIDE_MS } from './metroRide'
 import { FADE_MS, savedDistrict, STATION_RANGE, useTravel, type Swap } from './useTravel'
 
@@ -48,12 +49,37 @@ describe('savedDistrict', () => {
 })
 
 describe('travelTo', () => {
+  it('a trip to a place ("Chalo") hands the place to the swap, which stands the player there', async () => {
+    vi.useFakeTimers()
+    const travel = mount()
+    const swap = vi.fn<Swap>(async () => {})
+    travel.bind(swap)
+    let done: Promise<boolean>
+    act(() => void (done = travel.travelTo('university', 'walled-city', 'bench-2')))
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
+    // it says it arrived: only then is a friend's invite done with
+    expect(await act(() => done)).toBe(true)
+    // a trip asked for while another is under way is ignored, and says so
+    let first: Promise<boolean>
+    act(() => void (first = travel.travelTo('mi-road', 'university')))
+    let second: Promise<boolean>
+    act(() => void (second = travel.travelTo('amer', 'university', 'bench-1')))
+    expect(await act(() => second)).toBe(false)
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS + RIDE_MS))
+    expect(await act(() => first)).toBe(true)
+    expect(swap).toHaveBeenCalledWith('university', expect.any(AbortSignal), 'bench-2')
+    expect(swap).not.toHaveBeenCalledWith('amer', expect.anything(), expect.anything())
+    expect(localStorage.getItem('gg-district')).toBe('mi-road')
+    storage.clear() // the page-lifetime copy too: the next test starts in the Walled City
+  })
+
   it('fades to black, swaps the district, persists it and fades back', async () => {
     vi.useFakeTimers()
     const travel = mount()
     const swap = vi.fn<Swap>(async () => {})
     travel.bind(swap)
-    let done: Promise<void>
+    let done: Promise<boolean>
     act(() => void (done = travel.travelTo('mi-road')))
     expect(travel.fading).toBe(true)
     expect(swap).not.toHaveBeenCalled() // the screen goes black first
@@ -75,7 +101,7 @@ describe('travelTo', () => {
     let arrive = () => {}
     const swap = vi.fn<Swap>(() => new Promise<void>((r) => (arrive = r)))
     travel.bind(swap)
-    let first: Promise<void>
+    let first: Promise<boolean>
     act(() => void (first = travel.travelTo('university')))
     act(() => void travel.travelTo('malviya-nagar'))
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
@@ -156,7 +182,7 @@ describe('the ride', () => {
     const travel = mount()
     const swap = vi.fn<Swap>(async () => {})
     travel.bind(swap)
-    let trip: Promise<void>
+    let trip: Promise<boolean>
     act(() => void (trip = travel.travelTo('mi-road', 'walled-city')))
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
     expect(swap).toHaveBeenCalledWith('mi-road', expect.any(AbortSignal)) // loading starts with the ride, not after it
@@ -172,7 +198,7 @@ describe('the ride', () => {
     const travel = mount()
     let arrive = () => {}
     travel.bind(() => new Promise<void>((r) => (arrive = r)))
-    let trip: Promise<void>
+    let trip: Promise<boolean>
     act(() => void (trip = travel.travelTo('university', 'walled-city')))
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
     act(() => travel.skipRide()) // skipping before the load is in just shows the waiting line
@@ -195,7 +221,7 @@ describe('the ride', () => {
       signal = s
       return new Promise<void>((r) => (arrive = r))
     })
-    let trip: Promise<void>
+    let trip: Promise<boolean>
     act(() => void (trip = travel.travelTo('university', 'walled-city')))
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS + RIDE_MS))
     expect(travel.ride?.waiting).toBe(true)
@@ -213,7 +239,7 @@ describe('the ride', () => {
     vi.useFakeTimers()
     const travel = mount()
     travel.bind(() => Promise.reject(new Error('offline')))
-    let trip: Promise<void>
+    let trip: Promise<boolean>
     act(() => void (trip = travel.travelTo('university', 'walled-city')))
     await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
     await act(() => trip) // no RIDE_MS wait

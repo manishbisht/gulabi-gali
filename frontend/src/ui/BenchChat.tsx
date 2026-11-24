@@ -24,6 +24,8 @@ interface Props {
   onBlock?(id: string, name: string): Promise<boolean>
   /** "Bulao": a link to this bench or tapri to send someone (see `PlaceInvite`). */
   invite?: ReactNode
+  /** "Chai pe bulao": invite a friend to this bench (see `ChaiInvite`); residents only. */
+  chai?: ReactNode
 }
 
 /**
@@ -31,7 +33,19 @@ interface Props {
  * line to say, and Utho. It sits beside the joystick; while the phone keyboard is up it spans the screen just
  * above the keyboard instead (the joystick is under the keyboard then anyway).
  */
-export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand, onBlock, invite }: Props) {
+export function BenchChat({
+  seat,
+  lines,
+  me,
+  notice,
+  lang,
+  token,
+  onSay,
+  onStand,
+  onBlock,
+  invite,
+  chai,
+}: Props) {
   const [text, setText] = useState('')
   const [blocking, setBlocking] = useState<{ id: string; name: string } | null>(null)
   /** Who is being reported; `blocked` when they were just blocked from the block question's "Also report?". */
@@ -65,9 +79,12 @@ export function BenchChat({ seat, lines, me, notice, lang, token, onSay, onStand
           {t('benchStand', lang)}
         </button>
       </div>
-      <p className="bench-with">
-        {seat.with.length ? t('benchWith', lang, { names: seat.with.join(', ') }) : t('benchAlone', lang)}
-      </p>
+      <div className="bench-with-row">
+        <p className="bench-with">
+          {seat.with.length ? t('benchWith', lang, { names: seat.with.join(', ') }) : t('benchAlone', lang)}
+        </p>
+        {chai}
+      </div>
       {blocking && onBlock && (
         <BlockConfirm
           name={blocking.name}

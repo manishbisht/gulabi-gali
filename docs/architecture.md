@@ -686,13 +686,13 @@ someone else moves to them; at most 5 devices a person. Endpoints must be https 
 `DEV_AUTH`), so the Worker never posts to an address of a client's choosing. `PUT` is residents only, 409 `key`
 when the browser subscribed with another server key, 404 `off` without VAPID; both routes count against
 `push-sub` (30 an hour). `InboxDO.notify` sends a notice to the live sockets and, only when none is live, the
-notice is a `request` or a `message`, and the caller vouched for the sender (`notify(..., { push })`: a
+notice is a `request`, a `message` or a friend's `chai` invite, and the caller vouched for the sender (`notify(..., { push })`: a
 request's sender has passed `visibleRow`; a message pushes only if its sender passes `visibleRow` now, so a
 hidden person's messages reach an open inbox but never a lock screen), calls `pushTo`: nothing for a banned person or past the per-person limit
 (`push-minute` 1, `push-hour` 10, counted with `allow`), else one push per device, `TTL` a day, `Topic` the kind
 (so pending ones collapse at the push service). The payload is `{t, lang}` and nothing else, so the lock screen
 can never show a name or a message, and `sw.js` shows only its own words (`pushTitle`, `pushRequest`,
-`pushMessage`, checked against `strings.ts` by `sw.test.ts`), tagged per kind so a newer one replaces the last.
+`pushMessage`, `pushChai`, checked against `strings.ts` by `sw.test.ts`), tagged per kind so a newer one replaces the last.
 A 404 or 410 from the push service deletes the row; account deletion deletes them all in its batch, and a ban
 by trigger (`0008_ban_push.sql`).
 
@@ -746,3 +746,48 @@ phones require). It goes quiet while the tab is hidden (the context is suspended
 lowest quality tier it plays one steady layer and no blips (`thinMix`), and photo mode and the taxi ride duck it
 to half (`setAmbienceDuck`; the city going resets the duck). Layers are built only while they are audible, and
 levels glide (a 1.5 s time constant) rather than jump.
+
+### Friends and "Chai pe bulao" (`friends.ts`, `frontend/src/friends/`)
+
+Friends are two residents who are matched (an accepted chat) and who both said yes. One asks from the chat's menu
+("Dost banao", `POST /api/friends {to}`); the other sees the ask in their profile sheet and says "Haan" (`POST
+/api/friends/:id/accept`) or "Abhi nahi" (`.../decline`), which is never told: the asker sees it waiting until it
+runs out (14 days, then the cron deletes it and they may ask again). Two asks that cross are a yes from both.
+Either side removes the friendship at any time (`DELETE /api/friends/:id`), silently. Neither taking an ask back
+nor a removal is a way round a no: an ask taken back stays as a `cooldown` row (listed nowhere) until 14 days
+after it was made, and ending a friendship leaves the other person a `cooldown` ask dated now, so they cannot ask
+straight back for 14 days (409 `cooldown`) while the one who ended it may, as an unmatch does with requests. The inbox hears a bare
+`friend` nudge for an ask and a yes (no push). Anyone not matched, not visible, or blocked either way is 404
+`not-found`, alike. D1 keeps `friends(a, b)` (`a < b`, as `matches`), `friend_requests`, `friend_settings` and
+`chai_invites` (migration `0010`).
+
+It lives and dies with the match: triggers in `0010` delete the friendship and its asks when the match goes (an
+unmatch, a block, a deletion), when either blocks the other, and when either is hidden or banned; an ended
+friendship takes its invites with it. Nothing brings it back. Account deletion also deletes the person's rows
+explicitly.
+
+Presence: `GET /api/friends` (20 a minute per account) lists each friend's first name and, only for a friend who
+is visible, blocked neither way, has "Dosto ko dikhao ki main gali mein hoon" on (`show_presence`, default on),
+and holds a resident slot in a district right now, `here: <district>`. The Worker asks the gate
+(`GateDO.where`, one read, nothing scheduled) about those friends alone; nobody else's id reaches it. It asks on
+every read, with an empty list too, so the time an answer takes never tells whether a friend turned sharing off. Off, away,
+waiting in line, or the gate out of reach all read the same: just the name. No position is ever sent. Nothing is
+pushed to anyone's socket: the page reads the list when the profile sheet, a chat or the chai picker opens, and
+every 30 s while the friends list is open, so it adds no Durable Object time but that one gate read.
+
+Chai pe bulao: seated at a bench as a resident (the bench's district confirms it, `DistrictDO.seatedAt`), a
+person picks a friend (`POST /api/chai {to, bench, kind}`). Their own checks answer as usual (`ghost`, `muted`,
+`invalid`, `not-seated`); then the limits are spent (five an hour in all, before the seat check so tries never
+wake a district more often than that; and one per friend each 10 minutes, the friend's id SHA-256-hashed into the
+counter's bucket: unsalted, so not secret from anyone holding both tables, and swept with the counters after two
+days); and from there on the answer is always `202 {sent: true}`, whether the invite reached anyone or not, and
+every try runs the same D1 batch: the invite is inserted only when the friend is a friend, visible, blocked
+neither way, with "Chai ke bulaave lo" on (`chai_invites`, default on), all checked inside that one guarded
+`INSERT ... SELECT`, so a refusal costs exactly what a delivery does. Only a row written notifies `chai`. With no
+inbox open that pushes through `deliver` like a request, held by the push service only for the invite's 15
+minutes: the payload is `{t: 'chai', lang}` and the lock
+screen says only "Gulabi Gali: Ek dost ne chai pe bulaya" / "A friend invited you for chai"; a tap opens the
+inbox. In the app (`GET /api/chai`) the invite shows the sender's first name and the bench's kind and district
+for 15 minutes, with "Chalo" (in the same district the compass points at the bench, as a map pick does; in
+another, the metro or bus takes you and stands you by it, a place link's spot) and "Abhi nahi"
+(`DELETE /api/chai/:id`, silent).
