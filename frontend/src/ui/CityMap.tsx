@@ -33,9 +33,16 @@ interface Props {
 /** How often an open map moves you and the people on it. */
 const REFRESH_MS = 500
 
-const GLYPH: Record<MapItemKind, string> = { landmark: '★', metro: 'M', bench: '▬', tapri: '☕', poster: '▤' }
+const GLYPH: Record<MapItemKind, string> = {
+  landmark: '★',
+  metro: 'M',
+  viewpoint: '☀',
+  bench: '▬',
+  tapri: '☕',
+  poster: '▤',
+}
 /** In the page, landmarks first (a screen reader meets them before the benches); CSS stacks them on top. */
-const ORDER: MapItemKind[] = ['landmark', 'metro', 'tapri', 'bench', 'poster']
+const ORDER: MapItemKind[] = ['landmark', 'metro', 'viewpoint', 'tapri', 'bench', 'poster']
 /** Seats (benches and tapris) listed with the landmarks; the rest fold away under "more". */
 const NEAR_SEATS = 3
 
@@ -70,10 +77,10 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
   const seat = (i: MapItem) => i.kind === 'bench' || i.kind === 'tapri'
   const nearSeats = byDistance.filter(seat).slice(0, NEAR_SEATS)
   const listed = byDistance.filter(
-    (i) => i.kind === 'landmark' || i.kind === 'metro' || nearSeats.includes(i),
+    (i) => i.kind === 'landmark' || i.kind === 'metro' || i.kind === 'viewpoint' || nearSeats.includes(i),
   )
   const more = byDistance.filter((i) => !listed.includes(i))
-  /** The stop is a metro station, or (Amer) a bus stand in the bus's colour, as on the travel sheet. */
+  /** The stop is a metro station, or (`byBus`) a bus stand in the bus's colour, as on the travel sheet. */
   const by = (i: MapItem) => (i.kind === 'metro' ? (byBus(def.id) ? 'bus' : 'metro') : undefined)
   const row = (i: MapItem) => (
     <li key={i.id}>

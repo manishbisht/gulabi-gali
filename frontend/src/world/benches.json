@@ -1,5 +1,5 @@
 {
-  "counts": { "walled-city": 10, "mi-road": 16, "university": 6, "malviya-nagar": 5, "amer": 7 },
+  "counts": { "walled-city": 10, "mi-road": 16, "university": 6, "malviya-nagar": 5, "amer": 7, "nahargarh": 5 },
   "positions": {
     "walled-city": [
       { "x": -12, "z": -12 },
@@ -54,6 +54,13 @@
       { "x": -28, "z": 26 },
       { "x": 12, "z": 26 },
       { "x": 32, "z": 4 }
+    ],
+    "nahargarh": [
+      { "x": -66, "z": -22 },
+      { "x": 40, "z": -15 },
+      { "x": -93, "z": -12 },
+      { "x": -93, "z": 12 },
+      { "x": -12, "z": 24 }
     ]
   }
 }

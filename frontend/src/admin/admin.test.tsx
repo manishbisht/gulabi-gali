@@ -60,6 +60,7 @@ const stats: AdminStats = {
     { id: 'university', residents: 0, ghosts: 0 },
     { id: 'malviya-nagar', residents: 1, ghosts: 2 },
     { id: 'amer', residents: 0, ghosts: 1 },
+    { id: 'nahargarh', residents: 0, ghosts: 0 },
   ],
   live: 4,
   queue: 2,
@@ -187,6 +188,18 @@ it('a report card shows the evidence as text, with the sender and time, and mark
   // The city's cap: everyone it counts, and everyone waiting for room.
   expect(host.textContent).toContain('Seen across the city: 4')
   expect(host.textContent).toContain('Waiting for room: 2')
+})
+
+it('a district this page does not know yet (a newer Worker) is listed by its id, not a crash', async () => {
+  const newer = {
+    ...stats,
+    districts: [...stats.districts, { id: 'somewhere-new', residents: 2, ghosts: 0 }],
+  }
+  stubApi(ADMIN_ROUTES({ 'GET /api/admin/stats': () => json(newer) }))
+  const host = await render()
+  const rows = [...host.querySelectorAll('.admin-stats li')].map((li) => li.textContent)
+  expect(rows).toContainEqual(expect.stringContaining('somewhere-new'))
+  expect(rows).toContainEqual(expect.stringContaining('Nahargarh'))
 })
 
 it('evidence lives only in the report card', async () => {

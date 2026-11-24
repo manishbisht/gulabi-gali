@@ -26,7 +26,7 @@ function stage(): HTMLElement | null {
 }
 
 /**
- * The inside of a Pink Line coach, in CSS only, over the black screen; to or from Amer (no metro), the inside of
+ * The inside of a Pink Line coach, in CSS only, over the black screen; to or from a bus-only district, the inside of
  * a bus instead, its windscreen on a winding road through the hills, in its own colours and words. Tapping anywhere skips. Focus moves
  * onto the skip button while it shows (and onto "Go back" once the wait has dragged on), the game beneath is
  * inert and ignores keys, and focus comes back to where it was (or the stage) afterwards. The spoken status sits

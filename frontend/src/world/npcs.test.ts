@@ -24,9 +24,9 @@ describe('stepAlongRoute', () => {
 })
 
 describe('the cast', () => {
-  it('has eleven characters with bilingual role and status', () => {
+  it('has thirteen characters with bilingual role and status', () => {
     const all = Object.values(CAST)
-    expect(all).toHaveLength(11)
+    expect(all).toHaveLength(13)
     for (const c of all) {
       for (const text of [c.role, c.status]) {
         expect(text.hi.trim()).not.toBe('')

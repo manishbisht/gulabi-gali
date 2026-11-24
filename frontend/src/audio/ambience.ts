@@ -47,19 +47,23 @@ export interface Mix {
   crickets: number
   bells: number
   drums: number
+  /** Wind over a ridge (Nahargarh): low, gusting noise. */
+  wind: number
 }
 type Layer = keyof Mix
 
 /**
- * Each district's bed: how busy its bazaar murmur is, and how much green there is for birds and crickets.
- * A district not listed has no murmur and is fairly green: add one line here to tune it.
+ * Each district's bed: how busy its bazaar murmur is, how much green there is for birds and crickets, and how
+ * windy it is (only up on a ridge). A district not listed has no murmur, no wind and is fairly green: add one
+ * line here to tune it.
  */
-const BED: Record<string, { murmur: number; nature: number }> = {
+const BED: Record<string, { murmur: number; nature: number; wind?: number }> = {
   'walled-city': { murmur: 1, nature: 0.4 },
   'mi-road': { murmur: 0.8, nature: 0.5 },
   university: { murmur: 0, nature: 1 },
   'malviya-nagar': { murmur: 0, nature: 0.9 },
   amer: { murmur: 0.5, nature: 0.7 }, // the stalls on the path up, under the hill
+  nahargarh: { murmur: 0.3, nature: 0.85, wind: 1 }, // wind on the ridge, the birds, the city's far hum below
 }
 const DEFAULT_BED = { murmur: 0, nature: 0.8 }
 
@@ -84,16 +88,17 @@ export function mixFor(district: string, sky: AmbientSky, festival: FestivalId |
     crickets: phase === 'night' || phase === 'dusk' ? bed.nature : 0,
     bells: phase === 'dawn' || phase === 'dusk' ? 1 : 0,
     drums: festival ? 1 : 0,
+    wind: bed.wind ?? 0,
   }
 }
 
 /** The lowest quality tier's mix: one steady layer (the bazaar, else the crickets) and no blips. */
 export function thinMix(m: Mix): Mix {
-  return { murmur: m.murmur, birds: 0, crickets: m.murmur > 0 ? 0 : m.crickets, bells: 0, drums: 0 }
+  return { murmur: m.murmur, birds: 0, crickets: m.murmur > 0 ? 0 : m.crickets, bells: 0, drums: 0, wind: 0 }
 }
 
 /** Each layer's loudest, so the whole stays a very soft bed under the street. */
-const CAP: Mix = { murmur: 0.07, birds: 0.05, crickets: 0.012, bells: 0.06, drums: 0.09 }
+const CAP: Mix = { murmur: 0.07, birds: 0.05, crickets: 0.012, bells: 0.06, drums: 0.09, wind: 0.06 }
 const MASTER = 0.6
 /**
  * Photo mode and the taxi ride show the street with the player not walking in it, so the ambience steps back
@@ -105,7 +110,10 @@ const DUCK = 0.5
 const TICK_MS = 400
 /** Levels glide with this time constant, in seconds. */
 const GLIDE_S = 1.5
-const LAYERS: Layer[] = ['murmur', 'birds', 'crickets', 'bells', 'drums']
+const LAYERS: Layer[] = ['murmur', 'birds', 'crickets', 'bells', 'drums', 'wind']
+/** The layers that play steadily (sources running while audible), not in blips. */
+type Steady = 'murmur' | 'crickets' | 'wind'
+const steady = (k: Layer): k is Steady => k === 'murmur' || k === 'crickets' || k === 'wind'
 
 let duck = false
 /** The app says when the street is on show without the player in it (photo mode, a taxi ride). */
@@ -142,10 +150,10 @@ export function createAmbience(deps: AmbienceDeps) {
   let master: Gain | null = null
   let noise: { getChannelData(c: number): Float32Array } | null = null
   const buses: Partial<Record<Layer, Gain>> = {}
-  const target: Mix = { murmur: 0, birds: 0, crickets: 0, bells: 0, drums: 0 }
+  const target: Mix = { murmur: 0, birds: 0, crickets: 0, bells: 0, drums: 0, wind: 0 }
   let masterTarget = MASTER
   /** The steady layers' running sources, only while they are audible. */
-  const running: { murmur?: Source[]; crickets?: Source[] } = {}
+  const running: Partial<Record<Steady, Source[]>> = {}
   const retired: Source[] = []
   let timer: ReturnType<typeof setInterval> | null = null
   const next = { birds: 0, bells: 0, drums: 0 }
@@ -175,17 +183,23 @@ export function createAmbience(deps: AmbienceDeps) {
     return (buses[k] ??= gain(master, 0))
   }
 
-  /** Murmur: two seconds of noise, looped, band-passed to a crowd's voice range, swelling slowly. */
-  function startMurmur(): Source[] {
+  /** Two seconds of white noise, made once and shared by the murmur and the wind. */
+  function noiseBuffer() {
     const c = ctx!
     if (!noise) {
       noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate)
       const data = noise.getChannelData(0)
       for (let i = 0; i < data.length; i++) data[i] = random() * 2 - 1
     }
+    return noise
+  }
+
+  /** Murmur: the noise, looped, band-passed to a crowd's voice range, swelling slowly. */
+  function startMurmur(): Source[] {
+    const c = ctx!
     const out: Source[] = []
     const src = c.createBufferSource()
-    src.buffer = noise
+    src.buffer = noiseBuffer()
     src.loop = true
     const band = c.createBiquadFilter()
     band.type = 'bandpass'
@@ -197,6 +211,27 @@ export function createAmbience(deps: AmbienceDeps) {
     src.start(c.currentTime)
     out.push(src)
     osc('sine', 0.25, gain(swell.gain, 0.3), out)
+    return out
+  }
+
+  /** Wind: the noise, looped, low-passed to a rush, in slow gusts (two slow wobbles that drift in and out of step). */
+  function startWind(): Source[] {
+    const c = ctx!
+    const out: Source[] = []
+    const src = c.createBufferSource()
+    src.buffer = noiseBuffer()
+    src.loop = true
+    const low = c.createBiquadFilter()
+    low.type = 'lowpass'
+    low.frequency.value = 420
+    low.Q.value = 0.8
+    const gust = gain(bus('wind'), 0.6)
+    src.connect(low)
+    low.connect(gust)
+    src.start(c.currentTime)
+    out.push(src)
+    osc('sine', 0.07, gain(gust.gain, 0.3), out)
+    osc('sine', 0.11, gain(gust.gain, 0.15), out)
     return out
   }
 
@@ -216,11 +251,12 @@ export function createAmbience(deps: AmbienceDeps) {
     if (v > 0) {
       if (k === 'murmur' && !running.murmur) running.murmur = startMurmur()
       if (k === 'crickets' && !running.crickets) running.crickets = startCrickets()
+      if (k === 'wind' && !running.wind) running.wind = startWind()
       bus(k).gain.setTargetAtTime(v * CAP[k], t, GLIDE_S)
       return
     }
     buses[k]?.gain.setTargetAtTime(0, t, GLIDE_S)
-    if (k === 'murmur' || k === 'crickets') {
+    if (steady(k)) {
       const srcs = running[k]
       if (srcs) {
         for (const s of srcs) s.stop(t + GLIDE_S * 5)
@@ -340,7 +376,12 @@ export function createAmbience(deps: AmbienceDeps) {
       for (const e of gestures) doc.removeEventListener(e, gesture, true)
       doc.removeEventListener('visibilitychange', visibility)
       stopTimer()
-      for (const s of [...(running.murmur ?? []), ...(running.crickets ?? []), ...retired]) {
+      for (const s of [
+        ...(running.murmur ?? []),
+        ...(running.crickets ?? []),
+        ...(running.wind ?? []),
+        ...retired,
+      ]) {
         try {
           s.stop(ctx!.currentTime)
         } catch {
@@ -349,7 +390,7 @@ export function createAmbience(deps: AmbienceDeps) {
         s.disconnect()
       }
       retired.length = 0
-      running.murmur = running.crickets = undefined
+      running.murmur = running.crickets = running.wind = undefined
       // silences any bell or drum still scheduled
       master?.disconnect()
       master = null

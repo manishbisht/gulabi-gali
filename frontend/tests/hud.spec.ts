@@ -24,6 +24,7 @@ const ALL_STAMPS = [
   'jkk',
   'wtp',
   'amer-fort',
+  'nahargarh-fort',
 ]
 
 async function busiest(
@@ -171,6 +172,7 @@ const DISTRICTS = [
   ['university', 'University–JKK', 'University & JKK'],
   ['malviya-nagar', 'Malviya Nagar–WTP', 'Malviya Nagar & WTP'],
   ['amer', 'Amer', 'Amer'],
+  ['nahargarh', 'Nahargarh', 'Nahargarh'],
 ] as const
 const LANGS: L[] = ['hi', 'en']
 
@@ -251,7 +253,7 @@ for (const lang of LANGS) {
       ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
       signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
     }
-    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(10\/10\)$/)
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(11\/11\)$/)
     await laidOut(items, NEWS)
     await oneRow(page, items.place!)
     await shot(page, `guest-${lang}-malviya-nagar-all-stamps`)
@@ -268,10 +270,45 @@ for (const lang of LANGS) {
       profile: page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
       invite: page.locator('.invite-button'),
     }
-    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(10\/10\)$/)
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(11\/11\)$/)
     await laidOut(items, NEWS)
     await oneRow(page, items.place!)
     await shot(page, `signed-${lang}-malviya-nagar-all-stamps`)
+  })
+}
+
+// One stamp short of all of them, the chip says the whole "10/11": as wide as the count gets, and it has to fit too.
+for (const lang of LANGS) {
+  const place = lang === 'en' ? 'Malviya Nagar & WTP' : 'Malviya Nagar–WTP'
+  test(`one stamp short, the widest count still fits in ${place} (${lang}), guest and signed in`, async ({
+    page,
+    browser,
+  }) => {
+    const short = ALL_STAMPS.slice(0, -1)
+    await busiest(page, 'malviya-nagar', lang, 'gangaur', short)
+    await expect(page.locator('.stamp-count')).toHaveText(`${short.length}/${ALL_STAMPS.length}`)
+    const guest: Record<string, Locator> = {
+      ...common(page, place, lang),
+      ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+      signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+    }
+    await laidOut(guest, NEWS)
+    await oneRow(page, guest.place!)
+    await shot(page, `guest-${lang}-malviya-nagar-one-short`)
+
+    const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+    const asha = await resident(browser, 'Asha', phone)
+    await busiest(asha.page, 'malviya-nagar', lang, 'gangaur', short)
+    await expect(asha.page.locator('.stamp-count')).toHaveText(`${short.length}/${ALL_STAMPS.length}`)
+    const signed: Record<string, Locator> = {
+      ...common(asha.page, place, lang),
+      visibility: asha.page.getByText(WORDS[lang].sees, { exact: true }),
+      profile: asha.page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
+      invite: asha.page.locator('.invite-button'),
+    }
+    await laidOut(signed, NEWS)
+    await oneRow(asha.page, signed.place!)
+    await shot(asha.page, `signed-${lang}-malviya-nagar-one-short`)
   })
 }
 

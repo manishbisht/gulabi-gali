@@ -27,7 +27,7 @@ function Stats({ stats, lang }: { stats: AdminStats; lang: Lang }) {
       <ul>
         {stats.districts.map((d) => (
           <li key={d.id}>
-            <strong>{DISTRICT_NAMES[d.id][lang]}</strong>{' '}
+            <strong>{DISTRICT_NAMES[d.id]?.[lang] ?? d.id}</strong>{' '}
             {d.residents === null || d.ghosts === null
               ? t('adminUnknown', lang)
               : t('adminLiveLine', lang, { residents: d.residents, ghosts: d.ghosts })}

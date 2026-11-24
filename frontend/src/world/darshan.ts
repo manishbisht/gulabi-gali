@@ -14,6 +14,7 @@ export const STAMP_DISTRICT: Record<string, DistrictId> = {
   jkk: 'university',
   wtp: 'malviya-nagar',
   'amer-fort': 'amer',
+  'nahargarh-fort': 'nahargarh',
 }
 
 /** A one-line riddle per landmark, for the stamps not collected yet: it never says the name. */
@@ -57,6 +58,10 @@ export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
   'amer-fort': {
     hi: 'Pahadi pe shahi mahal, jo neeche jheel mein apni parchhai dekhta hai.',
     en: 'A palace up on the hill that watches its own reflection in the lake below.',
+  },
+  'nahargarh-fort': {
+    hi: 'Pahadi ki dhaar pe lambi deewarein; shaam ko yahan se poora shahar suraj ko vida karta hai.',
+    en: 'Long walls along a ridge; from here at dusk, you watch the whole city below wave the sun goodbye.',
   },
 }
 

@@ -7,6 +7,7 @@ import { DISTRICTS, loadDistrict, type District } from './district'
 import { linkId, placeSpot, placeUrl, readPlaceLink } from './placeLink'
 import { WALL_RANGE, wallDistance, wallsOf } from './posters'
 import type { AABB, Vec2 } from './types'
+import { STAIR_RANGE } from './rooftop'
 import { STATION_RANGE } from './useTravel'
 
 const loaded = new Map<DistrictId, Promise<District>>()
@@ -82,6 +83,24 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
     const spot = placeSpot(await load(id), back.place)!
     expect(colliders.some((c) => hits(spot, PLAYER_RADIUS, c))).toBe(false)
     expect(Math.hypot(spot.x - def.station.x, spot.z - def.station.z)).toBeLessThanOrEqual(STATION_RANGE)
+  })
+
+  it('a named viewpoint: at its stair, in the clear and in reach to climb, looking its way; none where there is none', async () => {
+    const { def, colliders } = await load(id)
+    const item = mapItems(def, []).find((i) => i.kind === 'viewpoint')
+    if (!def.roofName) {
+      expect(item).toBeUndefined()
+      expect(placeSpot(await load(id), 'viewpoint')).toBeNull()
+      return
+    }
+    const back = readPlaceLink(new URL(placeUrl(id, linkId(item!))).search)!
+    expect(back.place).toBe('viewpoint')
+    const spot = placeSpot(await load(id), back.place)!
+    expect(colliders.some((c) => hits(spot, PLAYER_RADIUS, c))).toBe(false)
+    const roof = def.roof!
+    expect(Math.hypot(spot.x - roof.stair.x, spot.z - roof.stair.z)).toBeLessThanOrEqual(STAIR_RANGE)
+    const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
+    expect(look.x * roof.out.x + look.z * roof.out.z).toBeGreaterThan(0.99)
   })
 
   it('benches and tapris: in reach to sit ("Baitho" shows), in the clear', async () => {

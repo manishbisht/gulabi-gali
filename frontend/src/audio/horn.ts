@@ -108,7 +108,7 @@ const ARRIVAL = {
 } as const
 
 /**
- * A two-note chime for arriving: soft for the metro, two horn toots for the bus (to or from Amer). Only when
+ * A two-note chime for arriving: soft for the metro, two horn toots for the bus (`rideBy`). Only when
  * sound is on and a context already exists (a honk made it): this never creates one, so a ride stays silent
  * for anyone who has not driven.
  */

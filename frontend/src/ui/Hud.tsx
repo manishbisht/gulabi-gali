@@ -14,7 +14,7 @@ interface Props {
   banner?: string
   /** A line under the banner while a procession is on the street, already in the current language. */
   procession?: string
-  /** Stamp progress as `N/10`; with every stamp the chip shows a shorter `✓ 10`, its name the whole count. */
+  /** Stamp progress as `N/total`; with every stamp the chip shows a shorter `✓ total`, its name the whole count. */
   stamps: string
   /** Opens the Jaipur Darshan list; the stamps chip is a button when present. */
   onStamps?: () => void
@@ -69,7 +69,7 @@ export function Hud({
 }: Props) {
   if (photo) return null
   const weather = weatherChip(snapshot) ?? t('weatherUnknown', lang)
-  // every stamp: a short "✓ 10", two characters narrower than "10/10", so the row keeps its room on a phone
+  // every stamp: a short "✓ total", narrower than "total/total", so the row keeps its room on a phone
   const [got, all] = stamps.split('/')
   const done = !!got && got === all
   const shown = done ? `✓ ${all}` : stamps

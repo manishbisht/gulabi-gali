@@ -422,7 +422,14 @@ button {
   background: #c2185b;
 }
 
-/* Amer's stop is a bus stand: the bus's marigold, as on the travel sheet and the shelter's roof */
+/* A named viewpoint (Nahargarh's sunset point): the marigold of the stair's marks, over the seats */
+.map-item[data-kind='viewpoint'] {
+  z-index: 2;
+  background: var(--marigold);
+  color: var(--plum);
+}
+
+/* A bus-only district's stop is a bus stand: the bus's marigold, as on the travel sheet and the shelter's roof */
 .map-item[data-by='bus'] {
   background: var(--marigold);
   color: var(--plum);
@@ -2312,7 +2319,7 @@ small.words-hint {
   outline-offset: 3px;
 }
 
-/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and 10/10 earns a badge. */
+/* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and every stamp earns a badge. */
 /* The place chip opens the city map (M): as slim as the chip it was, with a thumb-sized tap area. */
 button.place-button {
   position: relative;
@@ -2338,7 +2345,7 @@ button.stamp-count {
   pointer-events: auto;
 }
 
-/* every stamp collected: the short "✓ 10", ringed in marigold */
+/* every stamp collected: the short "✓ total", ringed in marigold */
 button.stamp-count[data-done] {
   border-color: var(--marigold);
 }

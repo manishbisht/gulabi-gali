@@ -3,7 +3,7 @@ import type { NpcDef } from './types'
 type Character = Omit<NpcDef, 'route' | 'speed'>
 
 /*
- * The eleven seed characters: fictional, every line original. Each district gives its own a route and a
+ * The thirteen seed characters: fictional, every line original. Each district gives its own a route and a
  * speed; the words and faces live here. `hi` is the Hinglish line, `en` its English.
  */
 export const CAST = {
@@ -95,5 +95,25 @@ export const CAST = {
       en: 'Warm lac, steady hands. Try a pair on?',
     },
     look: { skin: 2, outfit: 'pink', head: 'dupatta' },
+  },
+  bhanwar: {
+    id: 'bhanwar',
+    name: 'Bhanwar ji',
+    role: { hi: 'Bhutte wale', en: 'Roasted-corn seller' },
+    status: {
+      hi: 'Garam bhutta, thandi hawa. Suraj dhalne tak yahin hoon.',
+      en: "Hot corn, a cool wind. I'm here till the sun goes down.",
+    },
+    look: { skin: 3, outfit: 'terracotta', head: 'safa' },
+  },
+  tara: {
+    id: 'tara',
+    name: 'Tara',
+    role: { hi: 'Photography ki student', en: 'Photography student' },
+    status: {
+      hi: 'Golden hour ka intezaar hai. Tripod pakdoge?',
+      en: 'Waiting for the golden hour. Hold my tripod?',
+    },
+    look: { skin: 1, outfit: 'teal', head: 'bun' },
   },
 } as const satisfies Record<string, Character>

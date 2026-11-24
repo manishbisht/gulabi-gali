@@ -8,5 +8,6 @@
   { "id": "university-gate", "hi": "Rajasthan University", "en": "University of Rajasthan" },
   { "id": "jkk", "hi": "Jawahar Kala Kendra", "en": "Jawahar Kala Kendra" },
   { "id": "wtp", "hi": "World Trade Park", "en": "World Trade Park" },
-  { "id": "amer-fort", "hi": "Amer ka Qila", "en": "Amer Fort" }
+  { "id": "amer-fort", "hi": "Amer ka Qila", "en": "Amer Fort" },
+  { "id": "nahargarh-fort", "hi": "Nahargarh ka Qila", "en": "Nahargarh Fort" }
 ]
