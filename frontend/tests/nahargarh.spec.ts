@@ -14,7 +14,7 @@ const GOLDEN = '2026-11-15T11:55:00Z'
 async function enterOffline(page: Page, district?: string) {
   await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
   // a fixed clear day, whatever the weather (see hud.spec.ts)
-  await page.route('**/api/city', (route) =>
+  await page.route('**/api/city*', (route) =>
     route.fulfill({
       json: {
         fetchedAt: new Date().toISOString(),
