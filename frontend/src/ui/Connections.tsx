@@ -24,8 +24,11 @@ interface Props {
   onClose(): void
   /** Friends: a chat's menu offers "Dost banao" with it. */
   friends?: Friends
-  /** "Chalo" on a friend's invite for chai: off to their bench (the sheet closes). */
-  onChalo?(invite: ChaiInviteView): void
+  /**
+   * "Chalo" on a friend's invite for chai: off to their bench (the sheet closes). True once on the way (the
+   * compass set, or the trip arrived): only then is the invite done with.
+   */
+  onChalo?(invite: ChaiInviteView): boolean | Promise<boolean>
 }
 
 /**
@@ -138,10 +141,9 @@ export function Connections({ conn, lang, token, onBlock, onClose, friends, onCh
                         <button
                           type="button"
                           className="landmark-stamp"
-                          onClick={() => {
-                            conn.dismissChai(c.id)
-                            onChalo(c)
-                          }}
+                          onClick={() =>
+                            void Promise.resolve(onChalo(c)).then((went) => went && conn.dismissChai(c.id))
+                          }
                         >
                           {t('chaiGo', lang)}
                         </button>

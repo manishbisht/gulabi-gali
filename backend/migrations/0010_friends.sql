@@ -12,10 +12,12 @@ CREATE INDEX friends_b ON friends(b);
 
 -- "Dost banao": `from_id` asked `to_id`. `declined` is kept (and still reads as pending to the one who asked, who
 -- is never told) until the cron deletes it 14 days after `created_at`, so one ask per pair stands for that long.
--- Accepting deletes both directions' rows and writes `friends`.
+-- `cooldown` is listed nowhere and only stops `from_id` asking `to_id` until then: an ask taken back (it keeps its
+-- date), or a friendship `to_id` ended (dated when they ended it). Accepting deletes both directions' rows and
+-- writes `friends`.
 CREATE TABLE friend_requests (
   from_id TEXT NOT NULL, to_id TEXT NOT NULL, created_at INTEGER NOT NULL,
-  state TEXT NOT NULL CHECK (state IN ('pending', 'declined')), PRIMARY KEY (from_id, to_id));
+  state TEXT NOT NULL CHECK (state IN ('pending', 'declined', 'cooldown')), PRIMARY KEY (from_id, to_id));
 -- The asked person's list.
 CREATE INDEX friend_requests_to ON friend_requests(to_id, state, created_at);
 -- The cron's sweep of asks past their 14 days.

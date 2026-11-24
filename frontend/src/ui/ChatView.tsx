@@ -28,7 +28,7 @@ interface Props {
   /** Where you stand with them as friends (see `useFriends`), when it is known. */
   friend?: FriendStanding
   /** "Dost banao": asks them to be friends; where it stands then, or null when it did not go. */
-  onBefriend?(): Promise<FriendState | null>
+  onBefriend?(): Promise<FriendState | 'cooldown' | null>
 }
 
 /** A message the server has not confirmed yet. */
@@ -244,7 +244,13 @@ export function ChatView({
                 void onBefriend().then((state) => {
                   if (!alive.current) return
                   setFriendNote(
-                    state === 'friends' ? 'friendAlready' : state ? 'friendAsked' : 'friendAskFailed',
+                    state === 'friends'
+                      ? 'friendAlready'
+                      : state === 'cooldown'
+                        ? 'friendAskLater'
+                        : state
+                          ? 'friendAsked'
+                          : 'friendAskFailed',
                   )
                 })
               }}

@@ -21,8 +21,8 @@ export interface Friends {
   /** Looks again; `force` even if it just did (after your own change, or a `friend` notice). */
   refresh(force?: boolean): Promise<void>
   standing(id: string): FriendStanding
-  /** "Dost banao": where it stands now, or null when it could not be asked. */
-  ask(id: string): Promise<FriendState | null>
+  /** "Dost banao": where it stands now, `cooldown` when not yet again, or null when it could not be asked. */
+  ask(id: string): Promise<FriendState | 'cooldown' | null>
   /** Yes (true once friends) or a silent no to `id`'s ask. */
   answer(id: string, yes: boolean): Promise<boolean>
   remove(id: string): Promise<boolean>
@@ -106,7 +106,7 @@ export function useFriends({
   const ask = useCallback(
     async (id: string) => {
       const state = await withToken((tok) => askFriend(tok, id), null)
-      if (state) void refresh(true)
+      if (state && state !== 'cooldown') void refresh(true)
       return state
     },
     [withToken, refresh],

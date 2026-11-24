@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { FriendLists, PublicPerson } from '../net/protocol'
 import { ChatView } from '../ui/ChatView'
@@ -58,7 +58,10 @@ beforeEach(() => {
     }),
   )
 })
+/** Every root a test made: unmounted after it, so no panel of one test keeps listening in the next. */
+const roots: Root[] = []
 afterEach(() => {
+  act(() => roots.splice(0).forEach((r) => r.unmount()))
   vi.useRealTimers()
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
@@ -79,7 +82,9 @@ function Seated() {
 
 async function mount(node: React.ReactNode) {
   const host = document.body.appendChild(document.createElement('div'))
-  await act(async () => createRoot(host).render(node))
+  const root = createRoot(host)
+  roots.push(root)
+  await act(async () => root.render(node))
   await settle()
   const button = (name: string | RegExp) =>
     [...host.querySelectorAll('button')].find((b) =>
@@ -152,6 +157,34 @@ it(`open, the list looks again every ${FRIENDS_POLL_MS / 1000} s, and stops once
   expect(reads()).toBe(2)
 })
 
+it('a hidden tab asks nothing; coming back looks once, at once', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  let hidden = false
+  const spy = vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden)
+  await mount(<Panel />)
+  const reads = () => calls.filter((c) => c === 'GET /api/friends').length
+  expect(reads()).toBe(1)
+  hidden = true
+  await act(async () => void vi.advanceTimersByTime(3 * FRIENDS_POLL_MS))
+  await settle()
+  expect(reads()).toBe(1)
+  hidden = false
+  await act(async () => void document.dispatchEvent(new Event('visibilitychange')))
+  await settle()
+  expect(reads()).toBe(2)
+  spy.mockRestore()
+})
+
+it('while someone asks, the list does not also say there are no friends', async () => {
+  lists = { ...lists, friends: [], sent: [] }
+  const { host } = await mount(<Panel />)
+  expect(host.textContent).toContain('Want to be friends')
+  expect(host.textContent).not.toContain('No friends yet')
+  lists = { ...lists, incoming: [] }
+  const empty = await mount(<Panel />)
+  expect(empty.host.textContent).toContain('No friends yet')
+})
+
 it('Chai pe bulao: pick a friend, the invite names this bench, and "Invite sent" is all it ever says', async () => {
   const { host, button, click } = await mount(<Seated />)
   await click(button(/Invite for chai/))
@@ -185,7 +218,7 @@ it('a chat\'s menu offers "Be friends" until it is asked, then says where it sta
     look: { skin: 1, outfit: 'pink', head: 'none' },
     status: '',
   }
-  const onBefriend = vi.fn(async () => 'asked' as const)
+  const onBefriend = vi.fn(async (): Promise<'asked' | 'cooldown'> => 'asked')
   function Chat({ friend }: { friend: 'asked' | 'friends' | null }) {
     return (
       <ChatView
@@ -208,6 +241,12 @@ it('a chat\'s menu offers "Be friends" until it is asked, then says where it sta
   await settle()
   expect(onBefriend).toHaveBeenCalledTimes(1)
   expect(host.textContent).toContain('Friend request sent.')
+  // within 14 days of an ask taken back, or of being removed: not yet, and nothing more said
+  onBefriend.mockResolvedValueOnce('cooldown')
+  await click(button(/^More$/))
+  await click(button(/Be friends/))
+  await settle()
+  expect(host.textContent).toContain("You can't ask again just yet.")
   const asked = await mount(<Chat friend="asked" />)
   await asked.click(asked.button(/^More$/))
   expect(asked.host.textContent).toContain('Ravi · waiting for a yes')

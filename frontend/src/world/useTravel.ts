@@ -69,12 +69,13 @@ export function useTravel() {
 
   /**
    * A trip already under way ignores further requests. Only a trip that arrives is remembered: not one
-   * whose district failed to load (that raises `failed`), nor one cut short by the city closing.
+   * whose district failed to load (that raises `failed`), nor one cut short by the city closing. Resolves true
+   * once it has arrived, false for any trip that did not (ignored, failed, cancelled, the city closed).
    */
   const travelTo = useCallback(
     async (id: DistrictId, from: DistrictId = savedDistrict(), place?: string) => {
       const go = swap.current
-      if (busy.current || !go) return
+      if (busy.current || !go) return false
       busy.current = true
       showSheet(false)
       setFading(true)
@@ -82,7 +83,7 @@ export function useTravel() {
       const bound = () => swap.current === go
       try {
         await new Promise((r) => setTimeout(r, FADE_MS))
-        if (!bound()) return
+        if (!bound()) return false
         // the ride plays while the district loads; a failed load cuts the ride short
         const coach = playRide(from, id)
         skipRef.current = coach.skip
@@ -92,7 +93,7 @@ export function useTravel() {
         // remembered the moment the district is in, so a reload mid-ride reopens there
         loading.then(() => bound() && !trip.signal.aborted && storage.set(KEY, id), coach.skip)
         await coach.done
-        if (!bound()) return
+        if (!bound()) return false
         let arrived = false
         let lost = false
         void loading.then(
@@ -110,12 +111,15 @@ export function useTravel() {
             trip.signal.addEventListener('abort', () => no(new Error('cancelled')), { once: true }),
           ),
         ])
-        if (bound()) chime(rideBy(from, id))
+        if (!bound()) return false
+        chime(rideBy(from, id))
+        return true
       } catch {
-        if (!bound()) return
+        if (!bound()) return false
         setFailed(id)
         clearTimeout(failedTimer.current)
         failedTimer.current = setTimeout(() => setFailed(null), FAILED_MS)
+        return false
       } finally {
         busy.current = false
         skipRef.current = () => {}

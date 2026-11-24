@@ -21,14 +21,21 @@ export async function getFriends(token: string, signal?: AbortSignal): Promise<F
   }
 }
 
-/** "Dost banao": where it stands now, or null when it could not be asked (no longer matched, a limit, offline). */
-export async function askFriend(token: string, to: string): Promise<FriendState | null> {
+/**
+ * "Dost banao": where it stands now; `cooldown` when it cannot be asked again yet (an ask taken back, or they ended
+ * the friendship, in the last 14 days); null when it could not be asked (no longer matched, a limit, offline).
+ */
+export async function askFriend(token: string, to: string): Promise<FriendState | 'cooldown' | null> {
   try {
     const res = await fetchNoting(`${API_BASE}/api/friends`, {
       method: 'POST',
       headers: json(token),
       body: JSON.stringify({ to }),
     })
+    if (res.status === 409) {
+      const error = ((await res.json().catch(() => null)) as { error?: string } | null)?.error
+      return error === 'cooldown' ? 'cooldown' : null
+    }
     if (!res.ok) return null
     return ((await res.json()) as { state: FriendState }).state
   } catch {

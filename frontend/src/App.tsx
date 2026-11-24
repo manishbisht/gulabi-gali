@@ -267,6 +267,11 @@ export default function App() {
   }, [liveKey, auth.token])
   const conn = useConnections({ user: residentId, token: auth.token, onBanned: refresh })
   const friends = useFriends({ user: residentId, token: auth.token, tick: conn.friendTick })
+  // each time the inbox comes (back) up, a look at the friend asks too, so one made while away shows on Profile
+  const refreshFriends = friends.refresh
+  useEffect(() => {
+    if (conn.reconnects > 0) void refreshFriends()
+  }, [conn.reconnects, refreshFriends])
   const slowed = useRateNotice()
   const { block, blockPoster, toast: blockToast } = useBlock(auth.token, lang)
   const [connOpen, setConnOpen] = useState(false)
@@ -577,12 +582,13 @@ export default function App() {
    * "Chalo" on a friend's invite for chai: in this district, the compass points at their bench (as a map pick
    * does); in another, the metro (or bus) takes you there and stands you by it (a place link's spot).
    */
-  const chalo = (c: ChaiInviteView) => {
+  const chalo = async (c: ChaiInviteView): Promise<boolean> => {
     setConnOpen(false)
-    if (!entered) return
-    const place = c.district === here ? places?.get(c.bench) : undefined
+    if (!entered) return false
+    if (c.district !== here) return travelTo(c.district, here, linkId({ id: c.bench, kind: c.kind }))
+    const place = places?.get(c.bench)
     if (place) map.pick(place)
-    else if (c.district !== here) void travelTo(c.district, here, linkId({ id: c.bench, kind: c.kind }))
+    return !!place
   }
 
   const invite = (id: string) => {
@@ -641,6 +647,7 @@ export default function App() {
         }}
         visibility={visibility}
         onProfile={auth.signedIn && me ? () => setProfileOpen(true) : undefined}
+        profileBadge={residentId ? (friends.lists?.incoming.length ?? 0) : 0}
         onInvite={residentId ? () => setInviteOpen(true) : undefined}
         onConnections={residentId ? () => setConnOpen((was) => !was) : undefined}
         connectionsBadge={conn.badge}

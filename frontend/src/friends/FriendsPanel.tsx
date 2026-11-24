@@ -25,10 +25,20 @@ export function FriendsPanel({ friends, lang }: Props) {
   const [removing, setRemoving] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
+  // a hidden tab (a locked phone, another app) asks nothing; coming back looks once, at once
   useEffect(() => {
     void refresh(true)
-    const timer = setInterval(() => void refresh(true), FRIENDS_POLL_MS)
-    return () => clearInterval(timer)
+    const timer = setInterval(() => {
+      if (!document.hidden) void refresh(true)
+    }, FRIENDS_POLL_MS)
+    const onVisible = () => {
+      if (!document.hidden) void refresh(true)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [refresh])
 
   const act = async (key: string, fn: () => Promise<boolean>, failure: StringKey) => {
@@ -74,7 +84,7 @@ export function FriendsPanel({ friends, lang }: Props) {
             </div>
           )}
           {lists.friends.length === 0 && lists.sent.length === 0 ? (
-            <p>{t('friendsNone', lang)}</p>
+            lists.incoming.length === 0 && <p>{t('friendsNone', lang)}</p>
           ) : (
             <ul className="friends-list">
               {lists.friends.map((f) => (

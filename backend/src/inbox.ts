@@ -43,10 +43,10 @@ export async function notify(
   env: Env,
   userId: string,
   n: InboxNotice,
-  { push = false }: { push?: boolean } = {},
+  { push = false, ttlS }: { push?: boolean; ttlS?: number } = {},
 ): Promise<void> {
   try {
-    await inboxOf(env, userId).notify(n, push ? userId : undefined)
+    await inboxOf(env, userId).notify(n, push ? userId : undefined, ttlS)
   } catch (err) {
     console.error('inbox: notify failed', err)
   }
@@ -131,11 +131,12 @@ export class InboxDO extends DurableObject<Env> {
   /**
    * RPC: sends `n` to every live socket, serialised once. Answers how many it went to. With none live and
    * `pushTo` given (this object's person, passed only when the sender may be notified about: see `notify`), a
-   * request or a message is pushed to their devices instead: an open inbox already shows it, so a push then
+   * request, a message or a friend's invite for chai is pushed to their devices instead (held by the push service
+   * for `ttlS` seconds when given, else a day): an open inbox already shows it, so a push then
    * would only buzz twice. A socket not heard from for `INBOX_STALE_MS` does not count as open: it is closed
    * (`LIVE_CLOSE.idle`, which a page that wakes up reconnects after, fetching its lists) and the push goes.
    */
-  async notify(n: InboxNotice, pushFor?: string): Promise<number> {
+  async notify(n: InboxNotice, pushFor?: string, ttlS?: number): Promise<number> {
     const text = JSON.stringify(n)
     const now = this.clock()
     let sent = 0
@@ -151,7 +152,8 @@ export class InboxDO extends DurableObject<Env> {
         // Closing under us: its close handler will tidy up.
       }
     }
-    if (sent === 0 && pushFor && isPushKind(n.t)) await pushTo(this.env, pushFor, n.t)
+    if (sent === 0 && pushFor && isPushKind(n.t))
+      await pushTo(this.env, pushFor, n.t, fetch, Date.now(), ttlS)
     return sent
   }
 

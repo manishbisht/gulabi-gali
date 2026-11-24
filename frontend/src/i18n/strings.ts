@@ -993,6 +993,12 @@ export const STRINGS = {
   },
   friendAlready: { hi: 'Aap dost ho', en: "You're friends" },
   friendAskFailed: { hi: 'Request nahi gayi. Phir se try karo.', en: "Couldn't send that. Try again." },
+  friendAskLater: {
+    hi: 'Abhi dobara nahi pooch sakte. Kuch din baad try karna.',
+    en: "You can't ask again just yet. Try in a few days.",
+  },
+  /** The Profile button's count: asks to be friends waiting there for an answer. */
+  friendsAsking: { hi: '{n} dosti ki request', en: '{n} friend requests' },
   chaiButton: { hi: 'Chai pe bulao', en: 'Invite for chai' },
   chaiPick: { hi: 'Kise bulana hai?', en: 'Who would you like to invite?' },
   chaiNoFriends: {

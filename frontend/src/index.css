@@ -2515,6 +2515,13 @@ button.stamp-count::after {
   margin: 0 0 12px;
 }
 
+.chai-invites ul {
+  /* a few invites at most in view on a small phone; the rest scroll, and the tabs stay on screen */
+  max-height: 28vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .chai-invites h3 {
   margin: 0 0 6px;
   font-size: 0.95rem;

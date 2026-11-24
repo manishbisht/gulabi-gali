@@ -138,27 +138,26 @@ export async function listFriends(env: Env, userId: string, now = Date.now()): P
     )
       .bind(userId, cutoff, MAX_FRIENDS)
       .all<{ id: string; name: string }>(),
-    // A declined ask reads as pending: the asker is never told.
+    // A declined ask reads as pending: the asker is never told. A cooldown is never listed (see `askFriend`).
     env.DB.prepare(
       `SELECT p.user_id AS id, p.name FROM friend_requests r
        JOIN profiles p ON p.user_id = r.to_id JOIN users u ON u.id = p.user_id
-       WHERE r.from_id = ?1 AND r.created_at > ?2 AND ${OTHER_OK}
+       WHERE r.from_id = ?1 AND r.state IN ('pending', 'declined') AND r.created_at > ?2 AND ${OTHER_OK}
        ORDER BY r.created_at DESC LIMIT ?3`,
     )
       .bind(userId, cutoff, MAX_FRIENDS)
       .all<{ id: string; name: string }>(),
     settingsOf(env, userId),
   ])
-  // Only friends who share it are ever asked about: the gate never hears the others' ids.
+  // Only friends who share it are ever asked about: the gate never hears the others' ids. The gate is asked every
+  // time, with none at all too, so how long the answer takes never tells whether anyone turned sharing off.
   const sharing = friendRows.results.filter((r) => r.share === 1).map((r) => r.id)
   let where: Record<string, string> = {}
-  if (sharing.length) {
-    try {
-      where = await env.GATE.get(env.GATE.idFromName(GATE_NAME)).where(sharing)
-    } catch (err) {
-      // The list still comes, with nobody shown out: that reads the same as everyone being away.
-      console.error('friends: gate where failed', err)
-    }
+  try {
+    where = await env.GATE.get(env.GATE.idFromName(GATE_NAME)).where(sharing)
+  } catch (err) {
+    // The list still comes, with nobody shown out: that reads the same as everyone being away.
+    console.error('friends: gate where failed', err)
   }
   const friends: FriendView[] = friendRows.results.map((r) => {
     const here = r.share === 1 ? where[r.id] : undefined
@@ -210,7 +209,8 @@ async function reachable(env: Env, me: string, other: string): Promise<Response 
 /**
  * `POST /api/friends {to}`: "Dost banao". 201 `{state: 'asked'}` for a new ask (the other side's inbox hears
  * `friend`; no push); 200 `{state: 'asked'}` when one already stands (pending or, unknown to the asker,
- * declined); 200 `{state: 'friends'}` when they had asked too, or already are. The caller must be a resident others
+ * declined); 409 `cooldown` within 14 days of an ask taken back or of them ending the friendship (see
+ * `removeFriend`); 200 `{state: 'friends'}` when they had asked too, or already are. The caller must be a resident others
  * can see (403 `ghost`), not muted (403 `muted`); `to` someone they are matched with, who others can see, with no
  * block either way: anyone else is 404 `not-found`, alike. 400 for no `to`, or yourself; 429 past
  * `FRIEND_ASK_LIMIT`.
@@ -238,21 +238,24 @@ export async function askFriend(
     return state('friends')
   }
   const mine = await env.DB.prepare(
-    'SELECT 1 AS x FROM friend_requests WHERE from_id = ? AND to_id = ? AND created_at > ?',
+    'SELECT state FROM friend_requests WHERE from_id = ? AND to_id = ? AND created_at > ?',
   )
     .bind(userId, to, cutoff)
-    .first()
+    .first<{ state: 'pending' | 'declined' | 'cooldown' }>()
+  // A cooldown: you took your ask back, or they ended the friendship. One ask per 14 days, as for requests.
+  if (mine?.state === 'cooldown') return fail('cooldown', 409)
   if (mine) return state('asked')
   const slow = await spend(env, userId, FRIEND_ASK_LIMIT, now)
   if (slow) return slow
   const [a, b] = pairOf(userId, to)
-  // In one statement with the match and block checks, so a block or an unmatch landing meanwhile wins.
+  // In one statement with the match, block and cooldown checks, so anything landing meanwhile wins.
   const { meta } = await env.DB.prepare(
     `INSERT OR REPLACE INTO friend_requests (from_id, to_id, created_at, state)
      SELECT ?1, ?2, ?3, 'pending' WHERE EXISTS (SELECT 1 FROM matches WHERE a = ?4 AND b = ?5)
-       AND NOT EXISTS (SELECT 1 FROM blocks WHERE (a = ?1 AND b = ?2) OR (a = ?2 AND b = ?1))`,
+       AND NOT EXISTS (SELECT 1 FROM blocks WHERE (a = ?1 AND b = ?2) OR (a = ?2 AND b = ?1))
+       AND NOT EXISTS (SELECT 1 FROM friend_requests WHERE from_id = ?1 AND to_id = ?2 AND created_at > ?6)`,
   )
-    .bind(userId, to, now, a, b)
+    .bind(userId, to, now, a, b, cutoff)
     .run()
   if (!meta.changes) return fail('not-found', 404)
   // Both asked at the same moment, each before the other's ask was written: whoever looks again now finds it.
@@ -309,6 +312,11 @@ export async function declineFriend(
 /**
  * `DELETE /api/friends/:id`: the friendship with `id` ends (its invites with it), and any ask the caller made them
  * is taken back. 204, also when there was nothing; nobody is told. Anyone signed in may remove theirs.
+ *
+ * Neither is a way round a no. An ask taken back stays as a `cooldown` (listed nowhere) until 14 days after it
+ * was made, so it cannot be made again sooner. Ending a friendship leaves the other person a `cooldown` ask to
+ * the caller, dated now: they cannot ask straight back for 14 days, while the caller may ask again (as an
+ * unmatch does with requests).
  */
 export async function removeFriend(
   env: Env,
@@ -321,8 +329,15 @@ export async function removeFriend(
   if (slow) return slow
   const [a, b] = pairOf(userId, id)
   await env.DB.batch([
+    // Only while the friendship stands: then it is the caller who ended it.
+    env.DB.prepare(
+      `INSERT OR REPLACE INTO friend_requests (from_id, to_id, created_at, state)
+       SELECT ?1, ?2, ?3, 'cooldown' WHERE EXISTS (SELECT 1 FROM friends WHERE a = ?4 AND b = ?5)`,
+    ).bind(id, userId, now, a, b),
     env.DB.prepare('DELETE FROM friends WHERE a = ? AND b = ?').bind(a, b),
-    env.DB.prepare('DELETE FROM friend_requests WHERE from_id = ? AND to_id = ?').bind(userId, id),
+    env.DB.prepare(
+      "UPDATE friend_requests SET state = 'cooldown' WHERE from_id = ? AND to_id = ? AND state != 'cooldown'",
+    ).bind(userId, id),
   ])
   return noContent()
 }
@@ -360,7 +375,11 @@ export async function putFriendSettings(
   return Response.json(next)
 }
 
-/** The pair limit's bucket: the friend's id is hashed, so the counters table never holds who was invited. */
+/**
+ * The pair limit's bucket: the friend's id, hashed, so the counters table does not hold it in plain text. The hash
+ * is unsalted (no new secret for this), so anyone holding both the counters and the users table could match it
+ * back; the row goes with the cron's counter sweep after two days anyway.
+ */
 async function pairBucket(to: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(to))
   const hex = [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -407,25 +426,25 @@ export async function sendChai(
   if (!sits) return fail('not-seated', 409)
   const tooSoon = await spend(env, userId, CHAI_LIMIT.pair, now, await pairBucket(to))
   if (tooSoon) return tooSoon
-  // Everything below is about the friend: none of it may change the answer.
-  const [them, blocked, friends, theirs] = await Promise.all([
-    visibleRow(env, to),
-    isBlocked(env, userId, to),
-    areFriends(env, userId, to),
-    settingsOf(env, to),
-  ])
-  if (!them || blocked || !friends || !theirs.chaiInvites) return SENT()
+  // Everything below is about the friend: none of it may change the answer, nor how long it takes. So every try
+  // runs this same batch, with every condition about the friend inside the insert: a friend, someone others can
+  // see, no block either way, invites on. It also replaces the pair's last invite (one live one per pair).
   const [a, b] = pairOf(userId, to)
-  // One live invite per pair, written only while the friendship stands (a removal or block meanwhile wins).
   const results = await env.DB.batch([
     env.DB.prepare('DELETE FROM chai_invites WHERE from_id = ? AND to_id = ?').bind(userId, to),
     env.DB.prepare(
       `INSERT INTO chai_invites (id, from_id, to_id, bench, kind, created_at)
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM friends WHERE a = ?7 AND b = ?8)`,
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM friends WHERE a = ?7 AND b = ?8)
+         AND EXISTS (SELECT 1 FROM users u JOIN profiles p ON p.user_id = u.id
+           WHERE u.id = ?3 AND ${visibleAs('u', 'p')})
+         AND NOT EXISTS (SELECT 1 FROM blocks WHERE (a = ?2 AND b = ?3) OR (a = ?3 AND b = ?2))
+         AND COALESCE((SELECT chai_invites FROM friend_settings WHERE user_id = ?3), 1) = 1`,
     ).bind(crypto.randomUUID(), userId, to, bench, kind, now, a, b),
   ])
-  // The sender passed `visibleRow` above (a hidden person cannot invite), so this one may push.
-  if (results[1]!.meta.changes) later(notify(env, to, { t: 'chai' }, { push: true }))
+  // The sender passed `visibleRow` above (a hidden person cannot invite), so this one may push; for no longer
+  // than the invite stands.
+  if (results[1]!.meta.changes)
+    later(notify(env, to, { t: 'chai' }, { push: true, ttlS: CHAI_TTL_MS / 1000 }))
   return SENT()
 }
 

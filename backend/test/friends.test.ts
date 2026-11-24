@@ -107,12 +107,16 @@ async function seated(token: string, district: DistrictId, n: number): Promise<L
 
 /** A fake FCM: every push to it lands in `got`. */
 function fakePushService() {
-  const got: { endpoint: string; body: Uint8Array }[] = []
+  const got: { endpoint: string; body: Uint8Array; headers: Headers }[] = []
   const real = globalThis.fetch
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = input instanceof Request ? input.url : String(input)
     if (!url.startsWith('https://fcm.googleapis.com/')) return real(input, init)
-    got.push({ endpoint: url, body: new Uint8Array(await new Response(init?.body).arrayBuffer()) })
+    got.push({
+      endpoint: url,
+      body: new Uint8Array(await new Response(init?.body).arrayBuffer()),
+      headers: new Headers(init?.headers),
+    })
     return new Response(null, { status: 201 })
   })
   return got
@@ -211,13 +215,56 @@ describe('Dost banao: both have to agree', () => {
     expect((await unfriend(b, aId)).status).toBe(204)
     expect((await lists(a)).friends).toEqual([])
     expect((await lists(b)).friends).toEqual([])
-    // and again, from the other side, after a new yes
-    expect((await ask(a, bId)).status).toBe(201)
-    expect((await answer(b, aId, 'accept')).status).toBe(200)
+    // and again, from the other side, after a new yes (the one who ended it may ask again)
+    expect((await ask(b, aId)).status).toBe(201)
+    expect((await answer(a, bId, 'accept')).status).toBe(200)
     expect((await unfriend(a, bId)).status).toBe(204)
     expect((await lists(b)).friends).toEqual([])
     // removing someone who is not a friend tells nothing either
     expect((await unfriend(a, 'dev:nobody-at-all')).status).toBe(204)
+  })
+
+  it('the one removed cannot ask straight back: a 14-day cooldown nobody sees, as an unmatch gives', async () => {
+    const { a, b, aId, bId } = await friends('Cool Asha', 'Cool Bilal')
+    expect((await unfriend(b, aId)).status).toBe(204)
+    for (let i = 0; i < 3; i++) {
+      const res = await ask(a, bId)
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({ error: 'cooldown' })
+    }
+    // listed nowhere, either side
+    for (const t of [a, b]) {
+      const l = await lists(t)
+      expect([l.friends, l.incoming, l.sent]).toEqual([[], [], []])
+    }
+    // the cron's 14 days end it
+    await purgeFriends(testEnv, Date.now() + FRIEND_ASK_TTL_MS + 1000)
+    expect((await ask(a, bId)).status).toBe(201)
+    expect((await lists(b)).incoming).toEqual([{ id: aId, name: 'Cool' }])
+  })
+
+  it('an ask taken back cannot be made again for 14 days: no loop round a decline', async () => {
+    const { a, b, aId, bId } = await pair('Loop Chandu', 'Loop Dia')
+    expect((await ask(a, bId)).status).toBe(201)
+    expect((await answer(b, aId, 'decline')).status).toBe(204)
+    // take it back and ask again, over and over: refused, and B never sees another
+    expect((await unfriend(a, bId)).status).toBe(204)
+    expect((await lists(a)).sent).toEqual([])
+    const again = await ask(a, bId)
+    expect(again.status).toBe(409)
+    expect(await again.json()).toEqual({ error: 'cooldown' })
+    expect((await lists(b)).incoming).toEqual([])
+    // a pending one taken back, the same
+    const p = await pair('Loop Esha', 'Loop Farid')
+    expect((await ask(p.a, p.bId)).status).toBe(201)
+    expect((await unfriend(p.a, p.bId)).status).toBe(204)
+    expect((await lists(p.b)).incoming).toEqual([])
+    expect((await ask(p.a, p.bId)).status).toBe(409)
+    // and it cannot be accepted: it is no ask
+    expect((await answer(p.b, p.aId, 'accept')).status).toBe(404)
+    // still, the other side may ask: that is their own yes
+    expect(await (await ask(p.b, p.aId)).json()).toEqual({ state: 'asked' })
+    expect(await (await ask(p.a, p.bId)).json()).toEqual({ state: 'friends' })
   })
 
   it('an unmatch ends the friendship (friends are matched people)', async () => {
@@ -311,6 +358,13 @@ describe('a block, a hide, a ban or a deletion ends it', () => {
     const { a, b, aId, bId } = await friends('Leave Kiran', 'Leave Lal')
     const c = await pair('Leave Kiran', 'Leave Mohan')
     expect((await ask(c.a, c.bId)).status).toBe(201)
+    // and cooldowns, either way: an ask taken back, a friendship ended
+    expect((await unfriend(c.a, c.bId)).status).toBe(204)
+    const d = await friends('Leave Kiran', 'Leave Nisha')
+    expect((await unfriend(d.b, d.aId)).status).toBe(204)
+    expect(
+      await count("SELECT COUNT(*) AS n FROM friend_requests WHERE state = 'cooldown' AND from_id = ?", aId),
+    ).toBe(2)
     expect((await settings(a, { showPresence: false })).status).toBe(200)
     const sat = await seated(b, 'university', 0)
     expect(
@@ -584,6 +638,9 @@ describe('chai pe bulao', () => {
     const plain = new TextDecoder().decode(await decryptPayload(got[0]!.body, ua))
     expect(JSON.parse(plain)).toEqual({ t: 'chai', lang: 'en' })
     for (const leak of ['Indu', 'Push', 'amer', 'dev:']) expect(plain).not.toContain(leak)
+    // held by the push service only as long as the invite stands, not the usual day
+    expect(got[0]!.headers.get('TTL')).toBe(String(CHAI_TTL_MS / 1000))
+    expect(got[0]!.headers.get('Topic')).toBe('chai')
   })
 
   it('no push with the inbox open, and none at all for a refused one', async () => {
@@ -617,5 +674,115 @@ describe('chai pe bulao', () => {
     await again.settled()
     expect(got).toEqual([])
     closeAll()
+  })
+})
+
+/**
+ * `testEnv` with every D1 call it makes written down in order (`first`, `run`, `all`, `batch:<n>`), and every
+ * `where` the gate is asked: two answers that must not be told apart must cost the same calls.
+ */
+function counted() {
+  const log: string[] = []
+  const real = new WeakMap<object, D1PreparedStatement>()
+  const wrap = (stmt: D1PreparedStatement): D1PreparedStatement => {
+    const proxy = new Proxy(stmt, {
+      get(target, key) {
+        const value = Reflect.get(target, key) as unknown
+        if (typeof value !== 'function') return value
+        if (key === 'bind') return (...args: unknown[]) => wrap(target.bind(...args))
+        if (key === 'first' || key === 'run' || key === 'all' || key === 'raw')
+          return (...args: unknown[]) => {
+            log.push(String(key))
+            return (value as (...a: unknown[]) => unknown).apply(target, args)
+          }
+        return (value as (...a: unknown[]) => unknown).bind(target)
+      },
+    })
+    real.set(proxy, stmt)
+    return proxy
+  }
+  const DB = new Proxy(db, {
+    get(target, key) {
+      if (key === 'prepare') return (q: string) => wrap(target.prepare(q))
+      if (key === 'batch')
+        return (stmts: D1PreparedStatement[]) => {
+          log.push(`batch:${stmts.length}`)
+          return target.batch(stmts.map((s) => real.get(s) ?? s))
+        }
+      const value = Reflect.get(target, key) as unknown
+      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value
+    },
+  })
+  const GATE = {
+    idFromName: (name: string) => testEnv.GATE.idFromName(name),
+    get: (id: DurableObjectId) => {
+      const stub = testEnv.GATE.get(id)
+      return {
+        where: (ids: string[]) => {
+          log.push('where')
+          return stub.where(ids)
+        },
+      }
+    },
+  }
+  return { env: { ...testEnv, DB, GATE } as unknown as Env, log }
+}
+
+describe('nothing to read in how long an answer takes', () => {
+  it('the friend list asks the gate once, whether friends share, do not, or there are none', async () => {
+    const shares = await friends('Time Asha', 'Time Bilal')
+    const hides = await friends('Time Chitra', 'Time Dev')
+    expect((await settings(hides.b, { showPresence: false })).status).toBe(200)
+    await resident('Time Esha')
+    const logs: string[][] = []
+    for (const [who, i] of [
+      [shares.aId, 1],
+      [hides.aId, 2],
+      [devId('Time Esha'), 3],
+    ] as const) {
+      const { env: e, log } = counted()
+      const res = await listFriends(e, who, 21_000_000 * 60_000 + i)
+      expect(res.status).toBe(200)
+      logs.push(log)
+    }
+    expect(logs[0]).toContain('where')
+    for (const log of logs) expect(log).toEqual(logs[0])
+  })
+
+  it('an invite costs the same calls whether it reached them or not (invites off, hidden, blocked, a ghost, not a friend)', async () => {
+    const ok = await friends('Cost Asha', 'Cost Bilal')
+    const aId = ok.aId
+    const off = await friends('Cost Asha', 'Cost Off')
+    expect((await settings(off.b, { chaiInvites: false })).status).toBe(200)
+    const hid = await friends('Cost Asha', 'Cost Hidden')
+    await sql('UPDATE users SET hidden = 1 WHERE id = ?', hid.bId)
+    const blk = await friends('Cost Asha', 'Cost Blocker')
+    await sql(
+      'INSERT INTO blocks (a, b, created_at, name, handle) VALUES (?, ?, ?, ?, ?)',
+      blk.bId,
+      aId,
+      1,
+      'x',
+      'hc',
+    )
+    await resident('Cost Stranger')
+    await seated(ok.a, 'malviya-nagar', 0)
+    const targets = [ok.bId, off.bId, hid.bId, blk.bId, devId('Cost Ghost'), devId('Cost Stranger')]
+    const logs: string[][] = []
+    let at = 23_000_000 * CHAI_LIMIT.sender.windowMs
+    for (const to of targets) {
+      const { env: e, log } = counted()
+      const res = await sendChai(e, aId, { to, bench: 'malviya-nagar:0', kind: 'bench' }, at, () => {})
+      expect(res.status, to).toBe(202)
+      at += CHAI_LIMIT.sender.windowMs
+      logs.push(log)
+    }
+    for (const [i, log] of logs.entries()) expect(log, targets[i]).toEqual(logs[0])
+    // and only the first was written
+    const { results } = await db
+      .prepare('SELECT to_id FROM chai_invites WHERE from_id = ?')
+      .bind(aId)
+      .all<{ to_id: string }>()
+    expect(results).toEqual([{ to_id: ok.bId }])
   })
 })

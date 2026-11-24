@@ -119,7 +119,7 @@ const settle = () => act(async () => void (await new Promise((r) => setTimeout(r
 /** What the Connections sheet's block does here: set per test. */
 let onBlock: ((id: string, name: string) => Promise<boolean>) | undefined
 /** "Chalo" on an invite: set per test. */
-let onChalo: ((c: ChaiInviteView) => void) | undefined
+let onChalo: ((c: ChaiInviteView) => boolean | Promise<boolean>) | undefined
 
 function Probe({ sheet, user = 'u1' }: { sheet: boolean; user?: string | null }) {
   const conn = useConnections({ user, token: async () => 'tok' })
@@ -447,7 +447,12 @@ it('blocking from a chat with "Also report?" blocks at once and keeps the chat f
 it('a chai notice fetches the invites (not the requests or chats): who and which bench, Chalo or Abhi nahi', async () => {
   const { host, q, button, click } = await mount()
   const went: ChaiInviteView[] = []
-  onChalo = (c) => went.push(c)
+  /** Whether the next "Chalo" gets anywhere (a trip may fail, or another be under way). */
+  let goes = false
+  onChalo = async (c) => {
+    went.push(c)
+    return goes
+  }
   expect(calls).toContain('GET /api/chai') // on open, like the lists
   const before = q('[data-testid=badge]').textContent
   chai = [
@@ -469,10 +474,16 @@ it('a chai notice fetches the invites (not the requests or chats): who and which
   await settle()
   expect(calls).toContain('DELETE /api/chai/c1')
   expect(host.textContent).not.toContain('Asha invited you')
-  // "Chalo": off to the bench, and the invite is done with
+  // "Chalo" that gets nowhere (the trip failed): the invite stays, to try again
   await click(button(/Let's go/))
   await settle()
-  expect(went.map((c) => c.bench)).toEqual(['mi-road:3'])
+  expect(calls).not.toContain('DELETE /api/chai/c2')
+  expect(host.textContent).toContain('Ravi invited you for chai')
+  // "Chalo": off to the bench, and only then is the invite done with
+  goes = true
+  await click(button(/Let's go/))
+  await settle()
+  expect(went.map((c) => c.bench)).toEqual(['mi-road:3', 'mi-road:3'])
   expect(calls).toContain('DELETE /api/chai/c2')
   expect(host.textContent).not.toContain('invited you for chai')
 })
