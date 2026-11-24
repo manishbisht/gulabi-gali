@@ -14,7 +14,8 @@
       "hawa-mahal": { "x": 35, "z": -12.5, "ry": -1.571 },
       "jantar-mantar": { "x": -37, "z": -34, "ry": 3.142 },
       "tripolia-gate": { "x": -93.5, "z": -10, "ry": 1.571 },
-      "badi-chaupar": { "x": -0.2, "z": 6.3, "ry": 1.571 }
+      "badi-chaupar": { "x": -0.2, "z": 6.3, "ry": 1.571 },
+      "city-palace": { "x": -70, "z": -65.5, "ry": 1.571 }
     }
   },
   "mi-road": {
@@ -58,7 +59,8 @@
       { "x": -60, "z": 47.4 }
     ],
     "drops": {
-      "amer-fort": { "x": 38, "z": -35.5, "ry": 3.142 }
+      "amer-fort": { "x": 38, "z": -35.5, "ry": 3.142 },
+      "jal-mahal": { "x": -50, "z": 67.2, "ry": 0 }
     }
   },
   "nahargarh": {

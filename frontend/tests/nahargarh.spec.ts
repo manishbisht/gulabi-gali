@@ -78,12 +78,12 @@ test('no metro goes up to Nahargarh: the bus does, from the metro station, and b
   await expect.poll(() => page.evaluate(() => window.__gg.district())).toBe('amer')
 })
 
-test('Nahargarh: at the fort gateway its card opens and the stamp is the eleventh; the map calls the stop a bus stand', async ({
+test('Nahargarh: at the fort gateway its card opens and the stamp is one of thirteen; the map calls the stop a bus stand', async ({
   page,
 }) => {
   await enterOffline(page, 'nahargarh')
   expect(await page.evaluate(() => window.__gg.district())).toBe('nahargarh')
-  await expect(page.locator('.stamp-count')).toHaveText('0/11')
+  await expect(page.locator('.stamp-count')).toHaveText('0/13')
   await expect(page.locator('.hud-top')).toContainText('Nahargarh')
   await page.waitForTimeout(800)
   await shot(page, 'nahargarh-spawn')
@@ -93,7 +93,7 @@ test('Nahargarh: at the fort gateway its card opens and the stamp is the elevent
   await expect(card).toBeVisible()
   await shot(page, 'nahargarh-gate')
   await card.getByRole('button', { name: 'Stamp lo' }).tap()
-  await expect(page.locator('.stamp-count')).toHaveText('1/11')
+  await expect(page.locator('.stamp-count')).toHaveText('1/13')
 
   await page.getByRole('button', { name: 'Naksha · Nahargarh', exact: true }).tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Nahargarh' })

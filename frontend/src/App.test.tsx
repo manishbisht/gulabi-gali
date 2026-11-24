@@ -458,7 +458,7 @@ it('a profile with no `stamps` field (an older Worker, a rollback) still opens t
   )
   await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
   await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
-  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/11')
+  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/13')
   await act(async () => root.unmount())
 })
 

@@ -43,11 +43,15 @@ it("merges another device's stamps in after the local ones, known stamps only, o
 })
 
 it('names a stamp in either language, and knows how many there are', () => {
-  expect(stamps.TOTAL_STAMPS).toBe(11)
+  expect(stamps.TOTAL_STAMPS).toBe(13)
   expect(stamps.stampName('amer-fort', 'hi')).toBe('Amer ka Qila')
   expect(stamps.stampName('amer-fort', 'en')).toBe('Amer Fort')
   expect(stamps.stampName('nahargarh-fort', 'hi')).toBe('Nahargarh ka Qila')
   expect(stamps.stampName('nahargarh-fort', 'en')).toBe('Nahargarh Fort')
+  expect(stamps.stampName('jal-mahal', 'hi')).toBe('Jal Mahal')
+  expect(stamps.stampName('jal-mahal', 'en')).toBe('Jal Mahal')
+  expect(stamps.stampName('city-palace', 'hi')).toBe('City Palace')
+  expect(stamps.stampName('city-palace', 'en')).toBe('City Palace')
   expect(stamps.stampName('university-gate', 'hi')).toBe('Rajasthan University')
   expect(stamps.stampName('university-gate', 'en')).toBe('University of Rajasthan')
 })

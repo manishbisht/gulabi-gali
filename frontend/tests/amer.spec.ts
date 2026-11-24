@@ -78,7 +78,7 @@ test('Amer: up the path to the fort gate its card opens and the stamp is the ten
 }) => {
   await enterOffline(page, 'amer')
   expect(await page.evaluate(() => window.__gg.district())).toBe('amer')
-  await expect(page.locator('.stamp-count')).toHaveText('0/11')
+  await expect(page.locator('.stamp-count')).toHaveText('0/13')
   // at the foot of the path, looking north up it to the gate, the lake and the fort on its hill to the left
   await page.evaluate(() => window.__gg.teleport(31.5, 22))
   await page.waitForTimeout(800)
@@ -88,7 +88,7 @@ test('Amer: up the path to the fort gate its card opens and the stamp is the ten
   const card = page.locator('section.landmark-card[aria-label="Amer ka Qila"]')
   await expect(card).toBeVisible()
   await card.getByRole('button', { name: 'Stamp lo' }).tap()
-  await expect(page.locator('.stamp-count')).toHaveText('1/11')
+  await expect(page.locator('.stamp-count')).toHaveText('1/13')
 
   await page.getByRole('button', { name: 'Naksha · Amer', exact: true }).tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Amer' })

@@ -1,6 +1,7 @@
 import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { BADI_CHAUPAR, buildBadiChaupar } from '../landmarks/badiChaupar'
+import { buildCityPalace, CITY_PALACE, PALACE_GATE } from '../landmarks/cityPalace'
 import { buildHawaMahal, HAWA_MAHAL } from '../landmarks/hawaMahal'
 import { buildJantarMantar, JANTAR_MANTAR } from '../landmarks/jantarMantar'
 import { buildTripoliaGate, TRIPOLIA_GATE } from '../landmarks/tripoliaGate'
@@ -12,7 +13,9 @@ import { centred, createFill, grow, placed, rect, wall, type Facing } from './la
  * The Walled City, 240 × 240 m, with Badi Chaupar at the origin; x is east and -z is north. A loose take
  * on the real grid: the wide Tripolia–Ramganj bazaar runs east–west through the Chaupar and Johari
  * Bazaar runs south from it (Sireh Deori north). Lanes cross each quarter at ±62. The fill is placed
- * by a seeded generator, so the city is the same on every visit.
+ * by a seeded generator, so the city is the same on every visit. The City Palace's walled precinct fills the
+ * north-west, north of Jantar Mantar (and of Tripolia, its royal gate on the bazaar): its courtyard gateway
+ * opens south onto the lane, and Chandra Mahal rises at the back.
  */
 
 const SIZE = 240
@@ -31,6 +34,10 @@ const HAWA_AT = { x: 36, z: -18 }
 const JANTAR_AT = { x: -50, z: -36 }
 const TRIPOLIA_AT = { x: -96, z: -15 }
 const CHAUPAR_AT = { x: 0, z: 0 }
+/** The middle of the City Palace's precinct; its gateway faces south, onto the lane north of Jantar Mantar. */
+const PALACE_AT = { x: -66, z: -LANE - 10 - CITY_PALACE.d / 2 }
+/** Just outside the gateway, where its card opens and the stamp is. */
+const PALACE_GATE_AT = { x: PALACE_AT.x + PALACE_GATE.x, z: PALACE_AT.z + PALACE_GATE.z + 4 }
 
 const landmarks: LandmarkDef[] = [
   {
@@ -80,6 +87,18 @@ const landmarks: LandmarkDef[] = [
     radius: 12,
     footprint: centred(CHAUPAR_AT, BADI_CHAUPAR),
     build: placed(buildBadiChaupar, CHAUPAR_AT),
+  },
+  {
+    id: 'city-palace',
+    name: { hi: 'City Palace', en: 'City Palace' },
+    story: {
+      hi: 'Sawai Jai Singh II ne 1727 mein shahar ke saath ye mahal banwana shuru kiya. Saat manzila Chandra Mahal mein aaj bhi shahi parivaar rehta hai; baaki hissa museum hai.',
+      en: 'Sawai Jai Singh II began this palace with the city in 1727. The royal family still lives in the seven-storey Chandra Mahal; much of the rest is a museum.',
+    },
+    at: PALACE_GATE_AT,
+    radius: 8,
+    footprint: centred(PALACE_AT, CITY_PALACE),
+    build: placed(buildCityPalace, PALACE_AT),
   },
 ]
 

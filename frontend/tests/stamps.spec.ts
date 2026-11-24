@@ -20,13 +20,13 @@ test("a stamp collected signed in shows on that person's card in another browser
     (r) => new URL(r.url()).pathname === '/api/me/stamps' && r.request().method() === 'PUT',
   )
   await b.page.getByRole('button', { name: 'Stamp lo' }).click()
-  await expect(b.page.locator('.stamp-count')).toHaveText('1/11')
+  await expect(b.page.locator('.stamp-count')).toHaveText('1/13')
   expect((await saved).status()).toBe(200)
 
   // both step out of the ring (a landmark card outranks a person's), side by side, and A opens B's card
   await Promise.all([hopTo(b.page, OUTSIDE.x, OUTSIDE.z), hopTo(a.page, OUTSIDE.x - 1.5, OUTSIDE.z)])
   await a.page.keyboard.press('e')
   const card = a.page.getByRole('region', { name: b.name })
-  await expect(card.getByText('Jaipur Darshan · 1/11')).toBeVisible()
+  await expect(card.getByText('Jaipur Darshan · 1/13')).toBeVisible()
   await expect(card.getByRole('list', { name: 'Jaipur Darshan ke stamps' })).toHaveText('Hawa Mahal')
 })
