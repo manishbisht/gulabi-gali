@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CitySnapshot } from '../net/protocol'
+import { MAX_OPACITY } from './groundFog'
 import { airLoad, isWinter, istClock, morningMist, WINTER_MAX, winterFog } from './winter'
 
 /** An instant given as an IST wall-clock time. */
@@ -96,7 +97,7 @@ describe('winterFog', () => {
   it('is light on clean air, thicker on dirty air and in reported fog', () => {
     const d = (s: Partial<CitySnapshot>) => winterFog({ ...base, ...s }, dawn).density
     const clean = d({})
-    expect(clean).toBeCloseTo(0.012)
+    expect(clean).toBeCloseTo(0.009)
     expect(d({ aqi: 150, aqiBand: 'poor' })).toBeGreaterThan(clean)
     expect(d({ aqi: 200, aqiBand: 'unhealthy' })).toBeGreaterThan(d({ aqi: 150, aqiBand: 'poor' }))
     expect(d({ condition: 'fog' })).toBeGreaterThan(clean)
@@ -104,10 +105,12 @@ describe('winterFog', () => {
 
   it('never passes the cap, so landmarks 25 m off and the players stay in sight', () => {
     const worst = winterFog({ ...base, aqi: 500, aqiBand: 'severe', condition: 'fog' }, dawn)
-    expect(worst.density).toBe(WINTER_MAX)
-    expect(worst.ground).toBe(1)
-    // FogExp2 at 25 m: more than half of what is there still shows
-    expect(Math.exp(-((25 * worst.density) ** 2))).toBeGreaterThan(0.5)
+    expect(worst.density).toBeCloseTo(WINTER_MAX, 9)
+    expect(worst.ground).toBeCloseTo(1, 9)
+    // what still shows of a landmark 25 m off: through the scene fog (FogExp2), and then through a bank of mist
+    // in front of it at its thickest
+    const seen = Math.exp(-((25 * worst.density) ** 2)) * (1 - MAX_OPACITY * worst.ground)
+    expect(seen).toBeGreaterThanOrEqual(0.6)
   })
 
   it('fades with the morning, keeping the ground fog in step with the density', () => {

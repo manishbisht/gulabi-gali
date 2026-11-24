@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Stage } from '../engine/stage'
+import type { DistrictDef, Vec2 } from '../world/types'
 import type { SkyParams } from './sky'
 
 /** How many low banks of mist lie around the viewer: a handful, each one sprite (one draw). */
@@ -11,8 +12,8 @@ const FAR = 24
 const BANK_W = 22
 const BANK_H = 5
 const BANK_Y = 1.3
-/** The banks' opacity at the thickest fog: a veil, never a wall. */
-export const MAX_OPACITY = 0.32
+/** The banks' opacity at the thickest fog: a veil, never a wall (see `WINTER_MAX` in winter.ts). */
+export const MAX_OPACITY = 0.16
 /** How fast the ring of banks turns around the viewer, in radians a second: a slow drift. */
 const DRIFT = 0.015
 /** Below this ground fog the banks are not drawn at all. */
@@ -40,8 +41,25 @@ export function fogTexture(): THREE.DataTexture {
 
 export interface GroundFog {
   set(p: SkyParams): void
-  update(dt: number): void
+  /** `pos`: where the player stands; the banks lie on the ground under them (a roof, up on one). */
+  update(dt: number, pos?: Vec2): void
   dispose(): void
+}
+
+/** Whether (x, z) is the district's own ground: inside its square and not open water (Amer's lake). */
+export function onDistrictGround(def: Pick<DistrictDef, 'size' | 'water'>, x: number, z: number): boolean {
+  const half = def.size / 2
+  if (Math.abs(x) > half || Math.abs(z) > half) return false
+  return !(def.water ?? []).some((w) => x >= w.minX && x <= w.maxX && z >= w.minZ && z <= w.maxZ)
+}
+
+export interface GroundFogOptions {
+  /** Defaults to the browser's `prefers-reduced-motion`. */
+  reducedMotion?: () => boolean
+  /** How high the ground the player stands on is (a roof's top, up there); 0, the street, by default. */
+  floor?: (pos: Vec2) => number
+  /** Whether a bank may lie over (x, z): not off the district's edge or over water. Everywhere, by default. */
+  ground?: (x: number, z: number) => boolean
 }
 
 /**
@@ -49,12 +67,14 @@ export interface GroundFog {
  * low on the street in a ring around the camera, turning slowly (still, under `prefers-reduced-motion`). Not
  * drawn on the lowest quality tier, where the scene fog alone carries the morning. Nothing allocates per frame.
  */
-export function createGroundFog(stage: Stage, opts: { reducedMotion?: () => boolean } = {}): GroundFog {
+export function createGroundFog(stage: Stage, opts: GroundFogOptions = {}): GroundFog {
   const query =
     typeof matchMedia === 'function' && !opts.reducedMotion
       ? matchMedia('(prefers-reduced-motion: reduce)')
       : null
   const still = opts.reducedMotion ?? (() => query?.matches ?? false)
+  const floor = opts.floor ?? (() => 0)
+  const ground = opts.ground ?? (() => true)
 
   const group = new THREE.Group()
   group.name = 'ground-fog'
@@ -88,14 +108,22 @@ export function createGroundFog(stage: Stage, opts: { reducedMotion?: () => bool
       // the mist takes the colour of the morning's horizon, as the scene fog does
       material.color.set(p.skyHorizon)
     },
-    update(dt) {
+    update(dt, pos) {
       group.visible = level >= SHOW_FROM && stage.quality > 0
       if (!group.visible) return
-      group.position.set(stage.camera.position.x, 0, stage.camera.position.z)
-      if (still()) return
+      const cx = stage.camera.position.x
+      const cz = stage.camera.position.z
+      // on the ground the player stands on: on a roof the mist lies at the roof's level, not down in the street
+      group.position.set(cx, pos ? floor(pos) : 0, cz)
+      const drift = !still()
       for (let i = 0; i < FOG_BANKS; i++) {
-        const a = (angle[i] = (angle[i]! + DRIFT * dt) % (Math.PI * 2))
-        banks[i]!.position.set(Math.cos(a) * radius[i]!, BANK_Y, Math.sin(a) * radius[i]!)
+        const bank = banks[i]!
+        if (drift) {
+          const a = (angle[i] = (angle[i]! + DRIFT * dt) % (Math.PI * 2))
+          bank.position.set(Math.cos(a) * radius[i]!, BANK_Y, Math.sin(a) * radius[i]!)
+        }
+        // none hangs off the district's edge or over water
+        bank.visible = ground(cx + bank.position.x, cz + bank.position.z)
       }
     },
     dispose() {

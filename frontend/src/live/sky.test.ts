@@ -104,7 +104,7 @@ describe('winter mornings', () => {
     const dawn = skyParams(jan, at('07:30:00'))
     expect(dawn.groundFog).toBeGreaterThan(0)
     expect(dawn.fogDensity).toBeGreaterThan(0.008)
-    expect(dawn.fogDensity).toBeLessThanOrEqual(0.03)
+    expect(dawn.fogDensity).toBeLessThanOrEqual(0.022)
     const late = skyParams(jan, at('10:30:00'))
     expect(late.groundFog).toBe(0)
     expect(late.fogDensity).toBe(0.008)

@@ -34,16 +34,17 @@ export function morningMist(now: Date): number {
 }
 
 /** A light winter fog on clean air. */
-const WINTER_BASE = 0.012
+const WINTER_BASE = 0.009
 /** What dirty air adds to it at the most. */
-const WINTER_AIR = 0.012
+const WINTER_AIR = 0.009
 /** What a fog report (poor visibility) adds to it. */
-const WINTER_SEEN = 0.006
+const WINTER_SEEN = 0.004
 /**
- * Never thicker than this, which is the city's own haze on its worst air: at 25 m it still lets through more
- * than half of a landmark (exp(-(25 × 0.03)²) ≈ 0.57), and names and the HUD are drawn over the scene anyway.
+ * Never thicker than this. At 25 m the scene fog still lets through about three quarters of a landmark
+ * (exp(-(25 × 0.022)²) ≈ 0.74), and with the ground fog's banks over it at their thickest (`MAX_OPACITY` in
+ * groundFog.ts) still over 0.6; names and the HUD are drawn over the scene anyway.
  */
-export const WINTER_MAX = 0.03
+export const WINTER_MAX = 0.022
 
 const BAND_AIR: Record<AqiBand, number> = { good: 0, moderate: 0.25, poor: 0.5, unhealthy: 0.75, severe: 1 }
 /** How dirty the air is, 0 (AQI 50 or better) to 1 (AQI 250 or worse); the band stands in for a missing AQI. */

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import type { Stage } from '../engine/stage'
-import { createGroundFog, FOG_BANKS, fogTexture, MAX_OPACITY } from './groundFog'
+import { createGroundFog, FOG_BANKS, fogTexture, MAX_OPACITY, onDistrictGround } from './groundFog'
 import type { SkyParams } from './sky'
 
 function stageAt(quality: 0 | 1 | 2) {
@@ -83,6 +83,33 @@ describe('createGroundFog', () => {
     }
   })
 
+  it('lies on the ground the player stands on: up on a roof, at the roof', () => {
+    const stage = stageAt(2)
+    const roofY = 9.6
+    const fog = createGroundFog(stage, {
+      reducedMotion: () => false,
+      floor: (p) => (p.x > 100 ? roofY : 0),
+    })
+    fog.set(sky(1))
+    fog.update(1 / 30, { x: 0, z: 0 })
+    expect(banks(stage).position.y).toBe(0)
+    fog.update(1 / 30, { x: 120, z: 0 })
+    expect(banks(stage).position.y).toBe(roofY)
+    fog.dispose()
+  })
+
+  it('lays no bank off the district or over water', () => {
+    const stage = stageAt(2) // the camera at (30, -12)
+    // ground only west of x = 30: the banks east of the camera have none under them
+    const fog = createGroundFog(stage, { reducedMotion: () => true, ground: (x) => x < 30 })
+    fog.set(sky(1))
+    fog.update(1 / 30, { x: 30, z: -10 })
+    for (const c of banks(stage).children) expect(c.visible).toBe(c.position.x < 0)
+    expect(banks(stage).children.some((c) => c.visible)).toBe(true)
+    expect(banks(stage).children.some((c) => !c.visible)).toBe(true)
+    fog.dispose()
+  })
+
   it('allocates nothing per frame and lets go of its texture and material', () => {
     const stage = stageAt(2)
     const fog = createGroundFog(stage, { reducedMotion: () => false })
@@ -98,5 +125,17 @@ describe('createGroundFog', () => {
     expect(material).toHaveBeenCalled()
     expect(texture).toHaveBeenCalled()
     expect(stage.scene.getObjectByName('ground-fog')).toBeUndefined()
+  })
+})
+
+describe('onDistrictGround', () => {
+  const def = { size: 200, water: [{ minX: 10, maxX: 40, minZ: 10, maxZ: 40 }] }
+  it('is the district square, less its water', () => {
+    expect(onDistrictGround(def, 0, 0)).toBe(true)
+    expect(onDistrictGround(def, 99, -99)).toBe(true)
+    expect(onDistrictGround(def, 101, 0)).toBe(false)
+    expect(onDistrictGround(def, 0, -101)).toBe(false)
+    expect(onDistrictGround(def, 20, 20)).toBe(false)
+    expect(onDistrictGround({ size: 200 }, 20, 20)).toBe(true)
   })
 })

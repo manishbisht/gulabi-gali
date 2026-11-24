@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { QualityTier, Stage } from '../engine/stage'
 import type { Lang } from '../i18n/strings'
 import { createFestivalFx, festivalSky } from '../live/festivalFx'
-import { createGroundFog } from '../live/groundFog'
+import { createGroundFog, onDistrictGround } from '../live/groundFog'
 import type { ProcessionKind } from '../live/procession'
 import { applySky, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
@@ -623,7 +623,10 @@ function createSky(
 } {
   const { current, now } = hooks.live
   const fx = createWeatherFx(stage)
-  const groundFog = createGroundFog(stage)
+  const groundFog = createGroundFog(stage, {
+    floor: (p) => roofHeight(district.def.roof, p.x, p.z),
+    ground: (x, z) => onDistrictGround(district.def, x, z),
+  })
   const festivalFx = createFestivalFx(stage, district)
   let sky: SkyParams | null = null
   const paint = () => {
@@ -641,9 +644,9 @@ function createSky(
     params: () => sky!,
     procession: festivalFx.processionCount,
     forceProcession: (kind) => festivalFx.forceProcession?.(kind, stage.quality),
-    update(dt: number) {
+    update(dt: number, pos: Vec2) {
       fx.update(dt)
-      groundFog.update(dt)
+      groundFog.update(dt, pos)
       festivalFx.update(dt)
     },
     dispose() {
