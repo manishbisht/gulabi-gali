@@ -28,7 +28,7 @@ export interface InboxOptions {
 export const inboxUrl = (token: string) =>
   `${API_BASE.replace(/^http/, 'ws')}/api/inbox?token=${encodeURIComponent(token)}`
 
-const NOTICES: readonly string[] = ['request', 'accepted', 'message', 'unmatched']
+const NOTICES: readonly string[] = ['request', 'accepted', 'message', 'unmatched', 'friend', 'chai']
 
 /** A resident's inbox socket, kept up by the same backoff as the district's. */
 export function connectInbox(opts: InboxOptions): InboxConn {

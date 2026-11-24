@@ -1,12 +1,13 @@
 /*
- * Gulabi Gali's service worker. It does one thing: show a push notification for a new request or message (a tap
- * opens the inbox), or for a plan the person said they would come to being an hour away (a tap opens the city at
- * that plan's poster). It caches nothing and never sees a page's requests.
+ * Gulabi Gali's service worker. It does one thing: show a push notification for a new request or message, or a
+ * friend's invite for chai (a tap opens the inbox, which says who and where), or for a plan the person said they
+ * would come to being an hour away (a tap opens the city at that plan's poster). It caches nothing and never sees a
+ * page's requests.
  *
- * A push names nobody and quotes nothing: its payload is only {t: 'request' | 'message' | 'meetup', lang: 'hi' |
- * 'en'} (backend/src/push.ts), and a reminder's `at`, the poster's place (`<district>:poster-<wall>`), which goes
+ * A push names nobody and quotes nothing: its payload is only {t: 'request' | 'message' | 'chai' | 'meetup', lang:
+ * 'hi' | 'en'} (backend/src/push.ts), and a reminder's `at`, the poster's place (`<district>:poster-<wall>`), which goes
  * only into the tap's data (`?at=`, see src/world/placeLink.ts), never on the screen. The words shown are these,
- * never anything from the payload. They are the same as pushTitle, pushRequest, pushMessage and pushMeetup in
+ * never anything from the payload. They are the same as pushTitle, pushRequest, pushMessage, pushChai and pushMeetup in
  * src/i18n/strings.ts (src/push/sw.test.ts checks).
  */
 const COPY = {
@@ -14,12 +15,14 @@ const COPY = {
     title: 'Gulabi Gali',
     request: 'Ek nayi request',
     message: 'Ek naya message',
+    chai: 'Ek dost ne chai pe bulaya',
     meetup: 'Tumhara plan ek ghante mein',
   },
   en: {
     title: 'Gulabi Gali',
     request: 'A new request',
     message: 'A new message',
+    chai: 'A friend invited you for chai',
     meetup: 'Your plan is in an hour',
   },
 }
@@ -43,7 +46,7 @@ self.addEventListener('push', (event) => {
     // Unreadable: still a push, and every push must show (userVisibleOnly), so the general words go up.
   }
   const lang = data && data.lang === 'en' ? 'en' : 'hi'
-  const kind = data && (data.t === 'request' || data.t === 'meetup') ? data.t : 'message'
+  const kind = data && (data.t === 'request' || data.t === 'chai' || data.t === 'meetup') ? data.t : 'message'
   const copy = COPY[lang]
   const at = kind === 'meetup' && typeof data.at === 'string' && POSTER_PLACE.test(data.at) ? data.at : null
   event.waitUntil(

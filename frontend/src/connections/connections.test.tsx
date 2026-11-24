@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   LIVE_CLOSE,
+  type ChaiInviteView,
   type EndedChat,
   type MatchView,
   type PublicPerson,
@@ -41,6 +42,8 @@ let ended: EndedChat[]
 /** The bodies of the reports filed. */
 let reports: unknown[]
 let calls: string[]
+/** Friends' invites for chai, as GET /api/chai has them. */
+let chai: ChaiInviteView[]
 let msgs: { id: string; body: string; at: number; mine: boolean }[]
 /** Armed, the next GET /api/requests waits until `release` is called with its body. */
 let armed: boolean
@@ -57,7 +60,9 @@ const incomingFrom = (p: PublicPerson, reason: string): RequestView => ({
 beforeEach(() => {
   FakeSocket.all = []
   calls = []
+  chai = []
   onBlock = undefined
+  onChalo = undefined
   ended = []
   reports = []
   armed = false
@@ -80,6 +85,11 @@ beforeEach(() => {
         })
       }
       if (path === '/api/matches') return json(matches)
+      if (path === '/api/chai' && method === 'GET') return json(chai)
+      if (path.startsWith('/api/chai/') && method === 'DELETE') {
+        chai = chai.filter((c) => `/api/chai/${c.id}` !== path)
+        return new Response(null, { status: 204 })
+      }
       if (path === '/api/ended') return json(ended)
       if (path === '/api/reports' && method === 'POST') {
         reports.push(JSON.parse(String(init!.body)))
@@ -108,6 +118,8 @@ const settle = () => act(async () => void (await new Promise((r) => setTimeout(r
 
 /** What the Connections sheet's block does here: set per test. */
 let onBlock: ((id: string, name: string) => Promise<boolean>) | undefined
+/** "Chalo" on an invite: set per test. */
+let onChalo: ((c: ChaiInviteView) => void) | undefined
 
 function Probe({ sheet, user = 'u1' }: { sheet: boolean; user?: string | null }) {
   const conn = useConnections({ user, token: async () => 'tok' })
@@ -124,6 +136,7 @@ function Probe({ sheet, user = 'u1' }: { sheet: boolean; user?: string | null })
           token={async () => 'tok'}
           onBlock={onBlock}
           onClose={() => setOpen(false)}
+          onChalo={onChalo}
         />
       )}
     </>
@@ -429,4 +442,45 @@ it('blocking from a chat with "Also report?" blocks at once and keeps the chat f
   expect(reports).toEqual([])
   expect(blocked).toEqual(['p2'])
   expect(host.querySelector('.conn-chat')).toBeNull()
+})
+
+it('a chai notice fetches the invites (not the requests or chats): who and which bench, Chalo or Abhi nahi', async () => {
+  const { host, q, button, click } = await mount()
+  const went: ChaiInviteView[] = []
+  onChalo = (c) => went.push(c)
+  expect(calls).toContain('GET /api/chai') // on open, like the lists
+  const before = q('[data-testid=badge]').textContent
+  chai = [
+    { id: 'c1', name: 'Asha', bench: 'university:1', kind: 'tapri', district: 'university', at: Date.now() },
+    { id: 'c2', name: 'Ravi', bench: 'mi-road:3', kind: 'bench', district: 'mi-road', at: Date.now() },
+  ]
+  const from = calls.length
+  await act(async () => FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'chai' }) }))
+  await settle()
+  expect(calls.slice(from)).toEqual(['GET /api/chai'])
+  // each invite counts on the inbox button until it is answered
+  expect(q('[data-testid=badge]').textContent).toBe(String(Number(before) + 2))
+  await click(q('[data-testid=open]'))
+  await settle()
+  expect(host.textContent).toContain('Asha invited you for chai · chai stall, University & JKK')
+  expect(host.textContent).toContain('Ravi invited you for chai · bench, MI Road & Raja Park')
+  // "Abhi nahi" is silent: gone from the list and the server's
+  await click(button(/Not now/))
+  await settle()
+  expect(calls).toContain('DELETE /api/chai/c1')
+  expect(host.textContent).not.toContain('Asha invited you')
+  // "Chalo": off to the bench, and the invite is done with
+  await click(button(/Let's go/))
+  await settle()
+  expect(went.map((c) => c.bench)).toEqual(['mi-road:3'])
+  expect(calls).toContain('DELETE /api/chai/c2')
+  expect(host.textContent).not.toContain('invited you for chai')
+})
+
+it('a friend notice refetches neither requests nor chats', async () => {
+  await mount()
+  const from = calls.length
+  await act(async () => FakeSocket.all[0]!.onmessage!({ data: JSON.stringify({ t: 'friend' }) }))
+  await settle()
+  expect(calls.slice(from)).toEqual([])
 })

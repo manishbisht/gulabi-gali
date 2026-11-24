@@ -189,8 +189,8 @@ export const STRINGS = {
   /** Push notifications, opted into per device in the profile sheet (see src/push). */
   pushToggle: { hi: 'Naye messages pe batao', en: 'Tell me about new messages' },
   pushHint: {
-    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega, aur jis plan mein "Main aaunga/aaungi" dabaya ho uske ek ghanta pehle bhi. Screen pe sirf "ek nayi request", "ek naya message" ya "tumhara plan ek ghante mein" aayega: na kisi ka naam, na koi baat.',
-    en: 'Your phone lets you know about a new request or message even when Gulabi Gali is shut, and an hour before a plan you said you\'d come to. The screen only ever says "a new request", "a new message" or "your plan is in an hour": never a name, never what was said.',
+    hi: 'Gulabi Gali band ho tab bhi nayi request ya message pe phone bataega, koi dost chai pe bulaye tab bhi, aur jis plan mein "Main aaunga/aaungi" dabaya ho uske ek ghanta pehle bhi. Screen pe sirf "ek nayi request", "ek naya message", "ek dost ne chai pe bulaya" ya "tumhara plan ek ghante mein" aayega: na kisi ka naam, na koi baat.',
+    en: 'Your phone lets you know about a new request or message even when Gulabi Gali is shut, when a friend invites you for chai, and an hour before a plan you said you\'d come to. The screen only ever says "a new request", "a new message", "a friend invited you for chai" or "your plan is in an hour": never a name, never what was said.',
   },
   pushInApp: {
     hi: 'Instagram ke andar wale browser mein notifications nahi aa sakte. Gulabi Gali ko Chrome ya Safari mein kholo, wahan chalu karo.',
@@ -947,6 +947,75 @@ export const STRINGS = {
   photoFrame: { hi: 'Photo ka frame', en: 'Photo frame' },
   photoDownloaded: { hi: 'Photo aapke phone mein save ho gayi.', en: 'Photo saved to your phone.' },
   photoFailed: { hi: 'Photo nahi ban payi. Phir se try karo.', en: "Couldn't take the photo. Try again." },
+  /*
+   * Friends ("Dost banao") and "Chai pe bulao" (src/friends). A friend's row shows a district at most, never where.
+   */
+  friendsTitle: { hi: 'Dost', en: 'Friends' },
+  friendsNone: {
+    hi: 'Abhi koi dost nahi. Kisi chat mein "Aur" kholo aur "Dost banao" dabao.',
+    en: 'No friends yet. In a chat, open "More" and tap "Be friends".',
+  },
+  friendsLoadFailed: {
+    hi: 'Dost abhi nahi dikh paaye. Thodi der mein phir dekhna.',
+    en: "Couldn't load your friends just now. Look again in a bit.",
+  },
+  friendHere: { hi: 'gali mein hai · {place}', en: 'in the lanes · {place}' },
+  friendRemove: { hi: 'Hatao', en: 'Remove' },
+  friendRemoveLabel: { hi: '{name} ko dosti se hatao', en: 'Remove {name} as a friend' },
+  friendRemoveSure: { hi: 'Pakka hatao', en: 'Yes, remove' },
+  friendRemoveFailed: { hi: 'Hata nahi paaye. Phir se try karo.', en: "Couldn't remove. Try again." },
+  friendsIncoming: { hi: 'Dost banna chahte hain', en: 'Want to be friends' },
+  friendAccept: { hi: 'Haan', en: 'Yes' },
+  friendDecline: { hi: 'Abhi nahi', en: 'Not now' },
+  friendAnswerFailed: {
+    hi: 'Jawab nahi gaya. Phir se try karo.',
+    en: "Couldn't send your answer. Try again.",
+  },
+  friendWaiting: { hi: '{name} · jawab ka intezaar', en: '{name} · waiting for a yes' },
+  friendShowPresence: {
+    hi: 'Dosto ko dikhao ki main gali mein hoon',
+    en: "Show my friends when I'm in the lanes",
+  },
+  friendShowPresenceHint: {
+    hi: 'Sirf mohalla dikhta hai, kabhi exact jagah nahi. Band karo to dost bas naam dekhenge.',
+    en: 'Only the part of the city shows, never where exactly. Turn it off and friends just see your name.',
+  },
+  friendChaiInvites: { hi: 'Chai ke bulaave lo', en: 'Get chai invites' },
+  friendSettingsFailed: {
+    hi: 'Badlaav save nahi hua. Phir se try karo.',
+    en: "Couldn't save that. Try again.",
+  },
+  /** In a chat's menu: ask the person you're matched with to be friends. */
+  friendAsk: { hi: 'Dost banao', en: 'Be friends' },
+  friendAsked: {
+    hi: 'Dosti ki request bhej di. Haan kahein to dono ek doosre ki list mein dikhoge.',
+    en: "Friend request sent. If they say yes, you'll be in each other's friends list.",
+  },
+  friendAlready: { hi: 'Aap dost ho', en: "You're friends" },
+  friendAskFailed: { hi: 'Request nahi gayi. Phir se try karo.', en: "Couldn't send that. Try again." },
+  chaiButton: { hi: 'Chai pe bulao', en: 'Invite for chai' },
+  chaiPick: { hi: 'Kise bulana hai?', en: 'Who would you like to invite?' },
+  chaiNoFriends: {
+    hi: 'Abhi koi dost nahi. Kisi chat mein "Dost banao" karo, phir yahan se bulao.',
+    en: 'No friends yet. Tap "Be friends" in a chat, then invite them from here.',
+  },
+  chaiInviteLabel: { hi: '{name} ko chai pe bulao', en: 'Invite {name} for chai' },
+  chaiSent: { hi: 'Bulaava bhej diya', en: 'Invite sent' },
+  chaiRate: {
+    hi: 'Thoda ruko: abhi kaafi bulaave bhej diye.',
+    en: "Hold on: you've sent enough invites for now.",
+  },
+  chaiNotSeated: { hi: 'Pehle bench pe baitho, phir bulao.', en: 'Sit down first, then invite.' },
+  chaiFailed: { hi: 'Bulaava nahi gaya. Phir se try karo.', en: "Couldn't send the invite. Try again." },
+  chaiClose: { hi: 'Rehne do', en: 'Never mind' },
+  chaiInvitesTitle: { hi: 'Chai ke bulaave', en: 'Chai invites' },
+  chaiInvited: { hi: '{name} ne chai pe bulaya · {place}', en: '{name} invited you for chai · {place}' },
+  chaiPlaceTapri: { hi: 'chai ki tapri, {district}', en: 'chai stall, {district}' },
+  chaiPlaceBench: { hi: 'bench, {district}', en: 'bench, {district}' },
+  chaiGo: { hi: 'Chalo', en: "Let's go" },
+  chaiNotNow: { hi: 'Abhi nahi', en: 'Not now' },
+  /** The lock screen's words for an invite (public/sw.js holds the same, checked by sw.test.ts): nobody named. */
+  pushChai: { hi: 'Ek dost ne chai pe bulaya', en: 'A friend invited you for chai' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

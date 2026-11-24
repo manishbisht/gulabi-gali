@@ -5,6 +5,8 @@ import { getBlocks, unblockPerson, type ProfileInput } from '../net/api'
 import { HERE_FOR, type BlockListEntry, type HereFor, type HomeArea, type Me } from '../net/protocol'
 import { loadOrCreateLook, lookFromWire, lookToWire } from '../player/avatar'
 import { PushToggle } from '../push/PushToggle'
+import { FriendsPanel } from '../friends/FriendsPanel'
+import type { Friends } from '../friends/useFriends'
 import type { AvatarLook } from '../world/types'
 import { ReportSheet } from '../ui/ReportSheet'
 import { StampsLine } from '../ui/StampsLine'
@@ -35,6 +37,8 @@ interface Props {
   onPrivacy?: () => void
   /** Erases the account (true once gone). Without it the sheet has no delete button. */
   onDelete?: () => Promise<boolean>
+  /** A resident's friends, their asks and the two switches (see `FriendsPanel`). */
+  friends?: Friends
 }
 
 export function ProfileSheet({
@@ -47,6 +51,7 @@ export function ProfileSheet({
   onSignOut,
   onPrivacy,
   onDelete,
+  friends,
 }: Props) {
   const ref = useDialog<HTMLElement>(onClose)
   const p = me.profile
@@ -276,6 +281,7 @@ export function ProfileSheet({
           </button>
         </form>
         {token && me.complete && <PushToggle lang={lang} token={token} />}
+        {friends && me.complete && <FriendsPanel friends={friends} lang={lang} />}
         {token && me.complete && (blocked || blockedNote) && (
           <div className="blocked-list">
             <h3>{t('blockedTitle', lang)}</h3>

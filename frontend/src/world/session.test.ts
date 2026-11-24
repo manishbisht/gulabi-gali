@@ -10,7 +10,7 @@ import miRoad from './districts/miRoad'
 import walledCity from './districts/walledCity'
 import { benchesOf, seatPose } from './benches'
 import { ROOF_FADE_MS } from './rooftop'
-import { placeSpot } from './placeLink'
+import { linkId, placeSpot } from './placeLink'
 import { createCitySession, type SessionHooks } from './session'
 import type { DistrictDef } from './types'
 
@@ -158,6 +158,28 @@ describe('opened from a link to a place (`startAt`)', () => {
     const trip = session.travelTo('walled-city')
     loads[1]!.resolve(fakeDistrict(walledCity))
     await trip
+    expect(session.player()!.position()).toEqual(walledCity.station)
+    session.dispose()
+  })
+
+  it('a trip to a place ("Chalo" on an invite for chai) stands the player by that bench, not the station', async () => {
+    const { session } = open('walled-city')
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    // the place an invite names: its bench's kind and number, as a place link has them
+    const place = linkId(benchesOf(miRoad)[3]!)
+    const trip = session.travelTo('mi-road', undefined, place)
+    const there = fakeDistrict(miRoad)
+    loads[1]!.resolve(there)
+    await trip
+    const want = placeSpot(there, place)!
+    expect(want).not.toBeNull()
+    expect(session.player()!.position()).toEqual({ x: want.x, z: want.z })
+    expect(session.player()!.position()).not.toEqual(miRoad.station)
+    // one it does not have: the station, as any trip
+    const back = session.travelTo('walled-city', undefined, 'bench-999')
+    loads[2]!.resolve(fakeDistrict(walledCity))
+    await back
     expect(session.player()!.position()).toEqual(walledCity.station)
     session.dispose()
   })

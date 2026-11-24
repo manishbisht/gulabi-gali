@@ -2420,3 +2420,114 @@ button.stamp-count::after {
   position: absolute;
   inset: -6px -4px;
 }
+
+/* Friends ("Dost banao") in the profile sheet; "Chai pe bulao" at a bench and in the inbox (src/friends). */
+.friends-panel h4 {
+  margin: 8px 0 4px;
+  font-size: 0.9rem;
+}
+
+.friends-panel ul {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.friends-panel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.friends-panel li > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.friend-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.friend-here {
+  font-size: 0.82rem;
+  opacity: 0.8;
+}
+
+.friend-waiting span {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* Who sits with you, and "Chai pe bulao" beside it: one row, the button never pushing the lines down further. */
+.bench-with-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+
+.bench-with-row .bench-with {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chai-invite {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.bench-with-row .chai-invite[data-open] {
+  flex: 1 1 100%;
+  align-items: stretch;
+}
+
+.chai-pick p {
+  margin: 0;
+}
+
+.chai-pick ul {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 18vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chai-note:not(:empty) {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.chai-invites {
+  margin: 0 0 12px;
+}
+
+.chai-invites h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.chai-invites p {
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.chat-friend-state {
+  align-self: center;
+  padding: 0 8px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}

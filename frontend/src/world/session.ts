@@ -164,9 +164,10 @@ export interface CitySession {
   setLook(look: AvatarLook): void
   /**
    * Loads `id`, then (only once it is in) leaves the current district for it, standing the player at its
-   * station. If it cannot be loaded, the current district carries on and this rejects.
+   * station, or at `place` in it (a place link's id, see `placeSpot`: a friend's bench, for "Chalo"; one it does
+   * not have is the station). If it cannot be loaded, the current district carries on and this rejects.
    */
-  travelTo(id: DistrictId, signal?: AbortSignal): Promise<void>
+  travelTo(id: DistrictId, signal?: AbortSignal, place?: string): Promise<void>
   /** After a district's systems are up and the player stands in it. Returns an unsubscribe. */
   onEnter(cb: (d: District) => void): () => void
   /** Before a district is torn down (by travel or dispose), while it is still standing. */
@@ -268,7 +269,12 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     was.district.dispose()
   }
 
-  async function enter(id: DistrictId, at: 'spawn' | 'station', signal?: AbortSignal): Promise<void> {
+  async function enter(
+    id: DistrictId,
+    at: 'spawn' | 'station',
+    signal?: AbortSignal,
+    place?: string,
+  ): Promise<void> {
     const district = await loadDistrict(id).catch(() => null)
     if (disposed) return district?.dispose()
     if (signal?.aborted && district) {
@@ -293,8 +299,9 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       colliders: district.colliders,
       occluders: district.occluders,
     })
-    // opened from a link to a place: there, facing it, the first time only
-    const spot = at === 'spawn' && startAt ? placeSpot(district, startAt) : null
+    // opened from a link to a place: there, facing it, the first time only; or a trip to a place ("Chalo")
+    const want = at === 'spawn' ? startAt : place
+    const spot = want ? placeSpot(district, want) : null
     startAt = undefined
     if (spot) {
       player.lookAlong(spot.ry)
@@ -540,12 +547,12 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     player: () => here?.player ?? null,
     people: () => here?.people?.entries() ?? [],
     setLook: (look) => here?.player.setLook(look),
-    travelTo(id, signal) {
+    travelTo(id, signal, place) {
       // the metro takes a standing walker: get up from a bench, and out of an auto (boxed in, where the auto
       // stands), with no toast about it
       here?.sitting?.stand()
       here?.driving.forceExit()
-      return enter(id, 'station', signal)
+      return enter(id, 'station', signal, place)
     },
     onEnter(cb) {
       entered = [...entered, cb]

@@ -25,9 +25,10 @@ export const rememberDistrict = (id: DistrictId) => storage.set(KEY, id)
 
 /**
  * Loads `id` and, once it is in, swaps it for the district the player is in, standing them at its
- * station. Rejects, with the old district still running, if `id` cannot be loaded.
+ * station (or at `place` in it: see `CitySession.travelTo`). Rejects, with the old district still running, if
+ * `id` cannot be loaded.
  */
-export type Swap = (id: DistrictId, signal?: AbortSignal) => Promise<void>
+export type Swap = (id: DistrictId, signal?: AbortSignal, place?: string) => Promise<void>
 
 /**
  * Metro travel: whether the player stands by the station, the sheet of destinations, and the trip
@@ -71,7 +72,7 @@ export function useTravel() {
    * whose district failed to load (that raises `failed`), nor one cut short by the city closing.
    */
   const travelTo = useCallback(
-    async (id: DistrictId, from: DistrictId = savedDistrict()) => {
+    async (id: DistrictId, from: DistrictId = savedDistrict(), place?: string) => {
       const go = swap.current
       if (busy.current || !go) return
       busy.current = true
@@ -87,7 +88,7 @@ export function useTravel() {
         skipRef.current = coach.skip
         setRide({ from, to: id, waiting: false })
         const trip = (abort.current = new AbortController())
-        const loading = go(id, trip.signal)
+        const loading = place ? go(id, trip.signal, place) : go(id, trip.signal)
         // remembered the moment the district is in, so a reload mid-ride reopens there
         loading.then(() => bound() && !trip.signal.aborted && storage.set(KEY, id), coach.skip)
         await coach.done

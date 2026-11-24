@@ -87,6 +87,27 @@ describe('the service worker', () => {
     })
   }
 
+  for (const lang of ['hi', 'en'] as const) {
+    it(`a friend's invite for chai reads "${t('pushTitle', lang)}: ${t('pushChai', lang)}" in ${lang}, naming nobody; a tap opens the inbox`, async () => {
+      const sw = boot()
+      // whatever else a payload carried (it never does: see backend/src/friends.ts), only the words here show
+      await sw.fire('push', push({ t: 'chai', lang, name: 'Kavya', bench: 'university:1' }))
+      const [title, options] = sw.showNotification.mock.calls[0] as unknown as [
+        string,
+        { body: string; tag: string; data: unknown },
+      ]
+      expect(`${title}: ${options.body}`).toBe(
+        lang === 'hi'
+          ? 'Gulabi Gali: Ek dost ne chai pe bulaya'
+          : 'Gulabi Gali: A friend invited you for chai',
+      )
+      expect(options).toMatchObject({ body: t('pushChai', lang), tag: 'gg-chai', data: { kind: 'chai' } })
+      expect(JSON.stringify([title, options])).not.toMatch(/Kavya|university/)
+      await sw.fire('notificationclick', { notification: { close: vi.fn(), data: options.data } })
+      expect(sw.openWindow).toHaveBeenCalledWith(`${SCOPE}?inbox=1`)
+    })
+  }
+
   it('a meet-up reminder carrying its poster opens the city there (?at=), and never shows where', async () => {
     const sw = boot()
     await sw.fire('push', push({ t: 'meetup', lang: 'en', at: 'university:poster-3' }))

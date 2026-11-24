@@ -1,7 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { Connections as ConnectionsState } from '../connections/useConnections'
+import { chaiPlace } from '../friends/places'
+import type { Friends } from '../friends/useFriends'
 import { t, type Lang } from '../i18n/strings'
-import type { EndedChat, MatchView } from '../net/protocol'
+import type { ChaiInviteView, EndedChat, MatchView } from '../net/protocol'
 import { ChatView } from './ChatView'
 import { ReportSheet } from './ReportSheet'
 import { useKeyboard } from './useKeyboard'
@@ -20,13 +22,17 @@ interface Props {
   /** Blocks them; true once done. */
   onBlock?(id: string, name: string): Promise<boolean>
   onClose(): void
+  /** Friends: a chat's menu offers "Dost banao" with it. */
+  friends?: Friends
+  /** "Chalo" on a friend's invite for chai: off to their bench (the sheet closes). */
+  onChalo?(invite: ChaiInviteView): void
 }
 
 /**
  * The Connections sheet: requests that came in (Haan / Abhi nahi), requests sent, and the chats. It exists
  * only while open, so closed it leaves the joystick alone; with the phone keyboard up it sits just above it.
  */
-export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
+export function Connections({ conn, lang, token, onBlock, onClose, friends, onChalo }: Props) {
   const [tab, setTab] = useState<Tab>('incoming')
   /** The chat open, as it was when opened: kept to show it ended, once the other side unmatches. */
   const [chat, setChat] = useState<MatchView | null>(null)
@@ -37,13 +43,20 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
   /** An ended chat being reported, from the "Ended chats" list. */
   const [reporting, setReporting] = useState<EndedChat | null>(null)
   const { keyboard, height } = useKeyboard()
-  const { seeIncoming, incoming, refresh } = conn
+  const { seeIncoming, incoming, refresh, refreshChai } = conn
+  const refreshFriends = friends?.refresh
 
   // Opening the sheet looks again: a block tells the blocked person nothing, so their chat list (and the
   // ended chats they can still report) may be out of date.
   useEffect(() => {
     void refresh()
-  }, [refresh])
+    void refreshChai()
+  }, [refresh, refreshChai])
+  // a chat opening: whether "Dost banao" is still to say
+  const chatId = chat?.id
+  useEffect(() => {
+    if (chatId) void refreshFriends?.()
+  }, [chatId, refreshFriends])
 
   // looking at the incoming tab is what reads those requests
   useEffect(() => {
@@ -108,9 +121,40 @@ export function Connections({ conn, lang, token, onBlock, onClose }: Props) {
             if (gone) setChat(null)
             return gone
           }}
+          friend={friends?.standing(showing.person.id)}
+          onBefriend={friends && (() => friends.ask(showing.person.id))}
         />
       ) : (
         <>
+          {conn.chai.length > 0 && (
+            <section className="chai-invites" aria-label={t('chaiInvitesTitle', lang)}>
+              <h3>{t('chaiInvitesTitle', lang)}</h3>
+              <ul className="conn-list">
+                {conn.chai.map((c) => (
+                  <li key={c.id}>
+                    <p>{t('chaiInvited', lang, { name: c.name, place: chaiPlace(c, lang) })}</p>
+                    <div className="person-actions">
+                      {onChalo && (
+                        <button
+                          type="button"
+                          className="landmark-stamp"
+                          onClick={() => {
+                            conn.dismissChai(c.id)
+                            onChalo(c)
+                          }}
+                        >
+                          {t('chaiGo', lang)}
+                        </button>
+                      )}
+                      <button type="button" className="person-close" onClick={() => conn.dismissChai(c.id)}>
+                        {t('chaiNotNow', lang)}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <div className="conn-tabs" role="tablist" aria-label={t('connTabs', lang)}>
             {TABS.map(({ id, label }) => (
               <button

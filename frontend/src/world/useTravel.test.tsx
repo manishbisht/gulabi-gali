@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { storage } from '../storage'
 import { RIDE_MS } from './metroRide'
 import { FADE_MS, savedDistrict, STATION_RANGE, useTravel, type Swap } from './useTravel'
 
@@ -48,6 +49,21 @@ describe('savedDistrict', () => {
 })
 
 describe('travelTo', () => {
+  it('a trip to a place ("Chalo") hands the place to the swap, which stands the player there', async () => {
+    vi.useFakeTimers()
+    const travel = mount()
+    const swap = vi.fn<Swap>(async () => {})
+    travel.bind(swap)
+    let done: Promise<void>
+    act(() => void (done = travel.travelTo('university', 'walled-city', 'bench-2')))
+    await act(() => vi.advanceTimersByTimeAsync(FADE_MS))
+    await act(() => vi.advanceTimersByTimeAsync(RIDE_MS))
+    await act(() => done)
+    expect(swap).toHaveBeenCalledWith('university', expect.any(AbortSignal), 'bench-2')
+    expect(localStorage.getItem('gg-district')).toBe('university')
+    storage.clear() // the page-lifetime copy too: the next test starts in the Walled City
+  })
+
   it('fades to black, swaps the district, persists it and fades back', async () => {
     vi.useFakeTimers()
     const travel = mount()
