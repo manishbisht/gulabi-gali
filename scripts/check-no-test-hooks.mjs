@@ -23,9 +23,12 @@ try {
     process.exit(1)
   }
   const TEST_ONLY = ['__gg', 'gg-test', 'gg-full', 'gg-festival', 'gg-sw']
+  // `gg-swaad` is the tasting list's storage key (Jaipur ka Swaad), in every build: only that exact word is let
+  // past, so `gg-sw` on its own, or before anything else, is still a leak.
+  const found = (code, name) => (name === 'gg-sw' ? /gg-sw(?!aad\b)/.test(code) : code.includes(name))
   const leaks = scripts.flatMap((f) => {
     const code = readFileSync(join(assets, f), 'utf8')
-    return TEST_ONLY.filter((name) => code.includes(name)).map((name) => `${name} in ${f}`)
+    return TEST_ONLY.filter((name) => found(code, name)).map((name) => `${name} in ${f}`)
   })
   if (leaks.length) {
     console.error(`test hooks leaked into the production build: ${leaks.join(', ')}`)
