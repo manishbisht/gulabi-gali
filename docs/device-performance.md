@@ -238,8 +238,9 @@ as before. "Walled City" is the same walk with no festival, on the same build.
 Every target holds: walkable at 1.9 s, p50 16.7 ms, no frame over 33 ms, tier still 2. The kites, their strings
 and the flyers are three draw calls, three geometries and three shader programs (the flyers share the
 procession's dress-tint shader); the draw calls and triangles move with where the walk ends up looking, not with
-the kites (a kite is two triangles, a flyer about 250). The kites are stepped at most 30 times a second, so the
-main thread's time per frame is within the run-to-run spread (this run's baseline was the slower of the two).
+the kites (a kite is four triangles, its diamond and its tail; a flyer about 250). The kites are stepped at
+most 30 times a second, so the main thread's time per frame is within the run-to-run spread (this run's
+baseline was the slower of the two).
 The lowest tier draws 20 kites (2 cut), 2 flyers and no strings; at night there are none. Not measured: a real
 phone, and the kite fight itself from the rooftop (the same game as on the street, looking up from higher).
 

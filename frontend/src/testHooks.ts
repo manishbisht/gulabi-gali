@@ -75,6 +75,8 @@ export interface GgTestApi {
     pause(on: boolean): void
     score(): number
     rivals(): number
+    /** How high the game's camera stands, in metres (0 when no game runs): above the roof when played up there. */
+    eyeY(): number
   }
 }
 

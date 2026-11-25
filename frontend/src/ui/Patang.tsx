@@ -149,6 +149,7 @@ export function Patang({ lang, stage, controls, at, y = 0, onExit }: Props) {
         },
         score: () => s.score,
         rivals: () => s.rivals.length,
+        eyeY: () => stage.camera.position.y,
       }),
     })
     return () => {
@@ -166,6 +167,7 @@ export function Patang({ lang, stage, controls, at, y = 0, onExit }: Props) {
           pause() {},
           score: () => 0,
           rivals: () => 0,
+          eyeY: () => 0,
         }),
       })
     }
