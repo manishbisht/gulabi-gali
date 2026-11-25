@@ -198,6 +198,8 @@ const malviyaNagar: DistrictDef = {
   ],
   /** A three-storey block on JLN Marg by the street running south: its roof looks across the road at WTP. */
   roof: roofAt(buildings, { x: -11, z: 61.5 }, -1, WTP_AT),
+  /** Gali cricket where the lane meets the street south of JLN Marg: the pitch its captain walks out. */
+  cricket: { stumps: { x: -3.5, z: LANES[2] }, bowler: { x: -10.5, z: LANES[2] } },
 }
 
 export default malviyaNagar
