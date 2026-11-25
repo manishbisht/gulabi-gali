@@ -1620,3 +1620,71 @@ describe('the rooftop viewpoint', () => {
     live.session.dispose()
   })
 })
+
+describe('the cricket pitch', () => {
+  /** The Walled City offline, the player beside its pitch, with the pitch's hooks spied on. */
+  async function atPitch(extra: Partial<SessionHooks> = {}) {
+    const cricket = { near: vi.fn(), play: vi.fn(), left: vi.fn() }
+    const live = open('walled-city', { cricket, ...extra })
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    const { stumps, bowler } = walledCity.cricket!
+    live.session.player()!.teleport((stumps.x + bowler.x) / 2, stumps.z + 1)
+    live.tick(1 / 30)
+    return { ...live, cricket }
+  }
+  const press = (tick: (dt: number) => void) => {
+    const interact = vi.spyOn(controls, 'interact').mockReturnValueOnce(true)
+    tick(1 / 30)
+    interact.mockRestore()
+  }
+
+  it('says when it is in reach, E by it opens the game, and it says so when the district goes', async () => {
+    const { session, tick, cricket } = await atPitch()
+    expect(cricket.near.mock.calls).toEqual([[true]])
+    tick(1 / 30)
+    expect(cricket.play).not.toHaveBeenCalled() // no key, no game
+    press(tick)
+    expect(cricket.play).toHaveBeenCalledTimes(1)
+    session.player()!.teleport(60, 60)
+    tick(1 / 30)
+    expect(cricket.near).toHaveBeenLastCalledWith(false)
+    press(tick)
+    expect(cricket.play).toHaveBeenCalledTimes(1) // out of reach
+    session.dispose()
+    expect(cricket.left).toHaveBeenCalledTimes(1)
+  })
+
+  it('is last in line for E but for an animal: a landmark, the metro or a card has the key first', async () => {
+    const { session, tick, cricket, hooks: h } = await atPitch()
+    const landmark = vi.spyOn(h, 'track').mockReturnValue(walledCity.landmarks[0]!)
+    press(tick)
+    landmark.mockRestore()
+    const metro = vi.spyOn(h, 'trackStation').mockReturnValue(true)
+    press(tick)
+    metro.mockRestore()
+    for (const card of [h.npcCard, h.personCard]) {
+      const up = vi.spyOn(card, 'isOpen').mockReturnValue(true)
+      press(tick)
+      up.mockRestore()
+    }
+    expect(cricket.play).not.toHaveBeenCalled()
+    press(tick)
+    expect(cricket.play).toHaveBeenCalledTimes(1)
+    session.dispose()
+  })
+
+  it('a district with no pitch offers none', async () => {
+    const cricket = { near: vi.fn(), play: vi.fn(), left: vi.fn() }
+    const live = open('walled-city', { cricket })
+    loads[0]!.resolve(fakeDistrict({ ...walledCity, cricket: undefined }))
+    await settle()
+    const { stumps } = walledCity.cricket!
+    live.session.player()!.teleport(stumps.x + 1, stumps.z + 1)
+    press(live.tick)
+    expect(cricket.near).not.toHaveBeenCalled()
+    expect(cricket.play).not.toHaveBeenCalled()
+    live.session.dispose()
+    expect(cricket.left).not.toHaveBeenCalled()
+  })
+})
