@@ -50,6 +50,8 @@ export interface Mix {
   drums: number
   /** Wind over a ridge (Nahargarh): low, gusting noise. */
   wind: number
+  /** Sankranti by day: now and then a far-off cheer from the roofs, as a kite is cut somewhere. */
+  cheers: number
 }
 type Layer = keyof Mix
 
@@ -106,16 +108,34 @@ export function mixFor(
     bells: phase === 'dawn' || phase === 'dusk' ? 1 : 0,
     drums: festivalDrums(festival, now) ? 1 : 0,
     wind: bed.wind ?? 0,
+    // the kites are up from sunrise to sunset (see kites.ts), and so are the roofs' cheers
+    cheers: festival === 'sankranti' && sky.sunElevationDeg >= 0 ? 1 : 0,
   }
 }
 
 /** The lowest quality tier's mix: one steady layer (the bazaar, else the crickets) and no blips. */
 export function thinMix(m: Mix): Mix {
-  return { murmur: m.murmur, birds: 0, crickets: m.murmur > 0 ? 0 : m.crickets, bells: 0, drums: 0, wind: 0 }
+  return {
+    murmur: m.murmur,
+    birds: 0,
+    crickets: m.murmur > 0 ? 0 : m.crickets,
+    bells: 0,
+    drums: 0,
+    wind: 0,
+    cheers: 0,
+  }
 }
 
 /** Each layer's loudest, so the whole stays a very soft bed under the street. */
-const CAP: Mix = { murmur: 0.07, birds: 0.05, crickets: 0.012, bells: 0.06, drums: 0.09, wind: 0.06 }
+const CAP: Mix = {
+  murmur: 0.07,
+  birds: 0.05,
+  crickets: 0.012,
+  bells: 0.06,
+  drums: 0.09,
+  wind: 0.06,
+  cheers: 0.05,
+}
 const MASTER = 0.6
 /**
  * Photo mode and the taxi ride show the street with the player not walking in it, so the ambience steps back
@@ -127,7 +147,7 @@ const DUCK = 0.5
 const TICK_MS = 400
 /** Levels glide with this time constant, in seconds. */
 const GLIDE_S = 1.5
-const LAYERS: Layer[] = ['murmur', 'birds', 'crickets', 'bells', 'drums', 'wind']
+const LAYERS: Layer[] = ['murmur', 'birds', 'crickets', 'bells', 'drums', 'wind', 'cheers']
 /** The layers that play steadily (sources running while audible), not in blips. */
 type Steady = 'murmur' | 'crickets' | 'wind'
 const steady = (k: Layer): k is Steady => k === 'murmur' || k === 'crickets' || k === 'wind'
@@ -169,13 +189,13 @@ export function createAmbience(deps: AmbienceDeps) {
   let master: Gain | null = null
   let noise: { getChannelData(c: number): Float32Array } | null = null
   const buses: Partial<Record<Layer, Gain>> = {}
-  const target: Mix = { murmur: 0, birds: 0, crickets: 0, bells: 0, drums: 0, wind: 0 }
+  const target: Mix = { murmur: 0, birds: 0, crickets: 0, bells: 0, drums: 0, wind: 0, cheers: 0 }
   let masterTarget = MASTER
   /** The steady layers' running sources, only while they are audible. */
   const running: Partial<Record<Steady, Source[]>> = {}
   const retired: Source[] = []
   let timer: ReturnType<typeof setInterval> | null = null
-  const next = { birds: 0, bells: 0, drums: 0 }
+  const next = { birds: 0, bells: 0, drums: 0, cheers: 0 }
   let disposed = false
   let paused = false
   let tier: Tier = deps.quality?.() ?? 2
@@ -263,6 +283,30 @@ export function createAmbience(deps: AmbienceDeps) {
     return out
   }
 
+  /**
+   * A far-off cheer: a second of the noise, band-passed to a crowd's voices, swelling and dying away, with a
+   * rising "whoo" over it. Its sources stop by themselves.
+   */
+  function cheer(at: number) {
+    const c = ctx!
+    const src = c.createBufferSource()
+    src.buffer = noiseBuffer()
+    const band = c.createBiquadFilter()
+    band.type = 'bandpass'
+    band.frequency.value = 900
+    band.Q.value = 0.9
+    const env = c.createGain()
+    env.gain.setValueAtTime(0.0001, at)
+    env.gain.linearRampToValueAtTime(0.8, at + 0.25)
+    env.gain.exponentialRampToValueAtTime(0.0001, at + 1.4)
+    src.connect(band)
+    band.connect(env)
+    env.connect(bus('cheers'))
+    src.start(at)
+    src.stop(at + 1.5)
+    blip('cheers', 320, at + 0.05, 0.25, 0.7, 520)
+  }
+
   /** Moves a layer to a level, starting or retiring its steady sources as it becomes audible or silent. */
   function setLevel(k: Layer, v: number, t: number) {
     if (v === target[k]) return
@@ -332,6 +376,11 @@ export function createAmbience(deps: AmbienceDeps) {
       // a dhol's tum-tum-ta-tum: a falling thump on each beat
       for (const beat of [0, 0.5, 0.75, 1, 1.5]) blip('drums', 130, t + beat, 1, 0.28, 55)
       next.drums = t + 2.2
+    }
+    if (mix.cheers > 0 && t >= next.cheers) {
+      // never at once: the first comes 9 to 20 s in, and so on
+      if (next.cheers > 0) cheer(t)
+      next.cheers = t + 9 + random() * 11
     }
   }
 
