@@ -100,6 +100,15 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
         ahead.some((p) => hits(p, 0, f)),
         l.id,
       ).toBe(true)
+      // the chase camera's whole line back (7 m), with a metre's margin, clear of every collider: it never sits
+      // in a wall behind the visitor
+      for (let d = 1; d <= 7; d++) {
+        const p = { x: spot.x - look.x * d, z: spot.z - look.z * d }
+        expect(
+          colliders.some((c) => hits(p, 1, c)),
+          `${l.id}: ${d} m behind`,
+        ).toBe(false)
+      }
     }
   })
 
