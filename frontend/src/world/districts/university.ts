@@ -265,6 +265,8 @@ const university: DistrictDef = {
   ],
   /** The department beside the gate: its roof looks across the campus to JKK. */
   roof: roofAt(buildings, { x: -62, z: 0 }, -1, JKK_AT),
+  /** The evening's kalbelia-style dancers, on the open ground at the west end of the arts centre's forecourt. */
+  shows: [{ kind: 'dancers', at: { x: 22, z: 22 } }],
 }
 
 export default university

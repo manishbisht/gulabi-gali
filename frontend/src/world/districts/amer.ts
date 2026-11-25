@@ -268,6 +268,8 @@ const amer: DistrictDef = {
   /** The bastion on the rampart: its roof looks north across the lake at the palace. */
   roof: roofAt(buildings, BASTION, 1, { x: FORT_AT.x + PALACE.x, z: FORT_AT.z + PALACE.z }),
   water: [WATER, ...MAN_SAGAR],
+  /** A kathputli stage on the grass by the foot of the path up to the fort, where visitors gather. */
+  shows: [{ kind: 'kathputli', at: { x: 24, z: 24 } }],
 }
 
 export default amer

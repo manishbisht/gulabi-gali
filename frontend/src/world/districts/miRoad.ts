@@ -305,6 +305,8 @@ const miRoad: DistrictDef = {
   stringLights,
   /** A three-storey shop on MI Road just east of the gate's apron, looking over the garden to Albert Hall. */
   roof: roofAt(buildings, { x: 40.5, z: 36.5 }, -1, HALL_AT),
+  /** A ravanhatta player on the footpath outside Ram Niwas Bagh, east of the gate, facing the road. */
+  shows: [{ kind: 'ravanhatta', at: { x: 22, z: 41 } }],
 }
 
 export default miRoad
