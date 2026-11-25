@@ -85,6 +85,9 @@ test.describe('on a small phone', () => {
     // from here only the test moves the innings on, so a slow frame rate cannot decide a ball
     await page.evaluate(() => window.__gg.cricket().pause(true))
     await expect(game.getByText('Run: 0')).toBeVisible()
+    // a ready beat: the bowler waits for a tap, and the how-to is up
+    await expect(game.getByText('Tap karke shuru karo')).toBeVisible()
+    await expect(game.getByText(/Ball balle tak aaye/)).toBeVisible()
     await expect(game.getByText('Ball 1/18')).toBeVisible()
     await expect(game.getByText('Out 0/3')).toBeVisible()
     // the HUD is out of the way, and the game's view is the batter's: behind the stumps, looking at the bowler
@@ -118,9 +121,15 @@ test.describe('on a small phone', () => {
     expect.soft(Math.max(...chips.map((c) => c.right))).toBeLessThanOrEqual(closeBox.x - 10)
 
     // the ball is at the bat: a tap anywhere on the field is the swing, and this one is a six
+    // the first tap only says "ready": nothing is swung, and the how-to stays
+    await page.touchscreen.tap(200, 400)
+    await expect(game.getByText('Tap karke shuru karo')).toHaveCount(0)
+    await expect(game.getByText(/Ball balle tak aaye/)).toBeVisible()
+    expect(await page.evaluate(() => window.__gg.cricket().balls())).toBe(0)
     await page.evaluate(() => window.__gg.cricket().tapAtBat())
     await page.touchscreen.tap(120, 520)
     await expect.poll(() => page.evaluate(() => window.__gg.cricket().runs())).toBe(6)
+    await expect(game.getByText(/Ball balle tak aaye/)).toHaveCount(0)
     await expect(game.getByText('Run: 6')).toBeVisible()
     await expect(game.getByText(/Chhakka!/)).toBeVisible()
     await shot(page, 'six')
@@ -191,6 +200,7 @@ test.describe('on a small phone', () => {
       await expect.poll(() => page.evaluate(() => window.__gg.cricket().active)).toBe(true)
       await shot(page, district)
       await expect(game.getByText('Runs: 0')).toBeVisible()
+      await expect(game.getByText('Tap to start')).toBeVisible()
       await game.getByRole('button', { name: 'Stop playing' }).tap()
       await expect(game).toHaveCount(0)
     })
@@ -251,4 +261,86 @@ test('reduced motion: the innings plays the same, with the flourish left out', a
   const a = await page.evaluate(() => window.__gg.cricket().eye())
   await page.waitForTimeout(150)
   expect(await page.evaluate(() => window.__gg.cricket().eye())).toEqual(a)
+})
+
+test.describe('on a small phone, in English', () => {
+  test.use({ viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+
+  test('the chips fit one row beside the close button at their widest: "Runs: 108", "Ball 18/18"', async ({
+    page,
+  }) => {
+    await enterOffline(page, undefined, 'en')
+    await toPitch(page)
+    await page.getByRole('button', { name: 'Play cricket', exact: true }).tap()
+    const game = page.getByRole('dialog', { name: 'Gali cricket' })
+    await expect.poll(() => page.evaluate(() => window.__gg.cricket().active)).toBe(true)
+    // eighteen sixes
+    await page.evaluate(() => {
+      const c = window.__gg.cricket()
+      c.pause(true)
+      for (let i = 0; i < 18; i++) c.ball(0)
+      c.finish()
+    })
+    await expect(game.locator('.cricket-top')).toContainText('Runs: 108')
+    await expect(game.locator('.cricket-top')).toContainText('Ball 18/18')
+    await expect(game.locator('.cricket-top')).toContainText('Out 0/3')
+    const close = (await game.getByRole('button', { name: 'Stop playing' }).boundingBox())!
+    const chips = await game.locator('.cricket-top .hud-chip').evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect()
+        return { top: r.top, left: r.left, right: r.right }
+      }),
+    )
+    expect(chips).toHaveLength(3)
+    expect(new Set(chips.map((c) => Math.round(c.top))).size, 'chips on one row').toBe(1)
+    expect(Math.min(...chips.map((c) => c.left))).toBeGreaterThanOrEqual(0)
+    // 10 px to spare for CI's wider fonts
+    expect(Math.max(...chips.map((c) => c.right))).toBeLessThanOrEqual(close.x - 10)
+    expect(close.x + close.width).toBeLessThanOrEqual(PHONE.width)
+    await expect(page.locator('.cricket-score')).toContainText('Runs: 108')
+  })
+})
+
+test('a slow network: the button says it is opening, and walking away meanwhile opens nothing', async ({
+  page,
+}) => {
+  // the game's chunk is held back until the test lets it go
+  let release = () => {}
+  const held = new Promise<void>((r) => (release = r))
+  let asked = 0
+  await page.route('**/assets/Cricket-*.js', async (route) => {
+    asked++
+    await held
+    await route.continue()
+  })
+  await enterOffline(page)
+  const { at } = await toPitch(page)
+  const play = page.getByRole('button', { name: 'Cricket khelo', exact: true })
+  await play.click()
+  const opening = page.getByRole('button', { name: 'Khul raha hai…', exact: true })
+  await expect(opening).toBeVisible()
+  await expect(opening).toHaveAttribute('aria-busy', 'true')
+  const game = page.getByRole('dialog', { name: 'Gali cricket' })
+  await expect(game).toHaveCount(0)
+  // nothing is up, and the street is still the player's: they walk off
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 10), at)
+  await expect(opening).toHaveCount(0)
+  expect(asked).toBeGreaterThan(0)
+  release()
+  await page.waitForTimeout(800)
+  await expect(game).toHaveCount(0)
+  // the player was never frozen or hidden: they can still walk
+  const before = await position(page)
+  await page.keyboard.down('s')
+  await expect
+    .poll(async () => {
+      const p = await position(page)
+      return Math.hypot(p.x - before.x, p.z - before.z)
+    })
+    .toBeGreaterThan(1)
+  await page.keyboard.up('s')
+  // back at the pitch the game (its code here now) opens at once
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), at)
+  await play.click()
+  await expect(game).toBeVisible()
 })
