@@ -783,14 +783,15 @@ export default function App() {
             )}
             {/* a first visit's three steps, once the street is there to try them on */}
             {typeof place !== 'string' && <FirstHint lang={lang} />}
-            {/* "Home screen pe rakho": once, after a couple of minutes in the city, where the browser can; it
-                waits (and does not count) while anything is over the street */}
-            {typeof place !== 'string' && (
-              <InstallHint
-                lang={lang}
-                busy={bandarBlocked || !!photo || fading || roof.fading || taxi.dark}
-              />
-            )}
+            {/* "Home screen pe rakho": once, after a couple of minutes in the city, where the browser can. Mounted
+                for the whole visit (a district loading is only busy), so its clock is not restarted by travel; it
+                waits, and does not count, while anything is over the street */}
+            <InstallHint
+              lang={lang}
+              busy={
+                typeof place === 'string' || bandarBlocked || !!photo || fading || roof.fading || taxi.dark
+              }
+            />
           </>
         }
         bottom={
