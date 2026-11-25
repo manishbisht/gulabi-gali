@@ -42,6 +42,13 @@ import type { CDPSession, Page } from '@playwright/test'
  * Sankranti override on: the sky full of kites, a few cut ones drifting down, and people flying theirs from
  * the roofs, with the festival's drums and cheers. Results go to test-results/device-perf-sankranti.json. The
  * every-extra run (above) is also set to noon that day, so its kites are up whatever the clock says.
+ * Low-end Android (DEVICE_PERF_LOWEND=1, `npm run test:device:lowend`): a small cheap phone, 360 x 740 at DPR 2,
+ * the CPU slowed six times, no network throttle (this is about drawing, not loading). Every district the app has
+ * (read from src/world/district.ts, so a new one is measured as soon as it is listed), each twice in a fresh tab:
+ * once as a phone starts (tier 2, free to step down), once held at the lowest tier (tier 0) to see how much thinner
+ * that tier really is. Each run walks the district's spawn for `LOWEND_WALK_MS`, long enough for the tier to step.
+ * Results go to test-results/device-perf-lowend.json, and a table to the console. DEVICE_PERF_FESTIVAL=<id> (say
+ * `sankranti`) runs it all under that festival's effects, into device-perf-lowend-<id>.json.
  */
 
 test.skip(!process.env.DEVICE_PERF, 'Measurement, not a test: set DEVICE_PERF=1 to run it.')
@@ -58,8 +65,15 @@ const FAST_4G = {
   uploadThroughput: (1500 * 1000 * 0.9) / 8,
 }
 const CPU_SLOWDOWN = 6
+/** The low-end run's CPU slowdown: six times, or DEVICE_PERF_CPU's (say 20, to see the tier step on this machine). */
+const LOWEND_CPU = Number(process.env.DEVICE_PERF_CPU) || CPU_SLOWDOWN
 /** How long the walk along the bazaar is watched (and, with every extra on, the drive after it). */
 const WALK_MS = 8000
+/** A low-end run's walk: the 2 s warm-up and two 2 s windows the tier needs to step, and room to step twice. */
+const LOWEND_WALK_MS = 12000
+const LOWEND = !!process.env.DEVICE_PERF_LOWEND
+/** A festival the low-end run is held under (`gg-festival`), or none. */
+const LOWEND_FESTIVAL = process.env.DEVICE_PERF_FESTIVAL ?? ''
 const EXTRAS = !!process.env.DEVICE_PERF_EXTRAS
 const WINTER = !!process.env.DEVICE_PERF_WINTER
 const SANKRANTI = !!process.env.DEVICE_PERF_SANKRANTI
@@ -200,7 +214,7 @@ async function busy(cdp: CDPSession) {
  * Holds W and S in turn for `WALK_MS` (walking or driving), recording every frame interval, and how much of
  * each frame the main thread was busy (tasks, and script within them), averaged over the window.
  */
-async function record(page: Page, cdp: CDPSession): Promise<Frames> {
+async function record(page: Page, cdp: CDPSession, walkMs = WALK_MS): Promise<Frames> {
   await page.evaluate(() => {
     ;(window as unknown as { __perf: Perf }).__perf.frames = []
   })
@@ -208,7 +222,7 @@ async function record(page: Page, cdp: CDPSession): Promise<Frames> {
   const start = Date.now()
   let key = 'w'
   await page.keyboard.down(key)
-  while (Date.now() - start < WALK_MS) {
+  while (Date.now() - start < walkMs) {
     await page.waitForTimeout(1500)
     await page.keyboard.up(key)
     key = key === 'w' ? 's' : 'w'
@@ -233,6 +247,7 @@ async function record(page: Page, cdp: CDPSession): Promise<Frames> {
 }
 
 test('the walled city on a throttled Pixel 7', async ({ page }) => {
+  test.skip(LOWEND, 'DEVICE_PERF_LOWEND runs the low-end phone instead')
   test.setTimeout(240000)
   await instrument(page)
   const clerkMode = process.env.DEVICE_PERF_CLERK
@@ -377,4 +392,102 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
   )
   console.log(`Renderer: ${result.renderer}`)
   if (result.clerk) console.log(`Clerk: ${JSON.stringify(result.clerk)}`)
+})
+
+/** Every district the app lists (src/world/district.ts's `DISTRICTS`), in its order. */
+function districtIds(): string[] {
+  const source = readFileSync(new URL('../src/world/district.ts', import.meta.url), 'utf8')
+  const list = source.match(/export const DISTRICTS: DistrictId\[\] = \[([^\]]*)\]/)?.[1]
+  const ids = [...(list ?? '').matchAll(/'([a-z-]+)'/g)].map((m) => m[1]!)
+  expect(ids.length, 'DISTRICTS in src/world/district.ts').toBeGreaterThanOrEqual(6)
+  return ids
+}
+
+interface LowEndRun {
+  district: string
+  /** The tier the run started at: 2 as a phone starts, or 0 held there. */
+  from: 0 | 2
+  walkable: number | null
+  frames: Frames
+  tierAfter: number
+  /** The canvas's drawing buffer, in device pixels: the tier's pixel ratio at work. */
+  buffer: string
+  render: Result['render']
+  heapMB: number
+}
+
+test.describe('a low-end Android phone', () => {
+  // a small cheap phone: 360 x 740 CSS px at DPR 2, Chrome on Android
+  test.use({
+    viewport: { width: 360, height: 740 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    userAgent:
+      'Mozilla/5.0 (Linux; Android 12; Redmi 9A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+  })
+
+  test('every district, CPU slowed six times, as it starts and held at the lowest tier', async ({
+    context,
+  }) => {
+    test.skip(!LOWEND, 'Set DEVICE_PERF_LOWEND=1 for the low-end phone')
+    const ids = districtIds()
+    test.setTimeout(ids.length * 2 * 90_000 * Math.max(1, LOWEND_CPU / CPU_SLOWDOWN))
+    const runs: LowEndRun[] = []
+    for (const district of ids)
+      for (const from of [2, 0] as const) {
+        // a fresh tab each time: the stage keeps the tier it reached for the tab (sessionStorage)
+        const page = await context.newPage()
+        await page.addInitScript(
+          ({ d, q }) => {
+            localStorage.setItem('gg-district', d)
+            if (q === 0) sessionStorage.setItem('gg-quality', '0')
+          },
+          { d: district, q: from },
+        )
+        await instrument(page)
+        const cdp = await context.newCDPSession(page)
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: LOWEND_CPU })
+        await cdp.send('Performance.enable')
+        const festival = LOWEND_FESTIVAL ? `&gg-festival=${encodeURIComponent(LOWEND_FESTIVAL)}` : ''
+        await page.goto(`/?gg-test=1&gg-full=1${festival}`, { waitUntil: 'load', timeout: 120000 })
+        await page.getByRole('button', { name: 'Padharo!' }).click()
+        await page.waitForFunction(
+          () => (window as unknown as { __perf: Perf }).__perf.walkable !== null,
+          null,
+          {
+            timeout: 120000,
+          },
+        )
+        expect(await page.evaluate(() => window.__gg.district())).toBe(district)
+        const walkable = await page.evaluate(() => (window as unknown as { __perf: Perf }).__perf.walkable)
+        const frames = await record(page, cdp, LOWEND_WALK_MS)
+        const { metrics } = await cdp.send('Performance.getMetrics')
+        runs.push({
+          district,
+          from,
+          walkable,
+          frames,
+          tierAfter: await page.evaluate(() => window.__gg.quality()),
+          buffer: await page.evaluate(() => {
+            const c = document.querySelector<HTMLCanvasElement>('canvas.stage')!
+            return `${c.width}x${c.height}`
+          }),
+          render: await page.evaluate(() => window.__gg.renderInfo()),
+          heapMB: (metrics.find((m) => m.name === 'JSHeapUsedSize')?.value ?? 0) / 2 ** 20,
+        })
+        await page.close()
+      }
+    mkdirSync('test-results', { recursive: true })
+    const suffix = `${LOWEND_FESTIVAL ? `-${LOWEND_FESTIVAL}` : ''}${LOWEND_CPU !== CPU_SLOWDOWN ? `-cpu${LOWEND_CPU}` : ''}`
+    writeFileSync(`test-results/device-perf-lowend${suffix}.json`, JSON.stringify(runs, null, 2))
+    const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
+    console.log(
+      '\n| District | From tier | Walkable ms | Frames | p50 ms | p95 ms | Over 33 ms | Tier after | Buffer | Draw calls | Triangles | Textures | Programs | Heap MB | Main thread ms/frame (task, script) |',
+    )
+    for (const r of runs)
+      console.log(
+        `| ${r.district} | ${r.from} | ${ms(r.walkable)} | ${r.frames.count} | ${r.frames.p50.toFixed(1)} | ${r.frames.p95.toFixed(1)} | ${r.frames.over33} | ${r.tierAfter} | ${r.buffer} | ${r.render.calls} | ${r.render.triangles} | ${r.render.textures} | ${r.render.programs} | ${r.heapMB.toFixed(1)} | ${r.frames.taskPerFrame.toFixed(1)}, ${r.frames.scriptPerFrame.toFixed(1)} |`,
+      )
+  })
 })

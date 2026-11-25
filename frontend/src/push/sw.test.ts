@@ -46,7 +46,7 @@ describe('the service worker', () => {
   it('handles only push, a tap on a notification, install and activate: no fetch, no cache', () => {
     const { on } = boot()
     expect([...on.keys()].sort()).toEqual(['activate', 'install', 'notificationclick', 'push'])
-    expect(SOURCE).not.toMatch(/caches\.|importScripts|fetch\(/)
+    expect(SOURCE).not.toMatch(/caches\.|importScripts|fetch\(|\.respondWith\(|addEventListener\('fetch'/)
   })
 
   for (const lang of ['hi', 'en'] as const) {

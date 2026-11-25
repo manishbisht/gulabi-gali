@@ -26,18 +26,20 @@ prompt. Note the model, Android and Chrome versions and the GPU (`chrome://gpu`,
 tick _Network, Disable cache_, and set throttling to _No throttling_. Record each item three times, keep the
 median.
 
-| #   | What                                   | How                                                                                                                                                                                   | Target (mid-range, 4G)                                             |
-| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 1   | Load: FCP, LCP                         | Performance panel, _Record and reload_ on the site. Read FCP and LCP off _Timings_.                                                                                                   | FCP at most 1.8 s, LCP at most 2.5 s                               |
-| 2   | First walkable frame                   | Same recording, tap _Padharo!_: the first frame showing the street with the player in it.                                                                                             | at most 5 s from navigation                                        |
-| 3   | Bytes                                  | Network panel footer: _transferred_ for the load in (1).                                                                                                                              | note it; compare release to release                                |
-| 4   | Walking frames                         | Walk the bazaar for about 10 s. _Frames_ track: dropped and partial frames; _Main_: long tasks. Rendering drawer, _Frame rendering stats_, for live FPS.                              | at least 30 fps throughout; no task over 200 ms                    |
-| 5   | Quality tier                           | Console: `sessionStorage.getItem('gg-quality')`. `null` or `'2'` is full; `'1'` caps the pixel ratio at 1.25; `'0'` is ratio 1 and no shadows. Read it after (4) and after 5 minutes. | stays at 2 or 1 on a mid-range phone                               |
-| 6   | Memory                                 | _Performance monitor_: _JS heap size_ after (4) and after 5 minutes.                                                                                                                  | heap under 150 MB and flat                                         |
-| 7   | Metro travel                           | Open the metro, go to another district, come back. Watch for a stall or a blank frame while its chunk loads.                                                                          | no blank canvas; walking resumes at once                           |
-| 8   | Heat                                   | Five minutes of walking, then repeat (4) and (5). A drop in FPS or tier is thermal throttling.                                                                                        | no tier drop from heat alone                                       |
-| 9   | Touch                                  | Joystick with one thumb, tap a landmark, rotate the phone mid-walk.                                                                                                                   | no stuck input, no blank canvas                                    |
-| 10  | **Open the link from an Instagram DM** | On Android, send the link to yourself in an Instagram DM and open it in the in-app browser.                                                                                           | the canvas shows, the joystick works, and nothing scrolls the page |
+| #   | What                                   | How                                                                                                                                                                                                       | Target (mid-range, 4G)                                                                        |
+| --- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | Load: FCP, LCP                         | Performance panel, _Record and reload_ on the site. Read FCP and LCP off _Timings_.                                                                                                                       | FCP at most 1.8 s, LCP at most 2.5 s                                                          |
+| 2   | First walkable frame                   | Same recording, tap _Padharo!_: the first frame showing the street with the player in it.                                                                                                                 | at most 5 s from navigation                                                                   |
+| 3   | Bytes                                  | Network panel footer: _transferred_ for the load in (1).                                                                                                                                                  | note it; compare release to release                                                           |
+| 4   | Walking frames                         | Walk the bazaar for about 10 s. _Frames_ track: dropped and partial frames; _Main_: long tasks. Rendering drawer, _Frame rendering stats_, for live FPS.                                                  | at least 30 fps throughout; no task over 200 ms                                               |
+| 5   | Quality tier                           | Console: `sessionStorage.getItem('gg-quality')`. `null` or `'2'` is full; `'1'` caps the pixel ratio at 1.25; `'0'` is ratio 1 and no shadows. Read it after (4) and after 5 minutes.                     | stays at 2 or 1 on a mid-range phone                                                          |
+| 6   | Memory                                 | _Performance monitor_: _JS heap size_ after (4) and after 5 minutes.                                                                                                                                      | heap under 150 MB and flat                                                                    |
+| 7   | Metro travel                           | Open the metro, go to another district, come back. Watch for a stall or a blank frame while its chunk loads.                                                                                              | no blank canvas; walking resumes at once                                                      |
+| 8   | Heat                                   | Five minutes of walking, then repeat (4) and (5). A drop in FPS or tier is thermal throttling.                                                                                                            | no tier drop from heat alone                                                                  |
+| 9   | Touch                                  | Joystick with one thumb, tap a landmark, rotate the phone mid-walk.                                                                                                                                       | no stuck input, no blank canvas                                                               |
+| 10  | **Open the link from an Instagram DM** | On Android, send the link to yourself in an Instagram DM and open it in the in-app browser.                                                                                                               | the canvas shows, the joystick works, and nothing scrolls the page                            |
+| 11  | Home screen                            | In Chrome on Android: walk for 2 minutes, tap _Rakho_ on the hint, open the icon. On an iPhone in Safari: Share, _Add to Home Screen_, open it. `chrome://inspect`, _Application_, _Manifest_: no errors. | installs; opens full screen without `?source=pwa` in the address; the hint does not come back |
+| 12  | Notch and home bar                     | On an iPhone opened from the home screen (or an Android phone with a cut-out in full screen): the HUD's top row, the switches, the joystick, the map sheet, the metro's _Back_ button. Double-tap a chip. | nothing under the notch or the home bar; a double tap does not zoom                           |
 
 **How the tier moves.** The stage measures every frame (the city draws continuously) in windows of about 2 s.
 A window is bad if more than 60% of its time was spent in frames slower than 22 ms, and it holds at least 4 such
@@ -243,6 +245,60 @@ most 30 times a second, so the main thread's time per frame is within the run-to
 baseline was the slower of the two).
 The lowest tier draws 20 kites (2 cut), 2 flyers and no strings; at night there are none. Not measured: a real
 phone, and the kite fight itself from the rooftop (the same game as on the street, looking up from higher).
+
+### Low-end Android: every district
+
+Run 2026-11-25, same machine (Apple M3 Pro, installed Chrome 158, headless, ANGLE/Metal), test-hooks build against
+a local `wrangler dev` Worker, no residents, no festival. `npm run test:device:lowend` (`DEVICE_PERF_LOWEND=1`): a small
+cheap phone, 360 x 740 CSS px at DPR 2 with a Redmi 9A's Chrome user agent, the CPU slowed 6x, no network throttle (it
+measures drawing, not loading). Every district in `src/world/district.ts`'s `DISTRICTS` (read from the file, so a
+seventh is picked up as soon as it is listed), each in a fresh tab twice: as a phone starts (tier 2, free to step
+down) and held at the lowest tier (`gg-quality` = 0 in sessionStorage before load), each walking the spawn for 12 s
+(the 2 s warm-up plus two 2 s windows is the soonest the tier can step). Buffer is the canvas's drawing buffer in
+device pixels; draw calls and triangles are the walk's last frame (`__gg.renderInfo`, shadow pass included).
+
+| District      | From tier | Walkable ms | Frames (12 s) | p50 ms | p95 ms | Over 33 ms | Tier after | Buffer   | Draw calls | Triangles | Textures | Programs | Heap MB | Main thread ms/frame (task, script) |
+| ------------- | --------: | ----------: | ------------: | -----: | -----: | ---------: | ---------: | -------- | ---------: | --------: | -------: | -------: | ------: | ----------------------------------- |
+| Walled City   |         2 |        1505 |           724 |   16.7 |   16.8 |          1 |          2 | 720x1480 |         51 |    67,836 |        4 |       11 |     9.3 | 3.9, 2.6                            |
+|               |         0 |        1543 |           725 |   16.7 |   16.7 |          0 |          0 | 360x740  |         30 |    34,970 |        2 |        7 |    13.4 | 3.2, 1.8                            |
+| MI Road       |         2 |        1144 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         45 |    47,956 |        4 |       11 |     8.9 | 3.3, 2.2                            |
+|               |         0 |        1012 |           725 |   16.7 |   16.7 |          0 |          0 | 360x740  |         25 |    23,082 |        2 |        7 |    10.8 | 3.3, 1.9                            |
+| University    |         2 |         960 |           723 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         38 |    24,880 |        3 |       10 |     9.6 | 2.5, 1.8                            |
+|               |         0 |         791 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         21 |    10,968 |        1 |        6 |     9.0 | 1.8, 1.1                            |
+| Malviya Nagar |         2 |         969 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         44 |    31,420 |        4 |       11 |    11.5 | 3.5, 2.5                            |
+|               |         0 |         912 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         24 |    14,066 |        2 |        7 |     8.9 | 2.2, 1.4                            |
+| Amer          |         2 |         978 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         36 |    29,870 |        4 |       11 |     9.9 | 3.3, 2.0                            |
+|               |         0 |         891 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         19 |    11,614 |        2 |        7 |     9.5 | 2.3, 1.2                            |
+| Nahargarh     |         2 |         871 |           723 |   16.7 |   16.8 |          0 |          2 | 720x1480 |         31 |    21,152 |        3 |       11 |    10.8 | 2.3, 1.6                            |
+|               |         0 |         869 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         18 |    11,674 |        1 |        6 |    10.7 | 2.5, 1.6                            |
+
+The same run with the CPU slowed 20x (`DEVICE_PERF_CPU=20`), to look for the point where the main thread alone would
+push the tier down: walkable 2.5 to 5.4 s, p50 still 16.7 ms in every district, 0 to 4 frames over 33 ms of about
+725, tier 2 kept everywhere it started at 2. Main-thread time per frame rose to at most 11.8 ms (task; 7.7 ms script)
+at tier 2, in the Walled City and on MI Road; held at tier 0 the Walled City needed 3.9 ms. So even at 20x the main
+thread stays under a 60 fps frame, and well under the 22 ms the tier measures against.
+
+**What it shows.** Against the targets every district passes at 6x and at 20x: p50 16.7 ms (limit 33), at most 1 of
+about 725 frames over 33 ms at 6x (limit 10%), heap 9 to 13 MB (limit 150), and the tier never had to move. The lowest
+tier really is thinner in every district, not only the Walled City: a quarter of the pixels (360 x 740 instead of
+720 x 1480), 41 to 47% fewer draw calls (the sun's shadow pass is gone: at tier 2 every caster is drawn twice), 45
+to 63% fewer triangles, 6 or 7 shader programs instead of 10 or 11, and 1 or 2 textures fewer (the shadow map's). The
+Walled City is the heaviest district by a wide margin (51 draw calls, 68k triangles, about 1.5x the next, MI Road);
+Nahargarh is the lightest. Textures are few and small (1 to 4: the sky's backdrop and the signposts' and posters'
+canvases, plus the sun's 1024 x 1024 shadow map at tier 2); no district loads an image file as a texture.
+
+**Fixes made.** None to the render path: nothing missed a target, no district lacks a tier-0 reduction, and there
+was no tier step to tune. What this run cannot show is the one thing a low-end phone is short of, its GPU: here the
+M3 draws 1.07 million pixels with MSAA and a shadow pass inside the 16.7 ms vsync with room to spare, so frame times
+sit on vsync whatever the CPU does. On a Mali-G52 or PowerVR GE8320 class phone the same tier 2 is fill-rate bound,
+and the stage is expected to step to tier 1 about 6 s after the city opens and to tier 0 about 6 s after that; the
+real-device checklist (items 4, 5 and 8) is what confirms it. If it shows a cheap phone spending its first 12 s
+stepping down every visit, the next change would be to start such a phone at tier 1 (for instance when
+`navigator.deviceMemory` is 2 GB or less), which this run gives no evidence for yet.
+
+To repeat: `npm run test:device:lowend` from the repo root (about 3 minutes); `DEVICE_PERF_CPU=20` for the heavier
+throttle; `DEVICE_PERF_FESTIVAL=sankranti` (or any festival id) to hold every run under that festival's effects.
+Results go to `frontend/test-results/device-perf-lowend*.json`.
 
 ### Phase 3: Clerk mode
 

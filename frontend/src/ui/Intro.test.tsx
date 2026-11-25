@@ -136,3 +136,27 @@ it('coming back to the tab asks again at once, not at the next 30 s tick', async
   expect(fetchMock).toHaveBeenCalledTimes(2)
   root = createRoot(host)
 })
+
+it("inside Instagram's own browser, one quiet note names it and says how to get out; elsewhere none", async () => {
+  const ua = vi
+    .spyOn(navigator, 'userAgent', 'get')
+    .mockReturnValue(
+      'Mozilla/5.0 (Linux; Android 13; SM-A536E) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36 Instagram 320.0.0.0.0 Android (33/13)',
+    )
+  await mount('en')
+  const note = host.querySelector('.intro-inapp')
+  expect(note!.getAttribute('role')).toBe('note')
+  expect(note!.textContent).toBe(
+    'Not everything works inside Instagram. For all of it: tap ⋯ or ⋮, open in your browser.',
+  )
+  // nothing is blocked: the way in is still there
+  expect(host.querySelector<HTMLButtonElement>('.enter')!.disabled).toBe(false)
+  act(() => root.unmount())
+  root = createRoot(host)
+  ua.mockReturnValue(
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+  )
+  await mount('hi')
+  expect(host.querySelector('.intro-inapp')).toBeNull()
+  ua.mockRestore()
+})
