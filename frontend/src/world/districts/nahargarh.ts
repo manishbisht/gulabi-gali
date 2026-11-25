@@ -249,6 +249,8 @@ const nahargarh: DistrictDef = {
   roofName: { hi: t('sunsetPoint', 'hi'), en: t('sunsetPoint', 'en') },
   ridgeWest: -HALF,
   scenery: () => buildCityBelow(-HALF, HALF),
+  /** A ravanhatta player seated on the fort's forecourt, east of the gate: the fort wall behind him. */
+  shows: [{ kind: 'ravanhatta', at: { x: 31, z: -36 } }],
 }
 
 export default nahargarh

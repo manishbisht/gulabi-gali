@@ -104,6 +104,35 @@ describe('the link preview pages', () => {
     }
   })
 
+  it('a street show has a page too: its craft in a line, the dancers as "kalbelia-style" and of the evening', () => {
+    const shows = places.filter((p) => p.kind === 'show')
+    expect(shows.map((p) => `${p.district}/${p.place}`)).toEqual([
+      'walled-city/show-kathputli',
+      'mi-road/show-ravanhatta',
+      'university/show-dancers',
+      'amer/show-kathputli',
+      'nahargarh/show-ravanhatta',
+    ])
+    const text = (district: string, place: string) =>
+      metaOf(
+        previewPage(
+          shows.find((p) => p.district === district && p.place === place)!,
+          has,
+        ).html,
+      )
+    const puppets = text('amer', 'show-kathputli')
+    expect(unescape(puppets.get('og:title')!)).toBe('Kathputli ka khel, Amer · Gulabi Gali')
+    expect(unescape(puppets.get('og:description')!)).toBe(
+      'A kathputli string-puppet show in Amer, Gulabi Gali: walk up and it plays for you. Aao, yahin milte hain!',
+    )
+    const dance = unescape(text('university', 'show-dancers').get('og:description')!)
+    expect(dance).toContain('Kalbelia-style dancers, out in the evening, in ')
+    for (const p of shows) {
+      const d = unescape(metaOf(previewPage(p, has).html).get('og:description')!)
+      expect(d.length, p.place).toBeLessThanOrEqual(160)
+    }
+  })
+
   it('names the landmark, in Hinglish and English where they differ, with a line about it', () => {
     const page = (place: string) => metaOf(pages[places.findIndex((p) => p.place === place)]!.html)
     expect(page('hawa-mahal').get('og:title')).toBe('Hawa Mahal · Gulabi Gali')

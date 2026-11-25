@@ -350,6 +350,11 @@ const walledCity: DistrictDef = {
   roof: roofAt(buildings, { x: -12.5, z: 26 }, 1, HAWA_AT),
   /** Gali cricket in the lane east of Johari Bazaar, a few steps from where you arrive: batting toward the neem. */
   cricket: { stumps: { x: 13, z: LANE }, bowler: { x: 20, z: LANE } },
+  /**
+   * A kathputli stage on the open patch across the bazaar from Hawa Mahal, at its quiet west end: the audience
+   * stands south of it, the palace of winds behind the puppets.
+   */
+  shows: [{ kind: 'kathputli', at: { x: 26, z: 11.4 } }],
 }
 
 export default walledCity

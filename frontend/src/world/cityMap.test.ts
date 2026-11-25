@@ -17,6 +17,7 @@ import walledCity from './districts/walledCity'
 import amer from './districts/amer'
 import nahargarh from './districts/nahargarh'
 import galta from './districts/galta'
+import university from './districts/university'
 import { createPeople } from './people'
 import { wallsOf } from './posters'
 
@@ -163,4 +164,26 @@ it('privacy: the map shows only people drawn on the street now; never a ghost, a
   // someone further than the street draws (frozen where last heard of) is not shown either
   expect(people.entries().map((e) => e.person.id)).toContain('far')
   people.dispose()
+})
+
+it("a district's street shows are on its map by kind, named in both languages; where there is none, none", () => {
+  const show = mapItems(walledCity, []).filter((i) => i.kind === 'show')
+  expect(show).toEqual([
+    {
+      id: 'show-kathputli',
+      kind: 'show',
+      name: { hi: 'Kathputli ka khel', en: 'Kathputli puppet show' },
+      at: walledCity.shows![0]!.at,
+    },
+  ])
+  expect(mapItems(nahargarh, []).find((i) => i.kind === 'show')).toMatchObject({
+    id: 'show-ravanhatta',
+    name: { hi: 'Ravanhatta ki dhun', en: 'Ravanhatta player' },
+  })
+  // the dancers are listed by day too: the name says when they are out
+  expect(mapItems(university, []).find((i) => i.kind === 'show')!.name).toEqual({
+    hi: 'Kalbelia-style naach (shaam ko)',
+    en: 'Kalbelia-style dance (evenings)',
+  })
+  expect(mapItems(galta, []).some((i) => i.kind === 'show')).toBe(false)
 })

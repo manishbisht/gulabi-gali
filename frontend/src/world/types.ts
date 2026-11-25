@@ -39,6 +39,15 @@ export interface PropSpec {
   /** Degrees, the same turn as `BuildingSpec.rot`: 90 sends the front (+z) to -x. */
   rot?: number
 }
+/** A street show (see shows.ts): the puppet stage, the bowed-instrument player, the evening's dancers. */
+export type ShowKind = 'kathputli' | 'ravanhatta' | 'dancers'
+export interface ShowSpec {
+  kind: ShowKind
+  /** The middle of the ground it takes: open, clear of every collider and of everything E answers to. */
+  at: Vec2
+  /** Degrees, the same turn as `PropSpec.rot`: its front (+z) is where the audience stands. */
+  rot?: number
+}
 /** A flat patch of ground colour (a road, a kerb line, a paved court). Later patches lie on top. */
 export interface Paving extends AABB {
   color: PaletteKey
@@ -146,6 +155,8 @@ export interface DistrictDef {
   scenery?: () => THREE.Group
   /** The lane's cricket pitch (see cricketPitch.ts): open ground, with a straight run of lane past both ends. */
   cricket?: PitchDef
+  /** The street shows (see shows.ts): at most one of a kind, only where one fits. */
+  shows?: ShowSpec[]
   /** New Year's string lights (see festivalFx.ts): strands hung between building fronts, both ends `y` m up. */
   stringLights?: StringLight[]
 }

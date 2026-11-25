@@ -55,6 +55,20 @@ export interface GgTestApi {
   roof(): { up: boolean; y: number; stair: Vec2; area: AABB } | null
   /** Where the district's signposts stand. */
   signposts(): Vec2[]
+  /**
+   * The district's street shows (see shows.ts): where each stands, whether it is out now (the dancers keep
+   * evening hours), what it is doing, and the draw calls its figures cost. Empty where there is none.
+   */
+  shows(): {
+    kind: string
+    x: number
+    z: number
+    out: boolean
+    phase: 'idle' | 'playing' | 'after' | 'settling'
+    calls: number
+  }[]
+  /** Moves the show now playing on by `seconds` of game time: a slow machine need not sit a performance out. */
+  showSkip(seconds: number): void
   /** The district socket: `connecting` (also while waiting to retry), `open`, or `closed` for good. */
   liveState(): LiveState
   /** Each other person in the district: where their body is drawn (metres) and their chest on the page (CSS px). */

@@ -137,6 +137,46 @@ export const STRINGS = {
     en: 'More places: benches, stalls, walls ({n})',
   },
   mapAway: { hi: '{name} · {m} m', en: '{name} · {m} m' },
+  /*
+   * The street shows (src/world/shows.ts): their names (the map's row, the card's title), the card's two lines
+   * about each craft, and the clap. The dance is "kalbelia-style": in the manner of, not the community's own troupe.
+   */
+  showKathputli: { hi: 'Kathputli ka khel', en: 'Kathputli puppet show' },
+  showKathputliCraft: {
+    hi: 'Kathputli Rajasthan ki sadiyon purani kala hai, jise Bhat samaj ke kalakaar peedhi dar peedhi nibhate aaye hain.',
+    en: "Kathputli is Rajasthan's centuries-old string-puppet theatre, carried from generation to generation by artists of the Bhat community.",
+  },
+  showKathputliHow: {
+    hi: 'Lakdi ke chehre, rangeen kapde, aur dhaagon pe naachti raja-raniyon ki kahaniyan.',
+    en: 'Carved wooden faces, bright cloth, and tales of kings and queens dancing on strings.',
+  },
+  showRavanhatta: { hi: 'Ravanhatta ki dhun', en: 'Ravanhatta player' },
+  showRavanhattaCraft: {
+    hi: 'Ravanhatta Rajasthan ka sadiyon purana lok-saaz hai, jo gaj se bajaya jaata hai.',
+    en: 'The ravanhatta is a centuries-old folk instrument of Rajasthan, played with a bow.',
+  },
+  showRavanhattaHow: {
+    hi: 'Nariyal ke khol ka tumba, baans ki dandi, aur gaj pe bandhe ghungroo jo taal dete hain.',
+    en: 'A coconut-shell bowl, a bamboo neck, and little bells on the bow that keep the beat.',
+  },
+  /** The map's row and a link's page say when; the card (up only while they dance) does not need to. */
+  showDancers: { hi: 'Kalbelia-style naach (shaam ko)', en: 'Kalbelia-style dance (evenings)' },
+  showDancersTitle: { hi: 'Kalbelia-style naach', en: 'Kalbelia-style dance' },
+  /** A link or a map pick led to the dancers' ground by day. */
+  showDancersLater: {
+    hi: 'Naach shaam ko hota hai, sooraj dhalne ke aas-paas aao',
+    en: 'The dancers come out in the evening, around sunset',
+  },
+  showDancersCraft: {
+    hi: 'Kalbelia Rajasthan ke Kalbelia samaj ka naach-gaana hai; 2010 mein UNESCO ne ise maanavta ki amoort dharohar maana.',
+    en: "Kalbelia is the song and dance of Rajasthan's Kalbelia community; in 2010 UNESCO inscribed it as intangible cultural heritage of humanity.",
+  },
+  showDancersHow: {
+    hi: 'Ye usi andaaz ka naach hai: ghoomte kaale ghaghre, lehrati chaal, saath mein dholak.',
+    en: 'This is a dance in that style: swirling black skirts, flowing steps, a dholak keeping time.',
+  },
+  showClap: { hi: 'Taali bajao', en: 'Clap' },
+  showClose: { hi: 'Band karo', en: 'Close' },
   compassClear: { hi: 'Tap karo to compass hat jaayega', en: 'Tap to clear the compass' },
   rideNext: { hi: 'Agla station: {station}', en: 'Next station: {station}' },
   rideDoors: {

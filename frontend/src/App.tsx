@@ -38,6 +38,7 @@ import { useDrive } from './world/useDrive'
 import { useTaxi } from './world/useTaxi'
 import { taxiAvailable } from './world/taxi'
 import { useRooftop } from './world/useRooftop'
+import { useShows } from './world/useShows'
 import { useQueue } from './world/useQueue'
 import { usePosters } from './world/usePosters'
 import { TOTAL_STAMPS } from './world/stamps'
@@ -67,6 +68,7 @@ import { Cricket } from './ui/lazyCricket'
 import { warmCricket } from './ui/warmCricket'
 import { Patang } from './ui/Patang'
 import { NpcCard } from './ui/NpcCard'
+import { ShowCard } from './ui/ShowCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
 import { PosterCard } from './ui/PosterCard'
 import { PosterComposer } from './ui/PosterComposer'
@@ -183,6 +185,9 @@ export default function App() {
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
+  /** The street shows: the one whose clap is on offer, and the craft card a first approach brings up. */
+  const shows = useShows()
+  const { bind: bindShows } = shows
   /** Reactions: a namaste or a wave from the person card, and the toast when one reaches the player. */
   const reactions = useReactions()
   const { hooks: reactionHooks, bind: bindReactions } = reactions
@@ -424,8 +429,10 @@ export default function App() {
     bindReactions(city)
     bindMap({ session: city, stage })
     bindCricket({ session: city, stage, controls })
+    bindShows({ session: city, stage, live: { now, current }, link: link?.place })
 
     return () => {
+      bindShows(null)
       bindCricket(null)
       bindMap(null)
       bindReactions(null)
@@ -472,6 +479,7 @@ export default function App() {
     swaadHooks,
     bindSwaad,
     bindMap,
+    bindShows,
     roofHooks,
     bindRoof,
     reactionHooks,
@@ -572,6 +580,21 @@ export default function App() {
         onClose={posters.close}
       />
     ))
+  /**
+   * Whether the street show's craft card is really on the screen: it is the last in the bottom row, so any other
+   * card, sheet or panel there takes its place. While it is, it carries "Taali bajao"; while it is not (never
+   * shown, closed, or displaced), the street's own button does.
+   */
+  const showCardUp =
+    !!shows.card &&
+    !drive.driving &&
+    !bench.seat &&
+    !near &&
+    !sheetOpen &&
+    !taxi.sheetOpen &&
+    !card &&
+    bench.notice !== 'ghost' &&
+    !(queue.card && queue.position !== null)
   /** A card, sheet or dialog is up: M does not open the map over it. */
   const sheetUp =
     !!card ||
@@ -820,6 +843,11 @@ export default function App() {
                     }}
                   />
                 )}
+                {shows.later && (
+                  <div className="toast" role="status">
+                    {t('showDancersLater', lang)}
+                  </div>
+                )}
                 {travelFailed && (
                   <div className="toast" role="status">
                     {t('metroFailed', lang, { place: DISTRICT_NAMES[travelFailed][lang] })}
@@ -977,6 +1005,12 @@ export default function App() {
                         {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
                       </button>
                     )}
+                  {/* a street show is on (or just over): the clap, unless its own card is up and has it */}
+                  {shows.clapFor && !showCardUp && !bench.seat && !near && !sheetOpen && !card && (
+                    <button type="button" className="metro-button show-button" onClick={shows.clap}>
+                      {t('showClap', lang)}
+                    </button>
+                  )}
                   {animals.following && !bench.seat && !near && !sheetOpen && !card && (
                     <button type="button" className="metro-button animal-button" onClick={animals.home}>
                       {t('animalHome', lang)}
@@ -1051,6 +1085,16 @@ export default function App() {
                   )) ||
                   (queue.card && queue.position !== null && (
                     <FullScreen position={queue.position} lang={lang} onClose={queue.dismiss} />
+                  )) ||
+                  // last of all: the craft card of a street show walked up to for the first time
+                  (showCardUp && shows.card && (
+                    <ShowCard
+                      kind={shows.card}
+                      lang={lang}
+                      clap={shows.clapFor === shows.card}
+                      onClap={shows.clap}
+                      onClose={shows.closeCard}
+                    />
                   ))
                 )}
               </>
@@ -1085,7 +1129,10 @@ export default function App() {
           read={map.read}
           target={map.target?.id}
           lang={lang}
-          onPick={map.pick}
+          onPick={(place) => {
+            map.pick(place)
+            shows.picked(place.id) // the dancers' ground by day: a line says when they come
+          }}
           onClose={map.close}
         />
       )}

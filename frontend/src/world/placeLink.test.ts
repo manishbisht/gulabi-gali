@@ -7,6 +7,7 @@ import { DISTRICTS, loadDistrict, type District } from './district'
 import { SITE_URL } from '../ui/inviteShare'
 import { linkId, placeForward, placeSpot, placeUrl, readPlaceLink } from './placeLink'
 import { WALL_RANGE, wallDistance, wallsOf } from './posters'
+import { NEAR_M, showColliders, showsOf } from './shows'
 import type { AABB, Vec2 } from './types'
 import { STAIR_RANGE } from './rooftop'
 import { STATION_RANGE } from './useTravel'
@@ -147,6 +148,38 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
         `${d} m behind`,
       ).toBe(false)
     }
+  })
+
+  it('street shows: where the audience stands, in the clear, facing the show and near enough to start it', async () => {
+    const { def, colliders } = await load(id)
+    const items = mapItems(def, []).filter((i) => i.kind === 'show')
+    expect(items).toHaveLength(showsOf(def).length)
+    for (const s of showsOf(def)) {
+      const item = items.find((i) => i.id === `show-${s.kind}`)!
+      const back = forwarded(id, linkId(item))!
+      expect(back).toEqual({ district: id, place: `show-${s.kind}` })
+      const spot = placeSpot(await load(id), back.place)!
+      expect(spot, s.kind).not.toBeNull()
+      // clear of the street, and of what the show itself puts on it
+      for (const c of [...colliders, ...showColliders(s)])
+        expect(hits(spot, PLAYER_RADIUS, c), s.kind).toBe(false)
+      expect(Math.hypot(spot.x - s.at.x, spot.z - s.at.z), s.kind).toBeLessThan(NEAR_M)
+      const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
+      const to = { x: s.at.x - spot.x, z: s.at.z - spot.z }
+      expect((look.x * to.x + look.z * to.z) / Math.hypot(to.x, to.z), s.kind).toBeGreaterThan(0.99)
+      // the chase camera's line back (7 m), clear of every collider
+      for (let d = 1; d <= 7; d++) {
+        const p = { x: spot.x - look.x * d, z: spot.z - look.z * d }
+        expect(
+          colliders.some((c) => hits(p, 1, c)),
+          `${s.kind}: ${d} m behind`,
+        ).toBe(false)
+      }
+    }
+    // a show this district does not have is no place
+    for (const kind of ['kathputli', 'ravanhatta', 'dancers'])
+      if (!showsOf(def).some((s) => s.kind === kind))
+        expect(placeSpot(await load(id), `show-${kind}`)).toBeNull()
   })
 
   it('benches and tapris: in reach to sit ("Baitho" shows), in the clear', async () => {
