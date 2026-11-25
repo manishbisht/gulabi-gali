@@ -102,3 +102,69 @@ test('Dost banao from a chat, a yes from the profile, then Chai pe bulao from a 
   await open.click()
   await expect(sheetB).not.toContainText('chai pe bulaya')
 })
+
+test.describe('on a 360 px phone', () => {
+  const PHONE = {
+    viewport: { width: 360, height: 740 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  }
+
+  /** Whole on the screen across, and inside its top-to-bottom too. */
+  async function onScreen(what: string, box: { x: number; y: number; width: number; height: number } | null) {
+    expect(box, what).not.toBeNull()
+    expect.soft(box!.x, `${what} left`).toBeGreaterThanOrEqual(0)
+    expect.soft(box!.x + box!.width, `${what} right`).toBeLessThanOrEqual(PHONE.viewport.width)
+    expect.soft(box!.y + box!.height, `${what} bottom`).toBeLessThanOrEqual(PHONE.viewport.height)
+  }
+
+  test('the Profile count, the friends panel, the chai picker and the invite in the inbox all fit', async ({
+    browser,
+  }) => {
+    const a = await resident(browser, 'Asha', PHONE)
+    const b = await resident(browser, 'Ravi', PHONE)
+    await matched(a, b)
+    expect((await call(a.page, '/api/friends', 'POST', { to: b.id })).status).toBeLessThan(300)
+
+    // the Profile button with its count sits in the top block, whole, the HUD's head no taller than a third
+    const profile = b.page.getByRole('button', { name: 'Profile 1 dosti ki request' })
+    await expect(profile).toBeVisible()
+    await onScreen('profile button', await profile.boundingBox())
+    const head = await b.page.locator('.hud-head').boundingBox()
+    expect(head!.y + head!.height, 'HUD head bottom').toBeLessThanOrEqual(PHONE.viewport.height * 0.35)
+
+    // the friends panel: the ask and its buttons on the screen, thumb-sized
+    const { sheet, panel } = await friendsOf(b)
+    const yes = panel.getByRole('button', { name: 'Haan' })
+    await yes.scrollIntoViewIfNeeded()
+    await onScreen('Haan', await yes.boundingBox())
+    expect((await yes.boundingBox())!.height, 'Haan thumb-sized').toBeGreaterThanOrEqual(44)
+    await yes.click()
+    await expect(panel.getByText(a.name)).toBeVisible()
+    await onScreen('friends panel', await panel.boundingBox())
+    await sheet.getByRole('button', { name: 'Baad mein' }).click()
+
+    // A at the tapri: the bench panel and its friend picker
+    await hopTo(a.page, TAPRI.x + 2.2, TAPRI.z + 0.5)
+    await a.page.getByRole('button', { name: 'Baitho' }).click()
+    const bench = a.page.getByRole('region', { name: 'Tapri pe' })
+    await bench.getByRole('button', { name: 'Chai pe bulao' }).click()
+    const pick = bench.getByRole('button', { name: `${b.name} ko chai pe bulao` })
+    await onScreen('bench panel', await bench.boundingBox())
+    await onScreen('friend in the picker', await pick.boundingBox())
+    expect((await pick.boundingBox())!.height, 'picker thumb-sized').toBeGreaterThanOrEqual(44)
+    await pick.click()
+    await expect(bench.getByText('Bulaava bhej diya')).toBeVisible()
+
+    // B's inbox: the invite and both its buttons on the screen
+    await b.page.getByRole('button', { name: /Mulaqaatein/ }).click()
+    const inbox = b.page.getByRole('dialog', { name: 'Aapki mulaqaatein' })
+    await expect(inbox).toContainText(`${a.name} ne chai pe bulaya`)
+    for (const name of ['Chalo', 'Abhi nahi']) {
+      const button = inbox.getByRole('button', { name, exact: true })
+      await onScreen(name, await button.boundingBox())
+      expect((await button.boundingBox())!.height, `${name} thumb-sized`).toBeGreaterThanOrEqual(44)
+    }
+  })
+})

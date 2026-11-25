@@ -2630,6 +2630,13 @@ button.stamp-count::after {
 }
 
 /* Friends ("Dost banao") in the profile sheet; "Chai pe bulao" at a bench and in the inbox (src/friends). */
+/* every button here is thumb-sized on a phone (a sheet's plain buttons are shorter) */
+.friends-panel button,
+.chai-pick button,
+.chai-invites button {
+  min-height: 44px;
+}
+
 .friends-panel h4 {
   margin: 8px 0 4px;
   font-size: 0.9rem;
