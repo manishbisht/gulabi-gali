@@ -339,7 +339,8 @@ const walledCity: DistrictDef = {
       { x: 8, z: 60 },
       { x: 6, z: -18 },
     ],
-    cow: { x: 0, z: 10 },
+    // just south of Badi Chaupar's ring (12 m), where the landmark's card does not hide her buttons
+    cow: { x: 0, z: 14 },
   },
   ground: 'sandstone',
   paving,

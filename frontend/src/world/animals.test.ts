@@ -438,6 +438,20 @@ describe('a kindness for each animal', () => {
 
 describe('district animals', () => {
   it.each(DISTRICTS)(
+    "%s: the cow stands outside every landmark's ring, where her buttons can show",
+    async (id) => {
+      const d = await loadDistrict(id)
+      // inside a ring the landmark's card has the screen, and "Gaay ko namaste" and "Roti khilao" are hidden
+      const { cow } = d.def.animals
+      /** How far she wanders from where she lives: she stands where she is. */
+      const wander = 0
+      for (const l of d.def.landmarks)
+        expect(Math.hypot(cow.x - l.at.x, cow.z - l.at.z) - wander, l.id).toBeGreaterThan(l.radius)
+      d.dispose()
+    },
+  )
+
+  it.each(DISTRICTS)(
     '%s: spawn points, and every place they wander to, are clear of colliders',
     async (id) => {
       const d = await loadDistrict(id)
