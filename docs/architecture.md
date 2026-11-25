@@ -90,14 +90,14 @@ pitch in e2e.
 
 ## How districts stream
 
-There are six districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`, `amer`, `nahargarh`). Each one's definition is a
+There are seven districts (`walled-city`, `mi-road`, `university`, `malviya-nagar`, `amer`, `nahargarh`, `galta`). Each one's definition is a
 dynamic `import()` in `src/world/district.ts`, so each is its own small chunk, fetched only when the player
 first goes there. `loadDistrict(id)` builds the geometry from the definition: building blocks are merged per
 60 m cell (few draw calls, still culled off-screen), props are baked, and the district gets one hemisphere
 light and one sun whose shadow box follows the player (`district.focus`).
 
-Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`), except to and from Amer and Nahargarh, which
-have no metro (`BUS_ONLY` in `world/metroRide.ts`): a bus runs there from every station and back (`rideBy`). It
+Travel is by metro (`src/world/useTravel.ts`, `ui/TravelSheet.tsx`), except to and from Amer, Nahargarh and Galta Ji,
+which have no metro (`BUS_ONLY` in `world/metroRide.ts`): a bus runs there from every station and back (`rideBy`). It
 takes the same trip, with its own look: a marigold "Bus" row in the sheet, a "Bus" button at the district's bus
 stand (its `station`, a `bus-stop` prop), a bus cab instead of the coach, and "Bus stand" on its map and
 signposts (the place id stays `metro`).
@@ -122,11 +122,27 @@ shader), so it is hazier the worse the air but still there on a poor day; its li
 rooftop viewpoint there is a bastion on the terrace by the edge, facing west: the sunset point. Its
 `DistrictDef.roofName` makes it a place: the signposts point at its stair, the map pins it (kind `viewpoint`),
 and a link (`?at=nahargarh:viewpoint`) stands someone at the stair's foot.
+Galta Ji (`world/districts/galta.ts`) is a narrow gorge in the Aravallis east of the city, a living pilgrimage
+place. The bus stops at its mouth in the south; a stone path runs north up the gorge past temples and havelis
+stacked along both sides, beside three stepped kunds one above the next (`DistrictDef.water`, walked round on
+their ghats), to the main temple (`world/landmarks/galtaJi.ts`), whose ring and stamp (`galta-ji`) are on the
+path before its steps, the main kund across it. The rocky slopes either side and at the gorge's head are
+`DistrictDef.rocks`: colliders the camera pulls in front of, as it does a building's, drawn by the district's
+`scenery` (`world/landmarks/galtaGorge.ts`: one height field whose foot meets the colliders' edges and that sinks to
+nothing toward the ridge's west edge, with the kunds' steps, two pavilions standing in the main kund and a few
+monkeys sitting on the steps; one mesh, no colliders of its own). Between the main and the upper kund a way crosses
+west and climbs out of the gorge to the ridge top, where the Surya Mandir stands by a terrace over the drop
+(`ridgeWest`, with the same city below as Nahargarh's): the roof beside it is the viewpoint, named "Surya Mandir" /
+"Sun Temple" (`roofName`), looking west, its stair foot faced up the stair (`upTheStair` in `rooftop.ts`) so the
+chase camera hangs over the open terrace. Nobody is drawn in the water and no ritual is shown: the characters are
+a garland seller, a chai seller and a guide, and the copy says what is said (Galav rishi, the spring) as "kehte
+hain" / "it is said". The bandar lives here too (`BANDAR_HOMES` in `bandar.ts`), its raids near the main temple and
+its switch in the HUD as in the Walled City.
 The new district is loaded first, and only
 once it is in does the old one leave; if loading fails the player stays where they were. Three.js is its own
 `three` chunk (`vite.config.ts`), so its hash survives deploys that only touch the app.
 
-The remembered district and the collected stamps (13 landmarks) live in `localStorage` (`src/storage.ts`). A
+The remembered district and the collected stamps (14 landmarks) live in `localStorage` (`src/storage.ts`). A
 resident's stamps are also kept on the server (see "Jaipur Darshan stamps" under phase 4), so a second device
 shows them; a ghost's stay on the device.
 
@@ -573,7 +589,7 @@ the next run while the plan is still ahead. Someone who says it inside the last 
 The stamp list is one data file, `backend/src/stamps.json` (id plus the landmark's Hinglish and English name),
 with a byte-for-byte copy at `frontend/src/world/stamps.json` (checked by `check:protocol`; a frontend test checks
 it against the districts' landmarks). It is in the order stamps were added, not district order: a new landmark's
-stamp goes last (Jal Mahal and the City Palace after Nahargarh), so a stored list keeps its meaning. D1 keeps `user_stamps(user_id, stamp, at)` (migration `0005`).
+stamp goes last (Jal Mahal and the City Palace after Nahargarh, then Galta Ji), so a stored list keeps its meaning. D1 keeps `user_stamps(user_id, stamp, at)` (migration `0005`).
 `PUT /api/me/stamps {stamps}` is for residents (`ACTIVE`; anyone else 403 `ghost`), 30 an hour per account: it
 refuses an unknown id or more ids than there are stamps (400 `invalid`), adds the rest (never removes one) and
 answers the whole set, so an empty list is a read. A profile (`GET /api/me`, `GET /api/profiles/:id`) carries
@@ -583,7 +599,7 @@ deletes the rows.
 The page keeps `gg-stamps` as before. For a resident, `useStamps` merges the profile's `stamps` into it, and
 pushes the local set whenever it holds one the server has not confirmed (after sign-in, after each new stamp);
 the answer is merged in too. A failed push is silent and is tried again on the next stamp or the next load. The
-person card and your own profile sheet show "Jaipur Darshan · n/13" and the landmarks by name (`ui/StampsLine.tsx`).
+person card and your own profile sheet show "Jaipur Darshan · n/14" and the landmarks by name (`ui/StampsLine.tsx`).
 
 ### Aaj ka Darshan: one small goal a day (`today.ts`, `frontend/src/world/today.ts`, `useToday.ts`)
 
@@ -799,7 +815,8 @@ A soft bed under the street, all synthesised in the page with Web Audio (filtere
 no recordings, no third-party audio, nothing downloaded. Each district has its own mix of bazaar murmur, birds
 by day, crickets at dusk and night, temple bells at dawn and dusk, and festival drums while a festival is on
 (`mixFor`, from the district, the live sky and the festival); up on Nahargarh's ridge a low, gusting wind too,
-over the birds and the city's far hum. It follows the HUD's one sound switch (`gg-sound`,
+over the birds and the city's far hum; Galta Ji's gorge is green and quiet, more birds than the bazaar and a
+soft murmur of visitors. It follows the HUD's one sound switch (`gg-sound`,
 `soundOn`) and starts only after a gesture (the page resumes its audio context on the first tap, click or key, as
 phones require). It goes quiet while the tab is hidden (the context is suspended and its timer stopped), at the
 lowest quality tier it plays one steady layer and no blips (`thinMix`), and photo mode and the taxi ride duck it
