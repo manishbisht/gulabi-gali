@@ -3,13 +3,13 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const photo = vi.hoisted(() => ({ capture: vi.fn(), share: vi.fn(), postcard: vi.fn(), shareImage: vi.fn() }))
+const photo = vi.hoisted(() => ({ capture: vi.fn(), postcard: vi.fn(), fonts: vi.fn(), shareImage: vi.fn() }))
 vi.mock('./photo', () => ({
   WORDMARK: 'Gulabi Gali · Jaipur',
   capturePhoto: photo.capture,
-  sharePhoto: photo.share,
+  photoName: () => 'gulabi-gali-20261125-101010.png',
 }))
-vi.mock('./cards', () => ({ composePostcard: photo.postcard }))
+vi.mock('./cards', () => ({ composePostcard: photo.postcard, fontsReady: photo.fonts }))
 vi.mock('./share', async (real) => ({
   ...(await real<typeof import('./share')>()),
   shareImage: photo.shareImage,
@@ -25,8 +25,8 @@ const stage = { capture: vi.fn() }
 const exit = vi.fn()
 beforeEach(() => {
   photo.capture.mockReset()
-  photo.share.mockReset()
   photo.postcard.mockReset()
+  photo.fonts.mockReset().mockResolvedValue(undefined)
   photo.shareImage.mockReset()
   URL.createObjectURL = vi.fn(() => 'blob:card')
   URL.revokeObjectURL = vi.fn()
@@ -48,7 +48,7 @@ it('a failed capture (a lost context) says so and shares and saves nothing', asy
   off()
   expect(deeds).not.toHaveBeenCalled() // no photo, so no "Aaj ka Darshan" photo either
   expect(q('.photo-note').textContent).toBe("Couldn't take the photo. Try again.")
-  expect(photo.share).not.toHaveBeenCalled()
+  expect(photo.shareImage).not.toHaveBeenCalled()
   expect((q('.photo-shutter') as HTMLButtonElement).disabled).toBe(false) // and it can be tried again
 })
 
@@ -57,7 +57,7 @@ it('the status line is in the page from the start, empty, and only its text chan
   expect(note.getAttribute('role')).toBe('status')
   expect(note.textContent).toBe('')
   photo.capture.mockResolvedValue(new Blob())
-  photo.share.mockResolvedValue('downloaded')
+  photo.shareImage.mockResolvedValue('downloaded')
   const deeds = vi.fn()
   const off = onDeed(deeds)
   await act(async () => q('.photo-shutter').click())
@@ -65,13 +65,17 @@ it('the status line is in the page from the start, empty, and only its text chan
   expect(deeds.mock.calls).toEqual([[{ kind: 'photo' }]]) // a photo taken does today's photo goal
   expect(q('.photo-note')).toBe(note)
   expect(note.textContent).toBe('Photo saved to your phone.')
+  expect(photo.shareImage.mock.calls[0]![1]).toBe('gulabi-gali-20261125-101010.png')
 })
 
 it('"Postcard" frames the shot 9:16 with the place, and makes the postcard from the same stage', async () => {
   const postcard = host.querySelector<HTMLInputElement>('input[value="postcard"]')!
   expect(host.querySelector<HTMLInputElement>('input[value="photo"]')!.checked).toBe(true) // a plain photo first
   expect(host.querySelector('[role="radiogroup"]')!.getAttribute('aria-label')).toBe('Choose a frame')
-  act(() => postcard.click())
+  expect(photo.fonts).not.toHaveBeenCalled() // nothing fetched for a plain photo
+  await act(async () => postcard.click())
+  // picking it fetches the composer and warms its fonts, so the shutter's tap waits less for the share sheet
+  expect(photo.fonts).toHaveBeenCalled()
   expect(q('.photo-frame').classList.contains('photo-frame-postcard')).toBe(true)
   expect(q('.photo-wordmark').textContent).toBe('Gulabi Gali · Hawa Mahal · Jaipur')
   photo.postcard.mockResolvedValue(new Blob(['p'], { type: 'image/png' }))
@@ -90,12 +94,20 @@ it('"Postcard" frames the shot 9:16 with the place, and makes the postcard from 
 it("in Instagram's browser the picture opens alone to press and save; Escape closes that, not photo mode", async () => {
   const card = new Blob(['p'], { type: 'image/png' })
   photo.capture.mockResolvedValue(card)
-  photo.share.mockResolvedValue('hold')
+  photo.shareImage.mockResolvedValue('hold')
   await act(async () => q('.photo-shutter').click())
   const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
   expect(dialog.getAttribute('aria-label')).toBe('Save the picture')
   expect(dialog.textContent).toContain('Press and hold the image to save it')
   expect(dialog.querySelector('img')!.getAttribute('src')).toBe('blob:card')
+  // and a small download link to the same picture, for a phone with no "save image" on a long press
+  const link = dialog.querySelector<HTMLAnchorElement>('a.hold-download')!
+  expect([link.getAttribute('href'), link.getAttribute('download'), link.textContent]).toEqual([
+    'blob:card',
+    'gulabi-gali-20261125-101010.png',
+    'Download',
+  ])
+  ;(document.body as HTMLElement).focus()
   expect(URL.createObjectURL).toHaveBeenCalledWith(card)
   expect(q('.photo-note').textContent).toBe('')
   act(() => {
@@ -104,4 +116,29 @@ it("in Instagram's browser the picture opens alone to press and save; Escape clo
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:card') // let go as it closes
   expect(exit).not.toHaveBeenCalled()
+  expect(document.activeElement).toBe(q('.photo-shutter')) // back to the shutter, for the next one
+})
+
+it('a share sheet refused for a late tap keeps the picture, and "Share" offers it to a fresh tap', async () => {
+  const shot = new Blob(['p'], { type: 'image/png' })
+  photo.capture.mockResolvedValue(shot)
+  photo.shareImage.mockResolvedValueOnce('retry').mockResolvedValueOnce('shared')
+  await act(async () => q('.photo-shutter').click())
+  expect(photo.capture).toHaveBeenCalledOnce()
+  const again = q('.photo-retry')
+  expect(again.textContent).toBe('Share')
+  await act(async () => again.click())
+  expect(photo.capture).toHaveBeenCalledOnce() // the same picture, not a new one
+  expect(photo.shareImage.mock.calls[1]).toEqual(photo.shareImage.mock.calls[0])
+  expect(photo.shareImage.mock.calls[1]![0]).toBe(shot)
+  expect(host.querySelector('.photo-retry')).toBeNull()
+})
+
+it('a new shot takes the old "Share" away', async () => {
+  photo.capture.mockResolvedValue(new Blob())
+  photo.shareImage.mockResolvedValueOnce('retry').mockResolvedValueOnce('cancelled')
+  await act(async () => q('.photo-shutter').click())
+  expect(host.querySelector('.photo-retry')).not.toBeNull()
+  await act(async () => q('.photo-shutter').click())
+  expect(host.querySelector('.photo-retry')).toBeNull()
 })

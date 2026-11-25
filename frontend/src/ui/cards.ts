@@ -37,7 +37,7 @@ const BODY = (size: number) => `600 ${size}px Mukta, system-ui, sans-serif`
 const FONT_WAIT_MS = 2000
 
 /** The site's two web fonts, loaded (or given up on): a picture is never held up by a slow font host. */
-async function fontsReady(): Promise<void> {
+export async function fontsReady(): Promise<void> {
   const fonts = typeof document !== 'undefined' ? document.fonts : undefined
   if (typeof fonts?.load !== 'function') return
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -60,9 +60,14 @@ function newCanvas(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D
   return { canvas, ctx }
 }
 
+/** The canvas as a PNG; the canvas is emptied once encoded, so its pixels are let go at once, not at GC. */
 const toPng = (canvas: HTMLCanvasElement) =>
   new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('png encode failed'))), 'image/png'),
+    canvas.toBlob((blob) => {
+      canvas.width = canvas.height = 0
+      if (blob) resolve(blob)
+      else reject(new Error('png encode failed'))
+    }, 'image/png'),
   )
 
 const measureWith =

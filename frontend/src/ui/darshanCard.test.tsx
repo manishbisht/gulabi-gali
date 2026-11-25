@@ -3,8 +3,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const cards = vi.hoisted(() => ({ compose: vi.fn(), share: vi.fn() }))
-vi.mock('./cards', () => ({ composeDarshanCard: cards.compose }))
+const cards = vi.hoisted(() => ({ compose: vi.fn(), share: vi.fn(), fonts: vi.fn() }))
+vi.mock('./cards', () => ({ composeDarshanCard: cards.compose, fontsReady: cards.fonts }))
 vi.mock('./share', async (real) => ({ ...(await real<typeof import('./share')>()), shareImage: cards.share }))
 import { DarshanList } from './DarshanList'
 
@@ -14,6 +14,7 @@ const card = new Blob(['c'], { type: 'image/png' })
 beforeEach(() => {
   cards.compose.mockReset().mockResolvedValue(card)
   cards.share.mockReset().mockResolvedValue('downloaded')
+  cards.fonts.mockReset().mockResolvedValue(undefined)
   URL.createObjectURL = vi.fn(() => 'blob:card')
   URL.revokeObjectURL = vi.fn()
 })
@@ -36,6 +37,7 @@ it('"Card banao" makes the card of the stamps, with no name by default, and save
   )
   const button = host.querySelector<HTMLButtonElement>('.darshan-card-make')!
   expect(button.textContent).toBe('Card banao')
+  expect(cards.fonts).toHaveBeenCalled() // the card is likely next: its composer and fonts come as the sheet opens
   const tick = host.querySelector<HTMLInputElement>('.darshan-card input[type="checkbox"]')!
   expect(tick.checked).toBe(false)
   expect(tick.closest('label')!.textContent).toBe('Naam dikhao')
@@ -75,7 +77,8 @@ it("in Instagram's browser the card opens alone to press and save; Escape closes
   await make(host)
   const hold = document.querySelector<HTMLElement>('[aria-label="Tasveer save karo"]')!
   expect(hold.getAttribute('role')).toBe('dialog')
-  expect(hold.textContent).toContain('Photo pe der tak dabao aur save karo')
+  expect(hold.textContent).toContain('Tasveer pe der tak dabao aur save karo')
+  expect(hold.querySelector('a.hold-download')!.getAttribute('download')).toMatch(/^gulabi-gali-darshan-/)
   expect(hold.querySelector('img')!.getAttribute('src')).toBe('blob:card')
   expect(document.activeElement).toBe(hold) // focus moved into it
   await act(async () => {
@@ -85,6 +88,20 @@ it("in Instagram's browser the card opens alone to press and save; Escape closes
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:card')
   expect(onClose).not.toHaveBeenCalled()
   expect(host.querySelector('.darshan-sheet')).not.toBeNull()
+  expect(document.activeElement).toBe(host.querySelector('.darshan-card-make')) // back to "Card banao"
+})
+
+it('a share sheet refused for a late tap keeps the card, and "Share karo" offers it to a fresh tap', async () => {
+  cards.share.mockResolvedValueOnce('retry').mockResolvedValueOnce('shared')
+  const host = await mount(<DarshanList ids={[]} lang="hi" onClose={() => {}} />)
+  await make(host)
+  const again = host.querySelector<HTMLButtonElement>('.darshan-card-share')!
+  expect(again.textContent).toBe('Share karo')
+  await act(async () => again.click())
+  expect(cards.compose).toHaveBeenCalledOnce() // the same card, not a new one
+  expect(cards.share.mock.calls[1]![0]).toBe(card)
+  expect(cards.share.mock.calls[1]![1]).toBe(cards.share.mock.calls[0]![1])
+  expect(host.querySelector('.darshan-card-share')).toBeNull()
 })
 
 it('a card that cannot be made says so, and can be tried again', async () => {

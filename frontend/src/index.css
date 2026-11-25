@@ -2344,16 +2344,10 @@ small.words-hint {
 .photo-kind {
   position: relative;
   display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 999px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  white-space: nowrap;
   cursor: pointer;
 }
 
+/* the radio covers its pill (a thumb-sized target) and is invisible; the pill after it shows its state */
 .photo-kind input {
   position: absolute;
   inset: 0;
@@ -2362,20 +2356,57 @@ small.words-hint {
   cursor: pointer;
 }
 
-.photo-kind:has(input:checked) {
+.photo-kind span {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.photo-kind input:checked + span {
   background: var(--pink);
   color: var(--plum);
 }
 
-.photo-kind:has(input:focus-visible) {
+.photo-kind input:focus-visible + span {
   outline: 3px solid var(--cream);
   outline-offset: 2px;
+}
+
+/* "Share" on a picture the share sheet refused: where the note goes, above the shutter */
+.photo-retry {
+  position: absolute;
+  left: 50%;
+  bottom: calc(126px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--marigold);
+  border-radius: 999px;
+  background: var(--marigold);
+  color: var(--plum);
+  font: inherit;
+  font-weight: 600;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.photo-retry:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 3px;
 }
 
 .photo-frame-postcard {
   inset: auto;
   top: 50%;
   left: 50%;
+  /* the window's size where container units are not known yet (older iOS): the same box, as the overlay fills it */
+  width: min(100vw, 100vh * 9 / 16);
+  height: min(100vh, 100vw * 16 / 9);
   width: min(100cqw, 100cqh * 9 / 16);
   height: min(100cqh, 100cqw * 16 / 9);
   transform: translate(-50%, -50%);
@@ -2420,7 +2451,8 @@ small.words-hint {
 .hold-image {
   display: block;
   /* the hint and the button keep their room under it */
-  max-height: calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: calc(100vh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   max-width: 100%;
   border-radius: 12px;
   box-shadow: 0 0 0 2px var(--marigold);
@@ -2428,6 +2460,14 @@ small.words-hint {
   -webkit-touch-callout: default;
   user-select: auto;
   -webkit-user-select: auto;
+}
+
+.hold-download {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--sandstone);
+  font-size: 0.85rem;
 }
 
 .hold-hint {

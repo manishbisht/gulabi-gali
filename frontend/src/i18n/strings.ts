@@ -1168,7 +1168,11 @@ export const STRINGS = {
   cardCountLabel: { hi: 'landmark dekhe', en: 'landmarks seen' },
   /** Instagram's in-app browser cannot share or download: the picture is shown alone to be pressed and saved. */
   holdTitle: { hi: 'Tasveer save karo', en: 'Save the picture' },
-  holdHint: { hi: 'Photo pe der tak dabao aur save karo', en: 'Press and hold the image to save it' },
+  holdHint: { hi: 'Tasveer pe der tak dabao aur save karo', en: 'Press and hold the image to save it' },
+  /** A small link under it, for a phone whose browser has no "save image" on a long press. */
+  holdDownload: { hi: 'Download karo', en: 'Download' },
+  /** The share sheet refused a picture that took a while to make: a fresh tap here opens it. */
+  shareAgain: { hi: 'Share karo', en: 'Share' },
   holdAlt: { hi: 'Aapki banayi tasveer', en: 'The picture you made' },
   holdClose: { hi: 'Band karo', en: 'Close' },
 } as const satisfies Record<string, Record<Lang, string>>

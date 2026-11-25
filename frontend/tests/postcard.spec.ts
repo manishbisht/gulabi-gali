@@ -1,8 +1,31 @@
 import { readFileSync } from 'node:fs'
-import { expect, test, type Download, type Page } from '@playwright/test'
+import { expect, test, type Download, type Locator, type Page } from '@playwright/test'
+import { closePeople, resident } from './support/people'
 
 /** A small phone, held upright. */
-test.use({ viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+const PHONE = { viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+test.use(PHONE)
+test.afterEach(closePeople)
+
+/** Each control on the phone's screen without scrolling, whole inside its 360 px, thumb-sized, none over another. */
+async function fitsThePhone(controls: Locator[]) {
+  const boxes = []
+  for (const c of controls) {
+    await expect(c).toBeInViewport({ ratio: 1 })
+    const b = (await c.boundingBox())!
+    expect(b.x).toBeGreaterThanOrEqual(0)
+    expect(b.x + b.width).toBeLessThanOrEqual(360)
+    expect(b.height).toBeGreaterThanOrEqual(44)
+    boxes.push(b)
+  }
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const [a, b] = [boxes[i]!, boxes[j]!]
+      expect(a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height).toBe(
+        false,
+      )
+    }
+}
 
 const IG_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36 Instagram 360.0.0.30.109 Android'
@@ -100,11 +123,26 @@ test('the Darshan card row fits a 360 px phone in English too', async ({ page })
   await enter(page, 'en')
   await page.locator('.stamp-count').click()
   const list = page.getByRole('dialog', { name: 'Jaipur Darshan' })
-  const make = list.getByRole('button', { name: 'Make a card' })
-  await expect(make).toBeInViewport()
-  const box = (await make.boundingBox())!
-  expect(box.x).toBeGreaterThanOrEqual(0)
-  expect(box.x + box.width).toBeLessThanOrEqual(360)
+  await fitsThePhone([list.getByRole('button', { name: 'Make a card' })])
+})
+
+test('a resident\'s card row, "Card banao" and "Naam dikhao", fits a 360 px phone in both languages', async ({
+  browser,
+}, info) => {
+  const { page } = await resident(browser, 'Mira', PHONE)
+  const list = page.getByRole('dialog', { name: 'Jaipur Darshan' })
+  await page.locator('.stamp-count').click()
+  const tick = list.getByRole('checkbox', { name: 'Naam dikhao' })
+  await expect(tick).not.toBeChecked() // no name on a card unless asked
+  // the tick's whole label is its target
+  await fitsThePhone([list.getByRole('button', { name: 'Card banao' }), list.locator('.darshan-card label')])
+  await page.screenshot({ path: info.outputPath('darshan-card-row-hi.png') })
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'English: bhasha badlo' }).click()
+  await page.locator('.stamp-count').click()
+  await expect(list.getByRole('checkbox', { name: 'Show my name' })).not.toBeChecked()
+  await fitsThePhone([list.getByRole('button', { name: 'Make a card' }), list.locator('.darshan-card label')])
+  await page.screenshot({ path: info.outputPath('darshan-card-row-en.png') })
 })
 
 test.describe("Instagram's in-app browser", () => {
@@ -120,7 +158,7 @@ test.describe("Instagram's in-app browser", () => {
     await page.locator('.photo-shutter').click()
     const hold = page.getByRole('dialog', { name: 'Tasveer save karo' })
     await expect(hold).toBeVisible()
-    await expect(hold).toContainText('Photo pe der tak dabao aur save karo')
+    await expect(hold).toContainText('Tasveer pe der tak dabao aur save karo')
     const img = hold.getByRole('img', { name: 'Aapki banayi tasveer' })
     await expect(img).toHaveAttribute('src', /^blob:/)
     await expect
@@ -129,7 +167,7 @@ test.describe("Instagram's in-app browser", () => {
     // the whole picture, the hint and the button on the phone's screen
     for (const el of [
       img,
-      hold.getByText('Photo pe der tak dabao aur save karo'),
+      hold.getByText('Tasveer pe der tak dabao aur save karo'),
       hold.getByRole('button'),
     ]) {
       await expect(el).toBeInViewport({ ratio: 1 })

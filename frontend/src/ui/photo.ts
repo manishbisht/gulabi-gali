@@ -31,7 +31,11 @@ export async function capturePhoto(stage: Pick<Stage, 'capture'>): Promise<Blob>
     ctx.fillText(WORDMARK, out.width / 2, out.height - size * 1.2)
     ctx.restore()
     return new Promise<Blob>((resolve, reject) =>
-      out.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('png encode failed'))), 'image/png'),
+      out.toBlob((blob) => {
+        out.width = out.height = 0 // let the pixels go now, not at GC
+        if (blob) resolve(blob)
+        else reject(new Error('png encode failed'))
+      }, 'image/png'),
     )
   })
 }

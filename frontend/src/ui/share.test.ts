@@ -67,6 +67,16 @@ it('anywhere else that cannot share files, it downloads, and lets the URL go aft
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:x')
 })
 
+it('a share sheet refused for a late tap is "retry" (a fresh tap can open it), never a download or hold', async () => {
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+  const late = Object.assign(new Error('needs a tap'), { name: 'NotAllowedError' })
+  for (const ua of [CHROME, IG]) {
+    vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(late), canShare: () => true })
+    expect(await shareImage(png(), 'a.png', ua)).toBe('retry')
+  }
+  expect(click).not.toHaveBeenCalled()
+})
+
 it('closing the share sheet is not a failure, and nothing else happens', async () => {
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
   const abort = Object.assign(new Error('x'), { name: 'AbortError' })

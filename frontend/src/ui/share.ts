@@ -3,7 +3,7 @@
  * the browser can share files; in Instagram's in-app browser, which can do neither that nor a download, the
  * picture shown on its own to be pressed and saved (`hold`, see `HoldToSave`); anywhere else, a download.
  */
-export type ShareOutcome = 'shared' | 'downloaded' | 'cancelled' | 'hold'
+export type ShareOutcome = 'shared' | 'downloaded' | 'cancelled' | 'hold' | 'retry'
 
 /** Instagram's in-app browser says so in its user agent ("Instagram 300.0…"). */
 export const isInstagram = (ua: string = navigator.userAgent): boolean => /\bInstagram\b/i.test(ua)
@@ -34,8 +34,11 @@ export function download(file: File): void {
 }
 
 /**
- * Hands a PNG over (see the module's note). Closing the share sheet is `cancelled`, not a failure; a share sheet
- * that fails after all falls through to the next way. Rejects only if even the download cannot start.
+ * Hands a PNG over (see the module's note). Closing the share sheet is `cancelled`, not a failure. A share sheet
+ * refused because the tap that asked for it is too long ago (`NotAllowedError`: making the picture took a
+ * while) is `retry`: the caller keeps the picture and offers a "Share" button, whose fresh tap can open it. A
+ * share sheet that fails any other way falls through to the next way. Rejects only if even the download cannot
+ * start.
  */
 export async function shareImage(blob: Blob, name: string, ua?: string): Promise<ShareOutcome> {
   const file = new File([blob], name, { type: 'image/png' })
@@ -47,7 +50,9 @@ export async function shareImage(blob: Blob, name: string, ua?: string): Promise
         return 'shared'
       }
     } catch (err) {
-      if ((err as { name?: string } | null)?.name === 'AbortError') return 'cancelled'
+      const name = (err as { name?: string } | null)?.name
+      if (name === 'AbortError') return 'cancelled'
+      if (name === 'NotAllowedError') return 'retry'
       // the share sheet failed after all: the next way
     }
   }

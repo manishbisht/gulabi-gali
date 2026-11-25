@@ -4,8 +4,10 @@ import { t, type Lang } from '../i18n/strings'
 import { emitDeed } from '../world/deeds'
 import { SEP } from './cardLayout'
 import { HoldToSave } from './HoldToSave'
-import { capturePhoto, sharePhoto, WORDMARK } from './photo'
-import { pictureName, shareImage } from './share'
+import { loadCards, preloadCards } from './loadCards'
+import { capturePhoto, photoName, WORDMARK } from './photo'
+import { pictureName, type ShareOutcome } from './share'
+import { useShareFlow, type Picture } from './useShareFlow'
 
 interface Props {
   stage: Pick<Stage, 'capture'>
@@ -17,21 +19,18 @@ interface Props {
 
 type Kind = 'photo' | 'postcard'
 
-/** The postcard composer, fetched the first time someone takes one. */
-const loadCards = () => import('./cards')
-
 /**
  * Photo mode: the street with nothing over it but a frame, the wordmark, a shutter and a way back. The shutter
- * draws one frame (see `Stage.capture`) and hands the PNG to the share sheet, or downloads it where the
- * browser cannot share files. "Postcard" frames a 9:16 Story with a band naming the place (see `cards.ts`).
+ * draws one frame (see `Stage.capture`) and hands the PNG on (see `shareImage`: the share sheet, a download, or
+ * in Instagram's browser the picture alone to press and save). "Postcard" frames a 9:16 Story with a band naming
+ * the place (see `cards.ts`, fetched, with its fonts, as soon as Postcard is picked).
  */
 export function PhotoMode({ stage, place, lang, onExit }: Props) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [kind, setKind] = useState<Kind>('photo')
-  /** A picture to press and save, where the browser can neither share nor download (Instagram's). */
-  const [hold, setHold] = useState<Blob | null>(null)
   const shutter = useRef<HTMLButtonElement>(null)
+  const flow = useShareFlow(shutter)
   const exitRef = useRef(onExit)
   useEffect(() => void (exitRef.current = onExit))
 
@@ -44,23 +43,40 @@ export function PhotoMode({ stage, place, lang, onExit }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const said = (outcome: ShareOutcome, picture: Picture) =>
+    setNote(outcome === 'downloaded' ? t(picture.saved, lang) : null)
+
   const take = async () => {
     if (busy) return
     setBusy(true)
     setNote(null)
+    flow.forget()
     try {
-      const postcard = kind === 'postcard'
-      const shot = postcard
-        ? await (await loadCards()).composePostcard(stage, place)
-        : await capturePhoto(stage)
+      const picture: Picture =
+        kind === 'postcard'
+          ? {
+              blob: await (await loadCards()).composePostcard(stage, place),
+              name: pictureName('postcard-'),
+              saved: 'postcardDownloaded',
+            }
+          : { blob: await capturePhoto(stage), name: photoName(), saved: 'photoDownloaded' }
       emitDeed({ kind: 'photo' }) // taken, whether it is then shared, saved or the share sheet closed
-      const outcome = postcard ? await shareImage(shot, pictureName('postcard-')) : await sharePhoto(shot)
-      if (outcome === 'hold') setHold(shot)
-      setNote(outcome === 'downloaded' ? t(postcard ? 'postcardDownloaded' : 'photoDownloaded', lang) : null)
+      said(await flow.share(picture), picture)
     } catch {
       setNote(t('photoFailed', lang))
     } finally {
       setBusy(false)
+    }
+  }
+
+  /** "Share" on a picture the share sheet refused (its tap was too long ago): this tap is fresh. */
+  const again = async () => {
+    const picture = flow.retry
+    if (!picture) return
+    try {
+      said(await flow.share(picture), picture)
+    } catch {
+      setNote(t('photoFailed', lang))
     }
   }
 
@@ -83,7 +99,10 @@ export function PhotoMode({ stage, place, lang, onExit }: Props) {
                 name="photo-kind"
                 value={k}
                 checked={kind === k}
-                onChange={() => setKind(k)}
+                onChange={() => {
+                  setKind(k)
+                  if (k === 'postcard') preloadCards()
+                }}
               />
               <span>{t(k === 'photo' ? 'photoKindPhoto' : 'photoKindPostcard', lang)}</span>
             </label>
@@ -96,6 +115,11 @@ export function PhotoMode({ stage, place, lang, onExit }: Props) {
         <p className="photo-note" role="status">
           {note}
         </p>
+        {flow.retry && (
+          <button type="button" className="photo-retry" onClick={() => void again()}>
+            {t('shareAgain', lang)}
+          </button>
+        )}
         <button
           ref={shutter}
           type="button"
@@ -105,7 +129,9 @@ export function PhotoMode({ stage, place, lang, onExit }: Props) {
           onClick={() => void take()}
         />
       </div>
-      {hold && <HoldToSave image={hold} lang={lang} onClose={() => setHold(null)} />}
+      {flow.hold && (
+        <HoldToSave image={flow.hold.blob} name={flow.hold.name} lang={lang} onClose={flow.closeHold} />
+      )}
     </>
   )
 }

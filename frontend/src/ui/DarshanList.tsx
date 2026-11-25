@@ -5,12 +5,11 @@ import { DISTRICT_NAMES } from '../world/districtNames'
 import { TOTAL_STAMPS } from '../world/stamps'
 import { cardName } from './cardLayout'
 import { HoldToSave } from './HoldToSave'
-import { pictureName, shareImage } from './share'
+import { loadCards, preloadCards } from './loadCards'
+import { pictureName, type ShareOutcome } from './share'
 import { DarshanBadge } from './StampsLine'
 import { useDialog } from './useDialog'
-
-/** The card composer, fetched the first time someone makes a card. */
-const loadCards = () => import('./cards')
+import { useShareFlow } from './useShareFlow'
 
 interface Props {
   /** The landmark ids stamped so far. */
@@ -33,28 +32,36 @@ export function DarshanList({ ids, lang, name, streak = 0, onClose }: Props) {
   const [showName, setShowName] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
-  const [hold, setHold] = useState<Blob | null>(null)
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => void (alive.current = false)
-  }, [])
+  const make = useRef<HTMLButtonElement>(null)
+  const flow = useShareFlow(make)
+  // the card is likely next: its composer and fonts come now, so the tap's share sheet is not kept waiting
+  useEffect(preloadCards, [])
+
+  const said = (outcome: ShareOutcome) => setNote(outcome === 'downloaded' ? t('cardDownloaded', lang) : null)
 
   const makeCard = async () => {
     if (busy) return
     setBusy(true)
     setNote(t('cardMaking', lang))
+    flow.forget()
     try {
       const { composeDarshanCard } = await loadCards()
-      const card = await composeDarshanCard({ ids, lang, name: cardName(name, showName), streak })
-      const outcome = await shareImage(card, pictureName('darshan-'))
-      if (!alive.current) return
-      if (outcome === 'hold') setHold(card)
-      setNote(outcome === 'downloaded' ? t('cardDownloaded', lang) : null)
+      const blob = await composeDarshanCard({ ids, lang, name: cardName(name, showName), streak })
+      said(await flow.share({ blob, name: pictureName('darshan-'), saved: 'cardDownloaded' }))
     } catch {
-      if (alive.current) setNote(t('cardFailed', lang))
+      setNote(t('cardFailed', lang))
     } finally {
-      if (alive.current) setBusy(false)
+      setBusy(false)
+    }
+  }
+
+  /** "Share" on a card the share sheet refused (its tap was too long ago): this tap is fresh. */
+  const again = async () => {
+    if (!flow.retry) return
+    try {
+      said(await flow.share(flow.retry))
+    } catch {
+      setNote(t('cardFailed', lang))
     }
   }
 
@@ -82,6 +89,7 @@ export function DarshanList({ ids, lang, name, streak = 0, onClose }: Props) {
           {darshanComplete(ids) && <DarshanBadge lang={lang} />}
           <div className="darshan-card">
             <button
+              ref={make}
               type="button"
               className="darshan-card-make"
               disabled={busy}
@@ -89,6 +97,15 @@ export function DarshanList({ ids, lang, name, streak = 0, onClose }: Props) {
             >
               {t('cardMake', lang)}
             </button>
+            {flow.retry && (
+              <button
+                type="button"
+                className="darshan-card-make darshan-card-share"
+                onClick={() => void again()}
+              >
+                {t('shareAgain', lang)}
+              </button>
+            )}
             {name && (
               <label>
                 <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} />
@@ -114,7 +131,9 @@ export function DarshanList({ ids, lang, name, streak = 0, onClose }: Props) {
           </button>
         </section>
       </div>
-      {hold && <HoldToSave image={hold} lang={lang} onClose={() => setHold(null)} />}
+      {flow.hold && (
+        <HoldToSave image={flow.hold.blob} name={flow.hold.name} lang={lang} onClose={flow.closeHold} />
+      )}
     </>
   )
 }

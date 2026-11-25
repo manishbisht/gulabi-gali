@@ -24,11 +24,14 @@ function fakeContext() {
 
 let drawn: ReturnType<typeof fakeContext>
 let sizes: [number, number][]
+let canvases: HTMLCanvasElement[]
 beforeEach(() => {
   drawn = fakeContext()
   sizes = []
+  canvases = []
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
     sizes.push([this.width, this.height])
+    canvases.push(this)
     return drawn.ctx as never
   })
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb, type) =>
@@ -54,6 +57,7 @@ it('the postcard is a 1080×1920 PNG: the frame cut to 9:16 from its middle, the
   const blob = await composePostcard({ capture }, 'Hawa Mahal')
   expect(blob.type).toBe('image/png')
   expect(sizes[0]).toEqual([CARD_W, CARD_H])
+  expect([canvases[0]!.width, canvases[0]!.height]).toEqual([0, 0]) // emptied once encoded: its pixels let go
   // a 1280×720 window's 9:16 middle is 405 px wide: drawn at a ratio that makes it 1080
   expect(ratios).toHaveLength(1)
   expect(ratios[0]).toBeCloseTo(1080 / 405)
@@ -85,6 +89,7 @@ it('the Darshan card: title, the count out of every stamp, names of the collecte
   const blob = await composeDarshanCard({ ids: ['hawa-mahal', 'jkk'], lang: 'hi', name: null, streak: 0 })
   expect(blob.type).toBe('image/png')
   expect(sizes[0]).toEqual([CARD_W, CARD_H])
+  expect([canvases[0]!.width, canvases[0]!.height]).toEqual([0, 0])
   const all = drawn.texts.join('\n')
   expect(drawn.texts).toContain('Mera Jaipur Darshan')
   expect(drawn.texts).toContain(`2/${TOTAL_STAMPS}`)

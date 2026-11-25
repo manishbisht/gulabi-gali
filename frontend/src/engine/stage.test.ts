@@ -201,7 +201,7 @@ describe('capture', () => {
     stage.dispose()
   })
 
-  it('draws a postcard at the ratio it asks for, never past the photo ceiling, and not on the lowest tier', () => {
+  it('draws a postcard at the ratio it asks for, never past the photo ceiling, and only on the top tier', () => {
     vi.stubGlobal('devicePixelRatio', 1)
     sessionStorage.setItem('gg-quality', '2')
     const stage = createStage(document.createElement('canvas'))
@@ -211,12 +211,22 @@ describe('capture', () => {
     stage.capture(() => 'x')
     expect(renderer.ratios).toEqual([2.5, 1, 3, 1, 1, 1])
     stage.dispose()
-    sessionStorage.setItem('gg-quality', '0')
-    const low = createStage(document.createElement('canvas'))
+    for (const tier of ['1', '0']) {
+      sessionStorage.setItem('gg-quality', tier)
+      const low = createStage(document.createElement('canvas'))
+      renderer.ratios.length = 0
+      low.capture(() => 'x', 2.5)
+      // a device stepped down for slowness keeps the frame it can afford: its own ratio (1 here)
+      expect(renderer.ratios[0], `tier ${tier}`).toBe(1)
+      low.dispose()
+    }
+    vi.stubGlobal('devicePixelRatio', 2)
+    sessionStorage.setItem('gg-quality', '1')
+    const mid = createStage(document.createElement('canvas'))
     renderer.ratios.length = 0
-    low.capture(() => 'x', 2.5)
-    expect(renderer.ratios).toEqual([1, 1]) // a slow device keeps the frame it can afford
-    low.dispose()
+    mid.capture(() => 'x', 3)
+    expect(renderer.ratios[0]).toBe(2) // min(DPR, 3), as a plain photo
+    mid.dispose()
   })
 })
 
