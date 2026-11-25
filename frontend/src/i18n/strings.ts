@@ -45,11 +45,12 @@ export const STRINGS = {
   langToggleLabel: { hi: 'English: bhasha badlo', en: 'हिन्दी: switch language' },
   /** The HUD's group of small switches: language, sound, and the monkey in the Walled City. */
   hudSwitches: { hi: 'Settings', en: 'Settings' },
-  /** Sankranti's greeting points at the day's game: up on a roof (the rooftop viewpoint), "Patang udao". */
   festivalSankranti: {
-    hi: 'Sankranti mubarak! Chhat pe patang udao 🪁',
-    en: 'Happy Sankranti! Fly a kite on the roof 🪁',
+    hi: 'Makar Sankranti mubarak! 🪁',
+    en: 'Happy Makar Sankranti! 🪁',
   },
+  /** Under Sankranti's greeting all day: the day's game, up on a roof (the rooftop viewpoint), "Patang udao". */
+  festivalSankrantiLine: { hi: 'Chhat pe chalo, patang udao', en: 'Up to the roof, fly a kite' },
   festivalHoli: { hi: 'Holi mubarak! Rang barse 🎨', en: 'Happy Holi! Colours in the air 🎨' },
   festivalGangaur: { hi: 'Gangaur ki shubhkamnayein! 🌸', en: 'Happy Gangaur! 🌸' },
   festivalTeej: { hi: 'Teej ki shubhkamnayein! 🌿', en: 'Happy Teej! 🌿' },

@@ -192,7 +192,8 @@ test('kite sky on Sankranti: kites and rooftop flyers by day, none at night', as
   await page.getByRole('button', { name: 'Padharo!' }).click()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
   expect(await page.evaluate(() => window.__gg.festival())).toBe('sankranti')
-  await expect(page.getByText('Sankranti mubarak! Chhat pe patang udao')).toBeVisible()
+  await expect(page.getByText('Makar Sankranti mubarak!')).toBeVisible()
+  await expect(page.getByText('Chhat pe chalo, patang udao')).toBeVisible()
   await page.evaluate((s) => window.__gg.setSnapshot(s), sun)
   await page.evaluate(() => window.__gg.setNow('2027-01-14T06:30:00Z')) // noon
   const day = await page.evaluate(() => window.__gg.kites())

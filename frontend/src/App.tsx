@@ -325,7 +325,9 @@ export default function App() {
   }, [residentId])
   const [override] = useState(() => festivalOverride(FESTIVALS))
   const festival = override ?? snapshot?.festival ?? null
-  const processionKey = processionLine(festival, here)
+  // the line under the greeting: a procession on the street, or on Sankranti the day's game (up on the roof)
+  const processionKey =
+    processionLine(festival, here) ?? (festival === 'sankranti' ? 'festivalSankrantiLine' : undefined)
   /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
   const map = useCityMap(entered && !ride && !taxi.riding && !kiteFrom && !photo)
   const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map

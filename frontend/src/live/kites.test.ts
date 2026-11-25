@@ -281,15 +281,19 @@ describe('kiteFlyerSpots', () => {
 })
 
 describe("Sankranti's HUD line", () => {
-  it('points at the roof and the kite in both languages, short enough for the HUD card', () => {
-    expect(t('festivalSankranti', 'hi')).toMatch(/Chhat/)
-    expect(t('festivalSankranti', 'hi')).toMatch(/patang/i)
-    expect(t('festivalSankranti', 'en')).toMatch(/roof/)
-    expect(t('festivalSankranti', 'en')).toMatch(/kite/)
+  it('greets, and points at the roof and the kite under it, in both languages, short enough for the card', () => {
+    expect(t('festivalSankrantiLine', 'hi')).toMatch(/Chhat/)
+    expect(t('festivalSankrantiLine', 'hi')).toMatch(/patang/i)
+    expect(t('festivalSankrantiLine', 'en')).toMatch(/roof/)
+    expect(t('festivalSankrantiLine', 'en')).toMatch(/kite/)
     for (const lang of ['hi', 'en'] as const) {
-      expect(t('festivalSankranti', lang).length).toBeLessThanOrEqual(44)
+      expect(t('festivalSankranti', lang)).toMatch(/Sankranti/)
+      // one line each on a 360 px phone (hud.spec.ts measures them)
+      expect(t('festivalSankranti', lang).length).toBeLessThanOrEqual(30)
+      expect(t('festivalSankrantiLine', lang).length).toBeLessThanOrEqual(30)
       // another region's own catchphrase is not Jaipur's
-      expect(t('festivalSankranti', lang)).not.toMatch(/kai po/i)
+      for (const k of ['festivalSankranti', 'festivalSankrantiLine'] as const)
+        expect(t(k, lang)).not.toMatch(/kai po/i)
     }
   })
 })

@@ -75,7 +75,7 @@ test('on Sankranti the rooftop viewpoint offers the kite fight, flown from up th
   await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
   await enterSankranti(page)
   // the greeting sends everyone up to the roof
-  await expect(page.getByText('Sankranti mubarak! Chhat pe patang udao')).toBeVisible()
+  await expect(page.getByText('Chhat pe chalo, patang udao')).toBeVisible()
   const { stair } = await page.evaluate(() => window.__gg.roof()!)
   await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), stair)
   await page.getByRole('button', { name: 'Chhat pe chalo' }).click()
