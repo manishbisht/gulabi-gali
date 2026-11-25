@@ -43,7 +43,8 @@ import type { CDPSession, Page } from '@playwright/test'
  * (read from src/world/district.ts, so a new one is measured as soon as it is listed), each twice in a fresh tab:
  * once as a phone starts (tier 2, free to step down), once held at the lowest tier (tier 0) to see how much thinner
  * that tier really is. Each run walks the district's spawn for `LOWEND_WALK_MS`, long enough for the tier to step.
- * Results go to test-results/device-perf-lowend.json, and a table to the console.
+ * Results go to test-results/device-perf-lowend.json, and a table to the console. DEVICE_PERF_FESTIVAL=<id> (say
+ * `sankranti`) runs it all under that festival's effects, into device-perf-lowend-<id>.json.
  */
 
 test.skip(!process.env.DEVICE_PERF, 'Measurement, not a test: set DEVICE_PERF=1 to run it.')
@@ -60,11 +61,15 @@ const FAST_4G = {
   uploadThroughput: (1500 * 1000 * 0.9) / 8,
 }
 const CPU_SLOWDOWN = 6
+/** The low-end run's CPU slowdown: six times, or DEVICE_PERF_CPU's (say 20, to see the tier step on this machine). */
+const LOWEND_CPU = Number(process.env.DEVICE_PERF_CPU) || CPU_SLOWDOWN
 /** How long the walk along the bazaar is watched (and, with every extra on, the drive after it). */
 const WALK_MS = 8000
 /** A low-end run's walk: the 2 s warm-up and two 2 s windows the tier needs to step, and room to step twice. */
 const LOWEND_WALK_MS = 12000
 const LOWEND = !!process.env.DEVICE_PERF_LOWEND
+/** A festival the low-end run is held under (`gg-festival`), or none. */
+const LOWEND_FESTIVAL = process.env.DEVICE_PERF_FESTIVAL ?? ''
 const EXTRAS = !!process.env.DEVICE_PERF_EXTRAS
 const WINTER = !!process.env.DEVICE_PERF_WINTER
 /** New Year's morning, 05:45 IST: the lights are still up and the ground fog is at its thickest. */
@@ -404,7 +409,7 @@ test.describe('a low-end Android phone', () => {
   }) => {
     test.skip(!LOWEND, 'Set DEVICE_PERF_LOWEND=1 for the low-end phone')
     const ids = districtIds()
-    test.setTimeout(ids.length * 2 * 90_000)
+    test.setTimeout(ids.length * 2 * 90_000 * Math.max(1, LOWEND_CPU / CPU_SLOWDOWN))
     const runs: LowEndRun[] = []
     for (const district of ids)
       for (const from of [2, 0] as const) {
@@ -419,9 +424,10 @@ test.describe('a low-end Android phone', () => {
         )
         await instrument(page)
         const cdp = await context.newCDPSession(page)
-        await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN })
+        await cdp.send('Emulation.setCPUThrottlingRate', { rate: LOWEND_CPU })
         await cdp.send('Performance.enable')
-        await page.goto('/?gg-test=1&gg-full=1', { waitUntil: 'load', timeout: 120000 })
+        const festival = LOWEND_FESTIVAL ? `&gg-festival=${encodeURIComponent(LOWEND_FESTIVAL)}` : ''
+        await page.goto(`/?gg-test=1&gg-full=1${festival}`, { waitUntil: 'load', timeout: 120000 })
         await page.getByRole('button', { name: 'Padharo!' }).click()
         await page.waitForFunction(
           () => (window as unknown as { __perf: Perf }).__perf.walkable !== null,
@@ -450,7 +456,8 @@ test.describe('a low-end Android phone', () => {
         await page.close()
       }
     mkdirSync('test-results', { recursive: true })
-    writeFileSync('test-results/device-perf-lowend.json', JSON.stringify(runs, null, 2))
+    const suffix = `${LOWEND_FESTIVAL ? `-${LOWEND_FESTIVAL}` : ''}${LOWEND_CPU !== CPU_SLOWDOWN ? `-cpu${LOWEND_CPU}` : ''}`
+    writeFileSync(`test-results/device-perf-lowend${suffix}.json`, JSON.stringify(runs, null, 2))
     const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
     console.log(
       '\n| District | From tier | Walkable ms | Frames | p50 ms | p95 ms | Over 33 ms | Tier after | Buffer | Draw calls | Triangles | Textures | Programs | Heap MB | Main thread ms/frame (task, script) |',
