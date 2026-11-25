@@ -22,7 +22,9 @@ const at = (over: Partial<CricketState>): CricketState => ({
   last: null,
   seq: 0,
   arre: false,
+  hold: RESULT_S,
   swing: 99,
+  swings: 0,
   ...over,
 })
 const out = { along: 0, side: 0, y: 0 }

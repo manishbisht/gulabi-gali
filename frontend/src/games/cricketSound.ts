@@ -45,6 +45,20 @@ const SOUNDS = {
   ],
 } as const satisfies Record<string, readonly Note[]>
 
+/**
+ * The sound of what a ball came to: glass for the window, the bricks for a wicket, the bat for runs. A dot ball
+ * met no bat, and makes no sound.
+ */
+export function soundFor(
+  o: 'six' | 'four' | 'two' | 'one' | 'dot' | 'bowled' | 'caught',
+  arre: boolean,
+): keyof typeof SOUNDS | null {
+  if (arre) return 'glass'
+  if (o === 'dot') return null
+  if (o === 'bowled' || o === 'caught') return 'out'
+  return o === 'six' || o === 'four' ? 'big' : 'bat'
+}
+
 /** A tap has woken the audio context: before one, nothing here makes a sound (or a context). */
 let woken = false
 

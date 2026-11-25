@@ -13,7 +13,12 @@ import {
   MAX_BALLS,
   MAX_OUTS,
   ONE_S,
+  READY_S,
   RESULT_S,
+  SIX_SLOW_S,
+  tapSince,
+  TOUCH_LAG_S,
+  ARRE_S,
   RUNUP_S,
   runsFor,
   runsOf,
@@ -32,6 +37,10 @@ const STEP = 1 / 240
 function run(c: Cricket, s: number) {
   for (let i = 0; i < Math.round(s / STEP); i++) c.update(STEP)
 }
+/** Lets the last ball's result be shown out (a broken window's takes longer). */
+function rest(c: Cricket) {
+  while (c.state.phase === 'result') c.update(STEP)
+}
 /** Plays the ball now being bowled with a tap `err` seconds from the perfect moment (null: no tap). */
 function play(c: Cricket, err: number | null): Outcome {
   const seq = c.state.seq
@@ -49,7 +58,7 @@ function innings(seed: number, err: number | null) {
   const seen: Outcome[] = []
   while (!c.state.over && seen.length < 40) {
     seen.push(play(c, err))
-    run(c, RESULT_S + 0.05)
+    rest(c)
   }
   return { c, seen }
 }
@@ -77,6 +86,21 @@ describe('runs by timing', () => {
     expect(runsFor(-1)).toBe(0)
   })
 
+  it('the six has a wider window on a slow phone: more than one of its frames', () => {
+    expect(SIX_SLOW_S).toBeGreaterThan(1 / 30)
+    expect(SIX_SLOW_S).toBeLessThan(FOUR_S)
+    expect(runsFor(0.05)).toBe(4)
+    expect(runsFor(0.05, SIX_SLOW_S)).toBe(6)
+    expect(runsFor(-0.05, SIX_SLOW_S)).toBe(6)
+    expect(runsFor(0.06, SIX_SLOW_S)).toBe(4)
+    expect(judge(ball(), 0.05, SIX_SLOW_S)).toBe('six')
+    // and the innings uses it
+    const slow = createCricket(8, { six: SIX_SLOW_S })
+    expect(play(slow, 0.05)).toBe('six')
+    const quick = createCricket(8)
+    expect(play(quick, 0.05)).toBe('four')
+  })
+
   it('a miss is bowled off a straight ball and a dot ball off a wide one', () => {
     expect(judge(ball({ straight: true }), null)).toBe('bowled')
     expect(judge(ball({ straight: true }), 0.5)).toBe('bowled')
@@ -84,10 +108,15 @@ describe('runs by timing', () => {
     expect(judge(ball(), -0.5)).toBe('dot')
   })
 
-  it('a late two off a catchable ball is caught on one bounce; nothing else is', () => {
-    expect(judge(ball({ catchable: true }), 0.1)).toBe('caught')
-    expect(judge(ball({ catchable: true }), -0.1)).toBe('two') // early: along the ground
-    expect(judge(ball(), 0.1)).toBe('two')
+  it('an early two off a catchable ball is caught on one bounce; a late stroke never is', () => {
+    expect(judge(ball({ catchable: true }), -0.1)).toBe('caught') // a skied leading edge
+    expect(judge(ball({ catchable: true }), 0.1)).toBe('two') // late: only a two
+    expect(judge(ball(), -0.1)).toBe('two')
+    // a phone that hears every tap late costs runs at worst, never a wicket: no late stroke is out
+    for (const d of [ball({ catchable: true }), ball({ catchable: true, straight: true })])
+      for (let err = 0; err <= ONE_S; err += 0.005) expect(isOut(judge(d, err)), `late by ${err}`).toBe(false)
+    expect(judge(ball({ catchable: true }), -0.06)).toBe('four')
+    expect(judge(ball({ catchable: true }), -0.16)).toBe('one')
     expect(judge(ball({ catchable: true }), 0)).toBe('six')
     expect(judge(ball({ catchable: true }), 0.06)).toBe('four')
     expect(judge(ball({ catchable: true }), 0.16)).toBe('one')
@@ -145,7 +174,7 @@ describe('an innings', () => {
       expect(play(c, 0)).toBe('six')
       if (c.state.arre) arre++
       expect(c.state.over).toBe(false) // the last ball is shown before the innings is over
-      run(c, RESULT_S + 0.05)
+      rest(c)
     }
     expect(c.state.over).toBe(true)
     expect(c.state.phase).toBe('over')
@@ -163,7 +192,7 @@ describe('an innings', () => {
       while (!c.state.over) {
         play(c, 0)
         if (c.state.arre) arre++
-        run(c, RESULT_S + 0.05)
+        rest(c)
       }
       expect(arre).toBeLessThanOrEqual(1)
       broke += arre
@@ -190,8 +219,8 @@ describe('an innings', () => {
     }
     // and timing is all that scores: a little late is fours, later still twos or a catch
     expect(innings(99, 0.06).seen.every((o) => o === 'four')).toBe(true)
-    expect(innings(99, 0.1).seen.every((o) => o === 'two' || o === 'caught')).toBe(true)
-    expect(innings(99, -0.1).seen.every((o) => o === 'two')).toBe(true)
+    expect(innings(99, -0.1).seen.every((o) => o === 'two' || o === 'caught')).toBe(true)
+    expect(innings(99, 0.1).seen.every((o) => o === 'two')).toBe(true)
   })
 
   it('is frame-rate independent: 20, 60 and 144 fps with no taps end the same', () => {
@@ -218,14 +247,93 @@ describe('an innings', () => {
     expect(t).toBeLessThan(65)
     const d = createCricket(3)
     d.update(30) // a tab coming back
-    expect(d.state.phase).toBe('runup')
+    expect(d.state.phase).toBe('ready')
     expect(d.state.t).toBeLessThanOrEqual(0.25 + 1e-9)
+  })
+})
+
+describe('the ready beat', () => {
+  it('waits for a tap before the first ball: that tap starts the run-up and is not a swing', () => {
+    const c = createCricket(4)
+    expect(c.state.phase).toBe('ready')
+    c.update(1)
+    expect(c.state.phase).toBe('ready')
+    c.swing()
+    expect(c.state.phase).toBe('runup')
+    expect(c.state.t).toBe(0)
+    expect(c.state.swing).toBeGreaterThan(90) // the bat has not moved
+    // the swing of this ball is still to be had: a perfect one is a six
+    expect(play(c, 0)).toBe('six')
+  })
+
+  it('starts by itself after three seconds for someone who only watches', () => {
+    const c = createCricket(4)
+    run(c, READY_S - 0.05)
+    expect(c.state.phase).toBe('ready')
+    run(c, 0.1)
+    expect(c.state.phase).toBe('runup')
+    expect(c.state.balls).toBe(0)
+  })
+
+  it('is only before the first ball: later balls follow one another', () => {
+    const c = createCricket(4)
+    play(c, 0)
+    rest(c)
+    expect(c.state.phase).toBe('runup')
+  })
+})
+
+describe("the tap's own moment", () => {
+  it("is the event's time stamp against the frame's, a touch taken a little earlier", () => {
+    expect(tapSince(1030, 1000, false)).toBeCloseTo(0.03)
+    expect(tapSince(990, 1000, false)).toBeCloseTo(-0.01) // heard a frame late: it was before this frame
+    expect(tapSince(1030, 1000, true)).toBeCloseTo(0.03 - TOUCH_LAG_S)
+    expect(TOUCH_LAG_S).toBeCloseTo(0.05)
+  })
+
+  it('is bounded, whatever clock the stamp came from', () => {
+    expect(tapSince(1_700_000_000_000, 1000, false)).toBe(0.1)
+    expect(tapSince(0, 100_000, true)).toBe(-0.15)
+    expect(tapSince(Number.NaN, 1000, false)).toBe(0)
+  })
+
+  it('a touch heard 50 ms late is the stroke it was: the six stays a six', () => {
+    const c = createCricket(23)
+    run(c, c.untilBat() + 0.05) // the frame the late event lands in
+    c.swing(tapSince(1000, 1000, true))
+    expect(c.state.last).toBe('six')
+    const d = createCricket(23)
+    run(d, d.untilBat() + 0.05)
+    d.swing(tapSince(1000, 1000, false)) // a mouse, on time by its own stamp: 50 ms late is a four
+    expect(d.state.last).toBe('four')
+  })
+})
+
+describe('a broken window', () => {
+  it('is shown for about two seconds, long enough to read; any other ball for one', () => {
+    expect(ARRE_S).toBeGreaterThanOrEqual(2)
+    let seen = false
+    for (let seed = 1; seed <= 12 && !seen; seed++) {
+      const c = createCricket(seed)
+      while (!c.state.over && !seen) {
+        play(c, 0)
+        const shown = c.state.arre ? ARRE_S : RESULT_S
+        expect(c.state.hold).toBe(shown)
+        run(c, shown - 0.05)
+        expect(c.state.phase).toBe('result')
+        run(c, 0.1)
+        expect(c.state.phase).not.toBe('result')
+        seen = c.state.arre
+      }
+    }
+    expect(seen).toBe(true)
   })
 })
 
 describe('the swing', () => {
   it('is one a ball: a swing at air while the bowler runs in leaves the ball to be survived', () => {
     const c = createCricket(21)
+    c.swing() // "ready"
     c.update(0.1)
     c.swing() // far too early: the ball is still in the hand
     expect(c.state.swing).toBe(0)
@@ -241,6 +349,7 @@ describe('the swing', () => {
 
   it('too early in the flight is a swing at air too; in time, the stroke is played at once', () => {
     const c = createCricket(22)
+    c.swing() // "ready"
     run(c, RUNUP_S + 0.05)
     expect(c.state.phase).toBe('flight')
     c.swing()
@@ -263,7 +372,7 @@ describe('the swing', () => {
     const d = createCricket(23)
     run(d, d.untilBat() - 0.1)
     d.swing()
-    expect(d.state.last).toBe('two')
+    expect(['two', 'caught']).toContain(d.state.last)
   })
 
   it('does nothing once the innings is over or the game is gone', () => {

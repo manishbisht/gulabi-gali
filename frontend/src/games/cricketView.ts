@@ -39,7 +39,7 @@ export function cricketEye(f: PitchFrame, out: { x: number; y: number; z: number
 export function ballAt(s: CricketState, length: number, out: { along: number; side: number; y: number }) {
   const from = length - 0.4
   const side = s.line * PITCH_HALF_WIDTH * 0.45
-  if (s.phase === 'runup' || s.phase === 'over') {
+  if (s.phase === 'ready' || s.phase === 'runup' || s.phase === 'over') {
     // in the bowler's hand
     out.along = from
     out.side = 0.22
@@ -118,6 +118,8 @@ export function ballAt(s: CricketState, length: number, out: { along: number; si
 }
 
 export interface CricketView {
+  /** How many fielders are drawn (none without `extras`). */
+  readonly fielders: number
   /** Looks down the pitch from the batting crease and draws this moment: the ball, the bat, the bowler's run. */
   update(state: CricketState, dt: number): void
   dispose(): void
@@ -194,6 +196,7 @@ export function createCricketView(
   let seq = 0
 
   return {
+    fielders: fielders?.count ?? 0,
     update(s, dt) {
       // a six or a wicket: a short shake of the view, unless motion is to be kept down
       if (s.seq !== seq) {
