@@ -1,12 +1,17 @@
+import { socialApp } from '../auth/inApp'
+
 /**
  * How a picture made here (a photo, a postcard, the Darshan card) leaves the site: the phone's share sheet when
- * the browser can share files; in Instagram's in-app browser, which can do neither that nor a download, the
+ * the browser can share files; in Instagram's or Facebook's in-app browser, where neither can be trusted, the
  * picture shown on its own to be pressed and saved (`hold`, see `HoldToSave`); anywhere else, a download.
  */
 export type ShareOutcome = 'shared' | 'downloaded' | 'cancelled' | 'hold' | 'retry'
 
-/** Instagram's in-app browser says so in its user agent ("Instagram 300.0…"). */
-export const isInstagram = (ua: string = navigator.userAgent): boolean => /\bInstagram\b/i.test(ua)
+/**
+ * Instagram's and Facebook's own browsers (one detection for the whole site, `socialApp`): neither can be trusted
+ * with a download, so a picture is shown there to be pressed and saved, with a small download link under it.
+ */
+export const holdsToSave = (ua: string = navigator.userAgent): boolean => socialApp(ua) !== null
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -62,7 +67,7 @@ export async function shareImage(
       // the share sheet failed after all: the next way
     }
   }
-  if (isInstagram(ua)) return 'hold'
+  if (holdsToSave(ua)) return 'hold'
   download(file)
   return 'downloaded'
 }

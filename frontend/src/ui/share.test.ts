@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { isInstagram, pictureName, shareImage } from './share'
+import { holdsToSave, pictureName, shareImage } from './share'
 
 const png = () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })
 const IG =
@@ -19,9 +19,10 @@ afterEach(() => {
 })
 
 it('knows Instagram by its user agent, and nothing else as Instagram', () => {
-  expect(isInstagram(IG)).toBe(true)
-  expect(isInstagram(CHROME)).toBe(false)
-  expect(isInstagram('Mozilla/5.0 … FBAN/FBIOS')).toBe(false)
+  expect(holdsToSave(IG)).toBe(true)
+  expect(holdsToSave(CHROME)).toBe(false)
+  // Facebook's (and Messenger's) own browser: the same press-and-hold screen, not a download that may not happen
+  expect(holdsToSave('Mozilla/5.0 … FBAN/FBIOS')).toBe(true)
 })
 
 it('names each kind of picture by the moment', () => {
