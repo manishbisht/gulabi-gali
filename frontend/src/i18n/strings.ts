@@ -1149,6 +1149,23 @@ export const STRINGS = {
   todayToastFirst: { hi: 'Aaj ka Darshan ho gaya!', en: "Today's Darshan, done!" },
   /** Added to the stamps chip's tooltip while a run of `STREAK_ACCENT` days or more is alive. */
   todayStreakBadge: { hi: 'Lagataar {n} din ka Darshan', en: '{n}-day Darshan run' },
+
+  /* Real phones (src/pwa): the home-screen hint, and the welcome screen's note inside an app's own browser. */
+  installHint: {
+    hi: 'Gulabi Gali ko home screen pe rakho: ek tap, seedha gali mein.',
+    en: 'Keep Gulabi Gali on your home screen: one tap and you are in the lane.',
+  },
+  installHintGo: { hi: 'Rakho', en: 'Add it' },
+  installHintIos: {
+    hi: 'Home screen pe rakho: Safari mein Share dabao, phir "Add to Home Screen".',
+    en: 'Keep it on your home screen: in Safari tap Share, then "Add to Home Screen".',
+  },
+  installHintDismiss: { hi: 'Abhi nahi', en: 'Not now' },
+  /** `{app}` is Instagram or Facebook. At most two lines on a 360 px phone (tests/phone.spec.ts). */
+  inAppNote: {
+    hi: '{app} ke andar sab nahi chalta. Poora maza browser mein: ⋯ dabao, phir browser mein kholo.',
+    en: 'Not everything works inside {app}. For all of it: tap ⋯, then open in your browser.',
+  },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

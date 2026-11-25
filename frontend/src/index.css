@@ -2832,3 +2832,106 @@ button.stamp-count::after {
   opacity: 0.85;
   text-align: center;
 }
+
+/*
+ * Real phones (src/pwa, tests/phone.spec.ts). Its own block so it stays apart from everything above it.
+ *
+ * Zoom: the page keeps pinch-zoom (no user-scalable=no in the viewport: people who need to zoom must be able to).
+ * What it drops is the double-tap zoom, which on an iPhone fires when a thumb taps the same spot twice (a chip, a
+ * card, the welcome screen): `manipulation` on the root carries down to everything under it, and the street's
+ * canvas and the joystick are `touch-action: none`, so a drag or a pinch on the street only ever turns the camera
+ * or walks. The root never scrolls (overflow hidden) and never rubber-bands (overscroll-behavior, above); iOS does
+ * not grow its text in landscape.
+ */
+html,
+body,
+#root {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * Safe areas: the notch, the rounded corners and the home bar. The HUD, the sheets in the bottom row, the photo
+ * frame and the welcome screen already keep clear of them; these are the rest of the screens over the street.
+ * env() is 0 on a screen without them, so nothing moves there.
+ */
+.auth-scrim {
+  padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+    calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+
+.metro-ride,
+.taxi-ride {
+  padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+    calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+
+.metro-back {
+  bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+.patang-top {
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+}
+
+.patang-help {
+  left: calc(16px + env(safe-area-inset-left));
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(190px + env(safe-area-inset-bottom));
+}
+
+.patang-controls {
+  left: calc(16px + env(safe-area-inset-left));
+  right: calc(16px + env(safe-area-inset-right));
+}
+
+/* Inside Instagram's or Facebook's own browser: one quiet note on the welcome screen, two lines at most. */
+.intro-inapp {
+  max-width: 30em;
+  margin: 0;
+  color: var(--sandstone);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* "Home screen pe rakho": one line under the HUD's head, once. */
+.install-hint {
+  align-self: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 18px;
+  background: rgb(42 29 36 / 0.92);
+  border: 2px solid var(--pink);
+  color: var(--cream);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.install-hint-go {
+  flex: none;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pink);
+  color: var(--plum);
+  font-weight: 700;
+}
+
+.install-hint-close {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+}

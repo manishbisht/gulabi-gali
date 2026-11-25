@@ -79,6 +79,7 @@ import { DarshanList } from './ui/DarshanList'
 import { AccountClosed } from './ui/AccountClosed'
 import { FullScreen } from './ui/FullScreen'
 import { FirstHint } from './ui/FirstHint'
+import { InstallHint } from './pwa/InstallHint'
 import { CityMap } from './ui/CityMap'
 import { Compass } from './ui/Compass'
 import { RoofButton, RoofNotice } from './ui/RoofButton'
@@ -782,6 +783,8 @@ export default function App() {
             )}
             {/* a first visit's three steps, once the street is there to try them on */}
             {typeof place !== 'string' && <FirstHint lang={lang} />}
+            {/* "Home screen pe rakho": once, after a couple of minutes in the city, where the browser can */}
+            {typeof place !== 'string' && <InstallHint lang={lang} />}
           </>
         }
         bottom={

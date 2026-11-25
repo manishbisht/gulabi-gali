@@ -1,4 +1,5 @@
 import { isInAppBrowser } from '../auth/inApp'
+import { isIOS, isStandalone } from '../pwa/device'
 import type { Lang } from '../i18n/strings'
 import { deletePushSubscription, putPushSubscription, type PushSubscriptionInput } from '../net/api'
 import { storage } from '../storage'
@@ -27,13 +28,12 @@ export interface Device {
 }
 
 export function thisDevice(): Device {
-  const nav = navigator as Navigator & { standalone?: boolean }
   return {
     key: pushKey(),
-    ua: nav.userAgent,
-    standalone: nav.standalone === true || !!window.matchMedia?.('(display-mode: standalone)').matches,
-    touchPoints: nav.maxTouchPoints ?? 0,
-    apis: 'serviceWorker' in nav && 'PushManager' in window && 'Notification' in window,
+    ua: navigator.userAgent,
+    standalone: isStandalone(),
+    touchPoints: navigator.maxTouchPoints ?? 0,
+    apis: 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
   }
 }
 
@@ -47,9 +47,7 @@ export type PushSupport = 'ok' | 'off' | 'in-app' | 'ios-browser' | 'unsupported
 export function pushSupport(d: Device = thisDevice()): PushSupport {
   if (!d.key) return 'off'
   if (isInAppBrowser(d.ua)) return 'in-app'
-  // An iPad asking for desktop sites calls itself a Mac; a Mac has no touch screen.
-  const ios = /iPhone|iPad|iPod/.test(d.ua) || (/Macintosh/.test(d.ua) && d.touchPoints > 1)
-  if (ios && !d.standalone) return 'ios-browser'
+  if (isIOS(d.ua, d.touchPoints) && !d.standalone) return 'ios-browser'
   return d.apis ? 'ok' : 'unsupported'
 }
 

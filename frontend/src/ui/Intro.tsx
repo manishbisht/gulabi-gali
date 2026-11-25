@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { socialApp } from '../auth/inApp'
 import { t, type Lang } from '../i18n/strings'
 import { useCityCount } from '../live/useCityCount'
 
@@ -18,6 +20,8 @@ interface Props {
 
 export function Intro({ lang, onLang, onEnter, onPrivacy, today }: Props) {
   const count = useCityCount()
+  // Instagram's or Facebook's own browser: one quiet line on what works better outside it (nothing is blocked)
+  const [app] = useState(() => socialApp())
   return (
     <div className="intro">
       <button
@@ -38,6 +42,11 @@ export function Intro({ lang, onLang, onEnter, onPrivacy, today }: Props) {
       <button type="button" className="enter" onClick={onEnter}>
         {t('enter', lang)}
       </button>
+      {app && (
+        <p className="intro-inapp" role="note">
+          {t('inAppNote', lang, { app })}
+        </p>
+      )}
       {onPrivacy && (
         <button type="button" className="intro-privacy" onClick={onPrivacy}>
           {t('privacyLink', lang)}
