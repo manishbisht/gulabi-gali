@@ -123,10 +123,13 @@ for (const [app, ua] of [
         expect(box.height).toBeLessThanOrEqual(2 * lineHeight + 1)
         expect(box.x).toBeGreaterThanOrEqual(0)
         expect(box.x + box.width).toBeLessThanOrEqual(PHONE.width)
-        // and still two lines with 24 px less room: CI's Linux fonts draw a little wider than a Mac's
+        // and still two lines with 24 px less room than the screen gives it: CI's Linux fonts draw a little wider
         const narrower = await note.evaluate((el) => {
           const p = el as HTMLElement
-          p.style.maxWidth = `${p.getBoundingClientRect().width - 24}px`
+          const parent = getComputedStyle(p.parentElement!)
+          const room =
+            p.parentElement!.clientWidth - parseFloat(parent.paddingLeft) - parseFloat(parent.paddingRight)
+          p.style.maxWidth = `${room - 24}px`
           const h = p.getBoundingClientRect().height
           p.style.maxWidth = ''
           return h
