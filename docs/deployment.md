@@ -467,6 +467,20 @@ Nothing to set, no secret, no migration. Deploy in the usual order: the Worker (
 - [ ] On a cheap Android phone, take the bus to Galta Ji: it opens, the kunds stop you at their edge, the
       climb to the Surya Mandir viewpoint works, and walking stays smooth.
 
+## 2g. Emotes others can see: what changes at deploy
+
+Nothing to set, no secret, no migration. Deploy in the usual order: the Worker, then the `pages` workflow.
+
+- **The Worker** learns one district-socket frame, `emote`, and starts passing emotes on. Until the site is
+  out nobody sends one. A page from before the site build that is sent one ignores it (an unknown frame falls
+  through its handlers; `frontend/src/net/emoteCompat.test.ts`), so the order does not matter for safety.
+- **The site against an older Worker** (a rollback of the Worker alone): each emote a resident sends is
+  answered `invalid`, as any unknown frame is, and five in a row with no other frame between would close the
+  socket (it reconnects). A walking page's moves come between, but **to roll back, roll back the site first,
+  then the Worker**, as in 2f.
+- No Durable Object time is added while nobody emotes; an emote costs one message in, a small write to the
+  socket's attachment, and one small message out per socket in range. No timer, no alarm, no storage.
+
 ## 3. Budget alerts
 
 Cloudflare dashboard, Notifications, Add:
