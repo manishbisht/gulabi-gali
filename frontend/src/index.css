@@ -2634,6 +2634,65 @@ button.stamp-count[data-done] {
   line-height: 1;
 }
 
+/*
+ * Jaipur ka Swaad (see world/swaad.ts): the dish over the taster's head for three seconds, the vendor's line on
+ * the card, and the tasting list's tab inside the Darshan sheet.
+ */
+.swaad-pop {
+  animation: emote-pop 3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swaad-pop {
+    animation: none;
+  }
+}
+
+.swaad-card .swaad-vendor {
+  font-style: italic;
+}
+
+.darshan-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.darshan-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--sandstone);
+  border-radius: 12px;
+  background: rgb(245 230 216 / 0.08);
+  color: var(--cream);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.darshan-tabs button[aria-selected='true'] {
+  border-color: var(--marigold);
+  background: var(--marigold);
+  color: var(--plum);
+}
+
+.swaad-done {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--sandstone);
+  color: #2a1d24;
+  font-weight: 600;
+}
+
+.swaad-local {
+  margin: 8px 0 4px;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
 /* the chip stays as slim as its neighbours; its tap area is still thumb-sized */
 button.stamp-count::after {
   content: '';

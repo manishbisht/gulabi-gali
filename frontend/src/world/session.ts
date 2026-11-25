@@ -38,6 +38,7 @@ import { placeSpot } from './placeLink'
 import { createPeople, createPeopleLabels, type People, type Remote } from './people'
 import { createPosters, type Posters } from './posters'
 import { createRooftop, roofHeight, type RoofHooks, type Rooftop } from './rooftop'
+import { createSwaad, type Swaad, type SwaadHooks } from './swaadSystem'
 import { createTaxi, type Taxi, type TaxiHooks } from './taxi'
 import type { SessionPosterHooks } from './usePosters'
 import type { ReactionHooks, ReactionRefusal } from './useReactions'
@@ -135,6 +136,8 @@ export interface SessionHooks {
   roof?: RoofHooks
   /** Greetings: one that reached the player, one of theirs that went, or one refused (see useReactions). Needs `presence`. */
   reactions?: ReactionHooks
+  /** Jaipur ka Swaad: the serving stall in reach, and a dish just tasted (see useSwaad). */
+  swaad?: SwaadHooks
 }
 
 export interface CitySessionOptions {
@@ -204,6 +207,8 @@ export interface CitySession {
   callAnimal(): void
   /** "Ghar jao": the follower goes back to where it lives. */
   animalHome(): void
+  /** "Chakho": tastes what the stall in reach serves. */
+  taste(): void
   /** A poster this page just pinned goes up on its wall at once (the socket's word on it may lag). */
   pinned(p: PosterView): void
   /** One of this page's own posters came down. */
@@ -241,6 +246,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     taxi: Taxi
     animals: Animals
     roof: Rooftop | null
+    swaad: Swaad
   } | null = null
   /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
   const stationMemory = createStationMemory()
@@ -388,8 +394,18 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       online: () => presence?.open() ?? true,
       hooks: hooks.taxi ?? { near() {}, riding() {}, dark() {}, refused() {} },
     })
+    // the stalls serve someone on foot at the counter: not from a bench, a wheel, a taxi or the roof
+    const swaad = createSwaad({
+      district: district.def.id,
+      host: bubbleHost,
+      camera: stage.camera,
+      elevation: player.elevation,
+      blocked: () => !!sitting?.seated() || driving.driving() || taxi.riding() || (roof?.up() ?? false),
+      hooks: hooks.swaad,
+    })
     const systems: DistrictSystem[] = [
       npcs,
+      swaad,
       {
         update: animals.update,
         dispose() {
@@ -430,6 +446,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         animals,
         roof,
         hooks,
+        swaad,
       ),
       createBubbleSystem(bubbleHost, stage, npcs, hooks),
       createZoomGestures(canvas, controls),
@@ -464,7 +481,20 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, people, sitting, posters, driving, taxi, animals, roof }
+    here = {
+      district,
+      player,
+      systems,
+      presence,
+      people,
+      sitting,
+      posters,
+      driving,
+      taxi,
+      animals,
+      roof,
+      swaad,
+    }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -590,6 +620,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       if (here) here.animals.call(here.player.position())
     },
     animalHome: () => here?.animals.sendHome(),
+    taste: () => void here?.swaad.taste(),
     pinned: (p) => here?.posters?.upsert(p),
     unpinned: (id) => here?.posters?.remove(id),
     refreshPosters: () => here?.posters?.refresh(),
@@ -680,7 +711,7 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 }
 
 /**
- * E and taps: a landmark's stamp, the metro, a bench, a poster wall, an auto, the rooftop stair, the character
+ * E and taps: a landmark's stamp, the metro, a bench, a stall's dish (E only), a poster wall, an auto, the rooftop stair, the character
  * card and the person card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
  * the landmark and metro wait until they do; up on the roof, E comes down (a card that is up closes first). A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
@@ -704,6 +735,7 @@ function createInteraction(
   animals: Animals,
   roof: Rooftop | null,
   hooks: SessionHooks,
+  swaad: Swaad,
 ): DistrictSystem {
   /** Where the player stands, for a tap on an animal. */
   const at: Vec2 = { x: 0, z: 0 }
@@ -852,23 +884,35 @@ function createInteraction(
       // E by a bench sits there (seated, it stands up), unless a card or the metro has it
       const bench = !!sitting && pressed && !card && (seated || (!landmarkNear && !metro && sitting.near()))
       if (bench) sitting.toggle()
+      // E by a stall that serves tastes its dish ("Chakho"): just below sitting, above everything after it
+      const taste = pressed && !card && !seated && !landmarkNear && !metro && !bench && swaad.taste()
       // E by a poster wall opens the composer, unless anything above has it or a poster's own UI is up
-      const wall = pressed && !card && !seated && !landmarkNear && !metro && !bench && posters?.near() != null
+      const wall =
+        pressed && !card && !seated && !landmarkNear && !metro && !bench && !taste && posters?.near() != null
       if (wall) hooks.posters!.compose()
       // E by a parked auto drives it, unless anything above has the key
-      const auto = pressed && !card && !seated && !landmarkNear && !metro && !bench && !wall && drive.near()
+      const auto =
+        pressed && !card && !seated && !landmarkNear && !metro && !bench && !taste && !wall && drive.near()
       if (auto) drive.mount()
       // E at the rooftop stair climbs, unless anything above has the key; up there it comes down
       const stair =
         !!roof &&
         press &&
         !card &&
-        (onRoof || (!seated && !landmarkNear && !metro && !bench && !wall && !auto && roof.near()))
+        (onRoof || (!seated && !landmarkNear && !metro && !bench && !taste && !wall && !auto && roof.near()))
       if (stair) roof.toggle()
       hooks.npcCard.step(
         pos,
         npcs,
-        press && !stair && !meeting && !postering && !bench && !wall && !auto && (chatting || !metro),
+        press &&
+          !stair &&
+          !meeting &&
+          !postering &&
+          !bench &&
+          !taste &&
+          !wall &&
+          !auto &&
+          (chatting || !metro),
         landmarkNear,
       )
       // a character that just opened (or closed on this very E) keeps the key from the person card
@@ -881,6 +925,7 @@ function createInteraction(
             !chatting &&
             !postering &&
             !bench &&
+            !taste &&
             !wall &&
             !auto &&
             (meeting || (!metro && !hooks.npcCard.isOpen())),
@@ -894,6 +939,7 @@ function createInteraction(
         !landmarkNear &&
         !metro &&
         !bench &&
+        !taste &&
         !wall &&
         !auto &&
         !stair &&

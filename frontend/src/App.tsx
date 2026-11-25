@@ -30,6 +30,7 @@ import { usePersonCard } from './world/usePersonCard'
 import { useReactions } from './world/useReactions'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
+import { useSwaad } from './world/useSwaad'
 import { hasBandar } from './world/bandar'
 import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
@@ -77,6 +78,7 @@ import { Connections } from './ui/Connections'
 import { InviteSheet } from './ui/InviteSheet'
 import { PrivacySheet } from './ui/PrivacySheet'
 import { DarshanList } from './ui/DarshanList'
+import { SwaadCard } from './ui/SwaadCard'
 import { AccountClosed } from './ui/AccountClosed'
 import { FullScreen } from './ui/FullScreen'
 import { FirstHint } from './ui/FirstHint'
@@ -165,6 +167,9 @@ export default function App() {
   /** The street animals: the one in reach, the one following, and their passing lines. */
   const animals = useAnimals()
   const { hooks: animalHooks, bind: bindAnimals } = animals
+  /** Jaipur ka Swaad: the serving stall in reach, the dish just tasted, and the list so far. */
+  const swaad = useSwaad()
+  const { hooks: swaadHooks, bind: bindSwaad } = swaad
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
@@ -385,6 +390,7 @@ export default function App() {
         drive: driveHooks,
         taxi: taxiHooks,
         animals: animalHooks,
+        swaad: swaadHooks,
         bandar: bandarHooks,
         roof: roofHooks,
         reactions: reactionHooks,
@@ -402,6 +408,7 @@ export default function App() {
     bindDrive(city)
     bindTaxi(city)
     bindAnimals(city)
+    bindSwaad(city)
     bindRoof(city)
     bindReactions(city)
     bindMap({ session: city, stage })
@@ -411,6 +418,7 @@ export default function App() {
       bindReactions(null)
       bindRoof(null)
       bindAnimals(null)
+      bindSwaad(null)
       bindTaxi(null)
       bindDrive(null)
       bindPosters(null)
@@ -448,6 +456,8 @@ export default function App() {
     bindTaxi,
     animalHooks,
     bindAnimals,
+    swaadHooks,
+    bindSwaad,
     bindMap,
     roofHooks,
     bindRoof,
@@ -565,7 +575,15 @@ export default function App() {
   }, [sheetUp, mapBlockedRef])
   // the monkey keeps off the street while anything is over it
   const bandarBlocked =
-    sheetUp || !!near || !!ride || taxi.riding || !!kiteFrom || !!bench.seat || map.open || roof.up
+    sheetUp ||
+    !!swaad.card ||
+    !!near ||
+    !!ride ||
+    taxi.riding ||
+    !!kiteFrom ||
+    !!bench.seat ||
+    map.open ||
+    roof.up
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked
@@ -817,8 +835,9 @@ export default function App() {
             ) : (
               <>
                 {/* the street's actions: beside the joystick, they stack upward when a small phone has no room
-                    (the "Le chalo" list has the row to itself) */}
-                <div className="hud-actions" hidden={taxi.sheetOpen}>
+                    (the "Le chalo" list has the row to itself, and so does the card of a dish just tasted: with
+                    "Baitho" beside it a small phone would squeeze it to a sliver) */}
+                <div className="hud-actions" hidden={taxi.sheetOpen || !!swaad.card}>
                   {drive.near && !near && !sheetOpen && !card && (bench.seat || !bench.near) && (
                     <button type="button" className="metro-button drive-button" onClick={drive.mount}>
                       {t('driveMount', lang)}
@@ -884,6 +903,11 @@ export default function App() {
                   {bench.near && !bench.seat && !near && !sheetOpen && (
                     <button type="button" className="metro-button bench-button" onClick={bench.sit}>
                       {t('benchSit', lang)}
+                    </button>
+                  )}
+                  {swaad.near && !swaad.card && !bench.seat && !near && !sheetOpen && !card && (
+                    <button type="button" className="metro-button swaad-button" onClick={swaad.taste}>
+                      {t('swaadTaste', lang)}
                     </button>
                   )}
                   {posters.near && !bench.near && !bench.seat && !near && !sheetOpen && !card && (
@@ -967,6 +991,7 @@ export default function App() {
                   />
                 ) : (
                   card ||
+                  (swaad.card && <SwaadCard dish={swaad.card.dish} lang={lang} onClose={swaad.close} />) ||
                   (bench.notice === 'ghost' && (
                     <BenchGhost
                       lang={lang}
@@ -1022,6 +1047,7 @@ export default function App() {
           // only a resident's own name, and the card prints only its first word when they tick "naam dikhao"
           name={shown ? shown.name : undefined}
           streak={today.streak}
+          dishes={swaad.have}
           onClose={() => setDarshanOpen(false)}
         />
       )}

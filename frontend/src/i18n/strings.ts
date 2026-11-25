@@ -21,6 +21,23 @@ export const STRINGS = {
   darshanListLabel: { hi: 'Jaipur Darshan ke landmark', en: 'Jaipur Darshan landmarks' },
   darshanBadge: { hi: 'Jaipur Darshan poora', en: 'Jaipur Darshan complete' },
   darshanLocked: { hi: 'Abhi baaki hai', en: 'Still to find' },
+  /** Jaipur ka Swaad: a stall that serves, its card, and the tasting list inside the Darshan sheet. */
+  swaadTaste: { hi: 'Chakho', en: 'Taste it' },
+  swaadClose: { hi: 'Mazaa aa gaya', en: 'Delicious!' },
+  swaadLine: { hi: 'Jaipur ka Swaad · {n}/{total}', en: 'Jaipur ka Swaad · {n}/{total}' },
+  swaadTabs: { hi: 'Darshan ya Swaad', en: 'Darshan or Swaad' },
+  swaadTabDarshan: { hi: 'Darshan {n}/{total}', en: 'Darshan {n}/{total}' },
+  swaadTabSwaad: { hi: 'Swaad {n}/{total}', en: 'Swaad {n}/{total}' },
+  swaadListLabel: { hi: 'Jaipur ke swaad', en: 'Tastes of Jaipur' },
+  swaadLocked: { hi: 'Abhi chakhna baaki hai', en: 'Still to taste' },
+  swaadDone: {
+    hi: 'Aathon swaad chakh liye — ab Jaipur aapki zubaan par hai. Phir padharna!',
+    en: 'All eight tasted — Jaipur is on your tongue now. Come again!',
+  },
+  swaadLocal: {
+    hi: 'Tapri ke paas jaao aur "Chakho" dabao. Yeh list sirf isi phone mein rehti hai.',
+    en: 'Walk up to a stall and tap "Taste it". This list is kept on this device only.',
+  },
   stampsNone: {
     hi: 'Abhi koi nahi. Kisi landmark ke paas jaao aur stamp lo.',
     en: 'None yet. Walk up to a landmark and collect its stamp.',
