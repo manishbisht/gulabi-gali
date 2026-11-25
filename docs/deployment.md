@@ -437,6 +437,36 @@ services (FCM, Mozilla, Apple, Windows); any other endpoint is refused.
 - [ ] Open the site in Instagram's browser: the profile sheet explains why there are no notifications there.
 - [ ] Sign out on the phone, then send another request: nothing arrives.
 
+## 2f. Postcards, Sankranti, Galta Ji and real phones: what changes at deploy
+
+Nothing to set, no secret, no migration. Deploy in the usual order: the Worker (`npx wrangler deploy` from
+`backend/`), then dispatch the `pages` workflow.
+
+- **The Worker** learns the seventh district, `galta`, and the 14th stamp, `galta-ji` (appended, so a page from
+  before still sends its 13 and is accepted). The Worker must go first: an older Worker refuses a whole stamp
+  upload that holds `galta-ji`. For the same reason, **to roll back, roll back the site first, then the Worker.**
+- **The service worker** (`sw.js`) is now registered for every visitor, not only for those who switch on
+  notifications, so phones can install the site to the home screen. It has no fetch listener and caches nothing:
+  every request still goes straight to the network, and `/p/` pages are untouched by it.
+- **Sankranti** (13–14 January 2027) needs nothing: `sankranti` is one of the first six festival ids, so every
+  page, old or new, already gets it from `/api/city`.
+- **Link-preview pictures** are committed JPEGs (`frontend/public/og/`); the site build only copies them. Run
+  `npm run og-images -w frontend -- <name>` on a Mac only when a place's look changes, and look at what it made.
+
+**Real-phone checks**
+
+- [ ] Android Chrome: after two minutes in the city, the hint "Gulabi Gali ko home screen pe rakho" shows once;
+      Rakho installs it; opening it from the home screen opens the city full-screen with no hint.
+- [ ] iPhone Safari: the same hint says where Share → "Add to Home Screen" is; Share → Add to Home Screen works.
+- [ ] Inside Instagram: the welcome screen's note "⋯ ya ⋮ dabao, browser chuno"; photo mode → Postcard → the
+      picture alone with "Tasveer pe der tak dabao aur save karo"; press and hold saves it to the gallery.
+- [ ] In Chrome on Android: Postcard and the Darshan list's "Card banao" open the share sheet; Instagram Stories
+      takes the 1080×1920 picture whole.
+- [ ] Paste `https://gulabi-gali.manishbisht.me/p/galta/galta-ji/` into WhatsApp (and Facebook's Sharing
+      Debugger): the card shows "Galta Ji", a line about it and the temple's picture; tapping it lands by the temple.
+- [ ] On a cheap Android phone, take the bus to Galta Ji: it opens, the kunds stop you at their edge, the
+      climb to the Surya Mandir viewpoint works, and walking stays smooth.
+
 ## 3. Budget alerts
 
 Cloudflare dashboard, Notifications, Add:

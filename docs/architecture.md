@@ -610,7 +610,7 @@ person card and your own profile sheet show "Jaipur Darshan · n/14" and the lan
 
 Two pictures to post, both 1080×1920 (an Instagram Story), drawn on a plain 2D canvas by `cards.ts`, a chunk
 loaded the first time one is made. Photo mode's "Postcard" frame takes one frame through `Stage.capture` (no
-`preserveDrawingBuffer`; it may ask for a higher ratio, capped at the photo ceiling and never on quality tier 0),
+`preserveDrawingBuffer`; it may ask for a higher ratio, capped at the photo ceiling and only on the top quality tier),
 cuts its middle to 9:16 (`coverCrop`) and adds a band "Gulabi Gali · <place> · Jaipur" (the landmark whose ring
 the player is in, else the district; the place shrinks, then is cut with "…", `fitBand`) with the site's address,
 in the site's own fonts once `document.fonts` has them (or after 2 s, a system font). Name labels and bubbles over
@@ -619,8 +619,9 @@ The Darshan sheet's "Card banao" draws "Mera Jaipur Darshan", n/`TOTAL_STAMPS`, 
 every stamp in order (collected as a pink seal with its name, the rest as a dashed "?") and the address. It
 prints a name only when a resident ticks "naam dikhao" (off each time the sheet opens), and then only the first
 word (`cardName`). Neither picture carries an account id. `shareImage` hands a picture to the share sheet when
-`navigator.canShare({files})`; in Instagram's in-app browser (its user agent), which can neither share files nor
-download, `HoldToSave` shows it alone with "Photo pe der tak dabao aur save karo"; anywhere else it downloads.
+`navigator.canShare({files})`; in Instagram's or Facebook's in-app browser (`socialApp`, the same check as the
+welcome screen's note), which cannot be trusted to share files or download, `HoldToSave` shows it alone with "Tasveer
+pe der tak dabao aur save karo" and a small download link; anywhere else it downloads.
 
 ### Aaj ka Darshan: one small goal a day (`today.ts`, `frontend/src/world/today.ts`, `useToday.ts`)
 

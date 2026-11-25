@@ -232,10 +232,10 @@ sets the clock to noon on 14 January 2027 under that day's sun, so the kites are
 sky, 15 of them cut and drifting down, and 4 people flying theirs from the roofs, at tier 2), then walks for 8 s
 as before. "Walled City" is the same walk with no festival, on the same build.
 
-| Run                  | Walkable ms | Frames | p50 ms | p95 ms | p99 ms | Max ms | Over 33 ms | Tier after | Heap MB | Draw calls | Triangles | Geometries | Programs | Main thread ms/frame (task, script) |
-| -------------------- | ----------: | -----: | -----: | -----: | -----: | -----: | ---------: | ---------- | ------: | ---------: | --------: | ---------: | -------: | ----------------------------------- |
-| Walled City          |        1811 |    549 |   16.7 |   16.8 |   16.8 |    150 |          2 | 2          |     9.5 |         53 |    68,962 |         40 |       11 | 4.6, 3.0                            |
-| Sankranti, noon      |        1857 |    543 |   16.7 |   16.8 |   16.8 |     17 |          0 | 2          |    11.0 |         52 |    60,816 |         43 |       14 | 2.4, 1.7                            |
+| Run             | Walkable ms | Frames | p50 ms | p95 ms | p99 ms | Max ms | Over 33 ms | Tier after | Heap MB | Draw calls | Triangles | Geometries | Programs | Main thread ms/frame (task, script) |
+| --------------- | ----------: | -----: | -----: | -----: | -----: | -----: | ---------: | ---------- | ------: | ---------: | --------: | ---------: | -------: | ----------------------------------- |
+| Walled City     |        1811 |    549 |   16.7 |   16.8 |   16.8 |    150 |          2 | 2          |     9.5 |         53 |    68,962 |         40 |       11 | 4.6, 3.0                            |
+| Sankranti, noon |        1857 |    543 |   16.7 |   16.8 |   16.8 |     17 |          0 | 2          |    11.0 |         52 |    60,816 |         43 |       14 | 2.4, 1.7                            |
 
 Every target holds: walkable at 1.9 s, p50 16.7 ms, no frame over 33 ms, tier still 2. The kites, their strings
 and the flyers are three draw calls, three geometries and three shader programs (the flyers share the
@@ -271,6 +271,8 @@ device pixels; draw calls and triangles are the walk's last frame (`__gg.renderI
 |               |         0 |         891 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         19 |    11,614 |        2 |        7 |     9.5 | 2.3, 1.2                            |
 | Nahargarh     |         2 |         871 |           723 |   16.7 |   16.8 |          0 |          2 | 720x1480 |         31 |    21,152 |        3 |       11 |    10.8 | 2.3, 1.6                            |
 |               |         0 |         869 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         18 |    11,674 |        1 |        6 |    10.7 | 2.5, 1.6                            |
+| Galta Ji      |         2 |         992 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         39 |    30,196 |        4 |       13 |    10.2 | 3.4, 2.1                            |
+|               |         0 |        1339 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         27 |    23,538 |        2 |        9 |    11.1 | 2.4, 1.3                            |
 
 The same run with the CPU slowed 20x (`DEVICE_PERF_CPU=20`), to look for the point where the main thread alone would
 push the tier down: walkable 2.5 to 5.4 s, p50 still 16.7 ms in every district, 0 to 4 frames over 33 ms of about
@@ -282,7 +284,10 @@ thread stays under a 60 fps frame, and well under the 22 ms the tier measures ag
 about 725 frames over 33 ms at 6x (limit 10%), heap 9 to 13 MB (limit 150), and the tier never had to move. The lowest
 tier really is thinner in every district, not only the Walled City: a quarter of the pixels (360 x 740 instead of
 720 x 1480), 41 to 47% fewer draw calls (the sun's shadow pass is gone: at tier 2 every caster is drawn twice), 45
-to 63% fewer triangles, 6 or 7 shader programs instead of 10 or 11, and 1 or 2 textures fewer (the shadow map's). The
+to 63% fewer triangles, 6 or 7 shader programs instead of 10 or 11, and 1 or 2 textures fewer (the shadow map's).
+Galta Ji (added to the run on 2026-11-25, after it joined the city) thins less, 31% fewer draw calls and 22% fewer
+triangles, because its gorge is one large mesh that tier 0 keeps whole (it casts no shadow, so the shadow pass
+saves little there); it still sits mid-table at tier 2 (39 draw calls, 30k triangles) and meets every target. The
 Walled City is the heaviest district by a wide margin (51 draw calls, 68k triangles, about 1.5x the next, MI Road);
 Nahargarh is the lightest. Textures are few and small (1 to 4: the sky's backdrop and the signposts' and posters'
 canvases, plus the sun's 1024 x 1024 shadow map at tier 2); no district loads an image file as a texture.

@@ -43,6 +43,12 @@ const FRAMING = {
   wtp: { back: 1800, up: -280, zoom: 6 },
 }
 
+/** A district's own picture, where walking in from its spawn for the default 1.2 s does not suit. */
+const DISTRICT_FRAMING = {
+  // past the bus stand's roof, which otherwise fills the bottom of the shot
+  galta: { back: 2600 },
+}
+
 /** `OG_FRAME='{"back":1200,"up":-40,"zoom":0}'` tries a framing on whatever is made this run. */
 const TRY = process.env.OG_FRAME ? JSON.parse(process.env.OG_FRAME) : null
 const only = process.argv.slice(2)
@@ -181,6 +187,7 @@ try {
         walk: 'w',
         zoom: 3,
         up: 0,
+        ...DISTRICT_FRAMING[district],
       })
     for (const { place, name: landmark } of landmarks) {
       const file = `${district}-${place}.jpg`
