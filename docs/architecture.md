@@ -701,7 +701,7 @@ shows nothing until one arrives.
 ### Links to a place (`frontend/src/world/placeLink.ts`, `frontend/src/ui/PlaceInvite.tsx`)
 
 "Bulao" on a landmark card, the bench panel and each row of the map's list hands on
-`https://gulabi-gali.manishbisht.me/?at=<district>:<place>` with a short line (`shareLink`, the invite codes'
+`https://gulabi-gali.manishbisht.me/p/<district>/<place>/` (`placeUrl`; see "Link previews" below) with a short line (`shareLink`, the invite codes'
 helper: the share sheet, else the clipboard). On the landmark card and the bench panel it is an icon with the
 same accessible name, so those rows stay one line on a 360 px phone; the map's rows keep the word. Its status
 line is always mounted (empty while idle) and floats over the button, so it never moves the row. Place ids are the map's (`mapItems`): a landmark's id, `metro`,
@@ -713,6 +713,27 @@ landmark where the auto-taxi sets riders down (in its ring, so its card opens), 
 point round a bench or tapri within reach to sit, or in front of a poster wall, facing it with the view turned
 to match. A place the district does not have is the usual spawn. `placeLink.test.ts` checks every place in
 every district round-trips to a clear spot in reach.
+
+### Link previews (`frontend/src/preview/`, `scripts/og-images.mjs`)
+
+A shared place link is a static page, `/p/<district>/<place>/index.html`, one per place on any district's map
+(`sharedPlaces`: `mapItems` over every district's definition, ids by `linkId`). The build makes them: a plugin in
+`vite.config.ts` loads `src/preview/build.ts` with Vite's module runner (the district definitions, and with them
+Three.js, load in Node; nothing is built or drawn) and emits each page as an asset, so a new district or landmark
+gets pages with no other change. A page is plain HTML (`previewPage`): `<title>`, description, Open Graph and
+Twitter tags (`summary_large_image`), all absolute and escaped; a short visible line and a link to
+`/?at=<district>:<place>` (`placeForward`), and one inline script, allowed by hash in the page's own CSP, that
+replaces the location with that link, carrying on only `gg-` switches (the e2e build's), nothing a link was
+dressed with. No `<meta refresh>`: some scrapers follow one and would draw the home page's card. Titles are the
+map's names (a landmark's English after its Hinglish where they differ; a small place with its district's);
+descriptions are an English line (each landmark has one in `LANDMARK_LINES`, others a line by kind) and the
+Hinglish "Aao, yahin milte hain!", at most 160 characters. The picture is the first that exists of
+`public/og/<district>-<landmark>.jpg`, `public/og/<district>.jpg`, `public/og/default.jpg` (and `og.png`, for a
+build before any): benches, tapris, poster walls, the metro and viewpoints always use their district's.
+`scripts/og-images.mjs` makes the pictures from the built pages' list: each place's own link, the HUD hidden, every
+body hidden (`__gg.hideFigures`, which turns off the avatars' shared material), golden hour, 1200x630 JPEG at
+quality 78. `src/preview/pages.test.ts` checks a page per place, the tags, escaping, the forward round-trip
+through `readPlaceLink`, the fallbacks, the CSP hash, and the pictures' size.
 
 ## Launch and grow
 
