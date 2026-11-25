@@ -135,7 +135,12 @@ shows them; a ghost's stay on the device.
 `useLiveCity` fetches `/api/city` and refreshes it; `live/sky.ts` turns the snapshot and the clock into sky,
 fog and light colours (recomputed every 30 s), `live/weatherFx.ts` adds rain, and `live/festivalFx.ts`
 draws the festival of the day (Sankranti kites, Diwali diyas, Holi colour, and since phase 4 the Gangaur and
-Teej processions) and its banner. The festival table is `backend/src/festivals.data.ts`; an entry is whole IST
+Teej processions) and its banner. Sankranti's sky is `live/kites.ts`: 20/60/120 kites by tier (one in eight a
+cut one sinking and drifting before it goes back up high) and 2/3/4 people flying their own from the flat roofs
+nearest the rooftop viewpoint, three draw calls in all, only from sunrise to sunset, stepped at most 30 times a
+second, still under reduced motion. That day "Patang udao" is offered up on the rooftop viewpoint as well as on
+the street (the game then looks up from the roof's height), the greeting points there, and the ambience adds a
+far-off cheer from the roofs now and then (not on the lowest tier). The festival table is `backend/src/festivals.data.ts`; an entry is whole IST
 days or IST minutes. It needs yearly upkeep: add the next year's dates by each December (a test checks it still
 covers 2028). New Year (31 Dec 18:00 to 1 Jan 06:00 IST) needs no entry: `festivalOn` works it out every year.
 `/api/city` works the festival out from the clock as it serves, not from the last cron run, and names a
@@ -161,7 +166,7 @@ Opening the site with `?gg-test=1` installs `window.__gg` (`src/testHooks.ts`), 
 `quality`, `framesSinceRestore`, `position`, `teleport`, `district`, `sky`, `festival`, `npcs`, `freezeNpcs`,
 `people`, `liveState`, `setSnapshot`, `setNow`, and from phase 4 `posters`, `animals`, `freezeAnimals`,
 `procession`, `forceProcession` (a procession whatever the festival, so the perf run can have one under the
-kites), `patang` and `renderInfo` (the renderer's draw calls and memory). `?gg-festival=<id>` stands in for the
+kites), `kites` (Sankranti's kites and rooftop flyers up now), `patang` and `renderInfo` (the renderer's draw calls and memory). `?gg-festival=<id>` stands in for the
 live festival and `?gg-today=<goal id>` for the day's "Aaj ka Darshan" goal (`src/overrides.ts`), in test mode only. Both are needed: the hooks exist only in a build made with `VITE_TEST_HOOKS=1` (the e2e build; the shipped one
 drops them) and only on a page opened with `gg-test=1`. The Playwright specs in `frontend/tests` and `tests/device-perf.spec.ts` use these.
 Such a page also draws lite (`testRenderLite`): a pixel ratio of 0.25 and no antialiasing, so CI's

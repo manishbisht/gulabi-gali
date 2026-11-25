@@ -37,6 +37,11 @@ import type { CDPSession, Page } from '@playwright/test'
  * Winter (DEVICE_PERF_WINTER=1): the same walk on MI Road at 05:45 IST on 1 January, under a fog warning and
  * unhealthy air, with the New Year override on: the morning's ground fog at its thickest and the string lights
  * across MI Road, both up at once. Results go to test-results/device-perf-winter.json.
+ *
+ * Sankranti (DEVICE_PERF_SANKRANTI=1): the same walk in the Walled City at noon on 14 January with the
+ * Sankranti override on: the sky full of kites, a few cut ones drifting down, and people flying theirs from
+ * the roofs, with the festival's drums and cheers. Results go to test-results/device-perf-sankranti.json. The
+ * every-extra run (above) is also set to noon that day, so its kites are up whatever the clock says.
  */
 
 test.skip(!process.env.DEVICE_PERF, 'Measurement, not a test: set DEVICE_PERF=1 to run it.')
@@ -57,6 +62,10 @@ const CPU_SLOWDOWN = 6
 const WALK_MS = 8000
 const EXTRAS = !!process.env.DEVICE_PERF_EXTRAS
 const WINTER = !!process.env.DEVICE_PERF_WINTER
+const SANKRANTI = !!process.env.DEVICE_PERF_SANKRANTI
+/** Noon on Makar Sankranti 2027 in Jaipur, under that day's sun (07:15 to 17:50 IST): the kites are up. */
+const SANKRANTI_NOON = '2027-01-14T06:30:00Z'
+const SANKRANTI_SUN = { sunrise: '2027-01-14T01:45:00Z', sunset: '2027-01-14T12:20:00Z' }
 /** New Year's morning, 05:45 IST: the lights are still up and the ground fog is at its thickest. */
 const WINTER_DAWN = '2027-01-01T00:15:00Z'
 /** The street dog that lives a few steps from the spawn, and the auto parked just past it. */
@@ -92,6 +101,8 @@ interface Result {
   clerk?: { mode: string; chunk: boolean; cdn: string[] }
   /** What the renderer drew in the walk's last frame. */
   render: { calls: number; triangles: number; geometries: number; textures: number; programs: number }
+  /** Sankranti and every-extra modes: Sankranti's kites up during the walk (see `__gg.kites`). */
+  kites?: { sky: number; falling: number; flyers: number }
   /** Every-extra mode only: what was up during the walk, and the drive recorded after it. */
   extras?: {
     festival: string | null
@@ -231,7 +242,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
   // Load: a cold visit, past the intro, to the first walkable frame. gg-full: drawn in full, as a phone
   // draws it (other test pages draw lite, see testRenderLite).
   if (WINTER) await page.addInitScript(() => localStorage.setItem('gg-district', 'mi-road'))
-  const festival = EXTRAS ? '&gg-festival=sankranti' : WINTER ? '&gg-festival=newyear' : ''
+  const festival = EXTRAS || SANKRANTI ? '&gg-festival=sankranti' : WINTER ? '&gg-festival=newyear' : ''
   await page.goto(`/?gg-test=1&gg-full=1${festival}`, { waitUntil: 'load', timeout: 120000 })
   await page.getByRole('button', { name: 'Padharo!' }).click()
   const entered = await page.evaluate(() => performance.now())
@@ -254,6 +265,17 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
       window.__gg.setNow(iso)
     }, WINTER_DAWN)
   }
+
+  if (SANKRANTI || EXTRAS) {
+    await page.evaluate(
+      ({ sun, iso }) => {
+        window.__gg.setSnapshot(sun)
+        window.__gg.setNow(iso)
+      },
+      { sun: SANKRANTI_SUN, iso: SANKRANTI_NOON },
+    )
+  }
+  const kites = SANKRANTI || EXTRAS ? await page.evaluate(() => window.__gg.kites()) : undefined
 
   let extras: Result['extras']
   if (EXTRAS) {
@@ -316,6 +338,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     heapMB: heap / 2 ** 20,
     renderer,
     render,
+    kites,
     extras,
   }
   if (clerkMode) {
@@ -325,7 +348,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     result.clerk = { mode: clerkMode === 'abort' ? 'abort' : 'stub', chunk, cdn }
   }
   mkdirSync('test-results', { recursive: true })
-  const suffix = EXTRAS ? '-extras' : WINTER ? '-winter' : ''
+  const suffix = EXTRAS ? '-extras' : WINTER ? '-winter' : SANKRANTI ? '-sankranti' : ''
   writeFileSync(`test-results/device-perf${suffix}.json`, JSON.stringify(result, null, 2))
   const ms = (v: number | null) => (v === null ? '-' : `${Math.round(v)}`)
   console.log(
@@ -346,6 +369,7 @@ test('the walled city on a throttled Pixel 7', async ({ page }) => {
     console.log(`Draw (walk): ${JSON.stringify(result.render)}; (drive): ${JSON.stringify(x.driveRender)}`)
   } else console.log(`\nDraw: ${JSON.stringify(result.render)}`)
   if (WINTER) console.log(`Winter: ${JSON.stringify(await page.evaluate(() => window.__gg.sky()))}`)
+  if (kites) console.log(`Kites: ${JSON.stringify(kites)}`)
   const busyLine = (f: Frames) =>
     `${f.taskPerFrame.toFixed(1)} ms task, ${f.scriptPerFrame.toFixed(1)} ms script`
   console.log(
