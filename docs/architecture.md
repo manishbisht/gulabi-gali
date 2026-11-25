@@ -732,7 +732,8 @@ Opt-in per device, from the profile sheet (`PushToggle`, residents only). `pushS
 shows: nothing in a build without `VITE_VAPID_PUBLIC_KEY`; an explanation instead of the switch in an in-app
 browser (Instagram has no push), on an iPhone or iPad outside an installed home-screen app (Safari gives push only
 there), or where the Push API is missing. Switching on asks permission, registers `/sw.js` (a static file served
-from the site's own origin; the CSP's `worker-src 'self'` covers it; it caches nothing and has no fetch handler),
+from the site's own origin; the CSP's `worker-src 'self'` covers it; it caches nothing, and its fetch listener is
+empty, see "Home screen" below),
 subscribes with the VAPID public key and sends the subscription to `PUT /api/me/push` with the language. Each
 visit re-sends it (`syncPush`: the language now, the endpoint the browser has now, a new subscription if the key
 changed or the browser dropped it, and off if the permission was taken back). Switching off and signing out
@@ -768,6 +769,33 @@ key the site's `VITE_VAPID_PUBLIC_KEY`, both set by `scripts/vapid-setup.mjs`, w
 deployment.md); either missing turns the feature off. Tests make their own pair in memory (`backend/vitest.config.ts`,
 `frontend/playwright.config.ts`); the e2e spec (`tests/push.spec.ts`) stands in for the browser's push service
 with a stub `PushManager` and a fake push service on this machine, and decrypts what the Worker sends.
+
+### Home screen, in-app browsers, safe areas (`frontend/src/pwa/`, `public/manifest.webmanifest`, `public/sw.js`)
+
+The site installs as a web app: `manifest.webmanifest` (`id` `/`, `start_url` `/?source=pwa`, standalone, portrait,
+plum theme, 192 and 512 PNG icons and a maskable 512 made from `icon.svg` by `scripts/app-icons.mjs`), and `sw.js`
+registered on every visit once the page has loaded and gone idle (`registerAppWorker`; not inside an app's own
+browser; the e2e build only with `?gg-sw=1`, so a worker never sits in front of other specs' routes). Its `fetch`
+listener is empty on purpose: older Chrome wants one before it offers an install, current Chrome skips an empty one,
+and it never calls `respondWith`, so every request goes to the network. Nothing is cached: a deploy replaces the
+hashed `/assets`, and a stale cached page would ask for chunks that are gone. `main.tsx` takes `?source=pwa` out of
+the address first thing (`dropPwaSource`), before the analytics beacon, place links or "Bulao" read it.
+
+`watchInstall` holds Chrome's `beforeinstallprompt` (so its own banner never covers the street) and marks
+`appinstalled`. `InstallHint` shows one line under the HUD's head after 2 minutes of the city on screen (and the first
+visit's steps closed): "Rakho" opens Chrome's dialog, or in Safari on an iPhone it says where "Add to Home Screen" is.
+It never shows inside Instagram, Facebook or another app's browser, once installed or opened from the home screen
+(`display-mode: standalone`, `navigator.standalone`), or within 30 days of the last time it showed
+(`gg-install-hint` in localStorage, through `storage`). Inside Instagram's or Facebook's own browser (`socialApp`,
+beside `isInAppBrowser` in `auth/inApp.ts`) the welcome screen has one note on opening the site in a browser; the
+sign-in sheet's and the push switch's own notes stay as they were, and nothing is blocked.
+
+The viewport has `viewport-fit=cover`, so the HUD, the bottom row, the sheets (`.auth-scrim`, `.conn-sheet`), the
+metro, taxi and kite screens and the photo frame pad themselves with `env(safe-area-inset-*)`; `tests/phone.spec.ts`
+sets a notch and a home bar through DevTools (`Emulation.setSafeAreaInsetsOverride`) and checks the HUD, the joystick
+and the map sheet keep clear of them. Pinch-zoom stays (no `user-scalable=no`: people who need it keep it); the root
+is `touch-action: manipulation` (no double-tap zoom), the street's canvas and the joystick `touch-action: none`, and
+the page never scrolls or rubber-bands (`overflow: hidden`, `overscroll-behavior: none`).
 
 ### Reactions: a namaste, a wave (`DistrictDO.react`, `frontend/src/world/useReactions.ts`)
 
