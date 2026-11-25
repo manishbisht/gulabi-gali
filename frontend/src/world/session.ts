@@ -4,7 +4,7 @@ import type { Lang } from '../i18n/strings'
 import { createFestivalFx, festivalSky } from '../live/festivalFx'
 import { createGroundFog, onDistrictGround } from '../live/groundFog'
 import type { ProcessionKind } from '../live/procession'
-import { applySky, skyParams, type SkyParams } from '../live/sky'
+import { applySky, daylight, skyParams, type SkyParams } from '../live/sky'
 import type { LiveCity } from '../live/useLiveCity'
 import { createWeatherFx } from '../live/weatherFx'
 import { getPosters } from '../net/api'
@@ -507,6 +507,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       festival: hooks.festival,
       sky: sky.params,
       procession: () => ({ count: sky.procession() }),
+      kites: sky.kites,
       forceProcession: sky.forceProcession,
       renderInfo: () => {
         const { render, memory, programs } = stage.renderer.info
@@ -627,6 +628,7 @@ function createSky(
   paint(): void
   params(): SkyParams
   procession(): number
+  kites(): { sky: number; falling: number; flyers: number }
   forceProcession(kind: ProcessionKind | null): void
 } {
   const { current, now } = hooks.live
@@ -642,15 +644,16 @@ function createSky(
     applySky(stage, district, sky)
     fx.set(sky)
     groundFog.set(sky)
-    festivalFx.set(hooks.festival(), stage.quality)
+    festivalFx.set(hooks.festival(), stage.quality, daylight(sky))
   }
   paint()
   const timer = setInterval(paint, SKY_REFRESH_MS)
-  const offQuality = stage.onQuality((q) => festivalFx.set(hooks.festival(), q))
+  const offQuality = stage.onQuality((q) => festivalFx.set(hooks.festival(), q, daylight(sky!)))
   return {
     paint,
     params: () => sky!,
     procession: festivalFx.processionCount,
+    kites: festivalFx.kites,
     forceProcession: (kind) => festivalFx.forceProcession?.(kind, stage.quality),
     update(dt: number, pos: Vec2) {
       fx.update(dt)

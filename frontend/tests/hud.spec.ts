@@ -281,6 +281,55 @@ for (const lang of LANGS)
     })
   }
 
+// Makar Sankranti: the greeting sends everyone up to the roof to fly a kite. It has no procession under it; it
+// keeps to one line of the card with at least 10 px to spare (CI's fonts draw a few px wider), in every
+// district and each language.
+const SANKRANTI = {
+  hi: 'Sankranti mubarak! Chhat pe patang udao 🪁',
+  en: 'Happy Sankranti! Fly a kite on the roof 🪁',
+}
+for (const lang of LANGS)
+  for (const [id, hi, en] of DISTRICTS) {
+    const place = lang === 'en' ? en : hi
+    test(`Sankranti's greeting fits in ${place} (${lang}) with room to spare: festival, city line, sign-in nudge`, async ({
+      page,
+    }) => {
+      await busiest(page, id, lang, 'sankranti')
+      const items = common(page, place, lang)
+      delete items.procession
+      await expect(page.locator('.procession-line')).toHaveCount(0)
+      await expect(items.banner!).toHaveText(SANKRANTI[lang])
+      await laidOut(
+        {
+          ...items,
+          ghost: page.getByText(WORDS[lang].ghost, { exact: true }),
+          signIn: page.getByRole('button', { name: WORDS[lang].signIn }),
+        },
+        NEWS.filter(([, k]) => k !== 'procession'),
+      )
+      const fit = await items.banner!.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size
+        // the line's own width, unwrapped, against the most the card can give it
+        const probe = el.cloneNode(true) as HTMLElement
+        probe.style.cssText =
+          'position:absolute;visibility:hidden;white-space:nowrap;width:auto;max-width:none'
+        el.parentElement!.appendChild(probe)
+        const width = probe.getBoundingClientRect().width
+        probe.remove()
+        const news = el.closest('.hud-news') as HTMLElement
+        const pad = getComputedStyle(news)
+        const room =
+          news.parentElement!.clientWidth - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight)
+        return { lines, width, room }
+      })
+      expect(fit.lines).toBe(1)
+      expect(fit.width, `greeting ${fit.width} px in ${fit.room} px`).toBeLessThanOrEqual(fit.room - 10)
+      await shot(page, `guest-${lang}-${id}-sankranti`)
+    })
+  }
+
 // A misty winter dawn over clean air: the city line speaks of the fog. With a Gangaur procession too, in the
 // district with the longest name, in each language.
 const MIST_LINE = {

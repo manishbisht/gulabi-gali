@@ -19,7 +19,7 @@ import { t } from '../i18n/strings'
 
 describe('festivalParticleCount', () => {
   it('scales particles by quality tier', () => {
-    expect([2, 1, 0].map((q) => festivalParticleCount('sankranti', q as 0 | 1 | 2))).toEqual([120, 60, 25])
+    expect([2, 1, 0].map((q) => festivalParticleCount('sankranti', q as 0 | 1 | 2))).toEqual([120, 60, 20])
     expect([2, 1, 0].map((q) => festivalParticleCount('holi', q as 0 | 1 | 2))).toEqual([80, 40, 15])
     // gangaur and teej throw no particles: they have a procession instead, and jlf is banner-only
     expect(festivalParticleCount('gangaur', 2)).toBe(0)
