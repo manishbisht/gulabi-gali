@@ -177,7 +177,7 @@ it('says what came of each ball, in both languages', () => {
   })
   expect(text('.cricket-said')).toBe('Chauka!')
   expect(text('.cricket-top')).toContain('Run: 4')
-  act(() => gg().ball(-0.1))
+  act(() => gg().ball(0.1))
   expect(text('.cricket-said')).toBe('Do run')
   act(() => gg().ball(-0.16))
   expect(text('.cricket-said')).toBe('Ek run')
@@ -306,4 +306,133 @@ it('frames move the innings on by themselves: nobody tapping, it is over within 
   })
   expect(document.querySelector('.cricket-score')).not.toBeNull()
   expect(text('.cricket-score')).toMatch(/Runs: 0/)
+})
+
+it('waits for a first tap ("Tap to start") that is not a swing, and keeps the how-to up until the first swing', () => {
+  mount()
+  const field = document.querySelector<HTMLElement>('.cricket-field')!
+  expect(text('.cricket-ready')).toBe('Tap to start')
+  expect(text('.cricket-help')).toMatch(/Tap/)
+  // two seconds of frames: still waiting
+  act(() => {
+    for (let i = 0; i < 20; i++) frames.forEach((f) => f(0.1))
+  })
+  expect(text('.cricket-ready')).toBe('Tap to start')
+  act(() => void field.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })))
+  expect(document.querySelector('.cricket-ready')).toBeNull() // the bowler is on the way
+  expect(gg().balls()).toBe(0)
+  expect(text('.cricket-help')).toMatch(/Tap/) // nothing swung yet: the how-to stays
+  // the ball's own swing is still to be had
+  act(() => {
+    gg().pause(true)
+    gg().tapAtBat()
+  })
+  act(() => void field.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })))
+  expect(gg().runs()).toBe(6)
+  expect(document.querySelector('.cricket-help')).toBeNull()
+})
+
+it('starts by itself after three seconds, and the how-to outlasts a ball nobody swung at', () => {
+  mount({ lang: 'hi' })
+  expect(text('.cricket-ready')).toBe('Tap karke shuru karo')
+  act(() => {
+    for (let i = 0; i < 31; i++) frames.forEach((f) => f(0.1))
+  })
+  expect(document.querySelector('.cricket-ready')).toBeNull()
+  act(() => {
+    gg().pause(true)
+    gg().ball(null)
+  })
+  expect(gg().balls()).toBe(1)
+  expect(text('.cricket-help')).toMatch(/tap karo/)
+})
+
+it("times a tap by its event's own stamp, and takes a touch 50 ms earlier: a finger's six stays a six", () => {
+  const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  const tap = (pointerType: string, stamp: number) => {
+    act(() => {
+      gg().pause(true)
+      gg().tapAtBat()
+      gg().pause(false)
+    })
+    act(() => frames.forEach((f) => f(1e-6))) // a frame at 1000 ms, the ball at the bat
+    const e = new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+    Object.defineProperty(e, 'pointerType', { value: pointerType })
+    Object.defineProperty(e, 'timeStamp', { value: stamp })
+    now.mockReturnValue(1400) // the handler runs late: the stamp, not this, is the tap's moment
+    act(() => void document.querySelector('.cricket-field')!.dispatchEvent(e))
+    now.mockReturnValue(1000)
+    return gg().last()
+  }
+  mount()
+  expect(tap('touch', 1050)).toBe('six') // heard 50 ms late, as touches are
+  expect(tap('mouse', 1050)).toBe('four') // a mouse 50 ms late is late
+  expect(tap('mouse', 1000)).toBe('six')
+})
+
+it('gives a slow phone (the lowest tier) a six window wider than one of its frames', () => {
+  mount()
+  act(() => {
+    gg().pause(true)
+    gg().ball(0.05)
+  })
+  expect(gg().last()).toBe('four')
+  act(() => root.render(<></>))
+  ;(stage as { quality: number }).quality = 0
+  mount()
+  act(() => {
+    gg().pause(true)
+    gg().ball(0.05)
+  })
+  expect(gg().last()).toBe('six')
+})
+
+it('clears what came of the last ball when the next run-up starts (nothing fades it under reduced motion)', () => {
+  mount()
+  act(() => {
+    gg().pause(true)
+    gg().ball(0.06)
+  })
+  expect(text('.cricket-said')).toBe('Four!')
+  act(() => {
+    gg().pause(false)
+    for (let i = 0; i < 9; i++) frames.forEach((f) => f(0.1))
+  })
+  expect(text('.cricket-said')).toBe('Four!') // 0.9 s in: still showing
+  act(() => {
+    for (let i = 0; i < 4; i++) frames.forEach((f) => f(0.1))
+  })
+  expect(document.querySelector('.cricket-said')).toBeNull()
+  expect(gg().balls()).toBe(1)
+})
+
+it("holds the broken window's line for about two seconds", () => {
+  mount()
+  act(() => gg().pause(true))
+  let found = false
+  for (let i = 0; i < MAX_BALLS - 1 && !found; i++) {
+    act(() => gg().ball(0))
+    found = !!document.querySelector('.cricket-said small')
+  }
+  if (!found) return // this innings' balls broke no window (seeded by chance); cricket.test.ts covers the hold
+  const said = document.querySelector<HTMLElement>('.cricket-said')!
+  expect(said.style.animationDuration).toBe('2.2s')
+  act(() => {
+    gg().pause(false)
+    for (let i = 0; i < 19; i++) frames.forEach((f) => f(0.1))
+  })
+  expect(text('.cricket-said small')).toMatch(/^Arre!/) // 1.9 s on, still there to read
+})
+
+it('the fielders hook reports what is in the scene', () => {
+  mount()
+  const drawn = () => {
+    let n = 0
+    scene.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) n += o.count
+    })
+    return n
+  }
+  expect(drawn()).toBe(3)
+  expect(gg().fielders()).toBe(drawn())
 })

@@ -2272,6 +2272,24 @@ small.words-hint {
   }
 }
 
+.cricket-ready {
+  position: absolute;
+  top: 40%;
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  text-align: center;
+  color: #fff;
+  font:
+    800 1.6rem/1.2 'Baloo 2',
+    system-ui,
+    sans-serif;
+  text-shadow:
+    0 2px 0 var(--plum),
+    0 0 12px rgb(42 29 36 / 0.7);
+  pointer-events: none;
+}
+
 .cricket-help {
   position: absolute;
   left: calc(16px + env(safe-area-inset-left));

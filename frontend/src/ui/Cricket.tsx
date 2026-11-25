@@ -6,11 +6,13 @@ import {
   loadBest,
   MAX_BALLS,
   MAX_OUTS,
-  RESULT_S,
   saveBest,
+  SIX_S,
+  SIX_SLOW_S,
+  tapSince,
   type Outcome,
 } from '../games/cricket'
-import { cricketSound, wakeCricketSound } from '../games/cricketSound'
+import { cricketSound, soundFor, wakeCricketSound } from '../games/cricketSound'
 import { createCricketView } from '../games/cricketView'
 import { t, type Lang, type StringKey } from '../i18n/strings'
 import type { Controls } from '../player/controls'
@@ -41,7 +43,23 @@ const SAID: Record<Outcome, StringKey> = {
   caught: 'cricketCaught',
 }
 
-const FRESH = { runs: 0, balls: 0, outs: 0, over: false, seq: 0, last: null as Outcome | null, arre: false }
+const FRESH = {
+  runs: 0,
+  balls: 0,
+  outs: 0,
+  over: false,
+  seq: 0,
+  last: null as Outcome | null,
+  arre: false,
+  /** How long this ball's result is shown, in seconds. */
+  hold: 1,
+  /** Before the first ball: the bowler waits for a tap. */
+  ready: true,
+  /** A ball's result is being shown now. */
+  showing: false,
+  /** The bat has been swung this innings: the how-to has done its work. */
+  swung: false,
+}
 
 /** Where focus goes when the game ends: the stage, which is not otherwise focusable. */
 function stageEl(): HTMLElement | null {
@@ -64,7 +82,7 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
   const onExitRef = useRef(onExit)
   useEffect(() => void (onExitRef.current = onExit))
   /** The swing of the innings now being played (the tap's own moment, see `Cricket.swing`). */
-  const swing = useRef<() => void>(() => {})
+  const swing = useRef<(stamp?: number, touch?: boolean) => void>(() => {})
   const [round, setRound] = useState(0)
   const [hud, setHud] = useState(FRESH)
   const [best, setBest] = useState(loadBest)
@@ -91,7 +109,7 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
       // Space swings, except on a focused button (Stop, Again, Share), which it presses as it always does
       if (e.code !== 'Space' || onButton(e)) return
       e.preventDefault()
-      if (!e.repeat) swing.current()
+      if (!e.repeat) swing.current(e.timeStamp)
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !onButton(e)) e.preventDefault() // never also a click on the field
@@ -111,25 +129,41 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
 
   // one innings: the simulation and its drawing, from the first run-up to the score
   useEffect(() => {
-    const sim = createCricket((Math.random() * 2 ** 32) >>> 0)
+    // a slow phone (the lowest tier, about 30 frames a second) gets a six window wider than one of its frames
+    const sim = createCricket((Math.random() * 2 ** 32) >>> 0, {
+      six: stage.quality === 0 ? SIX_SLOW_S : SIX_S,
+    })
     // the lowest tier draws no fielders; reduced motion keeps the view still
     const view = createCricketView(stage, pitch, { extras: stage.quality > 0, calm: calm() })
     const s = sim.state
     const before = loadBest()
     /** What the HUD last showed: React is told only when something on it changes. */
-    const shown = { seq: 0, over: false }
+    const shown = { seq: 0, over: false, ready: true, showing: false, swung: false }
     /** Test hook only (`pause`): frames draw but do not move the innings on. */
     let paused = false
     let frameAt = performance.now()
     const tell = () => {
       if (s.seq !== shown.seq) {
-        const o = s.last!
-        cricketSound(s.arre ? 'glass' : isOut(o) ? 'out' : o === 'six' || o === 'four' ? 'big' : 'bat')
+        const sound = soundFor(s.last!, s.arre)
+        if (sound) cricketSound(sound)
       }
-      if (s.seq === shown.seq && s.over === shown.over) return
+      const ready = s.phase === 'ready'
+      const showing = s.phase === 'result'
+      const swung = s.swings > 0
+      if (
+        s.seq === shown.seq &&
+        s.over === shown.over &&
+        ready === shown.ready &&
+        showing === shown.showing &&
+        swung === shown.swung
+      )
+        return
       const finished = s.over && !shown.over
       shown.seq = s.seq
       shown.over = s.over
+      shown.ready = ready
+      shown.showing = showing
+      shown.swung = swung
       if (finished) {
         setBest(saveBest(s.runs))
         setRecord(s.runs > before)
@@ -143,11 +177,16 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
         seq: s.seq,
         last: s.last,
         arre: s.arre,
+        hold: s.hold,
+        ready,
+        showing,
+        swung,
       })
     }
-    swing.current = () => {
+    swing.current = (stamp, touch = false) => {
       wakeCricketSound() // a tap: the browser lets the game's sounds run
-      sim.swing(paused ? 0 : (performance.now() - frameAt) / 1000)
+      // the tap's own moment: its event's time stamp against the last frame's, not whenever this ran
+      sim.swing(paused || stamp === undefined ? 0 : tapSince(stamp, frameAt, touch))
       tell()
     }
     const off = stage.onFrame((dt) => {
@@ -197,7 +236,7 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
         outs: () => s.outs,
         last: () => s.last,
         eye: () => ({ x: stage.camera.position.x, y: stage.camera.position.y, z: stage.camera.position.z }),
-        fielders: () => (stage.quality > 0 ? 3 : 0),
+        fielders: () => view.fielders,
       }),
     })
     return () => {
@@ -243,8 +282,9 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
     const how = await shareLink(t('cricketShareText', lang, { n: hud.runs }), SITE_URL)
     setShared(how === 'copied' ? 'placeCopied' : how === 'failed' ? 'cricketShareFailed' : null)
   }
-  // the flash stays as long as the ball's result does; the next ball's run-up clears nothing early
-  const flash = hud.seq > 0 && !hud.over && hud.last
+  // what came of the ball shows for as long as its result does, and is gone when the next run-up starts
+  // (with reduced motion nothing fades it out, so it must not be left standing)
+  const flash = hud.showing && !hud.over && hud.last
 
   return (
     <div
@@ -263,11 +303,11 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
           aria-keyshortcuts="Space"
           onPointerDown={(e) => {
             if (e.button > 0) return
-            swing.current()
+            swing.current(e.timeStamp, e.pointerType === 'touch')
           }}
           onClick={(e) => {
             // a click with no press before it (a screen reader's activate, Enter): a swing too
-            if (e.detail === 0) swing.current()
+            if (e.detail === 0) swing.current(e.timeStamp)
           }}
           onContextMenu={(e) => e.preventDefault()}
         />
@@ -291,14 +331,16 @@ export default function Cricket({ lang, stage, controls, pitch, onHide, onExit }
             key={hud.seq}
             className="cricket-said"
             data-out={isOut(flash) || undefined}
-            style={{ animationDuration: `${RESULT_S}s` }}
+            style={{ animationDuration: `${hud.hold}s` }}
           >
             {t(SAID[flash], lang)}
             {hud.arre && <small>{t('cricketArre', lang)}</small>}
           </span>
         )}
       </div>
-      {!hud.over && hud.seq === 0 && <p className="cricket-help">{t('cricketHelp', lang)}</p>}
+      {hud.ready && !hud.over && <p className="cricket-ready">{t('cricketReady', lang)}</p>}
+      {/* the how-to stays until the bat has been swung once */}
+      {!hud.over && !hud.swung && <p className="cricket-help">{t('cricketHelp', lang)}</p>}
       {hud.over && (
         <div className="cricket-score" role="status">
           <h2>{t(hud.outs >= MAX_OUTS ? 'cricketAllOut' : 'cricketOvers', lang)}</h2>
