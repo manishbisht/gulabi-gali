@@ -40,7 +40,7 @@ test('photo mode makes a 1080×1920 postcard with the place on its band, saved w
   // a plain photo until the postcard is picked
   const kinds = page.getByRole('radiogroup', { name: 'Frame chuno' })
   await expect(kinds.getByRole('radio', { name: 'Photo' })).toBeChecked()
-  await kinds.getByText('Postcard').click()
+  await kinds.getByRole('radio', { name: 'Postcard' }).tap()
   await expect(kinds.getByRole('radio', { name: 'Postcard' })).toBeChecked()
   await expect(page.locator('.photo-frame-postcard .photo-wordmark')).toHaveText(
     /^Gulabi Gali · .+ · Jaipur$/,
@@ -116,7 +116,7 @@ test.describe("Instagram's in-app browser", () => {
     await noFileSharing(page)
     await enter(page)
     await page.locator('.photo-button').click()
-    await page.getByRole('radiogroup', { name: 'Frame chuno' }).getByText('Postcard').click()
+    await page.getByRole('radiogroup', { name: 'Frame chuno' }).getByRole('radio', { name: 'Postcard' }).tap()
     await page.locator('.photo-shutter').click()
     const hold = page.getByRole('dialog', { name: 'Tasveer save karo' })
     await expect(hold).toBeVisible()
