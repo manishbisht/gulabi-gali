@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 
 /*
- * Real phones: the site installs to the home screen (a manifest Chrome accepts, its icons, a service worker with a
- * fetch listener), says one quiet thing inside Instagram's own browser, and keeps the HUD and the sheets clear of a
- * notch and a home bar.
+ * Real phones: the site installs to the home screen (a manifest Chrome accepts, its icons, a service worker
+ * registered on every visit), says one quiet thing inside Instagram's own browser, offers the home screen once on an
+ * iPhone, and keeps the HUD and the sheets clear of a notch and a home bar.
  */
 
 /** A small phone, held upright. */
@@ -20,6 +20,29 @@ async function welcome(page: Page, lang: 'hi' | 'en' = 'hi', path = '/?gg-test=1
   await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
   await page.route('**/api/count', (route) => route.fulfill({ json: { people: 0 } }))
   await page.goto(path)
+}
+
+/** Into the Walled City, offline, under fixed weather (a live reply could change how the HUD wraps). */
+async function intoCity(page: Page) {
+  await page.route('**/api/city*', (route) =>
+    route.fulfill({
+      json: {
+        fetchedAt: new Date().toISOString(),
+        tempC: 31,
+        condition: 'clear',
+        aqi: 90,
+        aqiBand: 'moderate',
+        sunrise: new Date().toISOString(),
+        sunset: new Date().toISOString(),
+        festival: null,
+        stale: false,
+      },
+    }),
+  )
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+  await welcome(page)
+  await page.getByRole('button', { name: 'Padharo!' }).tap()
+  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
 }
 
 /** A PNG's width and height, from its header. */
@@ -78,7 +101,7 @@ test('a launch from the home screen loses its ?source=pwa before anything reads 
   expect(url.searchParams.get('gg-test')).toBe('1')
 })
 
-test('the service worker registers on a visit, with a fetch listener that lets every request through', async ({
+test('the service worker registers on a visit, and never stands between the page and its requests', async ({
   page,
   request,
 }) => {
@@ -86,8 +109,8 @@ test('the service worker registers on a visit, with a fetch listener that lets e
   await welcome(page, 'hi', '/?gg-test=1&gg-sw=1')
   const script = await page.evaluate(async () => (await navigator.serviceWorker.ready).active?.scriptURL)
   expect(script).toBe(new URL('/sw.js', page.url()).href)
-  // the worker the browser runs has a fetch listener (older Chrome wants one before it offers an install)
-  expect(await (await request.get('/sw.js')).text()).toMatch(/addEventListener\('fetch'/)
+  // no fetch listener: the worker is never woken for a request (installing needs only the manifest)
+  expect(await (await request.get('/sw.js')).text()).not.toMatch(/addEventListener\('fetch'/)
   // once it controls the page, the page's requests still reach the network: nothing is answered from a cache
   await page.reload()
   await expect
@@ -117,7 +140,9 @@ for (const [app, ua] of [
         const note = page.getByRole('note')
         await expect(note).toBeVisible()
         await expect(note).toContainText(app)
+        // the menu as an iPhone draws it and as Android does
         await expect(note).toContainText('⋯')
+        await expect(note).toContainText('⋮')
         const box = (await note.boundingBox())!
         const lineHeight = await note.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight))
         expect(box.height).toBeLessThanOrEqual(2 * lineHeight + 1)
@@ -156,26 +181,7 @@ test('with a notch and a home bar, the HUD, the joystick and a sheet keep clear 
 }) => {
   // an iPhone's insets, upright: the notch's 47 px at the top, the home bar's 34 px at the foot
   const inset = { top: 47, bottom: 34 }
-  // the weather is fixed: a live reply could change how the HUD wraps
-  await page.route('**/api/city*', (route) =>
-    route.fulfill({
-      json: {
-        fetchedAt: new Date().toISOString(),
-        tempC: 31,
-        condition: 'clear',
-        aqi: 90,
-        aqiBand: 'moderate',
-        sunrise: new Date().toISOString(),
-        sunset: new Date().toISOString(),
-        festival: null,
-        stale: false,
-      },
-    }),
-  )
-  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
-  await welcome(page)
-  await page.getByRole('button', { name: 'Padharo!' }).tap()
-  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  await intoCity(page)
   const place = page.getByRole('button', { name: 'Naksha · Gulabi Shahar', exact: true })
   const toggles = page.locator('.hud-toggles')
   const joystick = page.locator('.joystick')
@@ -208,4 +214,50 @@ test('with a notch and a home bar, the HUD, the joystick and a sheet keep clear 
   const s = (await sheet.boundingBox())!
   expect(s.y).toBeGreaterThanOrEqual(inset.top)
   expect(s.y + s.height).toBeLessThanOrEqual(PHONE.height - inset.bottom)
+})
+
+test.describe('on an iPhone in Safari', () => {
+  test.use({
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1',
+  })
+
+  for (const lang of ['hi', 'en'] as const)
+    test(`after two minutes on the street, one line says where "Add to Home Screen" is, clear of the HUD (${lang})`, async ({
+      page,
+    }) => {
+      // the page's clock is ours from the start; it runs on as usual until it is moved on below
+      await page.clock.install()
+      await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
+      await intoCity(page)
+      const hint = page.locator('.install-hint')
+      await expect(page.locator('.joystick')).toBeVisible()
+      await expect(hint).toHaveCount(0)
+      // two minutes on the street, a second at a time (the hint counts whole seconds on screen)
+      for (let s = 0; s < 125 && !(await hint.count()); s++) await page.clock.fastForward(1000)
+      await expect(hint).toBeVisible()
+      await expect(hint).toContainText('Add to Home Screen')
+      await expect(hint).toContainText('⋯')
+      // only × to press: Safari has no install dialog to open
+      await expect(hint.getByRole('button')).toHaveCount(1)
+
+      // under the HUD's head, over the joystick, inside the screen: each with at least 10 px to spare
+      const box = async (selector: string) => (await page.locator(selector).first().boundingBox())!
+      const h = (await hint.boundingBox())!
+      const head = await box('.hud-head')
+      const stick = await box('.joystick')
+      expect(h.x).toBeGreaterThanOrEqual(10)
+      expect(h.x + h.width).toBeLessThanOrEqual(PHONE.width - 10)
+      expect(h.y).toBeGreaterThanOrEqual(head.y + head.height)
+      expect(h.y + h.height + 10).toBeLessThanOrEqual(stick.y)
+      // and with 10 px less room (CI's wider fonts) it still clears the joystick
+      const taller = await hint.evaluate((el) => {
+        const d = el as HTMLElement
+        d.style.maxWidth = `${d.getBoundingClientRect().width - 10}px`
+        const r = d.getBoundingClientRect()
+        d.style.maxWidth = ''
+        return r.y + r.height
+      })
+      expect(taller + 10).toBeLessThanOrEqual(stick.y)
+    })
 })
