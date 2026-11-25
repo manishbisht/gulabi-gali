@@ -141,4 +141,10 @@ describe('onDistrictGround', () => {
     expect(onDistrictGround(def, 20, 20)).toBe(false)
     expect(onDistrictGround({ size: 200 }, 20, 20)).toBe(true)
   })
+
+  it("is not Galta's rock either: no bank of mist hangs inside a slope", () => {
+    const gorge = { size: 200, rocks: [{ minX: 34, maxX: 100, minZ: -100, maxZ: 100 }] }
+    expect(onDistrictGround(gorge, 50, 0)).toBe(false)
+    expect(onDistrictGround(gorge, 0, 0)).toBe(true)
+  })
 })

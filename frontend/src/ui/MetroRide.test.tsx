@@ -147,6 +147,14 @@ it('up to Nahargarh it is the bus as well, announcing the ridge', () => {
   expect(host.querySelector('[role="status"]')!.textContent).toContain('Next stop: Nahargarh')
 })
 
+it('out to Galta Ji it is the bus too, announcing the gorge', () => {
+  show({ from: 'mi-road', to: 'galta' })
+  const button = host.querySelector<HTMLButtonElement>('button.metro-ride')!
+  expect(button.getAttribute('data-by')).toBe('bus')
+  expect(button.querySelector('.bus-road')).not.toBeNull()
+  expect(host.querySelector('[role="status"]')!.textContent).toContain('Next stop: Galta Ji')
+})
+
 it('between two metro stations the coach stays the metro', () => {
   show()
   expect(host.querySelector('button.metro-ride')!.getAttribute('data-by')).toBe('metro')

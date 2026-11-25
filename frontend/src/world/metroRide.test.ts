@@ -38,8 +38,8 @@ it('every district has a station name in both languages', () => {
   expect(DISTRICT_NAMES['walled-city'].en).toBe('Pink City')
 })
 
-it('Amer and Nahargarh have no metro: a bus runs there from every station, and back', () => {
-  expect(DISTRICTS.filter(byBus)).toEqual(['amer', 'nahargarh'])
+it('Amer, Nahargarh and Galta Ji have no metro: a bus runs there from every station, and back', () => {
+  expect(DISTRICTS.filter(byBus)).toEqual(['amer', 'nahargarh', 'galta'])
   expect(rideBy('walled-city', 'mi-road')).toBe('metro')
   expect(rideBy('malviya-nagar', 'amer')).toBe('bus')
   expect(rideBy('amer', 'walled-city')).toBe('bus')
@@ -49,4 +49,9 @@ it('Amer and Nahargarh have no metro: a bus runs there from every station, and b
   expect(rideBy('nahargarh', 'mi-road')).toBe('bus')
   expect(rideBy('amer', 'nahargarh')).toBe('bus')
   expect(METRO_STATIONS.nahargarh).toEqual({ hi: 'Nahargarh', en: 'Nahargarh' })
+  // out to the gorge east of the city, and between it and the other bus stands, the bus as well
+  expect(rideBy('walled-city', 'galta')).toBe('bus')
+  expect(rideBy('galta', 'university')).toBe('bus')
+  expect(rideBy('nahargarh', 'galta')).toBe('bus')
+  expect(METRO_STATIONS.galta).toEqual({ hi: 'Galta Ji', en: 'Galta Ji' })
 })

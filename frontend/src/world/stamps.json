@@ -11,5 +11,6 @@
   { "id": "amer-fort", "hi": "Amer ka Qila", "en": "Amer Fort" },
   { "id": "nahargarh-fort", "hi": "Nahargarh ka Qila", "en": "Nahargarh Fort" },
   { "id": "jal-mahal", "hi": "Jal Mahal", "en": "Jal Mahal" },
-  { "id": "city-palace", "hi": "City Palace", "en": "City Palace" }
+  { "id": "city-palace", "hi": "City Palace", "en": "City Palace" },
+  { "id": "galta-ji", "hi": "Galta Ji", "en": "Galta Ji" }
 ]

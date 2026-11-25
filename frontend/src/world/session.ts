@@ -129,7 +129,7 @@ export interface SessionHooks {
   taxi?: TaxiHooks
   /** The street animals: the one in reach, the one following, and their passing lines (see useAnimals). */
   animals?: AnimalHooks
-  /** The Galta bandar (Walled City): `blocked` while a card, sheet, bench, kite game or metro ride is up. */
+  /** The Galta bandar (Walled City, Galta Ji): `blocked` while a card, sheet, bench, kite or ride is up. */
   bandar?: { blocked(): boolean; event(e: BandarEvent): void }
   /** The rooftop viewpoint: its stair in reach, being up there, and the fade between (see useRooftop). */
   roof?: RoofHooks

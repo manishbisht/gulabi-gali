@@ -47,6 +47,16 @@ it("Nahargarh's ridge has wind through it, birds by day, and only the far hum of
     expect(mixFor(d, DAY, null).wind, d).toBe(0)
 })
 
+it("Galta Ji's gorge is green and quiet: more birds than the bazaar, a soft murmur of visitors, no wind", () => {
+  const gorge = mixFor('galta', DAY, null)
+  expect(gorge.birds).toBeGreaterThan(mixFor('walled-city', DAY, null).birds)
+  expect(gorge.murmur).toBeGreaterThan(0)
+  expect(gorge.murmur).toBeLessThan(mixFor('amer', DAY, null).murmur)
+  expect(gorge.wind).toBe(0)
+  // the bells of dawn and dusk, as everywhere
+  expect(mixFor('galta', DAY, null).bells).toBe(0)
+})
+
 it('the lowest tier keeps one steady layer up on the ridge too: the hum, not the wind', () => {
   const thin = thinMix(mixFor('nahargarh', DAY, null))
   expect(thin.wind).toBe(0)

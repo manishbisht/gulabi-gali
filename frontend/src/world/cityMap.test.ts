@@ -16,6 +16,7 @@ import {
 import walledCity from './districts/walledCity'
 import amer from './districts/amer'
 import nahargarh from './districts/nahargarh'
+import galta from './districts/galta'
 import { createPeople } from './people'
 import { wallsOf } from './posters'
 
@@ -101,7 +102,7 @@ it("Amer's map has Jal Mahal out in Man Sagar, by the fort, with its arrival at 
   expect(items.filter((i) => i.kind === 'landmark').map((i) => i.id)).toEqual(['amer-fort', 'jal-mahal'])
 })
 
-it.each([amer, nahargarh])(
+it.each([amer, nahargarh, galta])(
   '$id has no metro: its map names the bus stand there instead, under the same id',
   (def) => {
     const stop = mapItems(def, []).find((i) => i.id === 'metro')!
@@ -116,6 +117,21 @@ it("Nahargarh's map shows its sunset point, at the stair up to it; the others na
   expect(spot).toMatchObject({ id: 'viewpoint', name: { hi: 'Sunset Point', en: 'Sunset point' } })
   expect(spot.at).toEqual(nahargarh.roof!.stair)
   expect(mapItems(amer, []).some((i) => i.kind === 'viewpoint')).toBe(false)
+})
+
+it("Galta Ji's map shows the Surya Mandir up on the ridge, at the stair to its roof, and the kunds as water", () => {
+  const items = mapItems(galta, ['galta-ji'])
+  const spot = items.find((i) => i.kind === 'viewpoint')!
+  expect(spot).toMatchObject({ id: 'viewpoint', name: { hi: 'Surya Mandir', en: 'Sun Temple' } })
+  expect(spot.at).toEqual(galta.roof!.stair)
+  expect(items.find((i) => i.id === 'galta-ji')).toMatchObject({
+    kind: 'landmark',
+    name: { hi: 'Galta Ji', en: 'Galta Ji' },
+    stamped: true,
+  })
+  // the map draws the paving: each kund's water, and the slopes either side as hillside
+  for (const k of galta.water!) expect(galta.paving).toContainEqual({ ...k, color: 'glass' })
+  for (const r of galta.rocks!) expect(galta.paving).toContainEqual({ ...r, color: 'grass' })
 })
 
 const person = (id: string, x: number, z: number): LivePerson => ({

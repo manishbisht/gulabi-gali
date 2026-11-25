@@ -27,6 +27,7 @@ const ALL_STAMPS = [
   'nahargarh-fort',
   'jal-mahal',
   'city-palace',
+  'galta-ji',
 ]
 
 async function busiest(
@@ -141,8 +142,8 @@ function common(page: Page, place = 'Gulabi Shahar', lang: L = 'hi'): Record<str
     stamps: page.locator('.stamp-count'),
     lang: toggles.locator('.lang-toggle'),
     sound: toggles.locator('.sound-toggle'),
-    // the monkey's switch is the Walled City's alone
-    ...(place === 'Gulabi Shahar' || place === 'Pink City'
+    // the monkey's switch, where the bandar lives: the Walled City and Galta Ji
+    ...(place === 'Gulabi Shahar' || place === 'Pink City' || place === 'Galta Ji'
       ? { bandar: toggles.locator('.bandar-toggle') }
       : {}),
     banner: page.locator('.festival-banner'),
@@ -183,6 +184,7 @@ const DISTRICTS = [
   ['malviya-nagar', 'Malviya Nagar–WTP', 'Malviya Nagar & WTP'],
   ['amer', 'Amer', 'Amer'],
   ['nahargarh', 'Nahargarh', 'Nahargarh'],
+  ['galta', 'Galta Ji', 'Galta Ji'],
 ] as const
 const LANGS: L[] = ['hi', 'en']
 
@@ -335,7 +337,7 @@ for (const lang of LANGS) {
       look: page.locator('.hud-toggles .look-button'),
       tick: page.locator('.today-chip .today-tick'),
     }
-    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(13\/13\)$/)
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(14\/14\)$/)
     await expect(page.locator('.stamp-count')).toHaveAttribute('data-streak', '')
     await laidOut(items, [['today', 'tick'], ...NEWS])
     await oneRow(page, items.place!)
@@ -353,14 +355,14 @@ for (const lang of LANGS) {
       profile: page.locator('.hud-identity .profile-button:not(.invite-button):not(.conn-button)'),
       invite: page.locator('.invite-button'),
     }
-    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(13\/13\)$/)
+    await expect(page.locator('.stamp-count')).toHaveAccessibleName(/\(14\/14\)$/)
     await laidOut(items, NEWS)
     await oneRow(page, items.place!)
     await shot(page, `signed-${lang}-malviya-nagar-all-stamps`)
   })
 }
 
-// One stamp short of all of them, the chip says the whole "12/13": as wide as the count gets, and it has to fit too.
+// One stamp short of all of them, the chip says the whole "13/14": as wide as the count gets, and it has to fit too.
 for (const lang of LANGS) {
   const place = lang === 'en' ? 'Malviya Nagar & WTP' : 'Malviya Nagar–WTP'
   test(`one stamp short, the widest count still fits in ${place} (${lang}), guest and signed in`, async ({

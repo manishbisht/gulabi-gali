@@ -2,12 +2,13 @@ import * as THREE from 'three'
 import { stepToward, stationSpot, type Mover } from './animals'
 import { bakeHex, FLOOR_H, merge } from './kit/parts'
 import { headgearOf, withoutHeadgear, type Headgear } from '../player/avatar'
+import type { DistrictId } from '../net/protocol'
 import { storage } from '../storage'
 import type { AABB, AvatarLook, DistrictDef, LandmarkDef, Vec2 } from './types'
 
 /*
- * The Galta bandar: in the Walled City, near Jantar Mantar, a monkey now and then drops down and snatches the
- * player's headgear (safa, cap or dupatta). The change is local to this page: the look is swapped on the
+ * The Galta bandar: in the Walled City near Jantar Mantar, and at Galta Ji itself among the kunds (`BANDAR_HOMES`),
+ * a monkey now and then drops down and snatches the player's headgear (safa, cap or dupatta). The change is local to this page: the look is swapped on the
  * player's own avatar with `setLook`, never sent to anyone and never saved, and it is put back exactly on every
  * way out (caught, given back, switched off, district change, dispose).
  *
@@ -21,6 +22,14 @@ import type { AABB, AvatarLook, DistrictDef, LandmarkDef, Vec2 } from './types'
  * says so through `blocked`.
  */
 
+/** Where the bandar lives: each district it raids in, and the landmark its raids start near. */
+export const BANDAR_HOMES: Partial<Record<DistrictId, string>> = {
+  'walled-city': 'jantar-mantar',
+  galta: 'galta-ji',
+}
+/** Whether `id` has the bandar (and so the HUD its switch). */
+export const hasBandar = (id: DistrictId): boolean => BANDAR_HOMES[id] !== undefined
+
 const KEY = 'gg-no-bandar'
 /** Whether the visitor switched the monkey off ("Bandar band karo"): `'1'` only; anything else is on. */
 export const bandarOff = (): boolean => storage.get(KEY) === '1'
@@ -32,8 +41,8 @@ export const COOLDOWN_MS = 10 * 60_000
 export const CATCH_RANGE = 2
 /** The monkey gives up after this long, in seconds, and the dropped headgear is given back after as long again. */
 export const GIVE_UP_S = 60
-/** A raid only starts when the player is this near Jantar Mantar, in metres. */
-const NEAR_JANTAR = 45
+/** A raid only starts when the player is this near the bandar's home landmark, in metres. */
+const NEAR_HOME = 45
 /** Looks for a chance to strike this often, in seconds; each look has this chance. */
 const CHECK_S = 1
 const CHANCE = 0.12
@@ -145,14 +154,15 @@ export function createBandar(
   rand: () => number,
   opts: BandarOptions,
 ): Bandar {
-  if (def.id !== 'walled-city') return INERT
+  const homeId = BANDAR_HOMES[def.id]
+  if (!homeId) return INERT
   const now = opts.now ?? Date.now
   const memory = opts.memory ?? createBandarMemory()
   const reduced =
     opts.reducedMotion ??
     (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
   const speed = reduced ? WALK : SCAMPER
-  const jantar = def.landmarks.find((l) => l.id === 'jantar-mantar')
+  const home = def.landmarks.find((l) => l.id === homeId)
 
   const monkeyGeo = buildMonkey()
   const monkeyMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
@@ -204,7 +214,7 @@ export function createBandar(
     if (opts.blocked?.() || player.driving()) return false
     if (!headgearOf(opts.look())) return false
     const p = player.position()
-    return !jantar || Math.hypot(p.x - jantar.at.x, p.z - jantar.at.z) <= NEAR_JANTAR
+    return !home || Math.hypot(p.x - home.at.x, p.z - home.at.z) <= NEAR_HOME
   }
 
   return {

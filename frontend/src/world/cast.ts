@@ -3,7 +3,7 @@ import type { NpcDef } from './types'
 type Character = Omit<NpcDef, 'route' | 'speed'>
 
 /*
- * The thirteen seed characters: fictional, every line original. Each district gives its own a route and a
+ * The sixteen seed characters: fictional, every line original. Each district gives its own a route and a
  * speed; the words and faces live here. `hi` is the Hinglish line, `en` its English.
  */
 export const CAST = {
@@ -115,5 +115,35 @@ export const CAST = {
       en: 'Waiting for the golden hour. Hold my tripod?',
     },
     look: { skin: 1, outfit: 'teal', head: 'bun' },
+  },
+  kamla: {
+    id: 'kamla',
+    name: 'Kamla ji',
+    role: { hi: 'Phool-maala wali', en: 'Garland seller' },
+    status: {
+      hi: 'Genda aur gulab ki maalayein, aaj subah ki guthi hui.',
+      en: 'Marigold and rose garlands, strung fresh this morning.',
+    },
+    look: { skin: 3, outfit: 'marigold', head: 'dupatta' },
+  },
+  sohan: {
+    id: 'sohan',
+    name: 'Sohan',
+    role: { hi: 'Chai wale', en: 'Chai seller' },
+    status: {
+      hi: 'Kund ke paas kadak chai. Biscuit sambhal ke, bandar dekh rahe hain!',
+      en: 'Strong chai by the kund. Mind your biscuits, the monkeys are watching!',
+    },
+    look: { skin: 4, outfit: 'white', head: 'cap' },
+  },
+  lakshmi: {
+    id: 'lakshmi',
+    name: 'Lakshmi',
+    role: { hi: 'Ghaati ki guide', en: 'Gorge guide' },
+    status: {
+      hi: 'Kund, mandir, phir Surya Mandir tak chadhai. Mandir mein joote bahar, aur aaram se chalo.',
+      en: 'The kunds, the temples, then the climb to the Sun Temple. Shoes off at the temples; no rush.',
+    },
+    look: { skin: 2, outfit: 'pink', head: 'bun' },
   },
 } as const satisfies Record<string, Character>

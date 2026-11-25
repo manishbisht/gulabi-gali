@@ -125,9 +125,10 @@ const facing = (rot: number) => {
 }
 
 describe('on foot from the spawn', () => {
-  it('covers Amer, Nahargarh and every other district', () => {
+  it('covers Amer, Nahargarh, Galta Ji and every other district', () => {
     expect(DISTRICTS).toContain('amer')
     expect(DISTRICTS).toContain('nahargarh')
+    expect(DISTRICTS).toContain('galta')
   })
 
   it.each(DISTRICTS)(

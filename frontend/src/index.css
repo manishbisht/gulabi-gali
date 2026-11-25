@@ -775,7 +775,7 @@ button {
 
   /* the place, the weather and the stamps keep one row beside the toggles on a 360 px phone */
   .hud-top .hud-chip {
-    padding-inline: 9px;
+    padding-inline: 8px;
   }
 }
 

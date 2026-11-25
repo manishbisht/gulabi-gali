@@ -30,6 +30,7 @@ import { usePersonCard } from './world/usePersonCard'
 import { useReactions } from './world/useReactions'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
+import { hasBandar } from './world/bandar'
 import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
 import { useTaxi } from './world/useTaxi'
@@ -655,7 +656,7 @@ export default function App() {
         onStamps={() => setDarshanOpen(true)}
         lang={lang}
         onLang={setLang}
-        bandar={here === 'walled-city' ? { off: bandar.off, onToggle: bandar.toggle } : undefined}
+        bandar={hasBandar(here) ? { off: bandar.off, onToggle: bandar.toggle } : undefined}
         sound={{
           on: sound,
           onToggle: () => {

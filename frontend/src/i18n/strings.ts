@@ -136,6 +136,8 @@ export const STRINGS = {
   mapBus: { hi: 'Bus stand', en: 'Bus stop' },
   /** A rooftop viewpoint worth a signpost and a map pin (Nahargarh's bastion over the city). */
   sunsetPoint: { hi: 'Sunset Point', en: 'Sunset point' },
+  /** Galta Ji's viewpoint: the terrace by the Sun Temple on the ridge above the gorge, looking west over the city. */
+  suryaMandir: { hi: 'Surya Mandir', en: 'Sun Temple' },
   busNext: { hi: 'Agla stop: {station}', en: 'Next stop: {station}' },
   busGhat: {
     hi: 'Aage ghaati ke mod hain. Handle pakad ke baitho.',
@@ -1095,8 +1097,8 @@ export const STRINGS = {
     en: 'Take the metro or the bus to another neighbourhood',
   },
   todayHintRide: {
-    hi: 'Station pe "Metro" dabao (Amer aur Nahargarh mein "Bus"), aur koi mohalla chuno.',
-    en: 'Press "Metro" at the station ("Bus" in Amer and Nahargarh) and pick a neighbourhood.',
+    hi: 'Station pe "Metro" dabao (Amer, Nahargarh aur Galta Ji mein "Bus"), aur koi mohalla chuno.',
+    en: 'Press "Metro" at the station ("Bus" in Amer, Nahargarh and Galta Ji) and pick a neighbourhood.',
   },
   todayGoalAuto: { hi: 'Auto lekar kisi landmark tak jao', en: 'Ride an auto to a landmark' },
   todayHintAuto: {

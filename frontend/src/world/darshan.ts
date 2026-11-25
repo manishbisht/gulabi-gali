@@ -17,6 +17,7 @@ export const STAMP_DISTRICT: Record<string, DistrictId> = {
   'nahargarh-fort': 'nahargarh',
   'jal-mahal': 'amer',
   'city-palace': 'walled-city',
+  'galta-ji': 'galta',
 }
 
 /** A one-line riddle per landmark, for the stamps not collected yet: it never says the name. */
@@ -72,6 +73,10 @@ export const STAMP_RIDDLE: Record<string, { hi: string; en: string }> = {
   'city-palace': {
     hi: 'Shahar ke beech saat manzila mahal, jiski chhat pe jhanda lehrata hai; aaj bhi ek shahi parivaar ka ghar.',
     en: "Seven storeys at the heart of town, a flag on the roof; still a royal family's home.",
+  },
+  'galta-ji': {
+    hi: 'Pahadi ki darar mein mandir aur kund; kehte hain jharna kabhi nahi sookhta. Bandar har taraf.',
+    en: 'Temples and tanks in a cleft of the hills; the spring, they say, never runs dry. Monkeys everywhere.',
   },
 }
 

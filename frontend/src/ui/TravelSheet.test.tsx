@@ -22,9 +22,16 @@ async function mount(here: DistrictId, lang: 'hi' | 'en' = 'hi') {
   return { host, onPick, stops }
 }
 
-it('lists the metro stops by name, then Amer and Nahargarh last, by bus, looking different', async () => {
+it('lists the metro stops by name, then Amer, Nahargarh and Galta Ji last, by bus, looking different', async () => {
   const { stops, onPick } = await mount('walled-city')
-  expect(stops.map((b) => b.getAttribute('data-by'))).toEqual(['metro', 'metro', 'metro', 'bus', 'bus'])
+  expect(stops.map((b) => b.getAttribute('data-by'))).toEqual([
+    'metro',
+    'metro',
+    'metro',
+    'bus',
+    'bus',
+    'bus',
+  ])
   expect(stops.slice(0, 3).map((b) => b.textContent)).toEqual([
     'MI Road–Raja Park',
     'University–JKK',
@@ -43,12 +50,17 @@ it('lists the metro stops by name, then Amer and Nahargarh last, by bus, looking
   expect(ridge.textContent).toBe('Nahargarh Bus')
   await act(async () => ridge.click())
   expect(onPick).toHaveBeenCalledWith('nahargarh')
+  const gorge = stops[5]!
+  expect(gorge.getAttribute('aria-label')).toBeNull()
+  expect(gorge.textContent).toBe('Galta Ji Bus')
+  await act(async () => gorge.click())
+  expect(onPick).toHaveBeenCalledWith('galta')
 })
 
 it('from Amer, every stop is by bus', async () => {
   const { stops } = await mount('amer', 'en')
-  expect(stops).toHaveLength(5)
-  expect(stops.map((b) => b.getAttribute('data-by'))).toEqual(['bus', 'bus', 'bus', 'bus', 'bus'])
+  expect(stops).toHaveLength(6)
+  expect(stops.map((b) => b.getAttribute('data-by'))).toEqual(['bus', 'bus', 'bus', 'bus', 'bus', 'bus'])
   expect(stops[0]!.textContent).toBe('Pink City Bus')
   expect(stops[0]!.getAttribute('aria-label')).toBeNull()
 })
@@ -61,7 +73,22 @@ it('from Nahargarh, every stop is by bus, Amer too', async () => {
     'university',
     'malviya-nagar',
     'amer',
+    'galta',
   ])
   expect(stops.every((b) => b.getAttribute('data-by') === 'bus')).toBe(true)
   expect(stops[4]!.textContent).toBe('Amer Bus')
+})
+
+it('from Galta Ji, every stop is by bus, the other two bus stands too', async () => {
+  const { stops } = await mount('galta', 'en')
+  expect(stops.map((b) => b.getAttribute('data-id'))).toEqual([
+    'walled-city',
+    'mi-road',
+    'university',
+    'malviya-nagar',
+    'amer',
+    'nahargarh',
+  ])
+  expect(stops.every((b) => b.getAttribute('data-by') === 'bus')).toBe(true)
+  expect(stops[5]!.textContent).toBe('Nahargarh Bus')
 })

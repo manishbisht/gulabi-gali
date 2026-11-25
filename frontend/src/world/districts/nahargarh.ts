@@ -3,8 +3,8 @@ import { CAST } from '../cast'
 import { DISTRICT_NAMES } from '../districtNames'
 import { buildCityBelow } from '../landmarks/cityBelow'
 import { buildNahargarhFort, NAHARGARH_FORT } from '../landmarks/nahargarhFort'
-import { roofAt } from '../rooftop'
-import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec, RoofDef } from '../types'
+import { roofAt, upTheStair } from '../rooftop'
+import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
 import { centred, createFill, grow, rect, wall, type Facing } from './layout'
 
 /*
@@ -199,12 +199,6 @@ const npcs: NpcDef[] = [
     speed: 0.8,
   },
 ]
-
-/**
- * `roof`, faced up its stair at the stair's foot: the chase camera, 7 m behind, then hangs over the open terrace
- * in front of the bastion. Faced out, it sat inside the stair's flight; faced along the side, against the front wall.
- */
-const upTheStair = (roof: RoofDef): RoofDef => ({ ...roof, foot: { x: -roof.out.x, z: -roof.out.z } })
 
 const nahargarh: DistrictDef = {
   id: 'nahargarh',
