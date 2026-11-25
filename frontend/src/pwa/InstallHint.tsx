@@ -33,16 +33,18 @@ export function InstallHint({ lang }: { lang: Lang }) {
     if (!hintDue(storage.get(INSTALL_HINT_KEY), Date.now())) return
     let onScreen = 0
     let shown = false
+    let tick = 0
     const tryShow = () => {
       if (shown || onScreen < INSTALL_HINT_DELAY_MS || storage.get(HINTED_KEY) !== '1') return
       // asked again now, not at the start: Chrome's offer can come late, or be withdrawn
       const next = installWay(thisInstallDevice())
       if (!next || !hintDue(storage.get(INSTALL_HINT_KEY), Date.now())) return
       shown = true
+      clearInterval(tick) // once a visit: nothing more to count
       markHintShown()
       setWay(next)
     }
-    const tick = window.setInterval(() => {
+    tick = window.setInterval(() => {
       if (!document.hidden) onScreen += TICK_MS
       tryShow()
     }, TICK_MS)
