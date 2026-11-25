@@ -76,8 +76,8 @@ const landmarks: LandmarkDef[] = [
     id: 'galta-ji',
     name: { hi: 'Galta Ji', en: 'Galta Ji' },
     story: {
-      hi: 'Aravalli ki sankri ghaati mein sadiyon purana teerth: ek prakritik jharne ka paani ek ke baad ek kund bharta hai, kinaron pe gulabi patthar ke mandir hain, aur yahan ke bandar mashhoor hain. Kehte hain yahan Galav rishi ne tap kiya tha. Ye aaj bhi pooja ki jagah hai, to aaraam se aur izzat se ghoomo.',
-      en: 'A centuries-old pilgrimage place in a narrow Aravalli gorge: a natural spring fills one kund after another, lined with pink-sandstone temples; its monkeys are famous. It is said the sage Galav meditated here. It is still a place of worship, so go gently and with respect.',
+      hi: 'Aravalli ki ghaati mein sadiyon purana teerth: jharne ka paani ek ke baad ek kund bharta hai. Kehte hain yahan Galav rishi ne tap kiya tha. Aaj bhi pooja ki jagah hai; izzat se ghoomo.',
+      en: 'An old pilgrimage place in an Aravalli gorge: a spring fills one kund after another. It is said the sage Galav meditated here. Still a place of worship; go gently.',
     },
     // on the path before the temple's steps, the main kund at your back
     at: { x: 14.5, z: 0 },

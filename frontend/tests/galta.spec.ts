@@ -64,12 +64,29 @@ test('no metro goes out to Galta Ji: the bus does, from the metro station, and b
   const sheet = page.getByRole('region', { name: 'Kahan chalein?' })
   const bus = sheet.getByRole('button', { name: 'Galta Ji Bus', exact: true })
   await expect(bus).toHaveAttribute('data-by', 'bus')
-  // every stop fits in the sheet on a small phone, the last one and the close button too
-  for (const b of await sheet.getByRole('button').all()) {
-    await b.scrollIntoViewIfNeeded()
+  // every stop fits in the sheet on a small phone, measured where it lies (no scrolling first); a sheet taller
+  // than the phone would have to scroll, and its last stop come into reach
+  await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const fits = await sheet.evaluate(
+    (el) => el.scrollHeight <= el.clientHeight + 1 && el.getBoundingClientRect().bottom <= innerHeight + 0.5,
+  )
+  const buttons = await sheet.getByRole('button').all()
+  for (const b of buttons) {
     const box = (await b.boundingBox())!
-    expect(box.y + box.height).toBeLessThanOrEqual(740)
     expect(box.height).toBeGreaterThanOrEqual(44)
+    if (fits) expect(box.y + box.height).toBeLessThanOrEqual(740)
+  }
+  if (!fits) {
+    const scrolls = await sheet.evaluate(
+      (el) =>
+        ['auto', 'scroll'].includes(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight,
+    )
+    expect(scrolls, 'a sheet taller than the phone scrolls').toBe(true)
+    const last = buttons.at(-1)!
+    await last.scrollIntoViewIfNeeded()
+    const box = (await last.boundingBox())!
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(740)
   }
   await bus.tap()
   const cab = page.getByRole('button', { name: 'Bus safar — chhodne ke liye tap karo' })
@@ -110,6 +127,19 @@ test('Galta Ji: the auto from the mouth sets you down by the main temple, its ca
   await expect(card).toBeVisible({ timeout: 8000 })
   await expect(card).toContainText('kund')
   await expect(card).toContainText('Kehte hain')
+  // as hud.spec.ts asks of a landmark card on a small phone: no taller than 40% of the screen, and "Bulao" on the
+  // stamp row
+  await card.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+  const stampButton = card.getByRole('button', { name: 'Stamp lo' })
+  const bulao = card.getByRole('button', { name: 'Bulao: Galta Ji ka link bhejo' })
+  const [c, s, b] = [
+    (await card.boundingBox())!,
+    (await stampButton.boundingBox())!,
+    (await bulao.boundingBox())!,
+  ]
+  expect(c.height, 'card height').toBeLessThanOrEqual(740 * 0.4)
+  expect(Math.abs(b.y + b.height / 2 - (s.y + s.height / 2)), 'Bulao on the stamp row').toBeLessThan(4)
+  expect(b.x + b.width, 'Bulao inside the card').toBeLessThanOrEqual(c.x + c.width)
   const p = await position(page)
   expect(p.x).toBeGreaterThan(6) // on the path, between the kund and the temple
   expect(p.x).toBeLessThan(19)
