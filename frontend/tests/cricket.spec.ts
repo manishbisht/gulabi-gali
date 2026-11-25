@@ -273,6 +273,7 @@ test.describe('on a small phone, in English', () => {
     await toPitch(page)
     await page.getByRole('button', { name: 'Play cricket', exact: true }).tap()
     const game = page.getByRole('dialog', { name: 'Gali cricket' })
+    await expect(game).toBeVisible()
     await expect.poll(() => page.evaluate(() => window.__gg.cricket().active)).toBe(true)
     // eighteen sixes
     await page.evaluate(() => {
@@ -323,7 +324,8 @@ test('a slow network: the button says it is opening, and walking away meanwhile 
   const game = page.getByRole('dialog', { name: 'Gali cricket' })
   await expect(game).toHaveCount(0)
   // nothing is up, and the street is still the player's: they walk off
-  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 10), at)
+  // (back along the lane to where it meets Johari Bazaar: open ground)
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x - 12, z), at)
   await expect(opening).toHaveCount(0)
   expect(asked).toBeGreaterThan(0)
   release()
