@@ -61,6 +61,7 @@ const stats: AdminStats = {
     { id: 'malviya-nagar', residents: 1, ghosts: 2 },
     { id: 'amer', residents: 0, ghosts: 1 },
     { id: 'nahargarh', residents: 0, ghosts: 0 },
+    { id: 'galta', residents: 0, ghosts: 0 },
   ],
   live: 4,
   queue: 2,

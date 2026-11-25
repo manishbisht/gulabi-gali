@@ -8,7 +8,7 @@ import { buildRoof } from './rooftop'
 import { buildSignposts } from './signposts'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
-/** The six districts, in the order the travel sheet lists them: the metro's four, then the bus's two. */
+/** The seven districts, in the order the travel sheet lists them: the metro's four, then the bus's three. */
 export const DISTRICTS: DistrictId[] = [
   'walled-city',
   'mi-road',
@@ -16,6 +16,7 @@ export const DISTRICTS: DistrictId[] = [
   'malviya-nagar',
   'amer',
   'nahargarh',
+  'galta',
 ]
 
 /** Each district is its own chunk, fetched only when the player goes there. */
@@ -26,6 +27,7 @@ const SOURCES: Record<DistrictId, () => Promise<{ default: DistrictDef }>> = {
   'malviya-nagar': () => import('./districts/malviyaNagar'),
   amer: () => import('./districts/amer'),
   nahargarh: () => import('./districts/nahargarh'),
+  galta: () => import('./districts/galta'),
 }
 
 export interface District {
@@ -83,6 +85,7 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
   }
   for (const r of built) if (r.status === 'fulfilled') root.add(r.value)
   colliders.push(...def.landmarks.map((l) => l.footprint))
+  colliders.push(...(def.rocks ?? []))
   const occluders = [...colliders]
 
   const props = buildProps(def.props)

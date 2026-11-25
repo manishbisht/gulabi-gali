@@ -23,7 +23,10 @@ interface Props {
   onLang: (l: Lang) => void
   /** The sound switch (the horn, the metro's arrival chime and the "Wo kaata" chirp): whether it is on, and how to flip it. */
   sound?: { on: boolean; onToggle: () => void }
-  /** The monkey's switch, a small chip for the Walled City only: whether the monkey is off, and how to flip it. */
+  /**
+   * The monkey's switch, a small chip where the bandar lives (the Walled City, Galta Ji): whether the monkey is
+   * off, and how to flip it.
+   */
   bandar?: { off: boolean; onToggle: () => void }
   /** The visibility chip; present only when sign-in exists. */
   visibility?: ReactNode

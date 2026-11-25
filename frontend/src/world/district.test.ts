@@ -148,14 +148,22 @@ const materials = (o: THREE.Object3D) => {
 }
 
 describe('the city', () => {
-  it('has all six districts', () => {
-    expect(DISTRICTS).toEqual(['walled-city', 'mi-road', 'university', 'malviya-nagar', 'amer', 'nahargarh'])
+  it('has all seven districts', () => {
+    expect(DISTRICTS).toEqual([
+      'walled-city',
+      'mi-road',
+      'university',
+      'malviya-nagar',
+      'amer',
+      'nahargarh',
+      'galta',
+    ])
   })
 
-  it('landmark count across districts is 13', async () => {
+  it('landmark count across districts is 14', async () => {
     const all = await Promise.all(DISTRICTS.map(load))
     expect(all.reduce((n, d) => n + d.def.landmarks.length, 0)).toBe(TOTAL_STAMPS)
-    expect(TOTAL_STAMPS).toBe(13)
+    expect(TOTAL_STAMPS).toBe(14)
   })
 
   it('the stamp list (stamps.json, which the server checks ids against) is every landmark, by its own name', async () => {
@@ -179,6 +187,7 @@ describe('the city', () => {
       'nahargarh-fort',
       'jal-mahal',
       'city-palace',
+      'galta-ji',
     ])
   })
 
@@ -192,7 +201,7 @@ describe('the city', () => {
   })
 
   it.each(DISTRICTS)(
-    '%s: has a metro entrance (Amer and Nahargarh: a bus stand, they have no metro) by its station',
+    '%s: has a metro entrance (Amer, Nahargarh and Galta Ji: a bus stand, they have no metro) by its station',
     async (id) => {
       const d = await load(id)
       const kind = byBus(id) ? 'bus-stop' : 'station'
@@ -701,6 +710,174 @@ describe('Nahargarh', () => {
 
   it('is where Bhanwar ji and Tara spend their days', async () => {
     expect(ids((await load('nahargarh')).def.npcs)).toEqual(['bhanwar', 'tara'])
+  })
+})
+
+describe('Galta Ji', () => {
+  const kundOf = (d: District, p: Vec2) => d.def.water!.some((w) => inside(p, w))
+
+  it('is Galta Ji: the main temple across the path from the main kund, up the gorge from the bus stand', async () => {
+    const d = await load('galta')
+    expect(d.def.name).toEqual({ hi: 'Galta Ji', en: 'Galta Ji' })
+    expect(d.def.size).toBe(200)
+    expect(ids(d.def.landmarks)).toEqual(['galta-ji'])
+    const temple = d.def.landmarks[0]!
+    const f = temple.footprint
+    // north of where the bus sets you down, up the gorge
+    expect(f.maxZ).toBeLessThan(d.def.spawn.z - 40)
+    // its ring on the path before its steps (west of it), on open ground
+    expect(temple.at.x).toBeLessThan(f.minX)
+    expect(f.minX - temple.at.x).toBeLessThan(temple.radius)
+    expect(blockedBy(d.colliders)(temple.at)).toBe(false)
+    // across the path, the main kund
+    const main = d.def.water!.find((w) => w.minZ < temple.at.z && w.maxZ > temple.at.z)!
+    expect(main.maxX).toBeLessThan(temple.at.x)
+    // a temple of a few storeys, its shikhara over the havelis, and the model keeps to its footprint
+    const box = new THREE.Box3().setFromObject(await temple.build())
+    expect(box.max.y).toBeGreaterThan(14)
+    expect(box.min.x).toBeGreaterThanOrEqual(f.minX - 0.01)
+    expect(box.max.x).toBeLessThanOrEqual(f.maxX + 0.01)
+    expect(box.min.z).toBeGreaterThanOrEqual(f.minZ - 0.01)
+    expect(box.max.z).toBeLessThanOrEqual(f.maxZ + 0.01)
+  })
+
+  it('is a gorge: rock either side and at its head, which nobody walks into and the camera pulls in front of', async () => {
+    const d = await load('galta')
+    const rocks = d.def.rocks!
+    expect(rocks.length).toBeGreaterThanOrEqual(3)
+    for (const r of rocks) {
+      expect(d.colliders).toContainEqual(r)
+      expect(d.occluders).toContainEqual(r)
+    }
+    const blocked = blockedBy(d.colliders)
+    // across the gorge from the main temple's ring: rock to the east and to the west, a narrow floor between
+    const ring = d.def.landmarks[0]!.at
+    const rock = (p: Vec2) => rocks.some((r) => inside(p, r))
+    expect(rock({ x: ring.x + 30, z: ring.z })).toBe(true)
+    expect(rock({ x: ring.x - 60, z: ring.z })).toBe(true)
+    // and up the path, the gorge's head closes it
+    expect(blocked({ x: ring.x, z: -d.def.size / 2 + 4 })).toBe(true)
+  })
+
+  it('draws the slopes rising from their foot, cheaply, with nothing of them over the open floor', async () => {
+    const d = await load('galta')
+    const gorge = d.root.getObjectByName('gorge') as THREE.Mesh
+    expect(gorge).toBeDefined()
+    let calls = 0
+    gorge.traverse((o) => {
+      if (o instanceof THREE.Mesh) calls++
+    })
+    expect(calls).toBe(1)
+    expect(triangles(gorge)).toBeLessThan(8000)
+    const box = new THREE.Box3().setFromObject(gorge)
+    expect(box.max.y).toBeGreaterThan(18)
+    // on the walkable floor, away from the kunds (their steps, pavilions and monkeys), nothing of the gorge stands:
+    // a vertex that touches open ground is a slope's foot, on the ground
+    const pos = gorge.geometry.getAttribute('position')
+    const half = d.def.size / 2
+    const within = (boxes: AABB[], x: number, z: number) =>
+      boxes.some((r) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ)
+    const open = (x: number, z: number) =>
+      Math.abs(x) < half && Math.abs(z) < half && !within(d.def.rocks!, x, z) && !within(d.def.water!, x, z)
+    let floor = 0
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const z = pos.getZ(i)
+      if (within(d.def.water!, x, z)) continue
+      const e = 0.05
+      if (![open(x + e, z), open(x - e, z), open(x, z + e), open(x, z - e)].some(Boolean)) continue
+      expect(pos.getY(i), `${x},${z}`).toBeLessThan(0.01)
+      floor++
+    }
+    expect(floor).toBeGreaterThan(0)
+  })
+
+  it('has a series of kunds up the gorge: water nobody walks into, a ghat walked round each', async () => {
+    const d = await load('galta')
+    const kunds = d.def.water!
+    expect(kunds).toHaveLength(3)
+    const blocked = blockedBy(d.colliders)
+    for (const k of kunds) {
+      expect(d.colliders).toContainEqual(k)
+      // the water drawn is the water you cannot walk into, and nothing is built on it
+      expect(d.def.paving).toContainEqual({ ...k, color: 'glass' })
+      for (const b of d.def.buildings) expect(intersects(footprint(b), k), `${b.x},${b.z}`).toBe(false)
+      // the ghat round it: walkable on every side
+      const mx = (k.minX + k.maxX) / 2
+      const mz = (k.minZ + k.maxZ) / 2
+      for (const p of [
+        { x: k.minX - 1.2, z: mz },
+        { x: k.maxX + 1.2, z: mz },
+        { x: mx, z: k.minZ - 1.2 },
+        { x: mx, z: k.maxZ + 1.2 },
+      ])
+        expect(blocked(p), `the ghat at ${p.x},${p.z}`).toBe(false)
+    }
+    // one above the next, up the gorge (north)
+    const zs = kunds.map((k) => k.minZ)
+    expect([...zs].sort((a, b) => b - a)).toEqual(zs)
+  })
+
+  it('shows nobody in the water: no character, animal, seat or prop stands in a kund', async () => {
+    const d = await load('galta')
+    for (const n of d.def.npcs) for (const p of n.route) expect(kundOf(d, p), n.id).toBe(false)
+    const { dogs, cats, cow } = d.def.animals
+    for (const p of [...dogs, ...cats, cow]) expect(kundOf(d, p), `${p.x},${p.z}`).toBe(false)
+    for (const p of d.def.props) expect(kundOf(d, p.at), `${p.kind} ${p.at.x},${p.at.z}`).toBe(false)
+    expect(kundOf(d, d.def.centre)).toBe(false)
+    for (const p of d.def.processionRoute) expect(kundOf(d, p)).toBe(false)
+  })
+
+  it('climbs to the Surya Mandir on the ridge: a roof beside it looks west over the city below', async () => {
+    const d = await load('galta')
+    const roof = d.def.roof!
+    expect(d.def.roofName).toEqual({ hi: 'Surya Mandir', en: 'Sun Temple' })
+    expect(roof.y).toBeGreaterThan(8)
+    expect(roofHeight(roof, roof.landing.x, roof.landing.z)).toBe(roof.y)
+    expect(roof.out).toEqual({ x: -1, z: 0 })
+    // due west, out past the ridge's edge, where the city lies below
+    expect(d.def.ridgeWest).toBe(-d.def.size / 2)
+    expect(roof.view.x).toBeLessThan(d.def.ridgeWest!)
+    expect(roof.building.minX - d.def.ridgeWest!).toBeLessThan(20)
+    expect(d.root.getObjectByName('city-below')).toBeDefined()
+    // the Surya Mandir itself, its shikhara beside the roof
+    const temple = d.def.buildings.filter(
+      (b) => b.style === 'temple' && Math.hypot(b.x - roof.landing.x, b.z - roof.landing.z) < 25,
+    )
+    expect(temple).toHaveLength(1)
+    // up out of the gorge: the stair's foot is west of the gorge's west slope
+    const westSlope = Math.max(...d.def.rocks!.filter((r) => r.minX <= -d.def.size / 2).map((r) => r.maxX))
+    expect(roof.stair.x).toBeLessThan(westSlope)
+  })
+
+  it('has no metro: a bus stand at the mouth, chai, benches, one poster wall and autos', async () => {
+    const d = await load('galta')
+    const count = (k: string) => d.def.props.filter((p) => p.kind === k).length
+    expect(count('station')).toBe(0)
+    expect(count('bus-stop')).toBe(1)
+    expect(count('tapri')).toBeGreaterThanOrEqual(2)
+    expect(count('bench')).toBeGreaterThanOrEqual(3)
+    expect(count('poster-wall')).toBe(1)
+    expect(count('auto')).toBeGreaterThanOrEqual(2)
+    // at least two benches up on the ridge look west (their front, +z, turned to -x)
+    expect(d.def.props.filter((p) => p.kind === 'bench' && p.rot === 90).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('frees the gorge and the city below with the rest of the district', async () => {
+    const d = await loadDistrict('galta')
+    const spies: ReturnType<typeof vi.fn>[] = []
+    d.root.getObjectByName('galta-scenery')!.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      spies.push(vi.spyOn(o.geometry as THREE.BufferGeometry, 'dispose') as never)
+      spies.push(vi.spyOn(o.material as THREE.Material, 'dispose') as never)
+    })
+    expect(spies).toHaveLength(6)
+    d.dispose()
+    for (const s of spies) expect(s).toHaveBeenCalled()
+  })
+
+  it('is where Kamla ji, Sohan and Lakshmi spend their days', async () => {
+    expect(ids((await load('galta')).def.npcs)).toEqual(['kamla', 'lakshmi', 'sohan'])
   })
 })
 

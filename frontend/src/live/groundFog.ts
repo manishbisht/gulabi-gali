@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Stage } from '../engine/stage'
-import type { DistrictDef, Vec2 } from '../world/types'
+import type { AABB, DistrictDef, Vec2 } from '../world/types'
 import type { SkyParams } from './sky'
 
 /** How many low banks of mist lie around the viewer: a handful, each one sprite (one draw). */
@@ -46,18 +46,25 @@ export interface GroundFog {
   dispose(): void
 }
 
-/** Whether (x, z) is the district's own ground: inside its square and not open water (Amer's lake). */
-export function onDistrictGround(def: Pick<DistrictDef, 'size' | 'water'>, x: number, z: number): boolean {
+/** Whether (x, z) is the district's own ground: inside its square, not open water (Amer's lake) nor rock (Galta's). */
+export function onDistrictGround(
+  def: Pick<DistrictDef, 'size' | 'water' | 'rocks'>,
+  x: number,
+  z: number,
+): boolean {
   const half = def.size / 2
   if (Math.abs(x) > half || Math.abs(z) > half) return false
-  const water = def.water
-  if (!water) return true
-  // a plain loop: this runs for every bank every frame, and must not allocate
-  for (let i = 0; i < water.length; i++) {
-    const w = water[i]!
-    if (x >= w.minX && x <= w.maxX && z >= w.minZ && z <= w.maxZ) return false
+  return !within(def.water, x, z) && !within(def.rocks, x, z)
+}
+
+/** Whether (x, z) is inside one of `boxes`: a plain loop, since this runs for every bank every frame. */
+function within(boxes: readonly AABB[] | undefined, x: number, z: number): boolean {
+  if (!boxes) return false
+  for (let i = 0; i < boxes.length; i++) {
+    const w = boxes[i]!
+    if (x >= w.minX && x <= w.maxX && z >= w.minZ && z <= w.maxZ) return true
   }
-  return true
+  return false
 }
 
 export interface GroundFogOptions {

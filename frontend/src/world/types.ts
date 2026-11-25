@@ -123,11 +123,19 @@ export interface DistrictDef {
   /** Open water nobody walks into (Amer's lake): colliders with no building, drawn by the district's paving. */
   water?: AABB[]
   /**
+   * Rock nobody walks into (Galta Ji's gorge walls): colliders the camera pulls in front of, as it does a
+   * building's, drawn by the district's `scenery`.
+   */
+  rocks?: AABB[]
+  /**
    * A ridge's edge (Nahargarh): west of this x the ground falls away, so the ground stops here and `scenery`
    * draws what lies below. It is the district's west wall: nobody walks past it.
    */
   ridgeWest?: number
-  /** Far scenery outside the district's walls (Nahargarh's city below the ridge): drawn, never walked or hit. */
+  /**
+   * Scenery drawn and never walked or hit (Nahargarh's city below the ridge; Galta Ji's gorge walls, whose
+   * colliders are `rocks`, and its kunds' steps, inside `water`).
+   */
   scenery?: () => THREE.Group
   /** New Year's string lights (see festivalFx.ts): strands hung between building fronts, both ends `y` m up. */
   stringLights?: StringLight[]

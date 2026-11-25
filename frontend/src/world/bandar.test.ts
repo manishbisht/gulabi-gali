@@ -5,10 +5,12 @@ import {
   bandarOff,
   createBandar,
   createBandarMemory,
+  hasBandar,
   setBandarOff,
   type BandarEvent,
   type BandarOptions,
 } from './bandar'
+import { DISTRICTS } from './district'
 import type { AvatarLook, DistrictDef, Vec2 } from './types'
 
 const LOOK: AvatarLook = { skin: 2, outfit: 'pink', head: 'safa' }
@@ -280,11 +282,37 @@ describe('the Galta bandar', () => {
     expect(s.player.setLook).toHaveBeenLastCalledWith(LOOK)
   })
 
-  it('only in walled-city', () => {
+  it('only where it lives: the Walled City and Galta Ji', () => {
     const s = setup({ id: 'mi-road' })
     s.run(120)
     expect(s.events).toEqual([])
     expect(s.scene.children).toHaveLength(0)
+    expect(DISTRICTS.filter(hasBandar)).toEqual(['walled-city', 'galta'])
+  })
+
+  it('raids at Galta Ji too, near its main temple, and nowhere far from it', () => {
+    const galta = (at: Vec2) => {
+      const scene = new THREE.Group()
+      const d = { ...def('galta'), landmarks: [landmark('galta-ji', 0, 0)] } as unknown as DistrictDef
+      const events: BandarEvent[] = []
+      let clock = 0
+      const b = createBandar(d, scene, () => 0, {
+        look: () => LOOK,
+        colliders: [],
+        now: () => clock,
+        reducedMotion: false,
+        memory: createBandarMemory(),
+      })
+      const player = { position: () => at, driving: () => false, setLook: vi.fn() }
+      for (let t = 0; t < 10; t += FRAME) {
+        clock += FRAME * 1000
+        const e = b.update(FRAME, player)
+        if (e) events.push(e)
+      }
+      return events
+    }
+    expect(galta({ x: 10, z: 0 })).toContainEqual(expect.objectContaining({ kind: 'snatched' }))
+    expect(galta({ x: 80, z: 0 })).toEqual([])
   })
 
   it('does not trigger without headgear to take', () => {

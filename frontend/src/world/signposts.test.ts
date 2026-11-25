@@ -122,8 +122,8 @@ describe.each(DISTRICTS)('%s: signposts', (id) => {
   })
 })
 
-it("Amer's and Nahargarh's boards point at their bus stands, not a metro they do not have", async () => {
-  for (const id of ['amer', 'nahargarh'] as const) {
+it("Amer's, Nahargarh's and Galta Ji's boards point at their bus stands, not a metro they do not have", async () => {
+  for (const id of ['amer', 'nahargarh', 'galta'] as const) {
     const { def } = await load(id)
     for (const post of signpostsOf(def)) {
       const stop = post.boards.find((b) => b.id === 'metro')!
@@ -134,18 +134,23 @@ it("Amer's and Nahargarh's boards point at their bus stands, not a metro they do
   expect(signpostsOf(pink)[0]!.boards.find((b) => b.id === 'metro')!.name.en).toBe('Metro station')
 })
 
-it("Nahargarh's boards point the way to its sunset point too, by name; no other district names its roof", async () => {
+it("Nahargarh's and Galta Ji's boards point the way to their viewpoints too, by name; no other district names its roof", async () => {
+  const named: Partial<Record<string, { hi: string; en: string }>> = {
+    nahargarh: { hi: 'Sunset Point', en: 'Sunset point' },
+    galta: { hi: 'Surya Mandir', en: 'Sun Temple' },
+  }
   for (const id of DISTRICTS) {
     const { def } = await load(id)
     const boards = signpostsOf(def).flatMap((p) => p.boards.filter((b) => b.id === 'viewpoint'))
-    if (id !== 'nahargarh') {
+    const name = named[id]
+    if (!name) {
       expect(boards, id).toEqual([])
       continue
     }
-    expect(boards).toHaveLength(def.signposts!.length)
+    expect(boards, id).toHaveLength(def.signposts!.length)
     for (const b of boards) {
-      expect(b.name).toEqual({ hi: 'Sunset Point', en: 'Sunset point' })
-      expect(b.to).toEqual(def.roof!.stair)
+      expect(b.name, id).toEqual(name)
+      expect(b.to, id).toEqual(def.roof!.stair)
     }
   }
 })

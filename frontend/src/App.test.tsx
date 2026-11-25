@@ -13,6 +13,7 @@ import { benchesOf } from './world/benches'
 import malviyaNagar from './world/districts/malviyaNagar'
 import amer from './world/districts/amer'
 import nahargarh from './world/districts/nahargarh'
+import galta from './world/districts/galta'
 import miRoad from './world/districts/miRoad'
 import university from './world/districts/university'
 import walledCity from './world/districts/walledCity'
@@ -250,6 +251,7 @@ const DEFS: Record<DistrictId, DistrictDef> = {
   'malviya-nagar': malviyaNagar,
   amer,
   nahargarh,
+  galta,
 }
 
 /** Opens the city with the test hooks on, in Hinglish, starting in the Walled City. */
@@ -308,6 +310,7 @@ it('travels round the city and leaves nothing behind', async () => {
     'malviya-nagar',
     'amer',
     'nahargarh',
+    'galta',
     'walled-city',
   ] as DistrictId[]) {
     await ride(host, to)
@@ -337,7 +340,7 @@ it('travels round the city and leaves nothing behind', async () => {
   }
   expect(stage.scene.children.length).toBe(before.children) // back in the Walled City, as we started
   await act(async () => root.unmount())
-}, 30000) // five rides of `RIDE_MS` each, on real timers
+}, 45000) // seven rides of `RIDE_MS` each, on real timers
 
 it('keeps the old district running when the new one fails to load, and says so', async () => {
   const { host, root } = await openCity()
@@ -458,7 +461,7 @@ it('a profile with no `stamps` field (an older Worker, a rollback) still opens t
   )
   await act(async () => host.querySelector<HTMLButtonElement>('.enter')!.click())
   await vi.waitFor(() => expect(host.textContent).toContain('Jaipur tumhe dekh sakta hai'))
-  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/13')
+  expect(host.querySelector('.stamp-count')!.textContent).toBe('0/14')
   await act(async () => root.unmount())
 })
 

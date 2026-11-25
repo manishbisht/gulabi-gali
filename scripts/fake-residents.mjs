@@ -22,6 +22,7 @@ const SPAWNS = {
   'malviya-nagar': { x: 6, z: 46 },
   amer: { x: 34, z: 31 },
   nahargarh: { x: 50, z: 40 },
+  galta: { x: 0, z: 70 },
 }
 const OUTFITS = ['pink', 'terracotta', 'sandstone', 'ochre', 'white', 'teal', 'marigold', 'road', 'grass', 'glass']
 const HEADS = ['none', 'safa', 'cap', 'dupatta', 'bun']

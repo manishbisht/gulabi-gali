@@ -65,6 +65,7 @@ const BED: Record<string, { murmur: number; nature: number; wind?: number }> = {
   'malviya-nagar': { murmur: 0, nature: 0.9 },
   amer: { murmur: 0.5, nature: 0.7 }, // the stalls on the path up, under the hill
   nahargarh: { murmur: 0.3, nature: 0.85, wind: 1 }, // wind on the ridge, the birds, the city's far hum below
+  galta: { murmur: 0.35, nature: 0.95 }, // the gorge: birds in the trees on its slopes, visitors' voices by the kunds
 }
 const DEFAULT_BED = { murmur: 0, nature: 0.8 }
 

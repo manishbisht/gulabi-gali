@@ -91,6 +91,13 @@ export function roofOver(b: BuildingSpec, side: 1 | -1, view?: Vec2): RoofDef {
   }
 }
 
+/**
+ * `roof`, faced up its stair at the stair's foot (see RoofDef.foot): the chase camera, 7 m behind, then hangs over
+ * the open ground in front of the building. Faced out, it would sit inside the stair's flight; faced along the
+ * side, against the front wall.
+ */
+export const upTheStair = (roof: RoofDef): RoofDef => ({ ...roof, foot: { x: -roof.out.x, z: -roof.out.z } })
+
 /** `roofOver` the district's building standing at `at`. */
 export function roofAt(buildings: readonly BuildingSpec[], at: Vec2, side: 1 | -1, view?: Vec2): RoofDef {
   const b = buildings.find((s) => inside(at, footprint(s)))
