@@ -159,6 +159,15 @@ export function setAmbienceDuck(on: boolean): void {
   duck = on
 }
 
+let showDuck = false
+/**
+ * A street show's tune is within earshot (see src/shows/): the ambience steps back under it by the same share,
+ * and comes back when the tune ends or the player walks off.
+ */
+export function setShowDuck(on: boolean): void {
+  showDuck = on
+}
+
 export interface AmbienceDeps {
   district: string
   sky(): AmbientSky
@@ -184,7 +193,7 @@ export function createAmbience(deps: AmbienceDeps) {
   const getCtx = deps.context ?? (() => sharedAudio() as AmbientCtx | null)
   const doc = deps.doc ?? document
   const random = deps.random ?? Math.random
-  const ducked = deps.ducked ?? (() => duck)
+  const ducked = deps.ducked ?? (() => duck || showDuck)
 
   let ctx: AmbientCtx | null = null
   let master: Gain | null = null
