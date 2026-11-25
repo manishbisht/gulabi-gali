@@ -168,6 +168,7 @@ test.describe("Instagram's in-app browser", () => {
     for (const el of [
       img,
       hold.getByText('Tasveer pe der tak dabao aur save karo'),
+      hold.getByRole('link', { name: 'Download karo' }),
       hold.getByRole('button'),
     ]) {
       await expect(el).toBeInViewport({ ratio: 1 })

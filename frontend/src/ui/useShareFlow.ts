@@ -25,9 +25,10 @@ export function useShareFlow(home: RefObject<HTMLElement | null>) {
     held.current = !!hold
   }, [hold, home])
 
-  const share = useCallback(async (picture: Picture): Promise<ShareOutcome> => {
+  /** `fresh`: from the "Share" button's own tap, so a refusal now is final (see `shareImage`). */
+  const share = useCallback(async (picture: Picture, fresh = false): Promise<ShareOutcome> => {
     setRetry(null)
-    const outcome = await shareImage(picture.blob, picture.name)
+    const outcome = await shareImage(picture.blob, picture.name, undefined, fresh)
     if (outcome === 'hold') setHold(picture)
     if (outcome === 'retry') setRetry(picture)
     return outcome

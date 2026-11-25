@@ -129,9 +129,34 @@ it('a share sheet refused for a late tap keeps the picture, and "Share" offers i
   expect(again.textContent).toBe('Share')
   await act(async () => again.click())
   expect(photo.capture).toHaveBeenCalledOnce() // the same picture, not a new one
-  expect(photo.shareImage.mock.calls[1]).toEqual(photo.shareImage.mock.calls[0])
+  expect(photo.shareImage.mock.calls[1]!.slice(0, 2)).toEqual(photo.shareImage.mock.calls[0]!.slice(0, 2))
   expect(photo.shareImage.mock.calls[1]![0]).toBe(shot)
   expect(host.querySelector('.photo-retry')).toBeNull()
+})
+
+it('"Share" never loops: refused again on its fresh tap, the picture ends at the hold screen or a download', async () => {
+  const shot = new Blob(['p'], { type: 'image/png' })
+  photo.capture.mockResolvedValue(shot)
+  // what shareImage answers a fresh tap that is refused again: Instagram's hold screen, or a download elsewhere
+  photo.shareImage.mockImplementation(async (_b: Blob, _n: string, _ua?: string, fresh?: boolean) =>
+    fresh ? 'hold' : 'retry',
+  )
+  await act(async () => q('.photo-shutter').click())
+  expect(photo.shareImage.mock.calls[0]![3]).toBeFalsy() // the shutter's tap may be stale by now
+  await act(async () => q('.photo-retry').click())
+  expect(photo.shareImage.mock.calls[1]![3]).toBe(true) // the button's tap is fresh
+  expect(host.querySelector('.photo-retry')).toBeNull() // no second "Share"
+  expect(document.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('Save the picture')
+  act(() => document.querySelector<HTMLButtonElement>('.hold-close')!.click())
+
+  photo.shareImage.mockReset()
+  photo.shareImage.mockImplementation(async (_b: Blob, _n: string, _ua?: string, fresh?: boolean) =>
+    fresh ? 'downloaded' : 'retry',
+  )
+  await act(async () => q('.photo-shutter').click())
+  await act(async () => q('.photo-retry').click())
+  expect(host.querySelector('.photo-retry')).toBeNull()
+  expect(q('.photo-note').textContent).toBe('Photo saved to your phone.')
 })
 
 it('a new shot takes the old "Share" away', async () => {

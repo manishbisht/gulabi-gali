@@ -36,11 +36,17 @@ export function download(file: File): void {
 /**
  * Hands a PNG over (see the module's note). Closing the share sheet is `cancelled`, not a failure. A share sheet
  * refused because the tap that asked for it is too long ago (`NotAllowedError`: making the picture took a
- * while) is `retry`: the caller keeps the picture and offers a "Share" button, whose fresh tap can open it. A
- * share sheet that fails any other way falls through to the next way. Rejects only if even the download cannot
- * start.
+ * while) is `retry`: the caller keeps the picture and offers a "Share" button, whose fresh tap can open it.
+ * That tap passes `fresh`: refused even then (a webview that always refuses), it falls through like any other
+ * failure, so "Share" can never loop. A share sheet that fails any other way falls through to the next way.
+ * Rejects only if even the download cannot start.
  */
-export async function shareImage(blob: Blob, name: string, ua?: string): Promise<ShareOutcome> {
+export async function shareImage(
+  blob: Blob,
+  name: string,
+  ua?: string,
+  fresh = false,
+): Promise<ShareOutcome> {
   const file = new File([blob], name, { type: 'image/png' })
   const data = { files: [file] }
   if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
@@ -52,7 +58,7 @@ export async function shareImage(blob: Blob, name: string, ua?: string): Promise
     } catch (err) {
       const name = (err as { name?: string } | null)?.name
       if (name === 'AbortError') return 'cancelled'
-      if (name === 'NotAllowedError') return 'retry'
+      if (name === 'NotAllowedError' && !fresh) return 'retry'
       // the share sheet failed after all: the next way
     }
   }

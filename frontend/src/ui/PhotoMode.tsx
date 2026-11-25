@@ -74,7 +74,7 @@ export function PhotoMode({ stage, place, lang, onExit }: Props) {
     const picture = flow.retry
     if (!picture) return
     try {
-      said(await flow.share(picture), picture)
+      said(await flow.share(picture, true), picture)
     } catch {
       setNote(t('photoFailed', lang))
     }

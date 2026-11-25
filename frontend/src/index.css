@@ -2463,7 +2463,8 @@ small.words-hint {
 }
 
 .hold-download {
-  min-height: 32px;
+  min-height: 44px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   color: var(--sandstone);

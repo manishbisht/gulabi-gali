@@ -59,7 +59,7 @@ export function DarshanList({ ids, lang, name, streak = 0, onClose }: Props) {
   const again = async () => {
     if (!flow.retry) return
     try {
-      said(await flow.share(flow.retry))
+      said(await flow.share(flow.retry, true))
     } catch {
       setNote(t('cardFailed', lang))
     }
