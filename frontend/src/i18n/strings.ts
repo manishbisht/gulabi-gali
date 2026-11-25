@@ -10,7 +10,7 @@ export const STRINGS = {
   /** Fewer than three (the count never tells one or two apart from none). */
   introQuiet: { hi: 'Abhi shaant hai — pehle aao', en: "It's quiet right now — be the first in" },
   stampGot: { hi: 'Jaipur Darshan · stamp mila: {place}', en: 'Stamp collected: {place}' },
-  stampButton: { hi: 'Stamp lo', en: 'Collect stamp' },
+  stampButton: { hi: 'Stamp lo', en: 'Get stamp' },
   stampHave: { hi: 'Stamp mil chuka hai', en: 'Stamp already collected' },
   stampCount: { hi: 'Jaipur Darshan stamps', en: 'Jaipur Darshan stamps' },
   stampsLine: { hi: 'Jaipur Darshan · {n}/{total}', en: 'Jaipur Darshan · {n}/{total}' },

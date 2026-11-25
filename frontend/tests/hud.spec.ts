@@ -362,6 +362,25 @@ for (const lang of LANGS) {
   })
 }
 
+/**
+ * The widest count keeps room to spare beside the language switch on its row: CI's fonts draw a few px wider than a
+ * Mac's, so "fits" alone is not enough (the HUD-fit rule: ≥ 10 px of slack).
+ */
+async function slackBesideStamps(page: Page) {
+  const [s, l] = [
+    (await page.locator('.stamp-count').boundingBox())!,
+    (await page.locator('.hud-toggles .lang-toggle').boundingBox())!,
+  ]
+  expect(
+    s.y < l.y + l.height && l.y < s.y + s.height,
+    'the stamps chip and the language switch share a row',
+  ).toBe(true)
+  expect(
+    l.x - (s.x + s.width),
+    'slack between the stamps chip and the language switch',
+  ).toBeGreaterThanOrEqual(10)
+}
+
 // One stamp short of all of them, the chip says the whole "13/14": as wide as the count gets, and it has to fit too.
 for (const lang of LANGS) {
   const place = lang === 'en' ? 'Malviya Nagar & WTP' : 'Malviya Nagar–WTP'
@@ -379,6 +398,7 @@ for (const lang of LANGS) {
     }
     await laidOut(guest, NEWS)
     await oneRow(page, guest.place!)
+    await slackBesideStamps(page)
     await shot(page, `guest-${lang}-malviya-nagar-one-short`)
 
     const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
@@ -393,6 +413,7 @@ for (const lang of LANGS) {
     }
     await laidOut(signed, NEWS)
     await oneRow(asha.page, signed.place!)
+    await slackBesideStamps(asha.page)
     await shot(asha.page, `signed-${lang}-malviya-nagar-one-short`)
   })
 }
@@ -508,28 +529,41 @@ test('seated at a tapri on a small phone, the bench panel and the joystick fit s
 /** The most of the screen's height a card at the bottom may take, so the street above stays in view. */
 const CARD_SHARE = 0.4
 
-test('a landmark card on a small phone: "Bulao" sits on the stamp row, and the card stays beside the joystick', async ({
-  page,
-}) => {
-  // in by a link to Albert Hall (offline, as in city.spec.ts), which stands you in its ring
-  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
-  await page.goto('/?gg-test=1&at=mi-road:albert-hall')
-  await page.getByRole('button', { name: 'Padharo!' }).click()
-  const card = page.getByRole('region', { name: 'Albert Hall' })
-  await expect(card).toBeVisible()
-  await card.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
-  const stamp = card.getByRole('button', { name: 'Stamp lo' })
-  const bulao = card.getByRole('button', { name: 'Bulao: Albert Hall ka link bhejo' })
-  await sideBySide({ card, joystick: page.locator('.joystick') })
-  const [c, s, b] = [(await card.boundingBox())!, (await stamp.boundingBox())!, (await bulao.boundingBox())!]
-  expect(c.height, 'card height').toBeLessThanOrEqual(PHONE.height * CARD_SHARE)
-  // one row of actions: Bulao beside the stamp button, not wrapped under it, and thumb-sized
-  expect(Math.abs(b.y + b.height / 2 - (s.y + s.height / 2)), 'Bulao on the stamp row').toBeLessThan(4)
-  expect(b.x + b.width, 'Bulao inside the card').toBeLessThanOrEqual(c.x + c.width)
-  expect(b.width).toBeGreaterThanOrEqual(44)
-  expect(b.height).toBeGreaterThanOrEqual(44)
-  if (process.env.GG_CARD_SHOT) await page.screenshot({ path: process.env.GG_CARD_SHOT })
-})
+/** A landmark card's two actions, by name, in each language. */
+const CARD_WORDS = {
+  hi: { enter: 'Padharo!', stamp: 'Stamp lo', bulao: 'Bulao: Albert Hall ka link bhejo' },
+  en: { enter: 'Come in', stamp: 'Get stamp', bulao: 'Invite: send a link to Albert Hall' },
+} as const
+
+for (const lang of LANGS)
+  test(`a landmark card on a small phone (${lang}): "Bulao" sits on the stamp row, and the card stays beside the joystick`, async ({
+    page,
+  }) => {
+    const words = CARD_WORDS[lang]
+    // in by a link to Albert Hall (offline, as in city.spec.ts), which stands you in its ring
+    await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+    await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
+    await page.goto('/?gg-test=1&at=mi-road:albert-hall')
+    await page.getByRole('button', { name: words.enter }).click()
+    const card = page.getByRole('region', { name: 'Albert Hall' })
+    await expect(card).toBeVisible()
+    await card.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+    const stamp = card.getByRole('button', { name: words.stamp })
+    const bulao = card.getByRole('button', { name: words.bulao })
+    await sideBySide({ card, joystick: page.locator('.joystick') })
+    const [c, s, b] = [
+      (await card.boundingBox())!,
+      (await stamp.boundingBox())!,
+      (await bulao.boundingBox())!,
+    ]
+    expect(c.height, 'card height').toBeLessThanOrEqual(PHONE.height * CARD_SHARE)
+    // one row of actions: Bulao beside the stamp button, not wrapped under it, and thumb-sized
+    expect(Math.abs(b.y + b.height / 2 - (s.y + s.height / 2)), 'Bulao on the stamp row').toBeLessThan(4)
+    expect(b.x + b.width, 'Bulao inside the card').toBeLessThanOrEqual(c.x + c.width)
+    expect(b.width).toBeGreaterThanOrEqual(44)
+    expect(b.height).toBeGreaterThanOrEqual(44)
+    if (process.env.GG_CARD_SHOT) await page.screenshot({ path: process.env.GG_CARD_SHOT })
+  })
 
 test('seated at a tapri on a small phone, the panel head keeps its title, "Bulao" and Utho on one row', async ({
   browser,
