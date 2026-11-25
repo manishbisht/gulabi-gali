@@ -2,8 +2,11 @@ import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CALL_RANGE,
+  CHEW_S,
   COW_LINES,
+  FED_LINES,
   FOLLOW_GAP,
+  PET_S,
   WAIT_MS,
   createAnimals,
   createStationMemory,
@@ -11,6 +14,7 @@ import {
   type Animals,
 } from './animals'
 import { DISTRICTS, loadDistrict } from './district'
+import { onTouched, type Touched } from './touched'
 import type { AABB, DistrictDef, Vec2 } from './types'
 
 /** A district with nothing in it but its animals: a station, a spawn and a handful of animals on open ground. */
@@ -47,7 +51,12 @@ const walk = (a: Animals, player: Vec2, to: Vec2, seconds: number, speed = 4) =>
   }
 }
 const make = (
-  opts: { colliders?: AABB[]; memory?: ReturnType<typeof createStationMemory>; hooks?: AnimalHooks } = {},
+  opts: {
+    colliders?: AABB[]
+    memory?: ReturnType<typeof createStationMemory>
+    hooks?: AnimalHooks
+    reducedMotion?: boolean
+  } = {},
 ) => {
   const scene = new THREE.Group()
   return { scene, a: createAnimals(def, scene, { colliders: opts.colliders ?? [], ...opts }) }
@@ -299,6 +308,131 @@ describe('street animals', () => {
     expect(scene.children.length).toBeGreaterThan(0)
     a.dispose()
     expect(scene.children).toHaveLength(0)
+  })
+})
+
+describe('a kindness for each animal', () => {
+  const hooks = () => ({ near: vi.fn(), following: vi.fn(), notice: vi.fn() })
+  const heard = () => {
+    const done: Touched[] = []
+    return { done, off: onTouched((k) => done.push(k)) }
+  }
+
+  it('the cow takes a roti and chews it over: a line each time, and no second roti until she is done', () => {
+    const h = hooks()
+    const { done, off } = heard()
+    const { a } = make({ hooks: h })
+    const me = { x: 0, z: -4.5 }
+    expect(a.feed(me)).toEqual({ line: 0 })
+    expect(h.notice).toHaveBeenLastCalledWith({ kind: 'fed', line: 0 })
+    // still chewing
+    expect(a.feed(me)).toBeNull()
+    walk(a, me, me, CHEW_S - 0.5)
+    expect(a.feed(me)).toBeNull()
+    walk(a, me, me, 0.6)
+    const lines = new Set([0])
+    for (let i = 1; i < FED_LINES; i++) {
+      lines.add(a.feed(me)!.line)
+      walk(a, me, me, CHEW_S + 0.1)
+    }
+    expect(lines.size).toBe(FED_LINES)
+    expect(done).toEqual(Array(FED_LINES).fill('feed'))
+    // she stays where she is, and follows nobody
+    expect(where(a, 'walled-city-cow-0')).toMatchObject({ x: 0, z: -6, following: false })
+    expect(a.following()).toBeNull()
+    off()
+    a.dispose()
+  })
+
+  it('a roti is for the cow only, and only within reach', () => {
+    const h = hooks()
+    const { a } = make({ hooks: h })
+    a.freeze(true)
+    expect(a.feed({ x: 1, z: 0 })).toBeNull() // beside a dog
+    expect(a.feed({ x: 0, z: -6 - CALL_RANGE - 1 })).toBeNull()
+    expect(a.feed({ x: 30, z: 30 }, 'walled-city-cow-0')).toBeNull()
+    expect(a.feed({ x: 1, z: 0 }, 'walled-city-dog-0')).toBeNull()
+    expect(h.notice).not.toHaveBeenCalled()
+    a.dispose()
+  })
+
+  it('a dog or cat can be petted: it wriggles where it is, and is not called along', () => {
+    const h = hooks()
+    const { done, off } = heard()
+    const { a, scene } = make({ hooks: h, reducedMotion: false })
+    a.freeze(true)
+    const me = { x: 1, z: 0 }
+    const dogs = scene.getObjectByName('animals-dog') as THREE.InstancedMesh
+    const turn = () => {
+      const m = new THREE.Matrix4()
+      dogs.getMatrixAt(0, m)
+      return new THREE.Euler().setFromRotationMatrix(m, 'YXZ').y
+    }
+    a.update(FRAME, me)
+    const rest = turn()
+    const petted = a.pet(me)
+    expect(petted).toMatchObject({ id: 'walled-city-dog-0', kind: 'dog' })
+    expect(h.notice).toHaveBeenLastCalledWith({ kind: 'pet', animal: petted })
+    expect(done).toEqual(['pet'])
+    // one pat at a time
+    expect(a.pet(me)).toBeNull()
+    let wagged = 0
+    for (let t = 0; t < PET_S - 0.2; t += FRAME) {
+      a.update(FRAME, me)
+      wagged = Math.max(wagged, Math.abs(turn() - rest))
+    }
+    expect(wagged).toBeGreaterThan(0.05)
+    walk(a, me, me, 0.5)
+    expect(turn()).toBeCloseTo(rest, 6)
+    expect(a.following()).toBeNull()
+    expect(h.following).not.toHaveBeenCalled()
+    expect(where(a, 'walled-city-dog-0')).toMatchObject({ x: 0, z: 0 })
+    expect(a.pet(me)).toMatchObject({ kind: 'dog' })
+    // a cat too; the cow is fed, not petted
+    expect(a.pet({ x: 0, z: 6.5 })).toMatchObject({ kind: 'cat' })
+    expect(a.pet({ x: 0, z: -4.5 })).toBeNull()
+    off()
+    a.dispose()
+  })
+
+  it('under reduced motion the petted animal holds still (the emote and the line still say it)', () => {
+    const { a, scene } = make({ reducedMotion: true })
+    a.freeze(true)
+    const me = { x: 1, z: 0 }
+    const dogs = scene.getObjectByName('animals-dog') as THREE.InstancedMesh
+    const read = () => {
+      const m = new THREE.Matrix4()
+      dogs.getMatrixAt(0, m)
+      return m.elements.slice()
+    }
+    a.update(FRAME, me)
+    const rest = read()
+    expect(a.pet(me)).not.toBeNull()
+    for (let t = 0; t < PET_S; t += FRAME) {
+      a.update(FRAME, me)
+      expect(read()).toEqual(rest)
+    }
+    a.dispose()
+  })
+
+  it('petting changes nothing about following: the follower still trails, and "Saath chalo" still calls', () => {
+    const { a } = make()
+    const me = { x: 1, z: 0 }
+    a.pet(me)
+    expect(a.call(me)?.kind).toBe('follow')
+    const id = a.following()!
+    walk(a, me, { x: 40, z: 0 }, 12)
+    expect(dist(where(a, id), me)).toBeCloseTo(FOLLOW_GAP, 1)
+    a.dispose()
+  })
+
+  it('says where an animal stands without allocating a list', () => {
+    const { a } = make()
+    const out = { x: 99, z: 99 }
+    expect(a.at('walled-city-cow-0', out)).toBe(true)
+    expect(out).toEqual({ x: 0, z: -6 })
+    expect(a.at('nobody', out)).toBe(false)
+    a.dispose()
   })
 })
 
