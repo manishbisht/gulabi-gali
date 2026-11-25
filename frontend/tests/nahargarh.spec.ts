@@ -72,18 +72,18 @@ test('no metro goes up to Nahargarh: the bus does, from the metro station, and b
   await expect(page.locator('.fade')).not.toHaveAttribute('data-on')
   await expect(page.getByRole('button', { name: 'Metro', exact: true })).toHaveCount(0)
   await back.tap()
-  await expect(sheet.locator('.travel-stop[data-by="bus"]')).toHaveCount(5)
+  await expect(sheet.locator('.travel-stop[data-by="bus"]')).toHaveCount(6)
   await sheet.getByRole('button', { name: 'Amer Bus', exact: true }).tap()
   await expect(page.getByRole('button', { name: 'Bus safar — chhodne ke liye tap karo' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.__gg.district())).toBe('amer')
 })
 
-test('Nahargarh: at the fort gateway its card opens and the stamp is one of thirteen; the map calls the stop a bus stand', async ({
+test('Nahargarh: at the fort gateway its card opens and the stamp is one of fourteen; the map calls the stop a bus stand', async ({
   page,
 }) => {
   await enterOffline(page, 'nahargarh')
   expect(await page.evaluate(() => window.__gg.district())).toBe('nahargarh')
-  await expect(page.locator('.stamp-count')).toHaveText('0/13')
+  await expect(page.locator('.stamp-count')).toHaveText('0/14')
   await expect(page.locator('.hud-top')).toContainText('Nahargarh')
   await page.waitForTimeout(800)
   await shot(page, 'nahargarh-spawn')
@@ -93,7 +93,7 @@ test('Nahargarh: at the fort gateway its card opens and the stamp is one of thir
   await expect(card).toBeVisible()
   await shot(page, 'nahargarh-gate')
   await card.getByRole('button', { name: 'Stamp lo' }).tap()
-  await expect(page.locator('.stamp-count')).toHaveText('1/13')
+  await expect(page.locator('.stamp-count')).toHaveText('1/14')
 
   await page.getByRole('button', { name: 'Naksha · Nahargarh', exact: true }).tap()
   const map = page.getByRole('dialog', { name: 'Naksha · Nahargarh' })

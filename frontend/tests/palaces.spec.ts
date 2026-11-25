@@ -53,7 +53,7 @@ test('Amer: the auto sets you down on the ghat facing Jal Mahal; its card and st
   page,
 }) => {
   await enterOffline(page, 'amer')
-  await expect(page.locator('.stamp-count')).toHaveText('0/13')
+  await expect(page.locator('.stamp-count')).toHaveText('0/14')
   // the auto waiting on the road by the lake
   await page.evaluate(() => window.__gg.teleport(-60, 45.4))
   await page.getByRole('button', { name: 'Le chalo', exact: true }).tap()
@@ -72,7 +72,7 @@ test('Amer: the auto sets you down on the ghat facing Jal Mahal; its card and st
   expect(Math.cos((await page.evaluate(() => window.__gg.view())).yaw)).toBeLessThan(-0.9)
   await shot(page, 'jal-mahal-ghat')
   await card.getByRole('button', { name: 'Stamp lo' }).tap()
-  await expect(page.locator('.stamp-count')).toHaveText('1/13')
+  await expect(page.locator('.stamp-count')).toHaveText('1/14')
 
   // walking on toward the palace gets you to the ghat's end and no further
   await hold(page, 'w', 3)
@@ -89,7 +89,7 @@ test('Walled City: the City Palace gateway north of Jantar Mantar; its card and 
   page,
 }) => {
   await enterOffline(page)
-  await expect(page.locator('.stamp-count')).toHaveText('0/13')
+  await expect(page.locator('.stamp-count')).toHaveText('0/14')
   // the auto from Johari Bazaar's stand sets you down by the gateway, its card open
   await page.evaluate(() => window.__gg.teleport(-0.6, 30))
   await page.getByRole('button', { name: 'Le chalo', exact: true }).tap()
@@ -111,5 +111,5 @@ test('Walled City: the City Palace gateway north of Jantar Mantar; its card and 
   expect(p.z).toBeLessThan(-60)
   await shot(page, 'city-palace-gate')
   await card.getByRole('button', { name: 'Stamp lo' }).tap()
-  await expect(page.locator('.stamp-count')).toHaveText('1/13')
+  await expect(page.locator('.stamp-count')).toHaveText('1/14')
 })
