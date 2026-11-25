@@ -22,8 +22,11 @@ async function welcome(page: Page, lang: 'hi' | 'en' = 'hi', path = '/?gg-test=1
   await page.goto(path)
 }
 
-/** Into the Walled City, offline, under fixed weather (a live reply could change how the HUD wraps). */
-async function intoCity(page: Page) {
+/**
+ * Into the Walled City, offline, under fixed weather and a fixed "Aaj ka Darshan" goal (a live reply, or the day's own
+ * goal, could change how the HUD's head wraps).
+ */
+async function intoCity(page: Page, lang: 'hi' | 'en' = 'hi') {
   await page.route('**/api/city*', (route) =>
     route.fulfill({
       json: {
@@ -40,8 +43,8 @@ async function intoCity(page: Page) {
     }),
   )
   await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
-  await welcome(page)
-  await page.getByRole('button', { name: 'Padharo!' }).tap()
+  await welcome(page, lang, '/?gg-test=1&gg-today=photo')
+  await page.getByRole('button', { name: lang === 'en' ? 'Come in' : 'Padharo!' }).tap()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
 }
 
@@ -228,8 +231,7 @@ test.describe('on an iPhone in Safari', () => {
     }) => {
       // the page's clock is ours from the start; it runs on as usual until it is moved on below
       await page.clock.install()
-      await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
-      await intoCity(page)
+      await intoCity(page, lang)
       const hint = page.locator('.install-hint')
       await expect(page.locator('.joystick')).toBeVisible()
       await expect(hint).toHaveCount(0)

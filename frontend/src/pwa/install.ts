@@ -73,9 +73,16 @@ export const cityTime = (): number => cityMs
 export function countCityTime(ms: number): void {
   cityMs += ms
 }
+/** Time the hint has been in view, uncovered and on screen, this page: added up across its reappearances. */
+let shownMs = 0
+export const shownTime = (): number => shownMs
+export function addShownTime(ms: number): void {
+  shownMs += Math.max(0, ms)
+}
 /** For tests: a new page. */
 export function resetCityTime(): void {
   cityMs = 0
+  shownMs = 0
 }
 
 let held: InstallPromptEvent | null = null

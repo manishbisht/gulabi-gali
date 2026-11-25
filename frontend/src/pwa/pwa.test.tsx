@@ -299,6 +299,54 @@ describe('InstallHint', () => {
     expect(hint()).toBeNull()
   })
 
+  it('covered and uncovered every second (walking past landmarks), its time in view adds up: seen at 5 s, gone at 30 s', () => {
+    offer()
+    mount()
+    wait(INSTALL_HINT_DELAY_MS)
+    expect(hint()).not.toBeNull()
+    const flap = (times: number) => {
+      for (let i = 0; i < times; i++) {
+        wait(1000) // in view
+        mount(true) // a card comes up
+        wait(1000)
+        mount(false)
+      }
+    }
+    flap(4)
+    expect(saved()).toBeNull()
+    flap(1)
+    expect(saved()).not.toBeNull()
+    // in view 30 s in all (here 25 more, a second at a time), and it does not come back
+    flap(25)
+    expect(hint()).toBeNull()
+    wait(INSTALL_HINT_DELAY_MS)
+    expect(hint()).toBeNull()
+  })
+
+  it('in a hidden tab its time in view stands still', () => {
+    offer()
+    mount()
+    wait(INSTALL_HINT_DELAY_MS)
+    expect(hint()).not.toBeNull()
+    wait(2000)
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+    act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    wait(10 * 60_000)
+    // neither seen nor closed by the time it spent behind other tabs
+    expect(saved()).toBeNull()
+    expect(hint()).not.toBeNull()
+    hidden.mockReturnValue(false)
+    act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    wait(2000)
+    expect(saved()).toBeNull()
+    wait(1000)
+    expect(saved()).not.toBeNull()
+    wait(30_000 - 5000 - 250)
+    expect(hint()).not.toBeNull()
+    wait(500)
+    expect(hint()).toBeNull()
+  })
+
   it('closes with ×, or by itself, and does not ask again for 30 days', () => {
     offer()
     mount()

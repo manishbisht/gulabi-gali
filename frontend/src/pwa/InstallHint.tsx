@@ -13,16 +13,20 @@ import {
   INSTALL_HINT_SEEN_MS,
   installWay,
   markHintShown,
+  addShownTime,
   onInstallChange,
   promptInstall,
+  shownTime,
   thisInstallDevice,
   type InstallWay,
 } from './install'
 
 /** How often the time on screen is counted. */
 const TICK_MS = 1000
-/** A hint nobody answers goes away by itself after this long on screen: it asked once, and that is enough. */
+/** A hint nobody answers goes away by itself after this long in view in all: it asked once, and that is enough. */
 const SHOWN_MS = 30_000
+/** How often the time in view is added up while the hint is up. */
+const VIEW_TICK_MS = 250
 
 interface Props {
   lang: Lang
@@ -79,12 +83,33 @@ export function InstallHint({ lang, busy = false }: Props) {
   const visible = !!way && !busy
   useEffect(() => {
     if (!visible) return
-    // seen once it has been in view a moment; covered or gone sooner, it may ask again
-    const seen = window.setTimeout(() => markHintShown(), INSTALL_HINT_SEEN_MS)
-    const done = window.setTimeout(() => setWay(null), SHOWN_MS)
+    /*
+     * The time in view is added up across every time it comes back (a card near a landmark can cover and uncover it
+     * every few steps), and only while the page is on screen: seen at INSTALL_HINT_SEEN_MS in all, gone at SHOWN_MS
+     * in all. Covered or gone sooner than the first, it may ask again.
+     */
+    let since = document.hidden ? null : Date.now()
+    const settle = () => {
+      if (since === null) return
+      const now = Date.now()
+      addShownTime(now - since)
+      since = now
+      if (shownTime() >= INSTALL_HINT_SEEN_MS && hintDue(storage.get(INSTALL_HINT_KEY), now))
+        markHintShown(now)
+    }
+    const onVisibility = () => {
+      settle()
+      since = document.hidden ? null : Date.now()
+    }
+    const tick = window.setInterval(() => {
+      settle()
+      if (shownTime() >= SHOWN_MS) setWay(null)
+    }, VIEW_TICK_MS)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
-      clearTimeout(seen)
-      clearTimeout(done)
+      settle()
+      clearInterval(tick)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [visible])
 
