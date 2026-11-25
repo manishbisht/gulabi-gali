@@ -429,6 +429,15 @@ button {
   color: var(--plum);
 }
 
+/* A street show (kathputli, ravanhatta, the evening's dancers): its mask on cream, over the seats */
+.map-item[data-kind='show'] {
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  background: var(--cream);
+  font-size: 0.85rem;
+}
+
 /* A bus-only district's stop is a bus stand: the bus's marigold, as on the travel sheet and the shelter's roof */
 .map-item[data-by='bus'] {
   background: var(--marigold);
@@ -891,6 +900,11 @@ button {
 
 .npc-card .npc-notreal {
   font-style: italic;
+}
+
+/* "Taali bajao", while a street show plays: the marigold of a festival, not the pink of a place to go. */
+.metro-button.show-button {
+  background: var(--marigold);
 }
 
 /* At Amer's bus stand the same button says "Bus", in the bus's marigold. */
