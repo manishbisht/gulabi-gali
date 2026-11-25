@@ -85,7 +85,7 @@ test('the service worker registers on a visit, with a fetch listener that lets e
   // the e2e build registers it only when asked (?gg-sw=1): a worker in every spec would sit in front of their routes
   await welcome(page, 'hi', '/?gg-test=1&gg-sw=1')
   const script = await page.evaluate(async () => (await navigator.serviceWorker.ready).active?.scriptURL)
-  expect(script).toBe('http://127.0.0.1:5173/sw.js')
+  expect(script).toBe(new URL('/sw.js', page.url()).href)
   // the worker the browser runs has a fetch listener (older Chrome wants one before it offers an install)
   expect(await (await request.get('/sw.js')).text()).toMatch(/addEventListener\('fetch'/)
   // once it controls the page, the page's requests still reach the network: nothing is answered from a cache
