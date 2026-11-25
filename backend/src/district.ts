@@ -21,9 +21,12 @@ import {
   REACT_PER_MINUTE,
   REACT_RANGE_M,
   REACTIONS,
+  EMOTE_KINDS,
+  EMOTE_PER_MINUTE,
   type BenchLine,
   type ClientMsg,
   type DistrictId,
+  type EmoteKind,
   type LivePerson,
   type PosterView,
   type PublicPerson,
@@ -169,6 +172,8 @@ const REACT_WINDOW_MS = 60_000
  * cannot be used to learn anything about the target.
  */
 export const REACT_INBOUND_PER_MINUTE = 6
+/** The window `EMOTE_PER_MINUTE` counts over, from a sender's first emote in it. */
+export const EMOTE_WINDOW_MS = 60_000
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
 const PING = '{"t":"ping"}'
 const PONG = '{"t":"pong"}'
@@ -286,6 +291,11 @@ export function parseClientMsg(text: string): ClientMsg | null {
         ? { t: 'react', to, kind: kind as Reaction }
         : null
     }
+    case 'emote':
+      // only a kind we know: anything else is a bad frame, and nothing but the kind is read
+      return (EMOTE_KINDS as readonly unknown[]).includes(m.kind)
+        ? { t: 'emote', kind: m.kind as EmoteKind }
+        : null
     case 'ping':
       return { t: 'ping' }
     default:
@@ -416,6 +426,13 @@ interface Seat {
   wait?: PublicPerson | null
   /** And the position in line they were last told. */
   place?: number
+  /** What this person spent of `EMOTE_PER_MINUTE`: when the minute began, and how many since (see `emote`). */
+  emotes?: EmoteSpend
+}
+
+interface EmoteSpend {
+  since: number
+  n: number
 }
 
 const fullLanes = (now: number): Record<Lane, Bucket> => ({
@@ -489,6 +506,9 @@ function livePerson(seat: Seat): LivePerson {
  * deploy, or the runtime evicting the object anyway, still loses both: that is accepted, and a report then
  * rests on the seats, which survive (see `benchWitness`).
  *
+ * Emotes (a dance, a clap, sitting down, a selfie pose, a wave): passed on to whoever hears the sender's moves
+ * and forgotten (`emote`). Their allowance rides in the socket's attachment, so they arm no timer at all.
+ *
  * Reactions (a namaste, a wave): passed on and forgotten. Only what each sender spent of their allowance is
  * remembered, in memory, for a minute (`reacts`), and that too keeps the object awake (`stayAwake`).
  *
@@ -546,6 +566,12 @@ export class DistrictDO extends DurableObject<Env> {
   private reacts = new Map<string, { at: number; to: string }[]>()
   /** Per target, when each greeting they were shown in the last `REACT_WINDOW_MS` came. Memory only, like `reacts`. */
   private greeted = new Map<string, number[]>()
+  /**
+   * Per sender, what they spent of `EMOTE_PER_MINUTE` (see `emote`), by user id so a new socket does not reset
+   * it. Memory only, and it arms no timer: the same figures ride in the socket's attachment, so a sleep
+   * forgets nothing a connected sender spent, and the object is never kept awake for an emote.
+   */
+  private emoteSpent = new Map<string, EmoteSpend>()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -591,6 +617,7 @@ export class DistrictDO extends DurableObject<Env> {
     const pair = new WebSocketPair()
     const [client, server] = [pair[0], pair[1]]
     this.ctx.acceptWebSocket(server)
+    const spent = before?.emotes ?? (who.userId ? this.emoteSpent.get(who.userId) : undefined)
     const seat: Seat = {
       district,
       userId: who.userId,
@@ -604,6 +631,8 @@ export class DistrictDO extends DurableObject<Env> {
       bench: null,
       ip: who.ip === null ? null : ipKey(who.ip),
       ...(pass && !pass.ok ? { wait, place: pass.position } : {}),
+      // the emote allowance is the person's, not the socket's: a new socket does not refill it
+      ...(spent && { emotes: spent }),
     }
     this.write(server, seat)
     this.send(server, {
@@ -1038,6 +1067,8 @@ export class DistrictDO extends DurableObject<Env> {
         return wordsOk(msg.text) ? this.say(ws, seat, msg.text, now) : this.send(ws, WORDS)
       case 'react':
         return this.react(ws, seat, msg, now)
+      case 'emote':
+        return this.emote(ws, seat, msg.kind, now)
     }
   }
 
@@ -1325,6 +1356,46 @@ export class DistrictDO extends DurableObject<Env> {
       }
       const { userId, pos } = this.seat(other)
       if (!pos || this.apart(from, userId) || this.apart(m.to, userId)) continue
+      const dx = pos.x - seat.pos.x
+      const dz = pos.z - seat.pos.z
+      if (dx * dx + dz * dz <= reach) this.sendRaw(other, text)
+    }
+  }
+
+  /**
+   * An emote from `seat`'s person (see `EMOTE_KINDS`): passed on, as `{t: 'emote', from, kind}`, to exactly the
+   * sockets `flush` would send this person's moves to (they have said where they are, stand within
+   * `INTEREST_M` of the sender's last accepted point, and are blocked neither way with them; ghosts watching
+   * included, as they see the street), and never back to the sender, whose page already plays it. Dropped
+   * without a word (the page plays its own regardless, so nothing is told) for anyone who is not a listed
+   * resident on the street (a ghost, someone waiting in line, a hidden person, one who has not stepped out
+   * yet), for a muted one, and past `EMOTE_PER_MINUTE` in the minute that began with their first.
+   *
+   * Nothing is stored and no timer is armed: the allowance is two numbers in the socket's attachment (and in
+   * `emoteSpent`, for a new socket of the same person), so this never keeps the object from sleeping.
+   */
+  private emote(ws: WebSocket, seat: Seat, kind: EmoteKind, now: number): void {
+    const from = seat.userId
+    if (!seat.person || !from || !seat.shown || !seat.pos || this.trust.get(from)?.hidden) return
+    if (this.muted(from, now)) return
+    const live = (s: EmoteSpend | undefined) => (s && now - s.since < EMOTE_WINDOW_MS ? s : undefined)
+    const [mine, known] = [live(seat.emotes), live(this.emoteSpent.get(from))]
+    // whichever remembers more: the attachment after a sleep, the map after a reconnect
+    const spent = mine && known ? (mine.n >= known.n ? mine : known) : (mine ?? known ?? { since: now, n: 0 })
+    if (spent.n >= EMOTE_PER_MINUTE) return
+    const next = { since: spent.since, n: spent.n + 1 }
+    // senders long quiet are forgotten whenever anyone emotes: the map never outgrows a minute's senders
+    for (const [id, s] of this.emoteSpent) if (now - s.since >= EMOTE_WINDOW_MS) this.emoteSpent.delete(id)
+    this.emoteSpent.set(from, next)
+    seat.emotes = next
+    this.write(ws, seat)
+    const text = JSON.stringify({ t: 'emote', from, kind } satisfies ServerMsg)
+    const reach = INTEREST_M * INTEREST_M
+    for (const other of this.sockets()) {
+      if (other === ws) continue
+      const { userId, pos } = this.seat(other)
+      // as for moves: a socket that has never said where it is hears nothing of the street
+      if (!pos || userId === from || this.apart(from, userId)) continue
       const dx = pos.x - seat.pos.x
       const dz = pos.z - seat.pos.z
       if (dx * dx + dz * dz <= reach) this.sendRaw(other, text)

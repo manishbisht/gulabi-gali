@@ -292,6 +292,8 @@ export type ClientMsg =
   | { t: 'status'; text: string }
   /** A greeting to the resident `to`, with no chat (see `REACTIONS`). Any other `kind` is a bad frame. */
   | { t: 'react'; to: string; kind: Reaction }
+  /** The sender plays an emote where they stand (see `EMOTE_KINDS`). Any other `kind` is a bad frame. */
+  | { t: 'emote'; kind: EmoteKind }
   | { t: 'ping' }
 
 export type ServerMsg =
@@ -341,6 +343,12 @@ export type ServerMsg =
   | { t: 'react'; from: string; to: string; kind: Reaction }
   /** A `react` this socket sent was not passed on, and why (see `ReactRefusal`). */
   | { t: 'react-no'; to: string; why: ReactRefusal }
+  /**
+   * `from` plays an emote where they stand (see `EMOTE_KINDS`): sent to the sockets that hear `from`'s moves
+   * (within 60 m, blocked neither way), never to `from`. Never stored; a page that does not know the kind, or
+   * the message, ignores it.
+   */
+  | { t: 'emote'; from: string; kind: EmoteKind }
 
 /** A line said at a bench, as each sitter hears it (and as the district keeps it, in memory only). */
 export type BenchLine = Omit<Extract<ServerMsg, { t: 'bench' }>, 't' | 'bench'>
@@ -367,6 +375,18 @@ export const REACT_PER_MINUTE = 10
  * bench line.
  */
 export type ReactRefusal = 'far' | 'wait' | 'gone' | 'ghost' | 'muted'
+
+/**
+ * Emotes: a resident others can see dances, claps, sits down, poses for a selfie or waves, where they stand, and
+ * everyone who is being sent their moves sees it. Nothing of one is ever stored. A ghost's, a hidden person's
+ * and a muted one's are never passed on (their own page still plays it), nor is one past `EMOTE_PER_MINUTE`
+ * in a minute, counted from the first of them: all dropped without a word. The sender's next step ends it on
+ * every page (there is no message for that), so `sit` lasts until they walk on; someone who arrives later
+ * does not see an emote that began before they came.
+ */
+export const EMOTE_KINDS = ['dance', 'clap', 'sit', 'selfie', 'wave'] as const
+export type EmoteKind = (typeof EMOTE_KINDS)[number]
+export const EMOTE_PER_MINUTE = 12
 
 /**
  * How the server may end a district socket. A replaced socket lost to a newer one for the same person (another
