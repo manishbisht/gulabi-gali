@@ -28,6 +28,8 @@ import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
 import { createBandar, createBandarMemory, type BandarEvent } from './bandar'
 import { createAnimals, createStationMemory, type AnimalHooks, type Animals } from './animals'
+import { createPetEmote } from './petEmote'
+import { createTouchables, createTouchMemory, type TouchableHooks, type Touchables } from './touchables'
 import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
@@ -129,6 +131,8 @@ export interface SessionHooks {
   taxi?: TaxiHooks
   /** The street animals: the one in reach, the one following, and their passing lines (see useAnimals). */
   animals?: AnimalHooks
+  /** The bell, pump or diya stand in reach (see useTouchables). */
+  touchables?: TouchableHooks
   /** The Galta bandar (Walled City, Galta Ji): `blocked` while a card, sheet, bench, kite or ride is up. */
   bandar?: { blocked(): boolean; event(e: BandarEvent): void }
   /** The rooftop viewpoint: its stair in reach, being up there, and the fade between (see useRooftop). */
@@ -204,6 +208,12 @@ export interface CitySession {
   callAnimal(): void
   /** "Ghar jao": the follower goes back to where it lives. */
   animalHome(): void
+  /** "Roti khilao": feeds the cow in reach a roti. */
+  feedAnimal(): void
+  /** "Pyaar karo": pets the dog or cat in reach; an emote shows over it. */
+  petAnimal(): void
+  /** "Ghanti bajao", "Paani chalao", "Diya jalao": touches the bell, pump or diya stand in reach. */
+  touch(): void
   /** A poster this page just pinned goes up on its wall at once (the socket's word on it may lag). */
   pinned(p: PosterView): void
   /** One of this page's own posters came down. */
@@ -240,12 +250,16 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     driving: Driving
     taxi: Taxi
     animals: Animals
+    touchables: Touchables
+    petEmote: ReturnType<typeof createPetEmote>
     roof: Rooftop | null
   } | null = null
   /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
   const stationMemory = createStationMemory()
   /** The monkey's last raid, so leaving and coming back does not reset its 10 minutes. */
   const bandarMemory = createBandarMemory()
+  /** The diyas lit on this visit stay lit when the player comes back to a district (not saved). */
+  const touchMemory = createTouchMemory()
   let repaint = () => {}
   let disposed = false
 
@@ -326,6 +340,15 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       memory: bandarMemory,
     })
     const sky = createSky(stage, district, hooks)
+    const touchables = createTouchables(district.def, stage.scene, {
+      // the diyas are lit between sunset and sunrise, by the live sky's sun
+      night: () => !daylight(sky.params()),
+      memory: touchMemory,
+      hooks: hooks.touchables,
+      quality: stage.quality,
+    })
+    const offTouchQuality = stage.onQuality(touchables.setQuality)
+    const petEmote = createPetEmote(bubbleHost, animals.at)
     // made here, not in the presence, so taps and E can reach the people too
     // someone inside the rooftop strip is up on the roof (nobody on the street can stand there)
     const roofDef = district.def.roof
@@ -405,6 +428,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         dispose: bandar.dispose,
       },
       sky,
+      {
+        update: touchables.update,
+        dispose() {
+          offTouchQuality()
+          touchables.dispose()
+        },
+      },
+      { update: (dt) => petEmote.update(dt, stage.camera), dispose: petEmote.dispose },
       createAmbience({
         district: district.def.id,
         sky: sky.params,
@@ -428,6 +459,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
         posters,
         driving,
         animals,
+        touchables,
         roof,
         hooks,
       ),
@@ -464,7 +496,21 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     else posters?.refresh()
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, people, sitting, posters, driving, taxi, animals, roof }
+    here = {
+      district,
+      player,
+      systems,
+      presence,
+      people,
+      sitting,
+      posters,
+      driving,
+      taxi,
+      animals,
+      touchables,
+      petEmote,
+      roof,
+    }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -502,6 +548,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           }
         }),
       freezeAnimals: animals.freeze,
+      touchables: touchables.list,
+      petEmote: petEmote.showing,
       roof: () =>
         roofDef ? { up: roof!.up(), y: player.elevation(), stair: roofDef.stair, area: roofDef.area } : null,
       signposts: () => district.def.signposts ?? [],
@@ -590,6 +638,19 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       if (here) here.animals.call(here.player.position())
     },
     animalHome: () => here?.animals.sendHome(),
+    feedAnimal() {
+      if (here) here.animals.feed(here.player.position())
+    },
+    petAnimal() {
+      if (!here) return
+      const a = here.animals.pet(here.player.position())
+      if (a && a.kind !== 'cow') here.petEmote.show(a.id, a.kind)
+    },
+    touch() {
+      // on foot in the street only: not from a bench, the wheel or the roof
+      if (!here || here.player.driving() || here.sitting?.seated() || here.roof?.up()) return
+      here.touchables.touch(here.player.position())
+    },
     pinned: (p) => here?.posters?.upsert(p),
     unpinned: (id) => here?.posters?.remove(id),
     refreshPosters: () => here?.posters?.refresh(),
@@ -681,7 +742,7 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 
 /**
  * E and taps: a landmark's stamp, the metro, a bench, a poster wall, an auto, the rooftop stair, the character
- * card and the person card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
+ * card and the person card, then a touchable (a bell, a pump, diyas) and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
  * the landmark and metro wait until they do; up on the roof, E comes down (a card that is up closes first). A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
  *
@@ -702,6 +763,7 @@ function createInteraction(
   posters: Posters | null,
   drive: Driving,
   animals: Animals,
+  touchables: Touchables,
   roof: Rooftop | null,
   hooks: SessionHooks,
 ): DistrictSystem {
@@ -793,7 +855,7 @@ function createInteraction(
       hooks.personCard.close()
       return hooks.posters?.tap(poster)
     }
-    // last: an animal, unless a card is up, a landmark has the screen, or the player is seated or up on a roof
+    // last: a touchable, then an animal, unless a card is up, a landmark has the screen, or the player is seated or up on a roof
     if (
       landmarkNear ||
       postering ||
@@ -803,6 +865,8 @@ function createInteraction(
       roof?.up()
     )
       return
+    const thing = touchables.pick(ray, at)
+    if (thing) return void touchables.touch(at, thing.id)
     const pet = animals.pick(ray, at)
     if (pet) animals.call(at, pet.id)
   }
@@ -886,7 +950,8 @@ function createInteraction(
             (meeting || (!metro && !hooks.npcCard.isOpen())),
           landmarkNear,
         )
-      // E by an animal, only when nothing above wanted it (a card that just opened has it)
+      // E by a bell, pump or diya stand, and after those an animal, only when nothing above wanted it (a card
+      // that just opened has it)
       if (
         pressed &&
         !card &&
@@ -899,8 +964,10 @@ function createInteraction(
         !stair &&
         !hooks.npcCard.isOpen() &&
         !hooks.personCard.isOpen()
-      )
-        animals.call(pos)
+      ) {
+        if (touchables.near()) touchables.touch(pos)
+        else animals.call(pos)
+      }
     },
     dispose() {
       canvas.removeEventListener('pointerdown', onDown)

@@ -12,6 +12,7 @@ import { benchesOf, seatPose } from './benches'
 import { ROOF_FADE_MS } from './rooftop'
 import { linkId, placeSpot } from './placeLink'
 import { createCitySession, type SessionHooks } from './session'
+import { onTouched } from './touched'
 import type { DistrictDef } from './types'
 
 /** Each district asked for waits here until the test lets it arrive (or fail). */
@@ -1100,6 +1101,63 @@ it('a follower waits at the station through a metro ride and rejoins on the way 
   await back
   expect(animals.following).toHaveBeenLastCalledWith(expect.objectContaining({ id: dog.id }))
   session.dispose()
+})
+
+it('a bell in reach is rung by the button and by E, before an animal is called; not from far off', async () => {
+  const touchables = { near: vi.fn() }
+  const animals = { near: vi.fn(), following: vi.fn(), notice: vi.fn() }
+  const done: string[] = []
+  const off = onTouched((k) => done.push(k))
+  const pressed = { now: false }
+  const { session, tick } = open('walled-city', { touchables, animals })
+  const interact = vi.spyOn(controls, 'interact').mockImplementation(() => pressed.now)
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const bell = walledCity.touchables!.find((t) => t.kind === 'bell')!
+  session.touch() // at the spawn: nothing in reach
+  expect(done).toEqual([])
+  session.player()!.teleport(bell.at.x + 1.5, bell.at.z)
+  tick(1 / 30)
+  expect(touchables.near).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'bell' }))
+  session.touch()
+  expect(done).toEqual(['bell'])
+  // E rings it too (once the three seconds are up), and calls no animal
+  for (let i = 0; i < 100; i++) tick(1 / 30)
+  pressed.now = true
+  tick(1 / 30)
+  pressed.now = false
+  expect(done).toEqual(['bell', 'bell'])
+  expect(animals.following).not.toHaveBeenCalled()
+  interact.mockRestore()
+  off()
+  session.dispose()
+  expect(touchables.near).toHaveBeenLastCalledWith(null)
+})
+
+it('feeding the cow says a line; petting a dog puts an emote over it, which leaves with the district', async () => {
+  const animals = { near: vi.fn(), following: vi.fn(), notice: vi.fn() }
+  const { session, tick } = open('walled-city', { animals })
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const emote = () => document.querySelector('.pet-emote') as HTMLElement
+  expect(emote().hidden).toBe(true)
+  session.player()!.teleport(walledCity.animals.cow.x, walledCity.animals.cow.z + 1.5)
+  session.petAnimal() // a cow is not petted
+  expect(animals.notice).not.toHaveBeenCalled()
+  session.feedAnimal()
+  expect(animals.notice).toHaveBeenLastCalledWith({ kind: 'fed', line: 0 })
+  session.player()!.teleport(2, 38.5) // beside the dog at (2, 38)
+  session.petAnimal()
+  expect(animals.notice).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: 'pet', animal: expect.objectContaining({ kind: 'dog' }) }),
+  )
+  expect(emote().textContent).toBe('❤️')
+  expect(animals.following).not.toHaveBeenCalled()
+  // it goes by itself after a few seconds
+  for (let i = 0; i < 100; i++) tick(1 / 30)
+  expect(emote().hidden).toBe(true)
+  session.dispose()
+  expect(document.querySelector('.pet-emote')).toBeNull()
 })
 
 it('a failed trip leaves the follower where it is', async () => {

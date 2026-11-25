@@ -30,6 +30,7 @@ import { usePersonCard } from './world/usePersonCard'
 import { useReactions } from './world/useReactions'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
+import { TOUCH_KEYS, useTouchables } from './world/useTouchables'
 import { hasBandar } from './world/bandar'
 import { bandarText, useBandar } from './world/useBandar'
 import { useDrive } from './world/useDrive'
@@ -165,6 +166,9 @@ export default function App() {
   /** The street animals: the one in reach, the one following, and their passing lines. */
   const animals = useAnimals()
   const { hooks: animalHooks, bind: bindAnimals } = animals
+  /** The bell, pump or diya stand in reach. */
+  const touch = useTouchables()
+  const { hooks: touchHooks, bind: bindTouch } = touch
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
@@ -385,6 +389,7 @@ export default function App() {
         drive: driveHooks,
         taxi: taxiHooks,
         animals: animalHooks,
+        touchables: touchHooks,
         bandar: bandarHooks,
         roof: roofHooks,
         reactions: reactionHooks,
@@ -402,6 +407,7 @@ export default function App() {
     bindDrive(city)
     bindTaxi(city)
     bindAnimals(city)
+    bindTouch(city)
     bindRoof(city)
     bindReactions(city)
     bindMap({ session: city, stage })
@@ -410,6 +416,7 @@ export default function App() {
       bindMap(null)
       bindReactions(null)
       bindRoof(null)
+      bindTouch(null)
       bindAnimals(null)
       bindTaxi(null)
       bindDrive(null)
@@ -448,6 +455,8 @@ export default function App() {
     bindTaxi,
     animalHooks,
     bindAnimals,
+    touchHooks,
+    bindTouch,
     bindMap,
     roofHooks,
     bindRoof,
@@ -891,7 +900,24 @@ export default function App() {
                       {t('posterPin', lang)}
                     </button>
                   )}
+                  {/* a bell, a pump or diyas in reach: before an animal, as E has it */}
+                  {touch.near &&
+                    !drive.near &&
+                    !nearStation &&
+                    !bench.near &&
+                    !bench.seat &&
+                    !posters.near &&
+                    !near &&
+                    !sheetOpen &&
+                    !card &&
+                    !roof.up &&
+                    !roof.fading && (
+                      <button type="button" className="metro-button touch-button" onClick={touch.touch}>
+                        {t(TOUCH_KEYS[touch.near.kind], lang)}
+                      </button>
+                    )}
                   {animals.near &&
+                    !touch.near &&
                     !drive.near &&
                     !nearStation &&
                     !bench.near &&
@@ -900,9 +926,23 @@ export default function App() {
                     !near &&
                     !sheetOpen &&
                     !card && (
-                      <button type="button" className="metro-button animal-button" onClick={animals.call}>
-                        {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
-                      </button>
+                      // two small buttons side by side: come along (or a namaste), and a kindness
+                      <>
+                        <button
+                          type="button"
+                          className="metro-button animal-button small-button"
+                          onClick={animals.call}
+                        >
+                          {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                        </button>
+                        <button
+                          type="button"
+                          className="metro-button animal-button small-button"
+                          onClick={animals.near.kind === 'cow' ? animals.feed : animals.pet}
+                        >
+                          {t(animals.near.kind === 'cow' ? 'animalFeed' : 'animalPet', lang)}
+                        </button>
+                      </>
                     )}
                   {animals.following && !bench.seat && !near && !sheetOpen && !card && (
                     <button type="button" className="metro-button animal-button" onClick={animals.home}>

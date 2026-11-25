@@ -440,6 +440,23 @@ export const STRINGS = {
     hi: '{name} station pe intezaar kar raha hai',
     en: '{name} is waiting at the station',
   },
+  animalFeed: { hi: 'Roti khilao', en: 'Feed a roti' },
+  animalPet: { hi: 'Pyaar karo', en: 'Pet' },
+  animalFed1: {
+    hi: 'Gaay mata ne roti le li, ab aaraam se jugaali kar rahi hain',
+    en: 'The cow took the roti and is chewing it over, unhurried',
+  },
+  animalFed2: {
+    hi: 'Pehli roti gaay ki — ghar ghar ki purani reet',
+    en: 'The first roti is for the cow: an old custom in many homes',
+  },
+  animalFed3: {
+    hi: 'Gaay mata tript hain, dheere se poonchh hila rahi hain',
+    en: 'The cow is content, slowly swishing her tail',
+  },
+  touchBell: { hi: 'Ghanti bajao', en: 'Ring the bell' },
+  touchPump: { hi: 'Paani chalao', en: 'Work the pump' },
+  touchDiya: { hi: 'Diya jalao', en: 'Light a diya' },
   animalCow1: { hi: 'Gaay mata apni marzi ki maalik hain', en: 'The cow does as she pleases' },
   animalCow2: {
     hi: 'Gaay mata ne ek nazar dekha, phir aaram se jugaali karti rahin',

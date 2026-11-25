@@ -912,6 +912,15 @@ button {
   font-weight: 700;
 }
 
+/* A street animal's two buttons ("Saath chalo" and "Pyaar karo"): smaller, so both sit beside the joystick on
+   a small phone, and still a thumb's size. */
+.metro-button.small-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 0.95rem;
+}
+
 /* Tapri and bench chat: beside the joystick, or spanning the screen above the phone keyboard. */
 .bench-chat {
   display: flex;

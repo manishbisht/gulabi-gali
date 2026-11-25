@@ -678,6 +678,36 @@ All extras follow the quality tiers: animals, procession members and the kite fi
 (a few draw calls each) and fewer at tier 0, and nothing in their frame updates allocates. The numbers with
 everything on at once are in [device-performance.md](./device-performance.md).
 
+#### Things you can touch (`frontend/src/world/touchables.ts`)
+
+Each district's def lists its `touchables` (kind, position, `rot`): a temple `bell` on a small frame, a hand
+`pump`, a flock of `pigeons` on an open square, a stand of `diyas`. At least two kinds stand in every district,
+placed by a test from the defs: on open ground, outside every landmark's ring and out of reach of the station,
+benches, poster walls, autos, the rooftop stair, the characters' walks and the procession. The standing ones are
+solid (`touchableBoxes.ts`, added to the district's colliders); the pigeons are walked through.
+
+- **Bell**: "Ghanti bajao" rings it once, softly, and it swings and settles. One ring per 3 s of play at most;
+  there is no count and no line of copy.
+- **Pump**: "Paani chalao" works the handle three strokes and water runs for a moment.
+- **Pigeons**: no button. Within 4 m they lift, wheel once round the square and settle exactly where they
+  stood; they go up again only after the player has stepped 2 m further away. Under `prefers-reduced-motion`
+  they hop 1.5 m aside instead and come back once the player has gone.
+- **Diyas**: "Diya jalao" lights the next of five, only while the live sky's sun is down (`daylight(sky)`
+  false: sunset to sunrise). Lit ones stay lit for the visit (`TouchMemory`, in memory: a reload starts dark).
+
+E and a tap reach them just above the animals in the priority order: ... > character or person card > a
+touchable > an animal. The street animals have a second small button beside "Saath chalo": "Roti khilao" for
+the cow (she chews for 3 s and a line says so) and "Pyaar karo" for a dog or cat (it wriggles, and an emote
+shows over it: `petEmote.ts`, one DOM node moved by projection). Following is unchanged.
+
+Drawing is one merged mesh for what stands still and one `InstancedMesh` each for the bells, pump handles,
+water, flames, and the pigeons' bodies and wings (seven draw calls at most, only for the kinds a district has);
+a frame allocates nothing, and a flock more than 50 m away is not touched. Tier 0 halves the flock (6 of 12),
+has no water and no flicker or pecking. The sounds (`audio/touch.ts`) are oscillators and filtered noise in the
+page's one audio context, follow `gg-sound`, and play nothing in a hidden tab. Every touch calls
+`touched(kind)` (`world/touched.ts`: `bell`, `pump`, `pigeons`, `diyas`, `feed`, `pet`), which anything on the
+page can listen to with `onTouched`.
+
 ## Launch readiness
 
 ### The error pipeline (`frontend/src/net/errorBeacon.ts`, `backend/src/errors.ts`)

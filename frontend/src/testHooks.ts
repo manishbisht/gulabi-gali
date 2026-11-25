@@ -51,6 +51,13 @@ export interface GgTestApi {
   animals(): { id: string; kind: string; x: number; z: number; following: boolean; sx: number; sy: number }[]
   /** Stops (or resumes) every animal wandering; a follower still follows. */
   freezeAnimals(on: boolean): void
+  /**
+   * Each touchable (bell, pump, pigeons, diyas): where it stands, whether it is answering now (swinging, running,
+   * in the air), and how many of a stand's diyas are lit.
+   */
+  touchables(): { id: string; kind: string; x: number; z: number; active: boolean; lit: number }[]
+  /** The animal the pet emote is over, or null. */
+  petEmote(): string | null
   /** The district's rooftop viewpoint: whether the player is up, how high their feet are, the stair and the strip. */
   roof(): { up: boolean; y: number; stair: Vec2; area: AABB } | null
   /** Where the district's signposts stand. */
