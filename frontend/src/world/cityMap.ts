@@ -4,6 +4,7 @@ import { benchesOf } from './benches'
 import { stopName } from './metroRide'
 import type { Remote } from './people'
 import { wallsOf } from './posters'
+import { SHOW_TEXT, showId, showsOf } from './shows'
 import type { AABB, DistrictDef, Vec2 } from './types'
 
 /*
@@ -14,7 +15,9 @@ import type { AABB, DistrictDef, Vec2 } from './types'
 /** Within this many metres of a target, it has been reached and the compass clears. */
 export const ARRIVE_M = 6
 
-export type MapItemKind = 'landmark' | 'metro' | 'viewpoint' | 'bench' | 'tapri' | 'poster'
+export type MapItemKind = 'landmark' | 'metro' | 'viewpoint' | 'show' | 'bench' | 'tapri' | 'poster'
+/** The kinds there are many of in a district, numbered in their names. */
+type Numbered = 'bench' | 'tapri' | 'poster'
 
 /** A place on the map that can be picked as the compass's target. */
 export interface MapTarget {
@@ -32,24 +35,22 @@ export interface MapItem extends MapTarget {
   stamped?: boolean
 }
 
-const NAMES: Record<Exclude<MapItemKind, 'landmark' | 'metro' | 'viewpoint'>, StringKey> = {
+const NAMES: Record<Numbered, StringKey> = {
   bench: 'mapBench',
   tapri: 'mapTapri',
   poster: 'mapPoster',
 }
 
 /** A place's name in both languages; `n` numbers one of many (`Chai tapri 2`), so a screen reader tells them apart. */
-const named = (
-  kind: Exclude<MapItemKind, 'landmark' | 'metro' | 'viewpoint'>,
-  n?: number,
-): Record<Lang, string> => ({
+const named = (kind: Numbered, n?: number): Record<Lang, string> => ({
   hi: t(NAMES[kind], 'hi', { n: n ?? '' }),
   en: t(NAMES[kind], 'en', { n: n ?? '' }),
 })
 
 /**
  * Every place on a district's map: its landmarks (with `stamped`), the metro, a named rooftop viewpoint (at its
- * stair), its benches and tapris, its poster walls.
+ * stair), its street shows (the evening's dancers too, by day: the name says when), its benches and tapris, its
+ * poster walls.
  */
 export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[] {
   const count = { bench: 0, tapri: 0 }
@@ -67,6 +68,12 @@ export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[
     ...(def.roof && def.roofName
       ? [{ id: 'viewpoint', kind: 'viewpoint', name: def.roofName, at: def.roof.stair } satisfies MapItem]
       : []),
+    ...showsOf(def).map((s): MapItem => ({
+      id: showId(s.kind),
+      kind: 'show',
+      name: { hi: t(SHOW_TEXT[s.kind].name, 'hi'), en: t(SHOW_TEXT[s.kind].name, 'en') },
+      at: s.at,
+    })),
     ...benchesOf(def).map((b): MapItem => ({
       id: b.id,
       kind: b.kind,

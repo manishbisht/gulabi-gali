@@ -36,6 +36,13 @@ const LANDMARK_LINES: Record<string, string> = {
   'galta-ji': 'The temples and sacred kunds of Galta, in a gorge in the hills east of Jaipur.',
 }
 
+/** How a street show's line begins, by its place id (`show-<kind>`, see shows.ts). */
+const SHOW_LINES: Record<string, string> = {
+  'show-kathputli': 'A kathputli string-puppet show',
+  'show-ravanhatta': 'A ravanhatta player with his bowed folk tune',
+  'show-dancers': 'Kalbelia-style dancers, out in the evening,',
+}
+
 /** The Hinglish half of every description, echoing the line "Bulao" sends with the link. */
 const TAG = 'Aao, yahin milte hain!'
 
@@ -46,6 +53,8 @@ function kindLine(p: SharedPlace, district: string): string {
   switch (p.kind) {
     case 'metro':
       return `The ${p.name.en.toLowerCase()} for ${district} in Gulabi Gali, a walkable, low-poly Jaipur.`
+    case 'show':
+      return `${SHOW_LINES[p.place] ?? 'A street show'} in ${district}, Gulabi Gali: walk up and it plays for you.`
     case 'viewpoint':
       return `Climb to the ${p.name.en.toLowerCase()} in ${district}, Gulabi Gali, and look out over Jaipur.`
     case 'bench':

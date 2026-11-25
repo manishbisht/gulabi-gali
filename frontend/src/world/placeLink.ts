@@ -5,6 +5,7 @@ import type { MapTarget } from './cityMap'
 import { PLAYER_RADIUS } from '../player/player'
 import { DISTRICTS, type District } from './district'
 import { wallsOf } from './posters'
+import { showOfId, watchSpot } from './shows'
 import { TAXI } from './taxi'
 import type { AABB, Vec2 } from './types'
 
@@ -16,7 +17,7 @@ import type { AABB, Vec2 } from './types'
  * stands the visitor at the place (after "Padharo"); a place the district does not have falls back to the
  * normal spawn.
  *
- * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `viewpoint`, `poster-<n>`; a bench or tapri is
+ * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `viewpoint`, `show-<kind>`, `poster-<n>`; a bench or tapri is
  * `bench-<n>` / `tapri-<n>`, its number as the server counts seats (the map's `<district>:<n>` without the
  * district, which the link already says).
  */
@@ -135,6 +136,12 @@ export function placeSpot(district: Pick<District, 'def' | 'colliders'>, place: 
     // can stand beyond, and facing it would turn the visitor's back on the fort
     const { minX, maxX, minZ, maxZ } = landmark.footprint
     return { x: drop.x, z: drop.z, ry: Math.atan2((minX + maxX) / 2 - drop.x, (minZ + maxZ) / 2 - drop.z) }
+  }
+  // a street show: where its audience stands, facing it (open ground by the show's own placement rules)
+  const show = showOfId(def, place)
+  if (show) {
+    const spot = watchSpot(show)
+    return clear(spot.x, spot.z, colliders) ? spot : null
   }
   const seat = /^(bench|tapri)-(\d+)$/.exec(place)
   if (seat) {

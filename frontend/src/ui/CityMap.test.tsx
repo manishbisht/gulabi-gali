@@ -6,6 +6,7 @@ import { benchesOf } from '../world/benches'
 import walledCity from '../world/districts/walledCity'
 import amer from '../world/districts/amer'
 import { wallsOf } from '../world/posters'
+import { showsOf } from '../world/shows'
 import { CityMap, type MapView } from './CityMap'
 import { Compass } from './Compass'
 
@@ -46,7 +47,11 @@ it('is a modal dialog named "Map", drawn from the district: its paving, every bu
   // every place on it is a button with a name
   const places = buttons().filter((b) => b.classList.contains('map-item'))
   expect(places).toHaveLength(
-    walledCity.landmarks.length + 1 + benchesOf(walledCity).length + wallsOf(walledCity).length,
+    walledCity.landmarks.length +
+      1 +
+      showsOf(walledCity).length +
+      benchesOf(walledCity).length +
+      wallsOf(walledCity).length,
   )
   for (const b of places) expect(b.getAttribute('aria-label')).toBeTruthy()
   const label = (b: HTMLButtonElement) => b.getAttribute('aria-label')!
@@ -184,4 +189,23 @@ it("Amer's stop is the bus stand: a B in the bus's marigold, not the metro's M; 
   const m = metro.host.querySelector<HTMLButtonElement>('.map-item[data-kind="metro"]')!
   expect(m.getAttribute('data-by')).toBe('metro')
   expect(m.textContent).toBe('M')
+})
+
+it('a street show has its mask on the map and a row of its own in the list, never folded away', async () => {
+  const { host, props } = await mount()
+  const dot = host.querySelector<HTMLButtonElement>('.map-item[data-kind="show"]')!
+  expect(dot.getAttribute('aria-label')).toBe('Kathputli puppet show')
+  expect(dot.textContent).toBe('🎭')
+  const row = host.querySelector<HTMLButtonElement>('.map-list:not(.map-more-list) button[data-kind="show"]')!
+  expect(row.textContent).toMatch(/^🎭 Kathputli puppet show · \d+ m$/)
+  // the mark is decoration: a screen reader hears the name and the distance
+  expect(row.querySelector('[aria-hidden="true"]')!.textContent).toBe('🎭 ')
+  expect(host.querySelector('.map-more button[data-kind="show"]')).toBeNull()
+  // it can be walked to like any place, and sent to someone
+  await act(async () => row.click())
+  expect(props.onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'show-kathputli', kind: 'show' }))
+  expect(row.closest('li')!.querySelector('.map-invite')).not.toBeNull()
+  // a district with no show has no such row
+  const none = await mount({ def: { ...walledCity, shows: undefined } })
+  expect(none.host.querySelector('[data-kind="show"]')).toBeNull()
 })
