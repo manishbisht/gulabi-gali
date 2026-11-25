@@ -58,7 +58,8 @@ test("a ghost's goal of the day: the chip and its sheet say it, a photo does it,
 
   await photo(page)
   await expect(page.locator('.today-toast')).toHaveText('Aaj ka Darshan ho gaya! Lagataar 3 din')
-  await expect(chip).toHaveAccessibleName('Aaj ka Darshan ho gaya: Photo mode mein ek photo khincho')
+  await expect(chip).toHaveAccessibleName('Aaj ka Darshan ho gaya')
+  await expect(chip).toHaveAttribute('title', 'Aaj ka Darshan ho gaya: Photo mode mein ek photo khincho')
   await expect(chip.locator('.today-tick')).toBeVisible()
   await expect(page.locator('.stamp-count')).toHaveAttribute('data-streak', '')
   expect(JSON.parse((await page.evaluate(() => localStorage.getItem('gg-today')))!)).toEqual({
