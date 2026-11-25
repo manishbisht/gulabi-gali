@@ -16,9 +16,10 @@ export interface Stage {
   /**
    * Draws one frame at the device's pixel ratio and runs `read` on the canvas straight away (it must copy or
    * encode synchronously: the drawing buffer is only good until this task ends), then goes back to the tier's
-   * ratio. No `preserveDrawingBuffer`: that would cost every frame on a phone.
+   * ratio. No `preserveDrawingBuffer`: that would cost every frame on a phone. `minRatio` asks for at least that
+   * ratio (a postcard cut from a low-ratio screen), still capped at the photo ceiling, and not on the lowest tier.
    */
-  capture<T>(read: (canvas: HTMLCanvasElement) => T): T
+  capture<T>(read: (canvas: HTMLCanvasElement) => T, minRatio?: number): T
   /** Frames drawn since the WebGL context was last restored (or since start). */
   framesSinceRestore(): number
   /** Seconds of game time the frames have run: the sum of their clamped dts, so slow frames count less than the wall clock. */
@@ -238,10 +239,13 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       qualityListeners.add(cb)
       return () => void qualityListeners.delete(cb)
     },
-    capture(read) {
+    capture(read, minRatio = 0) {
       const gone = () => disposed || lost || !fitW || renderer.getContext().isContextLost()
       if (gone()) throw new Error('capture: the WebGL context is lost')
-      renderer.setPixelRatio(lite ? LITE_RATIO : Math.min(window.devicePixelRatio, PHOTO_RATIO_CAP))
+      const asked = quality === 0 ? 0 : minRatio
+      renderer.setPixelRatio(
+        lite ? LITE_RATIO : Math.min(Math.max(window.devicePixelRatio, asked), PHOTO_RATIO_CAP),
+      )
       renderer.setSize(fitW, fitH, false)
       // Poster sheets print people's names; whatever is marked noPhoto stays out of the picture.
       const hidden: THREE.Object3D[] = []
