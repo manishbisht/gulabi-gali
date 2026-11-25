@@ -316,6 +316,16 @@ const walledCity: DistrictDef = {
     { x: -7.5, z: -7.5 },
     { x: -7.5, z: -2 },
   ],
+  /**
+   * What answers a touch (touchables.ts): a wayside bell up Sireh Deori bazaar, a hand pump by the start of Johari Bazaar, the pigeons on the
+   * open patch across from Hawa Mahal, and diyas on the quiet ground north of the bazaar.
+   */
+  touchables: [
+    { kind: 'bell', at: { x: -5.5, z: -28 }, rot: 270 },
+    { kind: 'pump', at: { x: 5.5, z: 46 }, rot: 90 },
+    { kind: 'pigeons', at: { x: 36, z: 16 } },
+    { kind: 'diyas', at: { x: 16, z: -23.5 } },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

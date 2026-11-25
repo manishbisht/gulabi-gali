@@ -239,6 +239,15 @@ const amer: DistrictDef = {
     { x: 40, z: 48 },
     { x: -40, z: 48 },
   ],
+  /**
+   * What answers a touch (touchables.ts): the bell before the temple by the road up to the fort, the pigeons on the square, and diyas on the
+   * lake's promenade.
+   */
+  touchables: [
+    { kind: 'bell', at: { x: 50, z: 17 }, rot: 90 },
+    { kind: 'pigeons', at: { x: 10, z: 34 } },
+    { kind: 'diyas', at: { x: -36, z: 55 }, rot: 180 },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

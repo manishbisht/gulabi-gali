@@ -215,6 +215,14 @@ const nahargarh: DistrictDef = {
     { x: 40, z: 50 },
     { x: -20, z: 50 },
   ],
+  /**
+   * What answers a touch (touchables.ts): the pigeons at the sunset point, diyas by the ridge's edge, and a hand pump on the way to the fort.
+   */
+  touchables: [
+    { kind: 'pigeons', at: { x: -60, z: 8 } },
+    { kind: 'diyas', at: { x: -88, z: 0 }, rot: 90 },
+    { kind: 'pump', at: { x: 44, z: -8 } },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

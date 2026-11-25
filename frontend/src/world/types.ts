@@ -39,6 +39,17 @@ export interface PropSpec {
   /** Degrees, the same turn as `BuildingSpec.rot`: 90 sends the front (+z) to -x. */
   rot?: number
 }
+/**
+ * Something on the street that answers a touch (see touchables.ts): a temple bell on its frame, a hand pump, a
+ * flock of pigeons on an open square (no button: they lift when walked into), a stand of diyas to light after
+ * sunset.
+ */
+export interface TouchableSpec {
+  kind: 'bell' | 'pump' | 'pigeons' | 'diyas'
+  at: Vec2
+  /** Degrees, the same turn as `PropSpec.rot`: 90 sends the front (+z) to -x. The pigeons have no front. */
+  rot?: number
+}
 /** A flat patch of ground colour (a road, a kerb line, a paved court). Later patches lie on top. */
 export interface Paving extends AABB {
   color: PaletteKey
@@ -137,6 +148,8 @@ export interface DistrictDef {
    * colliders are `rocks`, and its kunds' steps, inside `water`).
    */
   scenery?: () => THREE.Group
+  /** The things that answer a touch (see touchables.ts): at least two kinds in every district. */
+  touchables?: TouchableSpec[]
   /** New Year's string lights (see festivalFx.ts): strands hung between building fronts, both ends `y` m up. */
   stringLights?: StringLight[]
 }

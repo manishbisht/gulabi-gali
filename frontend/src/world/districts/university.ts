@@ -237,6 +237,14 @@ const university: DistrictDef = {
     { x: 34, z: 42.5 },
     { x: -5, z: 42.5 },
   ],
+  /**
+   * What answers a touch (touchables.ts): a hand pump by the road, the pigeons on the lawn before JKK, and diyas near the gate.
+   */
+  touchables: [
+    { kind: 'pump', at: { x: -24.5, z: 44 }, rot: 180 },
+    { kind: 'pigeons', at: { x: 50, z: 26 } },
+    { kind: 'diyas', at: { x: -48, z: 27.5 }, rot: 270 },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [
