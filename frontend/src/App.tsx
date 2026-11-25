@@ -783,8 +783,14 @@ export default function App() {
             )}
             {/* a first visit's three steps, once the street is there to try them on */}
             {typeof place !== 'string' && <FirstHint lang={lang} />}
-            {/* "Home screen pe rakho": once, after a couple of minutes in the city, where the browser can */}
-            {typeof place !== 'string' && <InstallHint lang={lang} />}
+            {/* "Home screen pe rakho": once, after a couple of minutes in the city, where the browser can; it
+                waits (and does not count) while anything is over the street */}
+            {typeof place !== 'string' && (
+              <InstallHint
+                lang={lang}
+                busy={bandarBlocked || !!photo || fading || roof.fading || taxi.dark}
+              />
+            )}
           </>
         }
         bottom={

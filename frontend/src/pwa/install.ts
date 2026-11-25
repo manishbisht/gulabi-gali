@@ -3,20 +3,23 @@ import { storage } from '../storage'
 import { isIOSSafari, isStandalone } from './device'
 
 /*
- * Putting Gulabi Gali on the home screen. The manifest (public/manifest.webmanifest) and the service worker
- * (public/sw.js, registered here on every visit, not only for push) make it installable; Chrome then offers it
- * with `beforeinstallprompt`, which is held back here so that Chrome's own banner never pops up over the street.
- * The city asks once instead, quietly, after a couple of minutes of walking (InstallHint.tsx): on Android with
- * Chrome's own prompt, on an iPhone in Safari with where to find "Add to Home Screen". Never inside Instagram's or
- * another app's browser (nothing can be installed from there), never once installed, and at most once a month.
+ * Putting Gulabi Gali on the home screen. The manifest (public/manifest.webmanifest) makes it installable, and the
+ * service worker (public/sw.js) is registered here on every visit, not only for push; Chrome then offers it with
+ * `beforeinstallprompt`, which is held back here so that Chrome's own banner never pops up over the street. The city
+ * asks once instead, quietly, after a couple of minutes of walking with nothing over the street (InstallHint.tsx): on
+ * a phone or tablet with Chrome's own prompt, on an iPhone in Safari with where to find "Add to Home Screen". Never
+ * inside Instagram's or another app's browser (nothing can be installed from there), never on a laptop ("home
+ * screen" means nothing there), never once installed, and at most once a month.
  */
 
 /** When the hint last showed (ms since the epoch), or `installed`: then never again on this browser. */
 export const INSTALL_HINT_KEY = 'gg-install-hint'
 /** Time in the city, on screen, before the hint may show. */
 export const INSTALL_HINT_DELAY_MS = 2 * 60_000
-/** How long a hint that showed (and was closed, or let be) keeps quiet. */
+/** How long a hint that was seen (and closed, or let be) keeps quiet. */
 export const INSTALL_HINT_REST_MS = 30 * 24 * 3600_000
+/** How long the hint must be on screen, uncovered, to count as seen; one covered or unmounted sooner may ask again. */
+export const INSTALL_HINT_SEEN_MS = 5000
 /** The address a launch from the home screen opens (the manifest's start_url), taken off before anything reads it. */
 export const PWA_SOURCE = 'pwa'
 
@@ -32,6 +35,8 @@ export type InstallWay = 'prompt' | 'ios'
 export interface InstallDevice {
   ua: string
   touchPoints: number
+  /** The main pointer is a finger (`(pointer: coarse)`). */
+  coarse: boolean
   standalone: boolean
   /** Chrome has offered an install (`beforeinstallprompt` came). */
   prompt: boolean
@@ -39,7 +44,8 @@ export interface InstallDevice {
 
 export function installWay(d: InstallDevice): InstallWay | null {
   if (d.standalone || isInAppBrowser(d.ua)) return null
-  if (d.prompt) return 'prompt'
+  // Chrome offers an install on a laptop too, but a "home screen" line would be wrong there
+  if (d.prompt && (d.coarse || d.touchPoints > 0)) return 'prompt'
   return isIOSSafari(d.ua, d.touchPoints) ? 'ios' : null
 }
 
@@ -56,9 +62,20 @@ export function hintDue(saved: string | null, now: number): boolean {
   return Math.abs(now - at) >= INSTALL_HINT_REST_MS
 }
 
-/** Remembers that the hint showed now: the next one waits a month. */
+/** Remembers that the hint was seen now: the next one waits a month. */
 export function markHintShown(now: number = Date.now()): void {
   if (storage.get(INSTALL_HINT_KEY) !== 'installed') storage.set(INSTALL_HINT_KEY, String(now))
+}
+
+/** Time the city has been on screen with nothing over it, this page: kept here so a remounted hint does not start over. */
+let cityMs = 0
+export const cityTime = (): number => cityMs
+export function countCityTime(ms: number): void {
+  cityMs += ms
+}
+/** For tests: a new page. */
+export function resetCityTime(): void {
+  cityMs = 0
 }
 
 let held: InstallPromptEvent | null = null
@@ -115,6 +132,13 @@ export function thisInstallDevice(): InstallDevice {
   return {
     ua: navigator.userAgent,
     touchPoints: navigator.maxTouchPoints ?? 0,
+    coarse: (() => {
+      try {
+        return !!window.matchMedia?.('(pointer: coarse)').matches
+      } catch {
+        return false
+      }
+    })(),
     standalone: isStandalone(),
     prompt: canPrompt(),
   }

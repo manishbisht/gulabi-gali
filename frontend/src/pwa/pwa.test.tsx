@@ -13,7 +13,9 @@ import {
   INSTALL_HINT_DELAY_MS,
   INSTALL_HINT_KEY,
   INSTALL_HINT_REST_MS,
+  INSTALL_HINT_SEEN_MS,
   installWay,
+  resetCityTime,
   watchInstall,
   type InstallDevice,
 } from './install'
@@ -99,6 +101,7 @@ describe('the home-screen hint: where and when', () => {
   const device = (d: Partial<InstallDevice>): InstallDevice => ({
     ua: UA.chromeAndroid,
     touchPoints: 5,
+    coarse: true,
     standalone: false,
     prompt: false,
     ...d,
@@ -110,6 +113,14 @@ describe('the home-screen hint: where and when', () => {
     expect(installWay(device({ ua: UA.safariIphone }))).toBe('ios')
     expect(installWay(device({ ua: UA.chromeIphone }))).toBeNull()
     expect(installWay(device({ ua: UA.firefoxDesktop, touchPoints: 0 }))).toBeNull()
+  })
+
+  it('not on a laptop, where Chrome offers an install too but there is no home screen', () => {
+    const laptop = { ua: UA.firefoxDesktop.replace('Firefox', 'Chrome'), touchPoints: 0, coarse: false }
+    expect(installWay(device({ ...laptop, prompt: true }))).toBeNull()
+    // a touch laptop or a tablet: a finger is there
+    expect(installWay(device({ ...laptop, touchPoints: 10, prompt: true }))).toBe('prompt')
+    expect(installWay(device({ ...laptop, coarse: true, prompt: true }))).toBe('prompt')
   })
 
   it('never inside Instagram or Facebook (or another app), whatever they offer', () => {
@@ -177,8 +188,11 @@ describe('InstallHint', () => {
     vi.useFakeTimers()
     storage.clear()
     storage.set(HINTED_KEY, '1')
+    resetCityTime()
     ua = UA.chromeAndroid
     vi.spyOn(navigator, 'userAgent', 'get').mockImplementation(() => ua)
+    // a phone: a touch screen
+    vi.spyOn(navigator, 'maxTouchPoints', 'get').mockReturnValue(5)
     prompt.mockClear()
     host = document.body.appendChild(document.createElement('div'))
     root = createRoot(host)
@@ -192,27 +206,37 @@ describe('InstallHint', () => {
     vi.useRealTimers()
   })
 
-  const mount = () => act(() => root.render(<InstallHint lang="hi" />))
+  const mount = (busy = false) => act(() => root.render(<InstallHint lang="hi" busy={busy} />))
+  /** A new page view of the same hint (photo mode, the taxi: the HUD goes and comes back). */
+  const remount = (busy = false) => {
+    act(() => root.unmount())
+    root = createRoot(host)
+    mount(busy)
+  }
   const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms))
   const hint = () => host.querySelector('.install-hint')
+  const saved = () => storage.get(INSTALL_HINT_KEY)
 
   it("holds Chrome's own banner back", () => {
     expect(offer().defaultPrevented).toBe(true)
   })
 
-  it('waits two minutes in the city, then asks once; Rakho opens Chrome’s dialog', async () => {
+  it('waits two minutes in the city, then asks; seen a moment, it rests; Rakho opens Chrome’s dialog', async () => {
     offer('accepted')
     mount()
     wait(INSTALL_HINT_DELAY_MS - 2000)
     expect(hint()).toBeNull()
     wait(2000)
     expect(hint()!.textContent).toContain(t('installHint', 'hi'))
-    expect(Number(storage.get(INSTALL_HINT_KEY))).toBeGreaterThan(0)
+    // up, but not yet seen
+    expect(saved()).toBeNull()
+    wait(INSTALL_HINT_SEEN_MS)
+    expect(Number(saved())).toBeGreaterThan(0)
     const go = [...host.querySelectorAll('button')].find((b) => b.textContent === t('installHintGo', 'hi'))!
     await act(async () => go.click())
     expect(prompt).toHaveBeenCalledOnce()
     expect(hint()).toBeNull()
-    expect(storage.get(INSTALL_HINT_KEY)).toBe('installed')
+    expect(saved()).toBe('installed')
   })
 
   it('counts only time the city is on screen', () => {
@@ -226,6 +250,55 @@ describe('InstallHint', () => {
     expect(hint()).not.toBeNull()
   })
 
+  it('with something over the street it neither counts nor shows, and spends nothing; clear again, it asks', () => {
+    offer()
+    mount(true)
+    wait(INSTALL_HINT_DELAY_MS * 2)
+    expect(hint()).toBeNull()
+    expect(saved()).toBeNull()
+    // the street clears: the two minutes start only now
+    mount(false)
+    wait(INSTALL_HINT_DELAY_MS - 2000)
+    expect(hint()).toBeNull()
+    // busy again right at the two-minute mark: still nothing, nothing written
+    mount(true)
+    wait(10_000)
+    expect(hint()).toBeNull()
+    expect(saved()).toBeNull()
+    mount(false)
+    wait(2000)
+    expect(hint()).not.toBeNull()
+  })
+
+  it('one covered or unmounted before it was seen may ask again; one seen does not', () => {
+    offer()
+    mount()
+    wait(INSTALL_HINT_DELAY_MS)
+    expect(hint()).not.toBeNull()
+    // a sheet comes up over it within a second: it steps aside, and is not spent
+    wait(1000)
+    mount(true)
+    expect(hint()).toBeNull()
+    wait(60_000)
+    expect(saved()).toBeNull()
+    mount(false)
+    expect(hint()).not.toBeNull()
+    // photo mode takes the HUD away a second later: still not spent, and back once the HUD is
+    wait(1000)
+    act(() => root.unmount())
+    expect(saved()).toBeNull()
+    root = createRoot(host)
+    mount()
+    wait(1000)
+    expect(hint()).not.toBeNull()
+    // this time it stays up long enough to be seen
+    wait(INSTALL_HINT_SEEN_MS)
+    expect(saved()).not.toBeNull()
+    remount()
+    wait(INSTALL_HINT_DELAY_MS * 2)
+    expect(hint()).toBeNull()
+  })
+
   it('closes with ×, or by itself, and does not ask again for 30 days', () => {
     offer()
     mount()
@@ -235,18 +308,18 @@ describe('InstallHint', () => {
     )!
     act(() => close.click())
     expect(hint()).toBeNull()
+    // answered, so spent at once
+    expect(saved()).not.toBeNull()
     // the next visit, still with an offer
-    act(() => root.unmount())
-    root = createRoot(host)
+    resetCityTime()
+    remount()
     offer()
-    mount()
     wait(INSTALL_HINT_DELAY_MS * 3)
     expect(hint()).toBeNull()
-    // one left alone goes away by itself
+    // a month on: one left alone goes away by itself
     storage.set(INSTALL_HINT_KEY, String(Date.now() - INSTALL_HINT_REST_MS))
-    act(() => root.unmount())
-    root = createRoot(host)
-    mount()
+    resetCityTime()
+    remount()
     wait(INSTALL_HINT_DELAY_MS)
     expect(hint()).not.toBeNull()
     wait(30_000)
@@ -272,27 +345,41 @@ describe('InstallHint', () => {
     expect(host.querySelectorAll('button')).toHaveLength(1)
   })
 
-  it('never inside Instagram, even with an offer, nor where nothing can install', () => {
-    ua = UA.instagramAndroid
+  it('not on a laptop, even with an offer', () => {
+    vi.spyOn(navigator, 'maxTouchPoints', 'get').mockReturnValue(0)
+    ua = UA.firefoxDesktop.replace('Firefox', 'Chrome')
     offer()
-    mount()
-    wait(INSTALL_HINT_DELAY_MS * 2)
-    expect(hint()).toBeNull()
-    ua = UA.firefoxDesktop
-    act(() => void window.dispatchEvent(new Event('appinstalled')))
-    storage.clear()
-    storage.set(HINTED_KEY, '1')
-    act(() => root.unmount())
-    root = createRoot(host)
     mount()
     wait(INSTALL_HINT_DELAY_MS * 2)
     expect(hint()).toBeNull()
   })
 
-  it('never once installed', () => {
-    storage.set(INSTALL_HINT_KEY, 'installed')
+  it('inside Instagram, or opened from the home screen, it does not even count', () => {
+    const every = vi.spyOn(window, 'setInterval')
+    ua = UA.instagramAndroid
     offer()
     mount()
+    wait(INSTALL_HINT_DELAY_MS * 2)
+    expect(hint()).toBeNull()
+    expect(every).not.toHaveBeenCalled()
+    ua = UA.chromeAndroid
+    Object.defineProperty(navigator, 'standalone', { value: true, configurable: true })
+    remount()
+    wait(INSTALL_HINT_DELAY_MS * 2)
+    expect(hint()).toBeNull()
+    expect(every).not.toHaveBeenCalled()
+    Object.defineProperty(navigator, 'standalone', { value: undefined, configurable: true })
+  })
+
+  it('never where nothing can install, nor once installed', () => {
+    ua = UA.firefoxDesktop
+    mount()
+    wait(INSTALL_HINT_DELAY_MS * 2)
+    expect(hint()).toBeNull()
+    ua = UA.chromeAndroid
+    storage.set(INSTALL_HINT_KEY, 'installed')
+    remount()
+    offer()
     wait(INSTALL_HINT_DELAY_MS * 2)
     expect(hint()).toBeNull()
   })
