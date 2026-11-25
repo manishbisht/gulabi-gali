@@ -28,6 +28,7 @@ import { createPlayer } from '../player/player'
 import { installTestHooks } from '../testHooks'
 import { createBandar, createBandarMemory, type BandarEvent } from './bandar'
 import { createAnimals, createStationMemory, type AnimalHooks, type Animals } from './animals'
+import { createPitch, pitchNear, type CricketHooks } from './cricketPitch'
 import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
@@ -138,6 +139,8 @@ export interface SessionHooks {
   reactions?: ReactionHooks
   /** Jaipur ka Swaad: the serving stall in reach, and a dish just tasted (see useSwaad). */
   swaad?: SwaadHooks
+  /** Gali cricket: the pitch in reach, and E by it (see useCricket). */
+  cricket?: CricketHooks
 }
 
 export interface CitySessionOptions {
@@ -433,6 +436,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       { update: (_dt, pos) => driving.update(pos), dispose: driving.dispose },
       taxi,
       ...(roof ? [{ update: (_dt: number, pos: Vec2) => roof.update(pos), dispose: roof.dispose }] : []),
+      // the cricket pitch, where the district has one: "Cricket khelo" in reach of it
+      ...(district.def.cricket && hooks.cricket
+        ? [
+            ((pitch) => ({ update: (_dt: number, pos: Vec2) => pitch.update(pos), dispose: pitch.dispose }))(
+              createPitch(district.def.cricket, hooks.cricket),
+            ),
+          ]
+        : []),
       createInteraction(
         canvas,
         stage,
@@ -534,6 +545,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       freezeAnimals: animals.freeze,
       roof: () =>
         roofDef ? { up: roof!.up(), y: player.elevation(), stair: roofDef.stair, area: roofDef.area } : null,
+      cricketPitch: () => district.def.cricket ?? null,
       signposts: () => district.def.signposts ?? [],
       festival: hooks.festival,
       sky: sky.params,
@@ -712,7 +724,7 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 
 /**
  * E and taps: a landmark's stamp, the metro, a bench, a stall's dish (E only: "Chakho", and E again closes its card), a poster
- * wall, an auto, the rooftop stair, the character card and the person card, and last a street animal, in that order of
+ * wall, an auto, the rooftop stair, the character card and the person card, the cricket pitch, and last a street animal, in that order of
  * priority, one card at a time; an open card keeps E to close itself, and a character's, person's or poster's card puts the dish's away. Seated, E stands the player up, and
  * the landmark and metro wait until they do; up on the roof, E comes down (a card that is up closes first). A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
@@ -940,9 +952,28 @@ function createInteraction(
             (meeting || (!metro && !hooks.npcCard.isOpen())),
           landmarkNear,
         )
+      // E by the cricket pitch opens the game, only when nothing above wanted the key (a card that just opened
+      // has it): never seated, at the wheel or up on a roof
+      const cricket =
+        pressed &&
+        !card &&
+        !seated &&
+        !landmarkNear &&
+        !metro &&
+        !bench &&
+        !taste &&
+        !wall &&
+        !auto &&
+        !stair &&
+        !hooks.npcCard.isOpen() &&
+        !hooks.personCard.isOpen() &&
+        !!hooks.cricket &&
+        pitchNear(district.def, pos)
+      if (cricket) hooks.cricket!.play()
       // E by an animal, only when nothing above wanted it (a card that just opened has it)
       if (
         pressed &&
+        !cricket &&
         !card &&
         !seated &&
         !landmarkNear &&

@@ -80,6 +80,28 @@ export interface GgTestApi {
     /** How high the game's camera stands, in metres (0 when no game runs): above the roof when played up there. */
     eyeY(): number
   }
+  /** The district's cricket pitch (null where there is none): its brick stumps and where the kid bowls from. */
+  cricketPitch(): { stumps: Vec2; bowler: Vec2 } | null
+  /** Gali cricket: whether an innings is up, and the levers a test needs to play one without waiting for frames. */
+  cricket(): {
+    active: boolean
+    /** Plays the ball now coming, at once, with a tap `err` seconds from the perfect moment (null: no tap). */
+    ball(err: number | null): void
+    /** Plays the rest of the innings out at once, with no taps. */
+    finish(): void
+    /** Moves the innings on, at once, to the moment the next ball reaches the bat: a real tap now is a six. */
+    tapAtBat(): void
+    /** Stops (or restarts) frames moving the innings on, so only the levers above do: the drawing goes on. */
+    pause(on: boolean): void
+    runs(): number
+    balls(): number
+    outs(): number
+    last(): string | null
+    /** Where the game's camera stands, in metres (zeros when no game runs). */
+    eye(): { x: number; y: number; z: number }
+    /** How many fielders are drawn: none at the lowest quality tier. */
+    fielders(): number
+  }
 }
 
 declare global {

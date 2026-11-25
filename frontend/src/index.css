@@ -2157,6 +2157,211 @@ small.words-hint {
   }
 }
 
+/* Gali cricket, at the pitch in the lane: the street keeps drawing behind it, and one thumb plays it. */
+.cricket {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  outline: none; /* a tabindex -1 root the game focuses itself: nothing to ring */
+  pointer-events: none;
+}
+
+/* the whole screen is the swing: a tap anywhere on it */
+.cricket-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.cricket-field:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: -6px;
+}
+
+.cricket-top {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  right: calc(12px + env(safe-area-inset-right));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.cricket-stop {
+  margin-left: auto;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  pointer-events: auto;
+  border: 2px solid var(--cream);
+  border-radius: 50%;
+  background: var(--pink);
+  color: var(--plum);
+  font:
+    800 1.2rem/1 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.cricket-flash {
+  position: absolute;
+  top: 24%;
+  left: 12px;
+  right: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.cricket-said {
+  display: inline-block;
+  font:
+    800 2.2rem/1.1 'Baloo 2',
+    system-ui,
+    sans-serif;
+  color: #fff;
+  text-shadow:
+    0 2px 0 var(--plum),
+    0 0 14px rgb(214 51 108 / 0.8);
+  animation: cricket-said 1.1s ease-out forwards;
+}
+
+.cricket-said[data-out] {
+  color: #ffe1a6;
+}
+
+.cricket-said small {
+  display: block;
+  margin-top: 6px;
+  font:
+    700 1rem/1.3 system-ui,
+    sans-serif;
+  text-shadow: 0 1px 3px rgb(42 29 36 / 0.9);
+}
+
+@keyframes cricket-said {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-6deg);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1.12) rotate(-3deg);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1) rotate(-3deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) translateY(-18px) rotate(-3deg);
+  }
+}
+
+.cricket-ready {
+  position: absolute;
+  top: 40%;
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  text-align: center;
+  color: #fff;
+  font:
+    800 1.6rem/1.2 'Baloo 2',
+    system-ui,
+    sans-serif;
+  text-shadow:
+    0 2px 0 var(--plum),
+    0 0 12px rgb(42 29 36 / 0.7);
+  pointer-events: none;
+}
+
+.cricket-help {
+  position: absolute;
+  left: calc(16px + env(safe-area-inset-left));
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  margin: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 0.95rem;
+  text-shadow: 0 1px 3px rgb(42 29 36 / 0.9);
+  pointer-events: none;
+}
+
+.cricket-score {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(86vw, 340px);
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--cream);
+  color: var(--plum);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.cricket-score h2 {
+  margin: 0 0 8px;
+  font-family: 'Baloo 2', system-ui, sans-serif;
+}
+
+.cricket-score p {
+  margin: 0;
+}
+
+.cricket-big {
+  font:
+    800 2rem 'Baloo 2',
+    system-ui,
+    sans-serif;
+}
+
+.cricket-record {
+  color: #b3264f;
+}
+
+.cricket-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.cricket-quiet {
+  background: var(--cream);
+}
+
+.cricket-shared {
+  min-height: 1.3em;
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* what came of the ball still shows, without the flourish */
+  .cricket-said {
+    animation: none;
+  }
+}
+
 /* The kite fight has the screen: the HUD is inert beneath it, and is not drawn over the sky. */
 .hud[inert] {
   visibility: hidden;

@@ -27,6 +27,28 @@ it('setLook swaps the avatar in place, leaving exactly one body in the scene', (
   controls.dispose()
 })
 
+it('setHidden stops drawing the body where it stands (a new look stays hidden), and shows it again', () => {
+  const scene = new THREE.Scene()
+  const controls = createControls(new EventTarget() as unknown as Window)
+  const player = createPlayer({
+    scene,
+    camera: new THREE.PerspectiveCamera(),
+    controls,
+    look: { skin: 0, outfit: 'pink', head: 'none' },
+    colliders: [],
+  })
+  player.teleport(3, 4)
+  player.setHidden(true)
+  expect(scene.children[0]!.visible).toBe(false)
+  expect(player.position()).toEqual({ x: 3, z: 4 })
+  player.setLook({ skin: 4, outfit: 'teal', head: 'safa' })
+  expect(scene.children[0]!.visible).toBe(false)
+  player.setHidden(false)
+  expect(scene.children[0]!.visible).toBe(true)
+  player.dispose()
+  controls.dispose()
+})
+
 function drivable(colliders: { minX: number; maxX: number; minZ: number; maxZ: number }[] = []) {
   const scene = new THREE.Scene()
   const controls = createControls(new EventTarget() as unknown as Window)

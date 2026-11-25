@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { DistrictId } from '../net/protocol'
+import { buildPitch, pitchColliders } from './cricketPitch'
 import { buildBlock } from './kit'
 import { bake, merge } from './kit/parts'
 import { PALETTE } from './palette'
@@ -102,6 +103,10 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
   if (def.roof) {
     root.add(buildRoof(def.roof))
     colliders.push(def.roof.flight)
+  }
+  if (def.cricket) {
+    root.add(buildPitch(def.cricket))
+    colliders.push(...pitchColliders(def.cricket))
   }
   colliders.push(...(def.water ?? []))
   if (def.scenery) root.add(def.scenery())

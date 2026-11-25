@@ -150,6 +150,9 @@ describe('on foot from the spawn', () => {
       }
       if (d.def.roof && !walk.near(d.def.roof.stair, STAIR_RANGE)) missed.push("the rooftop stair's foot")
       if (!walk.near(d.def.station, STATION_RANGE)) missed.push(byBus(id) ? 'the bus stand' : 'the metro')
+      // the cricket pitch: both its ends can be walked up to
+      for (const end of d.def.cricket ? [d.def.cricket.stumps, d.def.cricket.bowler] : [])
+        if (!walk.near(end, 1.5)) missed.push(`the cricket pitch at ${end.x},${end.z}`)
       expect(missed).toEqual([])
     },
   )

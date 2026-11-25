@@ -90,6 +90,13 @@ export interface RoofDef {
   /** The building's footprint. */
   building: AABB
 }
+/** A gali cricket pitch (see cricketPitch.ts): chalked along the lane from the brick stumps to the kid who bowls. */
+export interface PitchDef {
+  /** The batting end: the brick stack. */
+  stumps: Vec2
+  /** Where the bowler stands, 6 to 8 m along the lane. */
+  bowler: Vec2
+}
 export interface DistrictDef {
   id: DistrictId
   name: { hi: string; en: string }
@@ -137,6 +144,8 @@ export interface DistrictDef {
    * colliders are `rocks`, and its kunds' steps, inside `water`).
    */
   scenery?: () => THREE.Group
+  /** The lane's cricket pitch (see cricketPitch.ts): open ground, with a straight run of lane past both ends. */
+  cricket?: PitchDef
   /** New Year's string lights (see festivalFx.ts): strands hung between building fronts, both ends `y` m up. */
   stringLights?: StringLight[]
 }

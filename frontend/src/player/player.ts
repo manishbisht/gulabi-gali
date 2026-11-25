@@ -163,12 +163,20 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       pos = { x: to.x, z: to.z }
       sync(1)
     },
+    /**
+     * Stops drawing the player's own body (gali cricket's view is the batter's own), or draws it again. Only
+     * this page's picture: where they stand, and what others see of them, is unchanged.
+     */
+    setHidden(hidden: boolean) {
+      avatar.visible = !hidden
+    },
     /** Swaps the body for another look, standing where the old one did. */
     setLook(next: AvatarLook) {
       const old = avatar
       avatar = buildAvatar(next)
       avatar.position.copy(old.position)
       avatar.rotation.copy(old.rotation)
+      avatar.visible = old.visible
       scene.remove(old) // shared geometry and material: nothing to dispose
       scene.add(avatar)
     },

@@ -33,6 +33,7 @@ import { useAnimals } from './world/useAnimals'
 import { useSwaad } from './world/useSwaad'
 import { hasBandar } from './world/bandar'
 import { bandarText, useBandar } from './world/useBandar'
+import { useCricket } from './world/useCricket'
 import { useDrive } from './world/useDrive'
 import { useTaxi } from './world/useTaxi'
 import { taxiAvailable } from './world/taxi'
@@ -62,6 +63,8 @@ import { LandmarkCard } from './ui/LandmarkCard'
 import { PlaceInvite } from './ui/PlaceInvite'
 import { DriveButtons } from './ui/DriveButtons'
 import { Joystick } from './ui/Joystick'
+import { Cricket } from './ui/lazyCricket'
+import { warmCricket } from './ui/warmCricket'
 import { Patang } from './ui/Patang'
 import { NpcCard } from './ui/NpcCard'
 import { PersonCard, type Viewer } from './ui/PersonCard'
@@ -170,6 +173,13 @@ export default function App() {
   /** Jaipur ka Swaad: the serving stall in reach, the dish just tasted, and the list so far. */
   const swaad = useSwaad()
   const { hooks: swaadHooks, bind: bindSwaad } = swaad
+  /** Gali cricket: the pitch in reach, and the game while one is up (its own lazy chunk). */
+  const cricket = useCricket()
+  const { hooks: cricketHooks, bind: bindCricket } = cricket
+  // by a pitch the game is likely wanted: fetch it now, so "Cricket khelo" opens at once
+  useEffect(() => {
+    if (cricket.near) warmCricket()
+  }, [cricket.near])
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
@@ -336,7 +346,7 @@ export default function App() {
   const processionKey =
     processionLine(festival, here) ?? (festival === 'sankranti' ? 'festivalSankrantiLine' : undefined)
   /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
-  const map = useCityMap(entered && !ride && !taxi.riding && !kiteFrom && !photo)
+  const map = useCityMap(entered && !ride && !taxi.riding && !kiteFrom && !cricket.game && !photo)
   const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
   // in photo mode the pillar keeps out of the view (and out of every capture, see `Stage.capture`)
   useEffect(() => hideMapPillar(!!photo), [photo, hideMapPillar])
@@ -394,6 +404,7 @@ export default function App() {
         bandar: bandarHooks,
         roof: roofHooks,
         reactions: reactionHooks,
+        cricket: cricketHooks,
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -412,8 +423,10 @@ export default function App() {
     bindRoof(city)
     bindReactions(city)
     bindMap({ session: city, stage })
+    bindCricket({ session: city, stage, controls })
 
     return () => {
+      bindCricket(null)
       bindMap(null)
       bindReactions(null)
       bindRoof(null)
@@ -464,6 +477,8 @@ export default function App() {
     reactionHooks,
     bindReactions,
     bandarHooks,
+    cricketHooks,
+    bindCricket,
     current,
     now,
     patch,
@@ -581,9 +596,17 @@ export default function App() {
     !!ride ||
     taxi.riding ||
     !!kiteFrom ||
+    !!cricket.game ||
     !!bench.seat ||
     map.open ||
     roof.up
+  // no cricket from photo mode, a ride, under a sheet or the map, or in a kite fight (E knows nothing of those)
+  const cricketBlocked =
+    sheetUp || !!swaad.card || !!photo || !!ride || fading || taxi.riding || !!kiteFrom || map.open
+  const { blockedRef: cricketBlockedRef } = cricket
+  useEffect(() => {
+    cricketBlockedRef.current = cricketBlocked
+  }, [cricketBlocked, cricketBlockedRef])
   const { blockedRef: bandarBlockedRef } = bandar
   useEffect(() => {
     bandarBlockedRef.current = bandarBlocked
@@ -915,6 +938,32 @@ export default function App() {
                       {t('posterPin', lang)}
                     </button>
                   )}
+                  {/* "Cricket khelo" by the pitch: when nothing else has E (an animal is the only thing after
+                      it), on foot on the street, never seated, at a stair or up on the roof */}
+                  {cricket.near &&
+                    !cricket.game &&
+                    !drive.near &&
+                    !taxi.near &&
+                    !nearStation &&
+                    !bench.near &&
+                    !bench.seat &&
+                    !posters.near &&
+                    !roof.near &&
+                    !roof.up &&
+                    !roof.fading &&
+                    !near &&
+                    !sheetOpen &&
+                    !card && (
+                      <button
+                        type="button"
+                        className="metro-button cricket-button"
+                        aria-keyshortcuts="E"
+                        aria-busy={cricket.loading || undefined}
+                        onClick={cricket.play}
+                      >
+                        {t(cricket.loading ? 'cricketOpening' : 'cricketStart', lang)}
+                      </button>
+                    )}
                   {animals.near &&
                     !drive.near &&
                     !nearStation &&
@@ -1116,6 +1165,16 @@ export default function App() {
           at={kiteFrom.at}
           y={kiteFrom.y}
           onExit={() => setKiteFrom(null)}
+        />
+      )}
+      {cricket.game && (
+        <Cricket
+          lang={lang}
+          stage={cricket.game.stage}
+          controls={cricket.game.controls}
+          pitch={cricket.game.pitch}
+          onHide={cricket.hide}
+          onExit={cricket.stop}
         />
       )}
       {ride && <MetroRide {...ride} lang={lang} onSkip={skipRide} onBack={cancelRide} />}

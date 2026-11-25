@@ -960,6 +960,51 @@ export const STRINGS = {
     hi: 'Dor ek doosre se katrao, phir kheencho. Ghumane ke liye ungli ghumao ya A/D dabao. Space se kheencho.',
     en: 'Cross strings with a rival, then pull. Drag or press A/D to steer, and hold Space to pull.',
   },
+  /* Gali cricket (ui/Cricket.tsx): the pitch in the lane, one tap to swing. */
+  cricketStart: { hi: 'Cricket khelo', en: 'Play cricket' },
+  cricketLabel: { hi: 'Gali cricket', en: 'Gali cricket' },
+  /** Before the first ball: the bowler waits for this tap (or three seconds). */
+  cricketReady: { hi: 'Tap karke shuru karo', en: 'Tap to start' },
+  /** On "Cricket khelo" while the game's code is still arriving. */
+  cricketOpening: { hi: 'Khul raha hai…', en: 'Opening…' },
+  cricketSwing: { hi: 'Balla ghumao', en: 'Swing the bat' },
+  cricketStop: { hi: 'Khel band karo', en: 'Stop playing' },
+  cricketDone: { hi: 'Bas, ho gaya', en: 'Done' },
+  cricketAgain: { hi: 'Ek aur baari', en: 'Bat again' },
+  cricketRuns: { hi: 'Run: {n}', en: 'Runs: {n}' },
+  cricketBalls: { hi: 'Ball {n}/{total}', en: 'Ball {n}/{total}' },
+  cricketOuts: { hi: 'Out {n}/{total}', en: 'Out {n}/{total}' },
+  cricketSix: { hi: 'Chhakka! 🏏', en: 'Six! 🏏' },
+  cricketFour: { hi: 'Chauka!', en: 'Four!' },
+  cricketTwo: { hi: 'Do run', en: 'Two runs' },
+  cricketOne: { hi: 'Ek run', en: 'One run' },
+  cricketDot: { hi: 'Khaali gayi', en: 'Dot ball' },
+  cricketBowled: { hi: 'Bowled! Eentein bikhar gayi', en: 'Bowled! Down go the bricks' },
+  /** Lane rules: a catch off one bounce counts. */
+  cricketCaught: { hi: 'Ek tappa out!', en: 'Caught on one bounce: out!' },
+  /** The broken-window gag, under a six: once an innings at most. */
+  cricketArre: {
+    hi: 'Arre! Khidki ka kaanch! Ball ab tum hi laoge.',
+    en: "Arre! That was a window! You're fetching the ball.",
+  },
+  cricketHelp: {
+    hi: 'Ball balle tak aaye tab tap karo (ya Space). Timing sahi toh chhakka. Gali ke niyam: ek tappa catch bhi out.',
+    en: 'Tap (or press Space) as the ball reaches the bat. Time it right for a six. Lane rules: a one-bounce catch is out too.',
+  },
+  cricketAllOut: { hi: 'Teen out! Baari khatam 🏏', en: 'Three down! Innings over 🏏' },
+  cricketOvers: { hi: 'Teen over poore! 🏏', en: 'Three overs done! 🏏' },
+  cricketBest: { hi: 'Sabse zyada: {n}', en: 'Best: {n}' },
+  cricketRecord: { hi: 'Naya record!', en: 'A new best!' },
+  cricketShare: { hi: 'Share karo', en: 'Share' },
+  cricketShareText: {
+    hi: 'Gulabi Gali ki gali cricket mein {n} run banaye! 🏏 Tum kitne banaoge?',
+    en: 'I made {n} runs at gali cricket in Gulabi Gali! 🏏 How many can you make?',
+  },
+  cricketShareFailed: { hi: 'Share nahi ho paya.', en: "Couldn't share it." },
+  cricketLoadFailed: {
+    hi: 'Khel nahi khul paya. Page reload karke phir try karo.',
+    en: "The game couldn't open. Reload the page and try again.",
+  },
   photoOpen: { hi: 'Photo', en: 'Photo' },
   photoOpenLabel: { hi: 'Photo mode kholo', en: 'Open photo mode' },
   photoShutter: { hi: 'Photo kheencho', en: 'Take photo' },
