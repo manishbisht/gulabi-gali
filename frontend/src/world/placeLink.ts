@@ -110,7 +110,8 @@ function besideProp(
 }
 
 /**
- * Where a link to `place` stands the visitor in a district, and the way they face: by a landmark where the
+ * Where a link to `place` stands the visitor in a district, and the way they face: by a landmark (facing its
+ * building) where the
  * auto-taxi sets riders down (in its ring, so its card opens), at the metro station, at a named viewpoint's
  * stair, by a bench or tapri (in
  * reach to sit) or in front of a poster wall, clear of everything. Null for a place the district does not have,
@@ -130,7 +131,10 @@ export function placeSpot(district: Pick<District, 'def' | 'colliders'>, place: 
   if (landmark) {
     const drop = TAXI[def.id].drops[landmark.id]
     if (!drop) return null
-    return { x: drop.x, z: drop.z, ry: Math.atan2(landmark.at.x - drop.x, landmark.at.z - drop.z) }
+    // facing the building (its footprint's middle), not `at`: a fort's `at` is its gate's ring, which the drop
+    // can stand beyond, and facing it would turn the visitor's back on the fort
+    const { minX, maxX, minZ, maxZ } = landmark.footprint
+    return { x: drop.x, z: drop.z, ry: Math.atan2((minX + maxX) / 2 - drop.x, (minZ + maxZ) / 2 - drop.z) }
   }
   const seat = /^(bench|tapri)-(\d+)$/.exec(place)
   if (seat) {

@@ -71,7 +71,7 @@ describe('a link to a place', () => {
 })
 
 describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot at that place', (id) => {
-  it('landmarks: by the landmark (its card opens), facing it', async () => {
+  it('landmarks: by the landmark (its card opens), facing its building', async () => {
     const { def, colliders } = await load(id)
     for (const l of def.landmarks) {
       const item = mapItems(def, []).find((i) => i.id === l.id)!
@@ -84,6 +84,22 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
         l.id,
       ).toBe(false)
       expect(Math.hypot(spot.x - l.at.x, spot.z - l.at.z), l.id).toBeLessThanOrEqual(l.radius)
+      // facing the building itself (its footprint), not away from it: within 45 degrees of its middle, and
+      // looking straight ahead runs into it
+      const f = l.footprint
+      const mid = { x: (f.minX + f.maxX) / 2, z: (f.minZ + f.maxZ) / 2 }
+      const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
+      const to = { x: mid.x - spot.x, z: mid.z - spot.z }
+      const cos = (look.x * to.x + look.z * to.z) / Math.hypot(to.x, to.z)
+      expect(cos, l.id).toBeGreaterThan(Math.cos(Math.PI / 4))
+      const ahead = Array.from({ length: 300 }, (_, i) => ({
+        x: spot.x + look.x * i * 0.5,
+        z: spot.z + look.z * i * 0.5,
+      }))
+      expect(
+        ahead.some((p) => hits(p, 0, f)),
+        l.id,
+      ).toBe(true)
     }
   })
 

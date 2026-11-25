@@ -37,10 +37,9 @@ const SMALL = /^(metro|viewpoint|(bench|tapri|poster)-\d+)$/
  */
 const FRAMING = {
   default: { back: 2600, up: -80, zoom: 2 },
-  // the forts' links stand you at the gate facing out: turn round to them
-  'amer-fort': { turn: 688, back: 1500, up: -120, zoom: 3 },
-  'nahargarh-fort': { turn: 960, back: 1500, up: -100, zoom: 3 },
-  'city-palace': { turn: -160, back: 1200, up: -200, zoom: 4 },
+  'amer-fort': { back: 1500, up: -120, zoom: 3 },
+  'nahargarh-fort': { back: 1500, up: -100, zoom: 3 },
+  'city-palace': { back: 1200, up: -200, zoom: 4 },
   wtp: { back: 1800, up: -280, zoom: 6 },
 }
 
