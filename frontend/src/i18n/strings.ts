@@ -1163,8 +1163,8 @@ export const STRINGS = {
   installHintDismiss: { hi: 'Abhi nahi', en: 'Not now' },
   /** `{app}` is Instagram or Facebook. At most two lines on a 360 px phone (tests/phone.spec.ts). */
   inAppNote: {
-    hi: '{app} ke andar sab nahi chalta. Poora maza browser mein: ⋯ dabao, phir browser mein kholo.',
-    en: 'Not everything works inside {app}. For all of it: tap ⋯, then open in your browser.',
+    hi: '{app} ke andar sab nahi chalta. Poora maza browser mein: ⋯ dabao, browser mein kholo.',
+    en: 'Not everything works inside {app}. For all of it: tap ⋯, open in your browser.',
   },
 } as const satisfies Record<string, Record<Lang, string>>
 

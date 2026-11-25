@@ -15,7 +15,8 @@
     "test": "npm run check:protocol && npm run test --workspaces --if-present",
     "check:protocol": "node scripts/check-protocol.mjs",
     "check:test-hooks": "node scripts/check-no-test-hooks.mjs",
-    "test:device": "DEVICE_PERF=1 npm exec -w frontend -- playwright test tests/device-perf.spec.ts"
+    "test:device": "DEVICE_PERF=1 npm exec -w frontend -- playwright test tests/device-perf.spec.ts",
+    "test:device:lowend": "DEVICE_PERF=1 DEVICE_PERF_LOWEND=1 npm exec -w frontend -- playwright test tests/device-perf.spec.ts"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,

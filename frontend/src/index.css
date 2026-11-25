@@ -2861,6 +2861,11 @@ body,
     calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
 }
 
+/* a tall sheet (the map, the profile) scrolls inside the room between them instead of running under the notch */
+.auth-sheet {
+  max-height: min(90dvh, calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+}
+
 .metro-ride,
 .taxi-ride {
   padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
