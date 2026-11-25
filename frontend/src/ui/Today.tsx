@@ -4,8 +4,10 @@ import { goalText, streakText } from '../world/todayText'
 import { useDialog } from './useDialog'
 
 /**
- * The "Aaj ka Darshan" chip: an icon only (a small phone's HUD has no room for words), named by the day's goal.
- * Done, it wears a small tick. Opens the sheet.
+ * The "Aaj ka Darshan" chip: an icon only (a small phone's HUD has no room for words). Its name is short and the
+ * same every day ("Aaj ka Darshan", or "… ho gaya" once done), so it never sounds like another control (a "Metro"
+ * goal must not make a second "Metro" button); the day's goal is its description (the title). Done, it wears a
+ * small tick. Opens the sheet.
  */
 export function TodayChip({
   goal,
@@ -18,14 +20,15 @@ export function TodayChip({
   lang: Lang
   onOpen: () => void
 }) {
-  const label = t(done ? 'todayChipDone' : 'todayChip', lang, { goal: goalText(goal, lang).goal })
+  const label = t(done ? 'todayChipDone' : 'todayChip', lang)
+  const title = `${label}: ${goalText(goal, lang).goal}`
   return (
     <button
       type="button"
       className="hud-chip today-chip"
       aria-label={label}
       aria-haspopup="dialog"
-      title={label}
+      title={title}
       data-done={done ? '' : undefined}
       onClick={onOpen}
     >

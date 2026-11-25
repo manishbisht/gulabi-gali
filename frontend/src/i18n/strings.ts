@@ -1077,8 +1077,9 @@ export const STRINGS = {
   /* "Aaj ka Darshan": one small goal a day (world/today.ts). Every goal can be done alone, as a ghost. */
   todayTitle: { hi: 'Aaj ka Darshan', en: "Today's Darshan" },
   /** The chip's name (it shows an icon only), and the welcome screen's line. */
-  todayChip: { hi: 'Aaj ka Darshan: {goal}', en: "Today's Darshan: {goal}" },
-  todayChipDone: { hi: 'Aaj ka Darshan ho gaya: {goal}', en: "Today's Darshan, done: {goal}" },
+  todayChip: { hi: 'Aaj ka Darshan', en: "Today's Darshan" },
+  todayIntro: { hi: 'Aaj ka Darshan: {goal}', en: "Today's Darshan: {goal}" },
+  todayChipDone: { hi: 'Aaj ka Darshan ho gaya', en: "Today's Darshan, done" },
   todayGoalDarshan: { hi: '{place} ke darshan karo', en: 'Go and see {place}' },
   todayHintDarshan: {
     hi: '{district} mein hai. Paas pahunchte hi ho jaata hai; naksha raasta dikhata hai.',

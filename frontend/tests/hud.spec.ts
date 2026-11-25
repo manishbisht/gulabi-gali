@@ -102,10 +102,15 @@ async function laidOut(items: Record<string, Locator>, inside: [string, string][
   // one line each, not squeezed into a column of words
   for (const k of ['place', 'weather', 'stamps'])
     expect.soft(boxes[k]!.height, `${k} height`).toBeLessThanOrEqual(40)
-  // thumb-sized switches (the "Aaj ka Darshan" chip is one too)
-  for (const k of ['lang', 'sound', 'bandar', 'look', 'today'].filter((k) => k in boxes)) {
+  // thumb-sized switches
+  for (const k of ['lang', 'sound', 'bandar', 'look'].filter((k) => k in boxes)) {
     expect.soft(boxes[k]!.width, `${k} width`).toBeGreaterThanOrEqual(44)
     expect.soft(boxes[k]!.height, `${k} height`).toBeGreaterThanOrEqual(44)
+  }
+  // the "Aaj ka Darshan" chip is drawn slim, but its tap area (an ::after 5 px out each side) is thumb-sized
+  if (boxes.today) {
+    expect.soft(boxes.today.height, 'today height').toBeGreaterThanOrEqual(44)
+    expect.soft(boxes.today.width + 10, 'today tap width').toBeGreaterThanOrEqual(44)
   }
 }
 

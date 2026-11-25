@@ -20,19 +20,21 @@ async function render(node: React.ReactNode) {
   return host
 }
 
-it("the chip is an icon named by the day's goal, in either language; done, it says so and wears a tick", async () => {
+it("the chip is an icon with a short, steady name and the day's goal as its description; done, it says so and wears a tick", async () => {
   const onOpen = vi.fn()
   const goal = goalById('darshan:hawa-mahal')!
   let host = await render(<TodayChip goal={goal} done={false} lang="hi" onOpen={onOpen} />)
   let chip = host.querySelector<HTMLButtonElement>('.today-chip')!
-  expect(chip.getAttribute('aria-label')).toBe('Aaj ka Darshan: Hawa Mahal ke darshan karo')
+  expect(chip.getAttribute('aria-label')).toBe('Aaj ka Darshan')
+  expect(chip.getAttribute('title')).toBe('Aaj ka Darshan: Hawa Mahal ke darshan karo')
   expect(chip.getAttribute('aria-haspopup')).toBe('dialog')
   expect(host.querySelector('.today-tick')).toBeNull()
   await act(async () => chip.click())
   expect(onOpen).toHaveBeenCalledOnce()
   host = await render(<TodayChip goal={goalById('photo')!} done lang="en" onOpen={onOpen} />)
   chip = host.querySelector<HTMLButtonElement>('.today-chip')!
-  expect(chip.getAttribute('aria-label')).toBe("Today's Darshan, done: Take a photo in photo mode")
+  expect(chip.getAttribute('aria-label')).toBe("Today's Darshan, done")
+  expect(chip.getAttribute('title')).toBe("Today's Darshan, done: Take a photo in photo mode")
   expect(chip.hasAttribute('data-done')).toBe(true)
   expect(host.querySelector('.today-tick')).not.toBeNull()
 })

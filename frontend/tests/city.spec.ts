@@ -218,7 +218,7 @@ test('a winter morning is misty at dawn and clear by mid-morning', async ({ page
 test('E by the station opens the metro on a desktop', async ({ page }) => {
   await enterCity(page)
   await page.evaluate(() => window.__gg.teleport(-7.2, 11))
-  await expect(page.getByRole('button', { name: 'Metro' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Metro', exact: true })).toBeVisible()
   await page.keyboard.press('e')
   const sheet = page.getByRole('region', { name: 'Kahan chalein?' })
   await expect(sheet).toContainText('University–JKK')
@@ -232,9 +232,9 @@ test.describe('by metro', () => {
 
   test('travels by metro', async ({ page }) => {
     await enterCity(page)
-    await expect(page.getByRole('button', { name: 'Metro' })).toHaveCount(0) // the spawn is far from it
+    await expect(page.getByRole('button', { name: 'Metro', exact: true })).toHaveCount(0) // the spawn is far from it
     await page.evaluate(() => window.__gg.teleport(-7.2, 11)) // the Walled City's station
-    await page.getByRole('button', { name: 'Metro' }).tap()
+    await page.getByRole('button', { name: 'Metro', exact: true }).tap()
     const sheet = page.getByRole('region', { name: 'Kahan chalein?' })
     await expect(sheet.getByRole('button')).toHaveText([
       'MI Road–Raja Park',

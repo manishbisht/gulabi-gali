@@ -34,7 +34,7 @@ export function Intro({ lang, onLang, onEnter, onPrivacy, today }: Props) {
       <p className="intro-count" aria-live="polite">
         {count === null ? '' : countLine(count, lang)}
       </p>
-      {today && <p className="intro-today">{t('todayChip', lang, { goal: today })}</p>}
+      {today && <p className="intro-today">{t('todayIntro', lang, { goal: today })}</p>}
       <button type="button" className="enter" onClick={onEnter}>
         {t('enter', lang)}
       </button>
