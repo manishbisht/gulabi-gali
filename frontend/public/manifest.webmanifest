@@ -1,10 +1,21 @@
 {
-  "name": "Gulabi Gali — Jaipur ke log",
+  "id": "/",
+  "name": "Gulabi Gali",
   "short_name": "Gulabi Gali",
-  "start_url": "/",
+  "description": "Gulabi shehar ki gali mein ghoomo, chai ki bench pe baitho, Jaipur ke logon se milo. Walk a pink-city lane, share a chai bench, meet Jaipur.",
+  "lang": "hi",
+  "dir": "ltr",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#2a1d24",
   "theme_color": "#2a1d24",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "categories": ["games", "social", "travel"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }
