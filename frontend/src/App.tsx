@@ -995,7 +995,16 @@ export default function App() {
           onClose={map.close}
         />
       )}
-      {darshanOpen && <DarshanList ids={have} lang={lang} onClose={() => setDarshanOpen(false)} />}
+      {darshanOpen && (
+        <DarshanList
+          ids={have}
+          lang={lang}
+          // only a resident's own name, and the card prints only its first word when they tick "naam dikhao"
+          name={shown ? shown.name : undefined}
+          streak={today.streak}
+          onClose={() => setDarshanOpen(false)}
+        />
+      )}
       {todayOpen && (
         <TodaySheet
           goal={today.goal}
@@ -1027,7 +1036,15 @@ export default function App() {
           onChalo={chalo}
         />
       )}
-      {photo && <PhotoMode stage={photo} lang={lang} onExit={() => setPhoto(null)} />}
+      {photo && (
+        <PhotoMode
+          stage={photo}
+          // the postcard's place: the landmark the player stands by (inside its ring), else the district
+          place={near ? near.name[lang] : DISTRICT_NAMES[here][lang]}
+          lang={lang}
+          onExit={() => setPhoto(null)}
+        />
+      )}
       {lookOpen && (
         <LookEditor
           look={loadOrCreateLook()}

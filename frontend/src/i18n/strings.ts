@@ -1151,6 +1151,32 @@ export const STRINGS = {
   todayToastFirst: { hi: 'Aaj ka Darshan ho gaya!', en: "Today's Darshan, done!" },
   /** Added to the stamps chip's tooltip while a run of `STREAK_ACCENT` days or more is alive. */
   todayStreakBadge: { hi: 'Lagataar {n} din ka Darshan', en: '{n}-day Darshan run' },
+
+  /* Postcards and the Darshan card: pictures to share (see ui/cards.ts). */
+  /** Photo mode's choice of frame: the screen as it is, or a 9:16 postcard with a band. */
+  photoKinds: { hi: 'Frame chuno', en: 'Choose a frame' },
+  photoKindPhoto: { hi: 'Photo', en: 'Photo' },
+  photoKindPostcard: { hi: 'Postcard', en: 'Postcard' },
+  postcardDownloaded: { hi: 'Postcard aapke phone mein save ho gaya.', en: 'Postcard saved to your phone.' },
+  /** The Darshan sheet's button that makes the card of the visitor's stamps. */
+  cardMake: { hi: 'Card banao', en: 'Make a card' },
+  /** A resident's tick box: the card shows their first name. Off every time the sheet opens. */
+  cardShowName: { hi: 'Naam dikhao', en: 'Show my name' },
+  cardMaking: { hi: 'Card ban raha hai…', en: 'Making the card…' },
+  cardDownloaded: { hi: 'Card aapke phone mein save ho gaya.', en: 'Card saved to your phone.' },
+  cardFailed: { hi: 'Card nahi ban paya. Phir se try karo.', en: "Couldn't make the card. Try again." },
+  /** Printed on the card itself. */
+  cardTitle: { hi: 'Mera Jaipur Darshan', en: 'My Jaipur Darshan' },
+  cardCountLabel: { hi: 'landmark dekhe', en: 'landmarks seen' },
+  /** Instagram's in-app browser cannot share or download: the picture is shown alone to be pressed and saved. */
+  holdTitle: { hi: 'Tasveer save karo', en: 'Save the picture' },
+  holdHint: { hi: 'Tasveer pe der tak dabao aur save karo', en: 'Press and hold the image to save it' },
+  /** A small link under it, for a phone whose browser has no "save image" on a long press. */
+  holdDownload: { hi: 'Download karo', en: 'Download' },
+  /** The share sheet refused a picture that took a while to make: a fresh tap here opens it. */
+  shareAgain: { hi: 'Share karo', en: 'Share' },
+  holdAlt: { hi: 'Aapki banayi tasveer', en: 'The picture you made' },
+  holdClose: { hi: 'Band karo', en: 'Close' },
 } as const satisfies Record<string, Record<Lang, string>>
 
 export type StringKey = keyof typeof STRINGS

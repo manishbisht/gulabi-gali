@@ -48,6 +48,8 @@ it('capture draws the frame, adds the wordmark and encodes a PNG', async () => {
   expect(types).toEqual(['image/png'])
   expect(calls[0]).toBe('draw')
   expect(calls).toContain('text:Gulabi Gali · Jaipur')
+  const made = vi.mocked(HTMLCanvasElement.prototype.toBlob).mock.contexts[0] as HTMLCanvasElement
+  expect([made.width, made.height]).toEqual([0, 0]) // emptied once encoded: its pixels let go
 })
 
 it('capture fails cleanly when the canvas cannot encode', async () => {

@@ -2321,6 +2321,217 @@ small.words-hint {
   outline-offset: 3px;
 }
 
+/*
+ * Postcards (ui/cards.ts): photo mode's choice of frame, the postcard's 9:16 frame (the part of the screen the
+ * Story keeps) with its band where the picture has it, and the press-and-hold screen for Instagram's browser.
+ */
+.photo-mode {
+  container-type: size;
+}
+
+.photo-kinds {
+  position: absolute;
+  top: calc(22px + env(safe-area-inset-top));
+  left: calc(22px + env(safe-area-inset-left));
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--sandstone);
+  border-radius: 999px;
+  background: rgb(42 29 36 / 0.72);
+  pointer-events: auto;
+}
+
+.photo-kind {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+
+/* the radio covers its pill (a thumb-sized target) and is invisible; the pill after it shows its state */
+.photo-kind input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.photo-kind span {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.photo-kind input:checked + span {
+  background: var(--pink);
+  color: var(--plum);
+}
+
+.photo-kind input:focus-visible + span {
+  outline: 3px solid var(--cream);
+  outline-offset: 2px;
+}
+
+/* "Share" on a picture the share sheet refused: where the note goes, above the shutter */
+.photo-retry {
+  position: absolute;
+  left: 50%;
+  bottom: calc(126px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--marigold);
+  border-radius: 999px;
+  background: var(--marigold);
+  color: var(--plum);
+  font: inherit;
+  font-weight: 600;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.photo-retry:focus-visible {
+  outline: 3px solid var(--cream);
+  outline-offset: 3px;
+}
+
+.photo-frame-postcard {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  /* the window's size where container units are not known yet (older iOS): the same box, as the overlay fills it */
+  width: min(100vw, 100vh * 9 / 16);
+  height: min(100vh, 100vw * 16 / 9);
+  width: min(100cqw, 100cqh * 9 / 16);
+  height: min(100cqh, 100cqw * 16 / 9);
+  transform: translate(-50%, -50%);
+  border-radius: 0;
+}
+
+/* the band, where the picture has it: 250 px down a 1920 px Story */
+.photo-frame-postcard .photo-wordmark {
+  top: 13%;
+  bottom: auto;
+  max-width: calc(100% - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 12px;
+  border: 2px solid var(--marigold);
+  border-radius: 12px;
+  background: rgb(42 29 36 / 0.84);
+  text-shadow: none;
+  box-sizing: border-box;
+}
+
+.hold-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: calc(12px + env(safe-area-inset-top)) 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgb(42 29 36 / 0.94);
+}
+
+.hold-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  max-height: 100%;
+  outline: none;
+}
+
+.hold-image {
+  display: block;
+  /* the hint and the button keep their room under it */
+  max-height: calc(100vh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 0 0 2px var(--marigold);
+  /* a long press must offer "save image" here, wherever else it is switched off */
+  -webkit-touch-callout: default;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+.hold-download {
+  min-height: 44px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--sandstone);
+  font-size: 0.85rem;
+}
+
+.hold-hint {
+  margin: 0;
+  font-weight: 600;
+  text-align: center;
+}
+
+.hold-close {
+  max-width: 320px;
+  margin-top: 0;
+}
+
+/* The Darshan sheet's card row: "naam dikhao" (residents only) and "Card banao". */
+.darshan-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 10px;
+}
+
+.darshan-card label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.darshan-card input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--pink);
+}
+
+.darshan-card-make {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--marigold);
+  border-radius: 12px;
+  background: var(--marigold);
+  color: var(--plum);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.darshan-card-make:disabled {
+  opacity: 0.6;
+}
+
+.darshan-card-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.darshan-card-note:empty {
+  display: none;
+}
+
 /* Jaipur Darshan: the stamps chip is a button, the list is a sheet, and every stamp earns a badge. */
 /* The place chip opens the city map (M): as slim as the chip it was, with a thumb-sized tap area. */
 button.place-button {

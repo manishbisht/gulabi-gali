@@ -53,7 +53,11 @@ const photo = vi.hoisted(() => ({ shared: [] as Blob[], outcome: 'downloaded' as
 vi.mock('./ui/photo', () => ({
   WORDMARK: 'Gulabi Gali · Jaipur',
   capturePhoto: async () => new Blob(['png'], { type: 'image/png' }),
-  sharePhoto: async (blob: Blob) => {
+  photoName: () => 'gulabi-gali-x.png',
+}))
+vi.mock('./ui/share', async (real) => ({
+  ...(await real<typeof import('./ui/share')>()),
+  shareImage: async (blob: Blob) => {
     photo.shared.push(blob)
     return photo.outcome
   },
