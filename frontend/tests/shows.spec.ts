@@ -29,7 +29,8 @@ async function enterOffline(page: Page, district?: string, lang?: 'en', path = '
   )
   if (district) await page.addInitScript((d) => localStorage.setItem('gg-district', d), district)
   if (lang) await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
-  await page.goto(`${path}?gg-test=1`)
+  // a run that takes pictures (`GG_SHOWS_SHOTS`, a directory) asks for the full picture
+  await page.goto(`${path}?gg-test=1${process.env.GG_SHOWS_SHOTS ? '&gg-full=1' : ''}`)
   await page.getByRole('button', { name: lang ? 'Come in' : 'Padharo!' }).click()
   await page.waitForFunction(
     () => typeof (window as { __gg?: { shows?: unknown } }).__gg?.shows === 'function',
@@ -37,11 +38,17 @@ async function enterOffline(page: Page, district?: string, lang?: 'en', path = '
   await page.evaluate(() => window.__gg.setNow('2026-11-15T06:30:00Z'))
 }
 
+const shot = (page: Page, name: string) =>
+  process.env.GG_SHOWS_SHOTS
+    ? page.screenshot({ path: `${process.env.GG_SHOWS_SHOTS}/${name}.png` })
+    : undefined
+
 const show = (page: Page, kind: string) =>
   page.evaluate((k) => window.__gg.shows().find((s) => s.kind === k), kind)
 
-/** The whole of `what` is on the phone's screen. */
+/** The whole of `what` is on the phone's screen, once it has come to rest (a card slides up into place). */
 async function onScreen(what: Locator, name: string) {
+  await what.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)))
   const box = (await what.boundingBox())!
   expect(box, name).not.toBeNull()
   expect.soft(box.x, `${name} left`).toBeGreaterThanOrEqual(0)
@@ -72,6 +79,7 @@ test('the kathputli stage by Hawa Mahal: walk up, it plays, its card once, clap,
   await onScreen(card, 'card')
   const clapOnCard = card.getByRole('button', { name: 'Taali bajao' })
   expect((await onScreen(clapOnCard, 'card clap')).height).toBeGreaterThanOrEqual(44)
+  await shot(page, 'kathputli-card')
   await clapOnCard.tap()
   await card.getByRole('button', { name: 'Band karo' }).tap()
   await expect(card).toBeHidden()
@@ -83,6 +91,7 @@ test('the kathputli stage by Hawa Mahal: walk up, it plays, its card once, clap,
   expect(box.height).toBeGreaterThanOrEqual(44)
   expect(box.width).toBeGreaterThanOrEqual(44)
   await clap.tap()
+  await shot(page, 'kathputli-clap')
 
   // watched to its end (the hook moves it on: a slow machine need not sit through it)
   await page.evaluate(() => window.__gg.showSkip(60))
@@ -122,6 +131,7 @@ test('a link to a show stands you before it, and it plays', async ({ page }) => 
   const me = await page.evaluate(() => window.__gg.position())
   expect(Math.hypot(me.x - at.x, me.z - at.z)).toBeLessThan(4)
   await expect(page.getByRole('region', { name: 'Ravanhatta ki dhun' })).toBeVisible()
+  await shot(page, 'ravanhatta')
 })
 
 test('the dancers at the arts centre come out only in the evening', async ({ page }) => {
@@ -139,4 +149,6 @@ test('the dancers at the arts centre come out only in the evening', async ({ pag
   const card = page.getByRole('region', { name: 'Kalbelia-style naach (shaam ko)' })
   await expect(card).toContainText('UNESCO')
   await onScreen(card, 'card')
+  await card.getByRole('button', { name: 'Band karo' }).tap()
+  await shot(page, 'dancers')
 })
