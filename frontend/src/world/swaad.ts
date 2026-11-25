@@ -4,11 +4,11 @@ import type { Vec2 } from './types'
 
 /*
  * Jaipur ka Swaad: the stalls serve. Each dish is on the counter of a few tapris across the city; walk up,
- * "Chakho", and it joins the tasting list (`gg-swaad`). Local to this page and this device, for a guest and a
+ * "Chakho", and it joins the tasting list (`gg-tasted`). Local to this page and this device, for a guest and a
  * resident alike: nothing here is sent, synced or mirrored on the server. No money, and no real shop is named.
  */
 
-const KEY = 'gg-swaad'
+const KEY = 'gg-tasted'
 
 /** The eight dishes, in the order the list shows them. All vegetarian. */
 export const DISHES = [

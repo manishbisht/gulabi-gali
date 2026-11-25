@@ -800,7 +800,7 @@ it('E sits at a bench in reach and stands up again, unless a card has the key', 
 })
 
 it('E by a stall that serves: the bench has it within its reach, a step further out it tastes, and nothing is sent', async () => {
-  localStorage.removeItem('gg-swaad')
+  localStorage.removeItem('gg-tasted')
   const swaad = { near: vi.fn(), tasted: vi.fn() }
   const live = openLive(undefined, { swaad })
   loads[0]!.resolve(fakeDistrict(walledCity))
@@ -844,7 +844,7 @@ it('E by a stall that serves: the bench has it within its reach, a step further 
   live.session.taste()
   expect(swaad.tasted).toHaveBeenCalledTimes(before)
   live.session.dispose()
-  localStorage.removeItem('gg-swaad')
+  localStorage.removeItem('gg-tasted')
 })
 
 it('the walls: fetched on each welcome as this person, kept current by the socket, and E by one opens the composer', async () => {

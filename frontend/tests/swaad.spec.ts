@@ -44,7 +44,7 @@ test('a stall serves: "Chakho" gives the dish, the vendor\'s line and a note, an
   // the dish over the player's own head, for a moment
   await expect(page.locator('.swaad-emote')).toBeVisible()
   await expect(page.locator('.swaad-emote')).toBeHidden()
-  expect(await page.evaluate(() => localStorage.getItem('gg-swaad'))).toBe('["ghewar"]')
+  expect(await page.evaluate(() => localStorage.getItem('gg-tasted'))).toBe('["ghewar"]')
 
   // walking off puts the card away
   await page.evaluate(() => window.__gg.teleport(0, 40))
@@ -75,9 +75,9 @@ test('in English, and the list survives a reload; all eight earn the closing lin
   await page.route('**/api/city*', (route) => route.abort())
   await page.addInitScript(() => {
     localStorage.setItem('gg-lang', 'en')
-    if (!localStorage.getItem('gg-swaad'))
+    if (!localStorage.getItem('gg-tasted'))
       localStorage.setItem(
-        'gg-swaad',
+        'gg-tasted',
         '["chai","kachori","lassi","kulfi","mirchi-vada","dal-baati","golgappe"]',
       )
   })

@@ -98,7 +98,7 @@ it('useSwaad: a taste opens the card and grows the list; walking off, or to anot
   await act(async () => swaad.hooks.near(kulfi))
   expect(swaad.near).toBe(kulfi)
   expect(swaad.card).toBeNull()
-  storage.set('gg-swaad', '["kulfi"]')
+  storage.set('gg-tasted', '["kulfi"]')
   await act(async () => swaad.hooks.tasted(kulfi, true))
   expect(swaad.card).toBe(kulfi)
   expect(swaad.have).toEqual(['kulfi'])

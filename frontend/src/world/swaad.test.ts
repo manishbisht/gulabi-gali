@@ -94,7 +94,7 @@ describe('the words', () => {
   })
 })
 
-describe('the list (gg-swaad)', () => {
+describe('the list (gg-tasted)', () => {
   it('a dish joins once, in the order tasted, and listeners hear every taste', () => {
     const heard: [DishId, boolean][] = []
     const off = onTasted((dish, first) => heard.push([dish, first]))
@@ -102,7 +102,7 @@ describe('the list (gg-swaad)', () => {
     expect(tasted('chai')).toBe(true)
     expect(tasted('lassi')).toBe(false)
     expect(tastedDishes()).toEqual(['lassi', 'chai'])
-    expect(JSON.parse(localStorage.getItem('gg-swaad')!)).toEqual(['lassi', 'chai'])
+    expect(JSON.parse(localStorage.getItem('gg-tasted')!)).toEqual(['lassi', 'chai'])
     expect(heard).toEqual([
       ['lassi', true],
       ['chai', true],
@@ -123,11 +123,11 @@ describe('the list (gg-swaad)', () => {
   })
 
   it('reads only known dishes, each once, whatever was saved', () => {
-    storage.set('gg-swaad', '["chai","biryani","chai",7,"ghewar"]')
+    storage.set('gg-tasted', '["chai","biryani","chai",7,"ghewar"]')
     expect(tastedDishes()).toEqual(['chai', 'ghewar'])
-    storage.set('gg-swaad', '{"chai":true}')
+    storage.set('gg-tasted', '{"chai":true}')
     expect(tastedDishes()).toEqual([])
-    storage.set('gg-swaad', 'not json')
+    storage.set('gg-tasted', 'not json')
     expect(tastedDishes()).toEqual([])
   })
 
