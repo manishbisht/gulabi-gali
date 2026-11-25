@@ -29,6 +29,8 @@ export interface Remote {
   /** Their public face; `x`, `z` and `ry` are where the body is heading, not where it is drawn. */
   readonly person: LivePerson
   readonly body: THREE.Group
+  /** The figure inside `body` (swapped for another when they change their look): an emote poses it. */
+  readonly avatar: THREE.Mesh
   /** Bumped whenever the name or status changes, so labels rewrite their text only then. */
   readonly ver: number
 }

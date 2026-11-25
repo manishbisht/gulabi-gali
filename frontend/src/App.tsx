@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createStage, type Stage } from './engine/stage'
 import { patangAvailable } from './games/patang'
 import { hasWebGL } from './engine/webgl'
@@ -28,6 +28,8 @@ import { createCitySession, type CitySession } from './world/session'
 import { useNpcCard } from './world/useNpcCard'
 import { usePersonCard } from './world/usePersonCard'
 import { useReactions } from './world/useReactions'
+import { useEmotes } from './world/useEmotes'
+import { EmoteWheel } from './ui/EmoteWheel'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
 import { hasBandar } from './world/bandar'
@@ -52,7 +54,7 @@ import { byBus } from './world/metroRide'
 import { rememberDistrict, savedDistrict, useTravel } from './world/useTravel'
 import { dropPlaceLink, linkId, readPlaceLink } from './world/placeLink'
 import { mapItems } from './world/cityMap'
-import type { ChaiInviteView, DistrictId, FestivalId } from './net/protocol'
+import type { ChaiInviteView, DistrictId, EmoteKind, FestivalId } from './net/protocol'
 import type { DistrictDef, Vec2 } from './world/types'
 import { Hud } from './ui/Hud'
 import { PhotoMode } from './ui/PhotoMode'
@@ -246,6 +248,7 @@ export default function App() {
   const { snapshot, current, now, patch, freeze } = useLiveCity()
   /** The city session, while the stage is up; it re-paints the sky when a new snapshot lands. */
   const session = useRef<CitySession | null>(null)
+  const playEmote = useCallback((kind: EmoteKind) => session.current?.emote(kind) ?? false, [])
   useEffect(() => session.current?.repaint(), [snapshot])
   const lookKey = profileLook && figureKey(profileLook)
   useEffect(() => {
@@ -603,6 +606,20 @@ export default function App() {
       />
     )
 
+  /** Emotes (the chip over the joystick, G): on foot on the street, not in a game, a ride or photo mode. */
+  const canEmote =
+    entered &&
+    typeof place !== 'string' &&
+    !drive.driving &&
+    !bench.seat &&
+    !kiteFrom &&
+    !photo &&
+    !ride &&
+    !taxi.riding &&
+    !fading &&
+    !roof.fading
+  const emotes = useEmotes(canEmote, playEmote)
+
   /** "Bulao" (as an icon: the cards' rows are full) for a place in the district the player is in, by its map id. */
   /**
    * "Chalo" on a friend's invite for chai: in this district, the compass points at their bench (as a map pick
@@ -805,11 +822,17 @@ export default function App() {
         bottom={
           <>
             {!kiteFrom && (
-              <Joystick
-                lang={lang}
-                jogs={!drive.driving}
-                onChange={(v) => controlsRef.current?.setJoystick(v)}
-              />
+              // the stick's column: the emote chip hangs over its corner, out of the row's layout
+              <div className="stick-column">
+                <Joystick
+                  lang={lang}
+                  jogs={!drive.driving}
+                  onChange={(v) => controlsRef.current?.setJoystick(v)}
+                />
+                {canEmote && (
+                  <EmoteWheel open={emotes.open} lang={lang} onToggle={emotes.toggle} onPick={emotes.pick} />
+                )}
+              </div>
             )}
             {drive.driving ? (
               // at the wheel the stick drives; nothing else opens until the player gets out

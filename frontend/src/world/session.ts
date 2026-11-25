@@ -13,6 +13,7 @@ import {
   REACT_RANGE_M,
   type ClientMsg,
   type DistrictId,
+  type EmoteKind,
   type FestivalId,
   type LivePerson,
   type PosterView,
@@ -32,6 +33,7 @@ import { createSitting, type BenchHooks, type Sitting } from './benches'
 import { loadDistrict, type District } from './district'
 import { createDriving, type Driving, type DriveHooks } from './driving'
 import { createEmotes } from './emotes'
+import { createEmoteAllowance, createEmoting, type Emoting } from './emoting'
 import { createBubbles } from './npcBubbles'
 import { createNpcs, type Npcs } from './npcs'
 import { placeSpot } from './placeLink'
@@ -216,6 +218,11 @@ export interface CitySession {
    * more than `REACT_RANGE_M` away, drawn or not (`far`).
    */
   react(to: string, kind: Reaction): ReactionRefusal | null
+  /**
+   * Plays an emote on the player where they stand (see world/emoting.ts); a resident others can see is seen
+   * doing it by everyone near. False when the player cannot now: seated at a bench, at the wheel, in a taxi.
+   */
+  emote(kind: EmoteKind): boolean
   /** Leaves the district and stops; a district still loading is disposed when it arrives. */
   dispose(): void
 }
@@ -241,6 +248,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     taxi: Taxi
     animals: Animals
     roof: Rooftop | null
+    emoting: Emoting
   } | null = null
   /** An animal left at a station by a metro ride waits here (not saved: a reload forgets it). */
   const stationMemory = createStationMemory()
@@ -442,6 +450,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           posterHooks!.left()
         },
       })
+    const emoting = createEmoting({
+      host: bubbleHost,
+      camera: stage.camera,
+      player,
+      people,
+      can: () => !player.driving() && !taxi.riding() && !sitting?.seated(),
+      send: (kind) => presence?.emote(kind),
+    })
     // one live socket per tab: `leave` above closed the last district's before this one opens
     presence =
       hooks.presence && people
@@ -456,15 +472,32 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
             taxi,
             hooks.presence,
             hooks.reactions,
+            emoting.heard,
             opts.WebSocketImpl,
           )
         : null
     if (presence) systems.push(presence)
     // without a socket there is no welcome to fetch the walls on: fetch them now
     else posters?.refresh()
+    // after the presence, whose frame puts every body where it stands before an emote poses it
+    systems.push(emoting)
+    installTestHooks({ emoting: emoting.playing })
     // disposed first (systems go in reverse), so the bench chat closes before the socket does
     if (sitting) systems.push({ update: (_dt, pos) => sitting.update(pos), dispose: sitting.dispose })
-    here = { district, player, systems, presence, people, sitting, posters, driving, taxi, animals, roof }
+    here = {
+      district,
+      player,
+      systems,
+      presence,
+      people,
+      sitting,
+      posters,
+      driving,
+      taxi,
+      animals,
+      roof,
+      emoting,
+    }
     repaint = sky.paint
     hooks.place(district.def)
     installTestHooks({
@@ -595,6 +628,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
     refreshPosters: () => here?.posters?.refresh(),
     // null is "it went": only a missing socket is offline
     react: (to, kind) => (here?.presence ? here.presence.react(to, kind) : 'offline'),
+    emote: (kind) => here?.emoting.play(kind) ?? false,
     dispose() {
       if (disposed) return
       disposed = true
@@ -936,7 +970,15 @@ type Presence = DistrictSystem & {
   send(m: ClientMsg): void
   open(): boolean
   react(to: string, kind: Reaction): ReactionRefusal | null
+  /** Tells the street the player plays `kind`: only a resident others can see, on an open socket, within the allowance. */
+  emote(kind: EmoteKind): void
 }
+
+/**
+ * What the page has spent of the emotes the server passes on in a minute. The server counts per district, and
+ * this per visit: stricter where it differs, so a fair page's emote is never dropped.
+ */
+const emoteAllowance = createEmoteAllowance()
 
 /**
  * The district's live socket and the people it brings: their bodies, their labels, and the test hooks that
@@ -957,12 +999,16 @@ function createPresence(
   taxi: Pick<Taxi, 'riding' | 'refused'>,
   hooks: NonNullable<SessionHooks['presence']>,
   reactions: ReactionHooks | undefined,
+  /** Someone on the street plays an emote (see world/emoting.ts); the words are the socket's, unchecked. */
+  emoteHeard: (from: unknown, kind: unknown) => void,
   WebSocketImpl?: typeof WebSocket,
 ): Presence {
   const labels = createPeopleLabels(host)
   const emotes = createEmotes(host)
   /** Who this socket is, as its welcome said: the player's own emotes go over the player. */
   let self: string | null = null
+  /** Whether others see the player, as the last welcome said: only then is an emote of theirs told. */
+  let visible = false
   /** Where the player stands this frame, for an emote over their own head. */
   const here = { x: 0, z: 0 }
   /** Where `id` is drawn now, for an emote over their head: the player, or someone on the street in view. */
@@ -1008,10 +1054,12 @@ function createPresence(
     if (m.t === 'poster' || m.t === 'posters') return posters?.apply(m)
     if (m.t === 'react') return onReact(m)
     if (m.t === 'react-no') return reactions?.refused(m.to, m.why)
+    if (m.t === 'emote') return emoteHeard(m.from, m.kind)
     people.apply(m)
     sitting?.apply(m)
     if (m.t === 'welcome') {
       self = m.you.id
+      visible = m.you.visible
       hooks.queued?.(m.you.queued ?? null, m.you.visible)
       hooks.replaced(false)
       sitting?.reset() // a new socket: the server stood the old one up
@@ -1089,6 +1137,11 @@ function createPresence(
         return 'far'
       conn.send({ t: 'react', to, kind })
       return null
+    },
+    emote(kind) {
+      // a ghost's is their own page's alone; past the allowance the server would drop it anyway
+      if (!visible || conn.state() !== 'open' || !emoteAllowance.take(Date.now())) return
+      conn.send({ t: 'emote', kind })
     },
     dispose() {
       conn.close() // its 'closed' stops the stale timer

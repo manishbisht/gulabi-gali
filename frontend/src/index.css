@@ -731,6 +731,55 @@ button {
   opacity: 1;
 }
 
+/*
+ * Emotes (ui/EmoteWheel.tsx): the joystick's own column. The chip hangs over the stick's top-left corner and its
+ * five open beside and above it in two short rows, out of the layout: the bottom row is laid out as if they were not there,
+ * and nothing reaches past the stick's column into the cards and buttons beside it.
+ */
+.stick-column {
+  position: relative;
+  flex: none;
+}
+
+.emote-wheel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: 140px;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 4px;
+}
+
+/* the five sit in the chip's own rows: the chip and two beside it, then three above */
+.emote-kinds {
+  display: contents;
+}
+
+.emote-chip,
+.emote-kind {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid rgb(245 230 216 / 0.7);
+  border-radius: 50%;
+  background: rgb(42 29 36 / 0.72);
+  color: var(--cream);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.emote-chip[aria-expanded='true'] {
+  border-color: var(--pink);
+  font-size: 1rem;
+}
+
+.emote-kind {
+  background: rgb(42 29 36 / 0.9);
+  border-color: var(--pink);
+}
+
 /* the festival greeting, its procession and the city line: one card, a line each */
 .hud-news {
   max-width: 100%;

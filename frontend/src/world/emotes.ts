@@ -32,18 +32,32 @@ export function createEmotes(host: HTMLElement) {
     return { el, id: null as string | null, left: 0 }
   })
 
+  function mark(id: string, glyph: string) {
+    let slot = pool.find((s) => s.id === id) ?? pool.find((s) => s.id === null)
+    if (!slot) slot = pool.reduce((a, b) => (b.left < a.left ? b : a))
+    slot.id = id
+    slot.left = EMOTE_S
+    slot.el.textContent = glyph
+    // the pop runs again from the start: off, a reflow, on
+    slot.el.classList.remove('emote-pop')
+    void slot.el.offsetWidth
+    slot.el.classList.add('emote-pop')
+  }
+
   return {
     /** Puts `kind` over `id`'s head, in the place it already has if one is showing there. */
     show(id: string, kind: Reaction) {
-      let slot = pool.find((s) => s.id === id) ?? pool.find((s) => s.id === null)
-      if (!slot) slot = pool.reduce((a, b) => (b.left < a.left ? b : a))
-      slot.id = id
-      slot.left = EMOTE_S
-      slot.el.textContent = EMOTES[kind]
-      // the pop runs again from the start: off, a reflow, on
-      slot.el.classList.remove('emote-pop')
-      void slot.el.offsetWidth
-      slot.el.classList.add('emote-pop')
+      mark(id, EMOTES[kind])
+    },
+    /** The same, for any mark (an emote's, see world/emoting.ts). */
+    mark,
+    /** Takes down whatever shows over `id`'s head. */
+    drop(id: string) {
+      for (const slot of pool)
+        if (slot.id === id) {
+          slot.id = null
+          slot.el.hidden = true
+        }
     },
     update(dt: number, camera: THREE.Camera, at: EmoteAt) {
       const w = window.innerWidth

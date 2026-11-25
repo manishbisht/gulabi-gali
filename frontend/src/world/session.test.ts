@@ -620,6 +620,106 @@ describe('reactions', () => {
   })
 })
 
+describe('emotes', () => {
+  /** On a live street with Asha 3 m away; `visible` as the welcome says the player is. */
+  async function onStreet(visible: boolean) {
+    const live = openLive(async () => (visible ? 'tok' : null))
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    const ws = sockets()[0]!
+    const { x, z } = live.session.player()!.position()
+    const welcome = (seen: boolean) =>
+      ws.say({
+        t: 'welcome',
+        you: { id: seen ? 'dev:me' : null, visible: seen },
+        people: [{ ...asha, x: x + 3, z }],
+      })
+    const sentEmotes = () =>
+      ws.sent.filter((s) => s.includes('"emote"')).map((s) => JSON.parse(s) as unknown)
+    const marks = () =>
+      [...document.querySelectorAll<HTMLElement>('.emote')]
+        .filter((el) => !el.hidden)
+        .map((el) => el.textContent)
+    return { ...live, ws, welcome, sentEmotes, marks, x, z }
+  }
+
+  it("a resident others can see tells the street; the player's own plays at once either way", async () => {
+    const { session, ws, welcome, sentEmotes, marks, tick } = await onStreet(true)
+    // the socket is not open yet: it plays here, and nothing goes
+    expect(session.emote('clap')).toBe(true)
+    expect(sentEmotes()).toEqual([])
+    ws.onopen?.()
+    welcome(true)
+    expect(session.emote('dance')).toBe(true)
+    expect(sentEmotes()).toEqual([{ t: 'emote', kind: 'dance' }])
+    tick(1 / 30)
+    expect(marks()).toEqual(['🎶'])
+    // the pose is the body's alone: the moves that go out still say the heading the player faces
+    const facing = session.player()!.heading()
+    tick(1)
+    expect(session.player()!.heading()).toBeCloseTo(facing)
+    expect(ws.sent.filter((s) => s.includes('"move"'))).toHaveLength(1)
+    session.dispose()
+    expect(session.emote('wave')).toBe(false)
+  })
+
+  it('a ghost dances for themself alone: nothing is sent', async () => {
+    const { session, ws, welcome, sentEmotes, marks, tick } = await onStreet(false)
+    ws.onopen?.()
+    welcome(false)
+    expect(session.emote('dance')).toBe(true)
+    tick(1 / 30)
+    expect(marks()).toEqual(['🎶'])
+    expect(sentEmotes()).toEqual([])
+    // made visible (a new welcome on the socket): now it goes
+    welcome(true)
+    expect(session.emote('wave')).toBe(true)
+    expect(sentEmotes()).toEqual([{ t: 'emote', kind: 'wave' }])
+    session.dispose()
+  })
+
+  it("the street's word poses whoever it names, if the street shows them; a kind this page does not know is let go", async () => {
+    const { session, ws, welcome, marks, tick, x, z } = await onStreet(true)
+    ws.onopen?.()
+    welcome(true)
+    tick(1 / 30)
+    ws.say({ t: 'emote', from: 'dev:asha', kind: 'sit' })
+    tick(1)
+    expect(marks()).toEqual(['🧘'])
+    const figure = session.people()[0]!.avatar
+    expect(figure.position.y).toBeCloseTo(-0.45)
+    // she stays sat for as long as she stays put, and her next step stands her up
+    tick(60)
+    tick(1 / 30)
+    expect(figure.position.y).toBeCloseTo(-0.45)
+    ws.say({ t: 'moves', m: [['dev:asha', x + 4, z, 0]] })
+    tick(1 / 30)
+    tick(1 / 30)
+    expect(figure.position.y).toBe(0)
+    // nobody the street lists, a kind from a newer server, a frame with nothing in it: all let go
+    ws.say({ t: 'emote', from: 'dev:stranger', kind: 'dance' })
+    ws.say({ t: 'emote', from: 'dev:asha', kind: 'cartwheel' } as unknown as ServerMsg)
+    ws.say({ t: 'emote' } as unknown as ServerMsg)
+    tick(1 / 30)
+    expect(marks()).toEqual([])
+    session.dispose()
+    expect(document.querySelectorAll('.emote')).toHaveLength(0)
+  })
+
+  it('there is no emote from a bench seat', async () => {
+    const { session, ws, welcome, sentEmotes } = await onStreet(true)
+    ws.onopen?.()
+    welcome(true)
+    const bench = benchesOf(walledCity)[0]!
+    const pose = seatPose(bench, 0)
+    session.player()!.teleport(pose.x, pose.z)
+    ws.say({ t: 'seated', bench: bench.id, seat: 0, with: [] })
+    expect(session.emote('sit')).toBe(false)
+    expect(sentEmotes()).toEqual([])
+    session.dispose()
+  })
+})
+
 /** Opens a live district with one person dead ahead of the camera, and gives back the pieces to tap with. */
 async function withPersonAhead() {
   const live = openLive()
