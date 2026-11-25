@@ -799,6 +799,79 @@ it('E sits at a bench in reach and stands up again, unless a card has the key', 
   session.dispose()
 })
 
+it('E by a stall that serves: the bench has it within its reach, a step further out it tastes, and nothing is sent', async () => {
+  localStorage.removeItem('gg-tasted')
+  const swaad = { near: vi.fn(), tasted: vi.fn(), isOpen: vi.fn(() => false), close: vi.fn() }
+  const live = openLive(undefined, { swaad })
+  loads[0]!.resolve(fakeDistrict(walledCity))
+  await settle()
+  const ws = sockets()[0]!
+  ws.onopen?.()
+  ws.say({ t: 'welcome', you: { id: 'dev:asha', visible: true }, people: [] })
+  const sent = () => ws.sent.map((m) => JSON.parse(m) as { t: string }).filter((m) => m.t !== 'move')
+  const tapri = benchesOf(walledCity)[4]! // (-5.6, 36): it serves kulfi
+  const player = live.session.player()!
+  player.teleport(tapri.at.x + 2, tapri.at.z)
+  live.tick(1 / 30)
+  expect(swaad.near).toHaveBeenLastCalledWith(expect.objectContaining({ dish: 'kulfi' }))
+
+  const pressed = vi.spyOn(controls, 'interact').mockReturnValue(true)
+  const npc = vi.spyOn(live.hooks.npcCard, 'step')
+  live.tick(1 / 30)
+  expect(sent()).toEqual([{ t: 'sit', bench: 'walled-city:4' }]) // in the bench's reach, E sits
+  expect(swaad.tasted).not.toHaveBeenCalled()
+
+  pressed.mockReturnValue(false)
+  player.teleport(tapri.at.x + 3, tapri.at.z)
+  live.tick(1 / 30) // the bench hears it is out of reach
+  pressed.mockReturnValue(true)
+  live.tick(1 / 30)
+  expect(swaad.tasted).toHaveBeenLastCalledWith(expect.objectContaining({ dish: 'kulfi' }), true)
+  expect(npc.mock.calls.at(-1)![2]).toBe(false) // the stall took the key from the character card
+  expect(sent()).toHaveLength(1) // a taste is this page's alone
+
+  // with the dish card up, E closes it and tastes nothing more (nor sits, in the bench's reach)
+  swaad.isOpen.mockReturnValue(true)
+  const tastes = swaad.tasted.mock.calls.length
+  pressed.mockReturnValue(true)
+  live.tick(1 / 30)
+  expect(swaad.close).toHaveBeenCalledTimes(1)
+  expect(swaad.tasted).toHaveBeenCalledTimes(tastes)
+  expect(npc.mock.calls.at(-1)![2]).toBe(false)
+  player.teleport(tapri.at.x + 2, tapri.at.z)
+  pressed.mockReturnValue(false)
+  live.tick(1 / 30)
+  pressed.mockReturnValue(true)
+  live.tick(1 / 30)
+  expect(swaad.close).toHaveBeenCalledTimes(2)
+  expect(sent()).toHaveLength(1) // no second sit
+  pressed.mockReturnValue(false)
+  // a character's card opening over it puts the dish card away
+  vi.spyOn(live.hooks.npcCard, 'isOpen').mockReturnValue(true)
+  live.tick(1 / 30)
+  expect(swaad.close).toHaveBeenCalledTimes(3)
+  vi.spyOn(live.hooks.npcCard, 'isOpen').mockReturnValue(false)
+  swaad.isOpen.mockReturnValue(false)
+  player.teleport(tapri.at.x + 3, tapri.at.z)
+  live.tick(1 / 30)
+
+  // the button's way in, and seated nobody is served
+  live.session.taste()
+  expect(swaad.tasted).toHaveBeenLastCalledWith(expect.objectContaining({ dish: 'kulfi' }), false)
+  player.teleport(tapri.at.x + 2, tapri.at.z)
+  live.tick(1 / 30)
+  ws.say({ t: 'seated', bench: 'walled-city:4', seat: 1, with: [] })
+  live.tick(1 / 30)
+  live.tick(1 / 30)
+  expect(swaad.near).toHaveBeenLastCalledWith(null)
+  const before = swaad.tasted.mock.calls.length
+  live.session.taste()
+  expect(swaad.tasted).toHaveBeenCalledTimes(before)
+  pressed.mockRestore()
+  live.session.dispose()
+  localStorage.removeItem('gg-tasted')
+})
+
 it('the walls: fetched on each welcome as this person, kept current by the socket, and E by one opens the composer', async () => {
   const up: PosterView = {
     id: 'p1',

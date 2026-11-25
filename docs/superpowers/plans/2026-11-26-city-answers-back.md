@@ -59,7 +59,7 @@ decided on the page, kept in `localStorage` through `storage.ts`, nothing sent. 
 - Stalls and tapris serve: chai in a kulhad, pyaaz kachori, lassi, kulfi, ghewar (in season copy), mirchi vada,
   dal baati at one place, golgappe. Walk up, "Chakho": the vendor says a line, your character holds and has it
   (a prop in hand, a short emote), a one-line note about the dish and where in Jaipur it is loved.
-- A tasting list "Jaipur ka Swaad n/8" beside Darshan (same sheet pattern, local only, `gg-swaad`), each dish
+- A tasting list "Jaipur ka Swaad n/8" beside Darshan (same sheet pattern, local only, `gg-tasted`), each dish
   findable in at least one district, spread so the list sends you across the city. No money, no real shop names.
 
 ### Task 4: Street shows
