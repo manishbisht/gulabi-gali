@@ -200,8 +200,11 @@ const npcs: NpcDef[] = [
   },
 ]
 
-/** `roof`, faced along the open ground beside the stair (its `side`) at the stair's foot. */
-const alongTheTerrace = (roof: RoofDef): RoofDef => ({ ...roof, foot: roof.side })
+/**
+ * `roof`, faced up its stair at the stair's foot: the chase camera, 7 m behind, then hangs over the open terrace
+ * in front of the bastion. Faced out, it sat inside the stair's flight; faced along the side, against the front wall.
+ */
+const upTheStair = (roof: RoofDef): RoofDef => ({ ...roof, foot: { x: -roof.out.x, z: -roof.out.z } })
 
 const nahargarh: DistrictDef = {
   id: 'nahargarh',
@@ -246,9 +249,9 @@ const nahargarh: DistrictDef = {
   ],
   /**
    * The bastion on the terrace: its roof looks west, over the parapet, at the city below. At the stair's foot the
-   * parapet is a step in front, so there the player faces along the terrace instead (see RoofDef.foot).
+   * player faces up the stair (see RoofDef.foot and `upTheStair`).
    */
-  roof: alongTheTerrace(roofAt(buildings, BASTION, 1)),
+  roof: upTheStair(roofAt(buildings, BASTION, 1)),
   roofName: { hi: t('sunsetPoint', 'hi'), en: t('sunsetPoint', 'en') },
   ridgeWest: -HALF,
   scenery: () => buildCityBelow(-HALF, HALF),

@@ -102,12 +102,13 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
     const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
     const foot = roof.foot ?? roof.out
     expect(look.x * foot.x + look.z * foot.z).toBeGreaterThan(0.99)
-    // open ground both ways: nothing a step ahead to stare into, and room behind for the camera
-    for (const d of [-3, -1.5, 1.5, 3]) {
-      const p = { x: spot.x + look.x * d, z: spot.z + look.z * d }
+    // the chase camera's whole line back (7 m), with a metre's margin, clear of walls and the stair's flight: it
+    // must not sit inside the flight or press against a wall (what you face may be the stair itself)
+    for (let d = 1; d <= 7; d++) {
+      const p = { x: spot.x - look.x * d, z: spot.z - look.z * d }
       expect(
-        colliders.some((c) => hits(p, PLAYER_RADIUS, c)),
-        `${d} m along the facing`,
+        colliders.some((c) => hits(p, 1, c)),
+        `${d} m behind`,
       ).toBe(false)
     }
   })

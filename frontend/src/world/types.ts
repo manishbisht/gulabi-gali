@@ -79,8 +79,8 @@ export interface RoofDef {
   side: Vec2
   /**
    * The way the player faces at the stair's foot (coming down, or sent there by a link): `out` by default, the
-   * street the building fronts. Where the front looks over a parapet a step away (Nahargarh's bastion), `side`,
-   * along the open ground, so the camera behind them is not pressed into the bastion and the wall fills nothing.
+   * street the building fronts. Where the chase camera, 7 m behind, would then sit in the stair's flight or
+   * against a wall (Nahargarh's bastion), up the stair, so it hangs over the open ground in front instead.
    */
   foot?: Vec2
   /** The stair's flight beside that wall: a collider. Its low end is at the front. */
