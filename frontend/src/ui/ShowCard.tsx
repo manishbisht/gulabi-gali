@@ -19,9 +19,9 @@ interface Props {
 export function ShowCard({ kind, lang, clap, onClap, onClose }: Props) {
   const text = SHOW_TEXT[kind]
   return (
-    <section className="landmark-card show-card" aria-label={t(text.name, lang)}>
+    <section className="landmark-card show-card" aria-label={t(text.title, lang)}>
       <h2>
-        <span aria-hidden="true">🎭</span> {t(text.name, lang)}
+        <span aria-hidden="true">🎭</span> {t(text.title, lang)}
       </h2>
       <p>{t(text.lines[0], lang)}</p>
       <p>{t(text.lines[1], lang)}</p>

@@ -46,17 +46,27 @@ const shot = (page: Page, name: string) =>
 const show = (page: Page, kind: string) =>
   page.evaluate((k) => window.__gg.shows().find((s) => s.kind === k), kind)
 
-/** The whole of `what` is on the phone's screen, once it has come to rest (a card slides up into place). */
+/** CI's fonts run a few px wider than a Mac's: everything measured here keeps this much clear of the screen's edges. */
+const SLACK = 10
+
+/**
+ * The whole of `what` is on the phone's screen with `SLACK` to spare, once it has come to rest (a card slides up
+ * into place).
+ */
 async function onScreen(what: Locator, name: string) {
   await what.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)))
   const box = (await what.boundingBox())!
   expect(box, name).not.toBeNull()
-  expect.soft(box.x, `${name} left`).toBeGreaterThanOrEqual(0)
-  expect.soft(box.y, `${name} top`).toBeGreaterThanOrEqual(0)
-  expect.soft(box.x + box.width, `${name} right`).toBeLessThanOrEqual(PHONE.width)
-  expect.soft(box.y + box.height, `${name} bottom`).toBeLessThanOrEqual(PHONE.height)
+  expect.soft(box.x, `${name} left`).toBeGreaterThanOrEqual(SLACK)
+  expect.soft(box.y, `${name} top`).toBeGreaterThanOrEqual(SLACK)
+  expect.soft(box.x + box.width, `${name} right`).toBeLessThanOrEqual(PHONE.width - SLACK)
+  expect.soft(box.y + box.height, `${name} bottom`).toBeLessThanOrEqual(PHONE.height - SLACK)
   return box
 }
+
+type Box = { x: number; y: number; width: number; height: number }
+const overlap = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 
 test('the kathputli stage by Hawa Mahal: walk up, it plays, its card once, clap, and it ends', async ({
   page,
@@ -93,6 +103,24 @@ test('the kathputli stage by Hawa Mahal: walk up, it plays, its card once, clap,
   await clap.tap()
   await shot(page, 'kathputli-clap')
 
+  // by the bench on the same patch (still in earshot) the clap shares the row with "Baitho": both fit beside the
+  // joystick on a 360 px phone, neither on top of the other or of the stick
+  await page.evaluate(() => window.__gg.teleport(30, 18.4))
+  const sit = page.getByRole('button', { name: 'Baitho' })
+  await expect(sit).toBeVisible()
+  await expect(clap).toBeVisible()
+  const boxes = {
+    sit: await onScreen(sit, 'Baitho'),
+    clap: await onScreen(clap, 'clap beside Baitho'),
+    stick: (await page.locator('.joystick').boundingBox())!,
+  }
+  expect(boxes.clap.height).toBeGreaterThanOrEqual(44)
+  expect(overlap(boxes.sit, boxes.clap), 'Baitho over the clap').toBe(false)
+  expect(overlap(boxes.sit, boxes.stick), 'Baitho over the joystick').toBe(false)
+  expect(overlap(boxes.clap, boxes.stick), 'the clap over the joystick').toBe(false)
+  await shot(page, 'kathputli-clap-baitho')
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 4.2), stage)
+
   // watched to its end (the hook moves it on: a slow machine need not sit through it)
   await page.evaluate(() => window.__gg.showSkip(60))
   await expect.poll(async () => (await show(page, 'kathputli'))!.phase).toBe('after')
@@ -121,6 +149,21 @@ test('the map lists the show with its mask, and picking it points the compass th
   await row.tap()
   await expect(map).toBeHidden()
   await expect(page.getByRole('button', { name: /^Kathputli puppet show · \d+ m/ })).toBeVisible()
+
+  // there, the card and the clap in English, on the screen with room to spare
+  const stage = (await show(page, 'kathputli'))!
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 4.2), stage)
+  const card = page.getByRole('region', { name: 'Kathputli puppet show' })
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('artists of the Bhat community')
+  await expect(card).toContainText('dancing on strings')
+  await onScreen(card, 'card (en)')
+  expect(
+    (await onScreen(card.getByRole('button', { name: 'Clap' }), 'card clap (en)')).height,
+  ).toBeGreaterThanOrEqual(44)
+  await card.getByRole('button', { name: 'Close' }).tap()
+  const clap = page.getByRole('button', { name: 'Clap', exact: true })
+  expect((await onScreen(clap, 'clap (en)')).height).toBeGreaterThanOrEqual(44)
 })
 
 test('a link to a show stands you before it, and it plays', async ({ page }) => {
@@ -141,12 +184,21 @@ test('the dancers at the arts centre come out only in the evening', async ({ pag
   // at noon their ground is empty: standing on it starts nothing
   await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 6), at)
   await expect(page.getByRole('button', { name: 'Taali bajao' })).toHaveCount(0)
+  // picked on the map by day, a line says when they come (the row itself says "shaam ko")
+  await page.getByRole('button', { name: 'Naksha · University–JKK', exact: true }).tap()
+  const map = page.getByRole('dialog', { name: 'Naksha · University–JKK' })
+  await map.locator('.map-list button[data-kind="show"]').tap()
+  const later = page.getByText('Naach shaam ko hota hai, sooraj dhalne ke aas-paas aao')
+  await expect(later).toBeVisible()
+  await onScreen(later, 'the evening line')
   // half an hour before sunset they are there, in four draw calls at most, and dance for whoever is near
   await page.evaluate(() => window.__gg.setNow('2026-11-15T11:40:00Z'))
   await expect.poll(async () => (await show(page, 'dancers'))!.out, { timeout: 45000 }).toBe(true)
   expect((await show(page, 'dancers'))!.calls).toBeLessThanOrEqual(4)
   await expect.poll(async () => (await show(page, 'dancers'))!.phase).toBe('playing')
-  const card = page.getByRole('region', { name: 'Kalbelia-style naach (shaam ko)' })
+  // while they dance, the line is gone and the card's title does not say "evenings"
+  await expect(later).toHaveCount(0)
+  const card = page.getByRole('region', { name: 'Kalbelia-style naach', exact: true })
   await expect(card).toContainText('UNESCO')
   await onScreen(card, 'card')
   await card.getByRole('button', { name: 'Band karo' }).tap()

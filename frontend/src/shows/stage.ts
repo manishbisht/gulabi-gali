@@ -102,7 +102,6 @@ interface Entry {
 
 export function createShows(deps: ShowsDeps): Shows {
   const { scene, def, colliders, hooks } = deps
-  const music = deps.music ?? createShowMusic()
   const duck = deps.duck ?? setShowDuck
   const query =
     typeof matchMedia === 'function' && !deps.reducedMotion
@@ -117,6 +116,8 @@ export function createShows(deps: ShowsDeps): Shows {
     ducked = on
     duck(on)
   }
+  // a hidden tab runs no frames: the music shuts itself then, and says so, so the duck is let go with it
+  const music = deps.music ?? createShowMusic({ onHush: () => setDuck(false) })
 
   const entries: Entry[] = showsOf(def).map((spec) => {
     const f = showFront(spec)

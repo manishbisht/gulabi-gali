@@ -93,11 +93,25 @@ export function showColliders(spec: ShowSpec): AABB[] {
 /** The dholak player sits this far behind the middle of the dancers' ground. */
 export const DHOLAK_BACK = 2.5
 
-/** Each show's name (the map's row, the card's title) and the card's two lines about the craft. */
-export const SHOW_TEXT: Record<ShowKind, { name: StringKey; lines: readonly [StringKey, StringKey] }> = {
-  kathputli: { name: 'showKathputli', lines: ['showKathputliCraft', 'showKathputliHow'] },
-  ravanhatta: { name: 'showRavanhatta', lines: ['showRavanhattaCraft', 'showRavanhattaHow'] },
-  dancers: { name: 'showDancers', lines: ['showDancersCraft', 'showDancersHow'] },
+/**
+ * Each show's name on the map and in a link (the dancers' says when they are out), its card's title, and the
+ * card's two lines about the craft.
+ */
+export const SHOW_TEXT: Record<
+  ShowKind,
+  { name: StringKey; title: StringKey; lines: readonly [StringKey, StringKey] }
+> = {
+  kathputli: {
+    name: 'showKathputli',
+    title: 'showKathputli',
+    lines: ['showKathputliCraft', 'showKathputliHow'],
+  },
+  ravanhatta: {
+    name: 'showRavanhatta',
+    title: 'showRavanhatta',
+    lines: ['showRavanhattaCraft', 'showRavanhattaHow'],
+  },
+  dancers: { name: 'showDancers', title: 'showDancersTitle', lines: ['showDancersCraft', 'showDancersHow'] },
 }
 
 // ---- watched to the end ------------------------------------------------------------------------

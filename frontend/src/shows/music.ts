@@ -8,8 +8,9 @@ import type { ShowKind } from '../world/types'
  * music moves in, played on the page's one audio context (the ambience's graph, see `sharedAudio`) through a bus
  * of its own, so it can fade with distance while the ambience steps back under it (`setShowDuck`).
  *
- * Like every sound here it follows the sound switch, and it stops with the tab: notes are scheduled a quarter of
- * a second ahead from the frame loop, which a hidden tab does not run, and the ambience suspends the context.
+ * Like every sound here it follows the sound switch, and it stops with the tab by itself: on `visibilitychange`
+ * to hidden the bus is shut, the drone stopped and the caller told (so the ambience's duck is let go), whatever
+ * the ambience does with the context; back in view, the next frame's `update` picks the tune up where it is.
  */
 
 /** One note: when it starts (beats), its pitch (semitones above the tune's Sa) and how long it is held (beats). */
@@ -110,6 +111,10 @@ export interface ShowMusicDeps {
   /** Whether sound is on: the sound switch, unless a test says otherwise. */
   enabled?(): boolean
   random?(): number
+  /** Where visibility changes are heard. */
+  doc?: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>
+  /** Told when the music shuts itself because the tab was hidden: nothing can be heard from here on. */
+  onHush?(): void
 }
 
 export interface ShowMusic {
@@ -131,8 +136,12 @@ export function createShowMusic(deps: ShowMusicDeps = {}): ShowMusic {
   const enabled = deps.enabled ?? soundOn
   const getCtx = deps.context ?? (() => sharedAudio() as AmbientCtx | null)
   const random = deps.random ?? Math.random
+  const doc = deps.doc ?? (typeof document === 'undefined' ? null : document)
+  const hidden = () => doc?.visibilityState === 'hidden'
 
   let ctx: AmbientCtx | null = null
+  /** Whether this tune has already asked a context that is not running to wake: once a start, not once a frame. */
+  let woke = false
   let bus: ReturnType<AmbientCtx['createGain']> | null = null
   let noise: ReturnType<AmbientCtx['createBuffer']> | null = null
   let tune: Tune | null = null
@@ -146,13 +155,18 @@ export function createShowMusic(deps: ShowMusicDeps = {}): ShowMusic {
   /** A voice's filter into the bus, made the first time that voice plays. */
   const filters: Partial<Record<Tune['voice'], unknown>> = {}
 
-  /** The context, once there is one and it runs; never while sound is off. */
-  function audio(): AmbientCtx | null {
-    if (!enabled()) return null
+  /**
+   * The context, once there is one and it runs; never while sound is off or the tab is hidden. One that is not
+   * running is asked to wake once for each tune (and each time the tab comes back), or at once when `wake` says
+   * this is a tap.
+   */
+  function audio(wake = false): AmbientCtx | null {
+    if (!enabled() || hidden()) return null
     ctx ??= getCtx()
     if (!ctx) return null
     if (ctx.state !== 'running') {
-      void ctx.resume().catch(() => {})
+      if (wake || !woke) void ctx.resume().catch(() => {})
+      woke = true
       return null
     }
     if (!bus) {
@@ -258,11 +272,26 @@ export function createShowMusic(deps: ShowMusicDeps = {}): ShowMusic {
       drone.push(o)
     }
   }
-  function stopDrone() {
-    // once the bus has died away under them
-    for (const o of drone) o.stop(ctx!.currentTime + 1.5)
+  /** Stops the drone `after` seconds from now: by default once the bus has died away under it. */
+  function stopDrone(after = 1.5) {
+    for (const o of drone) o.stop(ctx!.currentTime + after)
     drone.length = 0
   }
+
+  function visibility() {
+    if (!hidden()) {
+      // back in view: the next update wakes the context if it must, and brings the bus and the drone back
+      woke = false
+      return
+    }
+    if (ctx && bus) {
+      level = 0
+      bus.gain.setTargetAtTime(0, ctx.currentTime, 0.02)
+      stopDrone(0.1)
+    }
+    deps.onHush?.()
+  }
+  doc?.addEventListener('visibilitychange', visibility)
 
   function setLevel(c: AmbientCtx, to: number, glide: number) {
     if (to === level) return
@@ -277,6 +306,7 @@ export function createShowMusic(deps: ShowMusicDeps = {}): ShowMusic {
       nextNote = 0
       nextHit = 0
       prev = 0
+      woke = false
       // a tune cut short and begun again: this one has its own drone
       stopDrone()
     },
@@ -323,7 +353,7 @@ export function createShowMusic(deps: ShowMusicDeps = {}): ShowMusic {
       if (ctx) stopDrone()
     },
     clap() {
-      const c = audio()
+      const c = audio(true)
       if (!c) return
       // straight out, not through the show's bus: your own hands are as loud wherever the show is
       const out = c.createGain()
@@ -349,6 +379,7 @@ export function createShowMusic(deps: ShowMusicDeps = {}): ShowMusic {
       }
     },
     dispose() {
+      doc?.removeEventListener('visibilitychange', visibility)
       tune = null
       score = null
       if (ctx) stopDrone()

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AmbientCtx } from '../audio/ambience'
 import { SHOW_KINDS, SHOW_S } from '../world/shows'
 import { createShowMusic, scoreOf, TUNES } from './music'
@@ -8,6 +8,8 @@ function fakeCtx(state = 'running') {
   const made = { oscillators: 0, buffers: 0, bufferSources: 0, filters: 0, resumed: 0, disconnected: 0 }
   const targets: number[] = []
   const starts: number[] = []
+  /** When each oscillator was told to stop, in the order told. */
+  const stops: number[] = []
   const param = () => ({
     value: 0,
     setValueAtTime() {},
@@ -27,7 +29,13 @@ function fakeCtx(state = 'running') {
     suspend: async () => {},
     createOscillator: () => {
       made.oscillators++
-      return { ...node(), type: '', frequency: param(), start: (t: number) => void starts.push(t), stop() {} }
+      return {
+        ...node(),
+        type: '',
+        frequency: param(),
+        start: (t: number) => void starts.push(t),
+        stop: (t: number) => void stops.push(t),
+      }
     },
     createGain: () => ({ ...node(), gain: param() }),
     createBiquadFilter: () => {
@@ -44,7 +52,23 @@ function fakeCtx(state = 'running') {
       return { ...node(), buffer: null as unknown, loop: false, start() {}, stop() {} }
     },
   }
-  return { ctx: ctx as unknown as AmbientCtx, made, targets, starts }
+  return { ctx: ctx as unknown as AmbientCtx, made, targets, starts, stops }
+}
+
+/** A stand-in document whose visibility a test sets. */
+function fakeDoc() {
+  const heard = new Set<() => void>()
+  const doc = {
+    visibilityState: 'visible' as DocumentVisibilityState,
+    addEventListener: (_type: string, fn: () => void) => void heard.add(fn),
+    removeEventListener: (_type: string, fn: () => void) => void heard.delete(fn),
+    set(state: DocumentVisibilityState) {
+      doc.visibilityState = state
+      for (const fn of [...heard]) fn()
+    },
+    listeners: () => heard.size,
+  }
+  return doc as typeof doc & Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>
 }
 
 describe('the tunes as written', () => {
@@ -143,6 +167,61 @@ describe('the tunes as played', () => {
       for (let t = 0; t < 10; t += 1 / 30) music.update(t, 1)
       expect(made.filters).toBe(1)
     }
+  })
+
+  it('wakes a sleeping context once a tune, not once a frame; a clap (a tap) may always ask', () => {
+    const { ctx, made } = fakeCtx('suspended')
+    const music = createShowMusic({ context: () => ctx, enabled: () => true })
+    music.start('kathputli')
+    for (let t = 0; t < 2; t += 1 / 30) expect(music.update(t, 1)).toBe(false)
+    expect(made.resumed).toBe(1)
+    music.clap()
+    expect(made.resumed).toBe(2)
+    // the next tune asks again, once
+    music.start('ravanhatta')
+    for (let t = 0; t < 1; t += 1 / 30) music.update(t, 1)
+    expect(made.resumed).toBe(3)
+  })
+
+  it('a hidden tab: the bus is shut and the drone stopped at once, the caller told; back in view the tune goes on', () => {
+    const { ctx, made, targets, stops } = fakeCtx()
+    const doc = fakeDoc()
+    const onHush = vi.fn()
+    const music = createShowMusic({ context: () => ctx, enabled: () => true, doc, onHush })
+    music.start('ravanhatta')
+    for (let t = 0; t < 2; t += 1 / 30) expect(music.update(t, 1)).toBe(true)
+    expect(targets.at(-1)).toBeGreaterThan(0)
+    const droneStops = stops.length
+
+    doc.set('hidden')
+    expect(onHush).toHaveBeenCalledOnce()
+    expect(targets.at(-1)).toBe(0)
+    // both of the drone's oscillators, within a tenth of a second
+    const cut = stops.slice(droneStops)
+    expect(cut).toHaveLength(2)
+    for (const at of cut) expect(at).toBeLessThanOrEqual(100.1)
+    // nothing is scheduled while hidden, whoever calls
+    const before = made.oscillators
+    expect(music.update(2.1, 1)).toBe(false)
+    music.clap()
+    expect(made.oscillators).toBe(before)
+    expect(made.bufferSources).toBe(0)
+
+    doc.set('visible')
+    expect(onHush).toHaveBeenCalledOnce()
+    expect(music.update(2.2, 1)).toBe(true)
+    expect(targets.at(-1)).toBeGreaterThan(0)
+    expect(made.oscillators).toBeGreaterThan(before) // the drone again, and the notes from here
+
+    // a show that had already ended stays silent on coming back
+    music.stop()
+    doc.set('hidden')
+    doc.set('visible')
+    const ended = made.oscillators
+    expect(music.update(3, 1)).toBe(false)
+    expect(made.oscillators).toBe(ended)
+    music.dispose()
+    expect(doc.listeners()).toBe(0)
   })
 
   it('a clap is five short bursts of noise; stopping fades the bus, disposing cuts it', () => {

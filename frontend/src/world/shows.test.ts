@@ -147,7 +147,7 @@ describe('the shows as data', () => {
     for (const kind of SHOW_KINDS) {
       expect(SHOW_S[kind]).toBeGreaterThanOrEqual(20)
       expect(SHOW_S[kind]).toBeLessThanOrEqual(30)
-      for (const key of [SHOW_TEXT[kind].name, ...SHOW_TEXT[kind].lines]) {
+      for (const key of [SHOW_TEXT[kind].name, SHOW_TEXT[kind].title, ...SHOW_TEXT[kind].lines]) {
         expect(STRINGS[key].hi.length).toBeGreaterThan(0)
         expect(STRINGS[key].en.length).toBeGreaterThan(0)
       }
@@ -155,6 +155,11 @@ describe('the shows as data', () => {
     // the dance is named as in the style of, never as the community's own troupe
     expect(STRINGS.showDancers.en.toLowerCase()).toContain('kalbelia-style')
     expect(STRINGS.showDancers.hi.toLowerCase()).toContain('kalbelia-style')
+    expect(STRINGS.showDancersTitle.en.toLowerCase()).toContain('kalbelia-style')
+    expect(STRINGS.showDancersTitle.hi.toLowerCase()).toContain('kalbelia-style')
+    // the card is only up while they dance: its title does not say "evenings", the map's row does
+    expect(STRINGS.showDancersTitle.hi).not.toContain('shaam')
+    expect(STRINGS.showDancers.hi).toContain('shaam ko')
   })
 
   it('`showWatched` tells every listener, and one that throws does not stop the rest', () => {
