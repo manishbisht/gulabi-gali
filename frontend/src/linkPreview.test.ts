@@ -15,6 +15,18 @@ function pngSize(path: string): { width: number; height: number } {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
 }
 
+/** A JPEG's width and height, from its first start-of-frame marker. */
+function jpegSize(path: string): { width: number; height: number } {
+  const bytes = readFileSync(file(path))
+  expect(bytes.readUInt16BE(0)).toBe(0xffd8)
+  for (let at = 2; at < bytes.length; at += 2 + bytes.readUInt16BE(at + 2)) {
+    const marker = bytes.readUInt16BE(at)
+    if (marker >= 0xffc0 && marker <= 0xffcf && ![0xffc4, 0xffc8, 0xffcc].includes(marker))
+      return { height: bytes.readUInt16BE(at + 5), width: bytes.readUInt16BE(at + 7) }
+  }
+  throw new Error(`${path}: no frame header`)
+}
+
 const SITE = 'https://gulabi-gali.manishbisht.me/'
 
 describe('the link preview Instagram, WhatsApp and X draw', () => {
@@ -39,15 +51,16 @@ describe('the link preview Instagram, WhatsApp and X draw', () => {
     expect(meta.get('og:image:alt')!.length).toBeGreaterThan(10)
   })
 
-  it('points at og.png by an absolute URL, and og.png is 1200x630 and under 300 kB', () => {
+  it('points at og/default.jpg (no one in it) by an absolute URL, a 1200x630 JPEG under 300 kB', () => {
     const image = meta.get('og:image')!
-    expect(image).toBe(`${SITE}og.png`)
+    expect(image).toBe(`${SITE}og/default.jpg`)
     expect(new URL(image).protocol).toBe('https:')
     expect(meta.get('twitter:image')).toBe(image)
+    expect(meta.get('og:image:type')).toBe('image/jpeg')
     expect(meta.get('og:image:width')).toBe('1200')
     expect(meta.get('og:image:height')).toBe('630')
-    expect(pngSize('public/og.png')).toEqual({ width: 1200, height: 630 })
-    expect(statSync(file('public/og.png')).size).toBeLessThan(300 * 1024)
+    expect(jpegSize('public/og/default.jpg')).toEqual({ width: 1200, height: 630 })
+    expect(statSync(file('public/og/default.jpg')).size).toBeLessThan(300 * 1024)
   })
 
   it('has a 180x180 home-screen icon for iOS', () => {

@@ -11,7 +11,8 @@
     "test:e2e": "playwright test",
     "format": "prettier --write src tests playwright.config.ts",
     "preview": "vite preview",
-    "og-image": "node ../scripts/og-image.mjs"
+    "og-image": "node ../scripts/og-image.mjs",
+    "og-images": "node ../scripts/og-images.mjs"
   },
   "dependencies": {
     "@clerk/react": "^6.18.8",

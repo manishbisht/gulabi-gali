@@ -2,7 +2,8 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { defineConfig, loadEnv } from 'vite'
+import { join } from 'node:path'
+import { defineConfig, loadEnv, runnerImport } from 'vite'
 import type { Plugin } from 'vite'
 import { analyticsCsp, analyticsTag } from './src/analytics.ts'
 
@@ -120,9 +121,37 @@ function contentSecurityPolicy(): Plugin {
   }
 }
 
+/**
+ * The link previews: a static page for every place a link can name, at `p/<district>/<place>/index.html` (see
+ * src/preview/pages.ts). GitHub Pages serves a folder's index.html at its path, so `/p/walled-city/hawa-mahal/`
+ * is that page; anything else under /p/ is the usual 404. The places are read from the district definitions
+ * themselves (Vite's module runner loads them in Node; nothing is built or drawn), so a new district or
+ * landmark gets its pages with no change here. A place's picture is used once it is in public/og.
+ */
+function placePreviews(): Plugin {
+  let root = ''
+  return {
+    name: 'place-previews',
+    apply: 'build',
+    configResolved(config) {
+      root = config.root
+    },
+    async generateBundle() {
+      type Built = { pages: { file: string; html: string }[] }
+      const { module } = await runnerImport<Built>(join(root, 'src/preview/build.ts'), {
+        root,
+        configFile: false,
+        logLevel: 'error',
+      })
+      for (const { file, html } of module.pages)
+        this.emitFile({ type: 'asset', fileName: file, source: html })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), contentSecurityPolicy()],
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), contentSecurityPolicy(), placePreviews()],
   define: {
     // read by src/net/errorBeacon.ts
     __GG_BUILD__: JSON.stringify(buildSha()),

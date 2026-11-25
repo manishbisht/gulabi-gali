@@ -50,10 +50,15 @@ const CELL = 60
 /** The sun's shadow box: half-width around the player, in metres. */
 const SHADOW_REACH = 45
 
-export async function loadDistrict(id: DistrictId): Promise<District> {
+/** A district's definition alone, built into nothing (the link previews' build reads its places from it). */
+export async function loadDef(id: DistrictId): Promise<DistrictDef> {
   const source = SOURCES[id] as (typeof SOURCES)[DistrictId] | undefined
   if (!source) throw new Error(`No such district: ${id}`)
-  const def = (await source()).default
+  return (await source()).default
+}
+
+export async function loadDistrict(id: DistrictId): Promise<District> {
+  const def = await loadDef(id)
   const root = new THREE.Group()
   root.name = def.id
 

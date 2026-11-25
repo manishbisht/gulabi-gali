@@ -160,11 +160,13 @@ it('every row in the list has "Bulao": the link to that place, without picking i
     await act(async () => hawa.querySelector<HTMLButtonElement>('button.map-invite')!.click())
     expect(share).toHaveBeenCalledWith({
       text: "Come to Hawa Mahal in Gulabi Gali — let's meet there!",
-      url: 'https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
+      url: 'https://gulabi-gali.manishbisht.me/p/walled-city/hawa-mahal/',
     })
     const wall = rows.find((li) => li.querySelector('[data-kind="poster"]'))!
     await act(async () => wall.querySelector<HTMLButtonElement>('button.map-invite')!.click())
-    expect(share.mock.lastCall![0].url).toMatch(/\?at=walled-city:poster-\d+$/)
+    expect(share.mock.lastCall![0].url).toMatch(
+      /^https:\/\/gulabi-gali\.manishbisht\.me\/p\/walled-city\/poster-\d+\/$/,
+    )
     expect(props.onPick).not.toHaveBeenCalled()
   } finally {
     vi.unstubAllGlobals()
