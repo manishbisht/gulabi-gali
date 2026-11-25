@@ -69,3 +69,29 @@ test('a kite round: cross strings, pull, "Wo kaata!", and the score', async ({ p
     .toBeGreaterThan(1)
   await page.keyboard.up('w')
 })
+
+test('on Sankranti the rooftop viewpoint offers the kite fight, flown from up there', async ({ page }) => {
+  // offline, as in rooftop.spec.ts: a live district would pull a teleported player back
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+  await enterSankranti(page)
+  // the greeting sends everyone up to the roof
+  await expect(page.getByText('Sankranti mubarak! Chhat pe patang udao')).toBeVisible()
+  const { stair } = await page.evaluate(() => window.__gg.roof()!)
+  await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), stair)
+  await page.getByRole('button', { name: 'Chhat pe chalo' }).click()
+  await expect.poll(() => page.evaluate(() => window.__gg.roof()!.up)).toBe(true)
+  await expect(page.locator('.fade')).not.toHaveAttribute('data-on')
+  // up there both are offered: the way down, and the kite
+  await expect(page.getByRole('button', { name: 'Neeche chalo' })).toBeVisible()
+  const kite = page.getByRole('button', { name: 'Patang udao' })
+  await expect(kite).toBeVisible()
+  await kite.click()
+  const game = page.getByRole('dialog', { name: 'Patang-baazi' })
+  await expect(game).toBeVisible()
+  expect(await page.evaluate(() => window.__gg.patang().active)).toBe(true)
+  // Escape leaves the game, and the player is still up on the roof
+  await page.keyboard.press('Escape')
+  await expect(game).toHaveCount(0)
+  expect(await page.evaluate(() => window.__gg.roof()!.up)).toBe(true)
+  await expect(kite).toBeVisible()
+})
