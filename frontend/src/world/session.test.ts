@@ -653,7 +653,7 @@ describe('emotes', () => {
     expect(session.emote('dance')).toBe(true)
     expect(sentEmotes()).toEqual([{ t: 'emote', kind: 'dance' }])
     tick(1 / 30)
-    expect(marks()).toEqual(['🎶'])
+    expect(marks()).toEqual(['✨'])
     // the pose is the body's alone: the moves that go out still say the heading the player faces
     const facing = session.player()!.heading()
     tick(1)
@@ -669,7 +669,7 @@ describe('emotes', () => {
     welcome(false)
     expect(session.emote('dance')).toBe(true)
     tick(1 / 30)
-    expect(marks()).toEqual(['🎶'])
+    expect(marks()).toEqual(['✨'])
     expect(sentEmotes()).toEqual([])
     // made visible (a new welcome on the socket): now it goes
     welcome(true)

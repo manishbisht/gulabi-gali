@@ -6,7 +6,7 @@ import type { Vec2 } from './types'
 
 /** The mark that pops over the head of whoever plays each emote (and the wheel's buttons wear). */
 export const EMOTE_MARKS: Record<EmoteKind, string> = {
-  dance: '🎶',
+  dance: '✨',
   clap: '👏',
   sit: '🧘',
   selfie: '🤳',

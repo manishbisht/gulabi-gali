@@ -576,6 +576,75 @@ test('seated at a tapri on a small phone, the bench panel and the joystick fit s
   await expect(page.getByRole('button', { name: 'Auto chalao' })).toHaveCount(0)
 })
 
+/** The emote chip and its five, by name, in each language (see ui/EmoteWheel.tsx). */
+const EMOTE_WORDS = {
+  hi: { chip: 'Mood dikhao', kinds: ['Naacho', 'Taali', 'Baith jao', 'Selfie pose', 'Haath hilao'] },
+  en: { chip: 'Show a mood', kinds: ['Dance', 'Clap', 'Sit down', 'Selfie pose', 'Wave'] },
+} as const
+
+/**
+ * The emote chip hangs over the joystick's corner and its five open above the stick: every one thumb-sized,
+ * whole on the screen, on nothing else, inside the stick's own column (so no card or street button beside the
+ * joystick is covered), well under the HUD's top block, and adding nothing to that block: its box is the same
+ * with the wheel open as shut.
+ */
+async function emoteWheelFits(page: Page, lang: L) {
+  const words = EMOTE_WORDS[lang]
+  const joystick = page.locator('.joystick')
+  const chip = page.getByRole('button', { name: words.chip, exact: true })
+  await expect(chip).toBeVisible()
+  const head = page.locator('.hud-head')
+  const before = (await head.boundingBox())!
+  const row = (await page.locator('.hud-bottom').boundingBox())!
+  await sideBySide({ joystick, chip })
+  await chip.tap()
+  const group = page.getByRole('group', { name: words.chip })
+  const kinds = Object.fromEntries(
+    words.kinds.map((name) => [name, group.getByRole('button', { name, exact: true })] as const),
+  )
+  await sideBySide({ joystick, chip, ...kinds })
+  const stick = (await joystick.boundingBox())!
+  for (const [name, item] of Object.entries({ chip, ...kinds })) {
+    const b = (await item.boundingBox())!
+    expect.soft(b.width, `${name} width`).toBeGreaterThanOrEqual(44)
+    expect.soft(b.height, `${name} height`).toBeGreaterThanOrEqual(44)
+    // above the stick, in its column: at most the row's own gap past its edge, where nothing else stands
+    expect.soft(b.y + b.height, `${name} above the joystick`).toBeLessThanOrEqual(stick.y)
+    expect.soft(b.x + b.width, `${name} in the joystick's column`).toBeLessThanOrEqual(stick.x + stick.width + 10)
+    // the HUD's top block, with room to spare for CI's wider (and so taller-wrapping) fonts
+    expect.soft(b.y, `${name} under the top block`).toBeGreaterThanOrEqual(before.y + before.height + 10)
+    await item.click({ trial: true, timeout: 2000 })
+  }
+  // nothing was added to the top rows, and the bottom row is laid out as it was
+  expect((await head.boundingBox())!).toEqual(before)
+  expect((await page.locator('.hud-bottom').boundingBox())!).toEqual(row)
+  expect((await joystick.boundingBox())!).toEqual(stick)
+  await shot(page, `emotes-${lang}`)
+  // picking one shuts the wheel
+  await kinds[words.kinds[0]]!.tap()
+  await expect(group).toHaveCount(0)
+  await expect(chip).toHaveAttribute('aria-expanded', 'false')
+}
+
+for (const lang of LANGS) {
+  test(`the emote chip and its five fit over the joystick on a small phone (${lang}, guest), adding nothing to the busiest HUD's top`, async ({
+    page,
+  }) => {
+    await busiest(page, undefined, lang)
+    await emoteWheelFits(page, lang)
+  })
+
+  test(`the emote chip and its five fit over the joystick on a small phone (${lang}, signed in), adding nothing to the busiest HUD's top`, async ({
+    browser,
+  }) => {
+    const phone = { viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+    const { page } = await resident(browser, 'Asha', phone)
+    await busiest(page, 'malviya-nagar', lang, 'gangaur', ALL_STAMPS)
+    await expect(page.getByText(WORDS[lang].sees, { exact: true })).toBeVisible()
+    await emoteWheelFits(page, lang)
+  })
+}
+
 /** The most of the screen's height a card at the bottom may take, so the street above stays in view. */
 const CARD_SHARE = 0.4
 
