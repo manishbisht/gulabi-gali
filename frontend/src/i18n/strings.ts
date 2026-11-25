@@ -1157,14 +1157,17 @@ export const STRINGS = {
   },
   installHintGo: { hi: 'Rakho', en: 'Add it' },
   installHintIos: {
-    hi: 'Home screen pe rakho: Safari mein Share dabao, phir "Add to Home Screen".',
-    en: 'Keep it on your home screen: in Safari tap Share, then "Add to Home Screen".',
+    hi: 'Home screen pe rakho: Safari mein Share dabao (⋯ ke andar ho sakta hai), phir "Add to Home Screen".',
+    en: 'Keep it on your home screen: in Safari tap Share (it may be inside ⋯), then "Add to Home Screen".',
   },
   installHintDismiss: { hi: 'Abhi nahi', en: 'Not now' },
-  /** `{app}` is Instagram or Facebook. At most two lines on a 360 px phone (tests/phone.spec.ts). */
+  /**
+   * `{app}` is Instagram or Facebook; its menu is ⋯ on an iPhone and ⋮ on Android. At most two lines on a 360 px
+   * phone (tests/phone.spec.ts).
+   */
   inAppNote: {
-    hi: '{app} mein sab nahi chalta. Poora maza browser mein: ⋯ dabao, browser mein kholo.',
-    en: 'Not everything works inside {app}. For all of it: tap ⋯, open in your browser.',
+    hi: '{app} mein sab nahi chalta. Poora maza browser mein: ⋯ ya ⋮ dabao, browser chuno.',
+    en: 'Not everything works inside {app}. For all of it: tap ⋯ or ⋮, open in your browser.',
   },
 } as const satisfies Record<string, Record<Lang, string>>
 

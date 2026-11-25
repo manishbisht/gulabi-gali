@@ -147,7 +147,7 @@ it("inside Instagram's own browser, one quiet note names it and says how to get 
   const note = host.querySelector('.intro-inapp')
   expect(note!.getAttribute('role')).toBe('note')
   expect(note!.textContent).toBe(
-    'Not everything works inside Instagram. For all of it: tap ⋯, open in your browser.',
+    'Not everything works inside Instagram. For all of it: tap ⋯ or ⋮, open in your browser.',
   )
   // nothing is blocked: the way in is still there
   expect(host.querySelector<HTMLButtonElement>('.enter')!.disabled).toBe(false)
