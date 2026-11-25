@@ -732,8 +732,8 @@ Opt-in per device, from the profile sheet (`PushToggle`, residents only). `pushS
 shows: nothing in a build without `VITE_VAPID_PUBLIC_KEY`; an explanation instead of the switch in an in-app
 browser (Instagram has no push), on an iPhone or iPad outside an installed home-screen app (Safari gives push only
 there), or where the Push API is missing. Switching on asks permission, registers `/sw.js` (a static file served
-from the site's own origin; the CSP's `worker-src 'self'` covers it; it caches nothing, and its fetch listener is
-empty, see "Home screen" below),
+from the site's own origin; the CSP's `worker-src 'self'` covers it; it caches nothing and has no fetch listener;
+it is registered on every visit, see "Home screen" below),
 subscribes with the VAPID public key and sends the subscription to `PUT /api/me/push` with the language. Each
 visit re-sends it (`syncPush`: the language now, the endpoint the browser has now, a new subscription if the key
 changed or the browser dropped it, and off if the permission was taken back). Switching off and signing out
@@ -775,18 +775,21 @@ with a stub `PushManager` and a fake push service on this machine, and decrypts 
 The site installs as a web app: `manifest.webmanifest` (`id` `/`, `start_url` `/?source=pwa`, standalone, portrait,
 plum theme, 192 and 512 PNG icons and a maskable 512 made from `icon.svg` by `scripts/app-icons.mjs`), and `sw.js`
 registered on every visit once the page has loaded and gone idle (`registerAppWorker`; not inside an app's own
-browser; the e2e build only with `?gg-sw=1`, so a worker never sits in front of other specs' routes). Its `fetch`
-listener is empty on purpose: older Chrome wants one before it offers an install, current Chrome skips an empty one,
-and it never calls `respondWith`, so every request goes to the network. Nothing is cached: a deploy replaces the
+browser; the e2e build only with `?gg-sw=1`, so a worker never sits in front of other specs' routes). It has no
+`fetch` listener on purpose: Chrome no longer needs one to install (the manifest is enough), iOS never did, and even
+an empty one wakes the worker for every request in Safari and Firefox. Nothing is cached: a deploy replaces the
 hashed `/assets`, and a stale cached page would ask for chunks that are gone. `main.tsx` takes `?source=pwa` out of
 the address first thing (`dropPwaSource`), before the analytics beacon, place links or "Bulao" read it.
 
 `watchInstall` holds Chrome's `beforeinstallprompt` (so its own banner never covers the street) and marks
-`appinstalled`. `InstallHint` shows one line under the HUD's head after 2 minutes of the city on screen (and the first
-visit's steps closed): "Rakho" opens Chrome's dialog, or in Safari on an iPhone it says where "Add to Home Screen" is.
-It never shows inside Instagram, Facebook or another app's browser, once installed or opened from the home screen
-(`display-mode: standalone`, `navigator.standalone`), or within 30 days of the last time it showed
-(`gg-install-hint` in localStorage, through `storage`). Inside Instagram's or Facebook's own browser (`socialApp`,
+`appinstalled`. `InstallHint` shows one line under the HUD's head after 2 minutes of the city on screen with nothing
+over the street (App passes `busy` for a sheet, card, ride, bench, roof, kite game or photo mode: no counting and no
+showing then, and a hint already up steps aside until the street is clear), and the first visit's steps closed:
+"Rakho" opens Chrome's dialog (phones and tablets only: a laptop gets no "home screen" line), or in Safari on an
+iPhone it says where "Add to Home Screen" is. It counts as asked once it has been in view, uncovered, for 5 s or was
+answered, and then rests 30 days (`gg-install-hint` in localStorage, through `storage`); one covered or unmounted
+sooner may ask again. It never shows inside Instagram, Facebook or another app's browser, or once installed or opened
+from the home screen (`display-mode: standalone`, `navigator.standalone`); there it does not even count. Inside Instagram's or Facebook's own browser (`socialApp`,
 beside `isInAppBrowser` in `auth/inApp.ts`) the welcome screen has one note on opening the site in a browser; the
 sign-in sheet's and the push switch's own notes stay as they were, and nothing is blocked.
 

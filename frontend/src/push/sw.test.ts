@@ -43,24 +43,10 @@ const push = (payload: unknown) => ({
 })
 
 describe('the service worker', () => {
-  it('handles push, a tap on a notification, install and activate, and lets fetches through: no cache', () => {
+  it('handles only push, a tap on a notification, install and activate: no fetch, no cache', () => {
     const { on } = boot()
-    expect([...on.keys()].sort()).toEqual(['activate', 'fetch', 'install', 'notificationclick', 'push'])
-    expect(SOURCE).not.toMatch(/caches\.|importScripts|fetch\(|\.respondWith\(/)
-  })
-
-  it('answers no request itself: a fetch goes to the network as if there were no worker', () => {
-    const { on } = boot()
-    const respondWith = vi.fn()
-    const waitUntil = vi.fn()
-    for (const mode of ['navigate', 'no-cors', 'cors'])
-      on.get('fetch')!({
-        request: { url: `${SCOPE}assets/index.js`, method: 'GET', mode },
-        respondWith,
-        waitUntil,
-      })
-    expect(respondWith).not.toHaveBeenCalled()
-    expect(waitUntil).not.toHaveBeenCalled()
+    expect([...on.keys()].sort()).toEqual(['activate', 'install', 'notificationclick', 'push'])
+    expect(SOURCE).not.toMatch(/caches\.|importScripts|fetch\(|\.respondWith\(|addEventListener\('fetch'/)
   })
 
   for (const lang of ['hi', 'en'] as const) {

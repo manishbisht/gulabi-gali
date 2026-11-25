@@ -1,8 +1,8 @@
 /*
  * Gulabi Gali's service worker. It does one thing: show a push notification for a new request or message, or a
  * friend's invite for chai (a tap opens the inbox, which says who and where), or for a plan the person said they
- * would come to being an hour away (a tap opens the city at that plan's poster). It caches nothing and never answers
- * a page's requests (its fetch listener only lets them through, see below).
+ * would come to being an hour away (a tap opens the city at that plan's poster). It caches nothing and never sees a
+ * page's requests (see below). It is registered on every visit (src/pwa/install.ts), so the site can be installed.
  *
  * A push names nobody and quotes nothing: its payload is only {t: 'request' | 'message' | 'chai' | 'meetup', lang:
  * 'hi' | 'en'} (backend/src/push.ts), and a reminder's `at`, the poster's place (`<district>:poster-<wall>`), which goes
@@ -39,14 +39,11 @@ self.addEventListener('activate', (event) => {
 })
 
 /*
- * Network only, on purpose. A fetch listener is here so that browsers that still ask for one before offering "Add to
- * Home screen" (older Chrome and the browsers built on it) see an installable app. It never calls respondWith, so
- * every request goes to the network exactly as if there were no worker; current Chrome sees that it is empty and
- * does not even wake the worker for it, so it costs a page nothing. Nothing is cached, and nothing must be: each
- * deploy replaces the hashed files in /assets, and an old cached index.html or chunk would ask for files that are
- * gone and break the city until the cache was cleared by hand.
+ * No fetch listener, on purpose: the worker never sees a page's requests. Chrome no longer needs one to offer "Add to
+ * Home screen" (the manifest is enough), iOS never did, and an empty one would still wake the worker for every
+ * request in Safari and Firefox. Nothing is cached either: each deploy replaces the hashed files in /assets, and an
+ * old cached index.html or chunk would ask for files that are gone and break the city until the cache was cleared.
  */
-self.addEventListener('fetch', () => {})
 
 self.addEventListener('push', (event) => {
   let data = null
