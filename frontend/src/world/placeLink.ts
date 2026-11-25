@@ -9,9 +9,12 @@ import { TAXI } from './taxi'
 import type { AABB, Vec2 } from './types'
 
 /*
- * Links to a place ("Bulao"): `https://…/?at=<district>:<place>`. A link names a place and nothing else: not
- * who shared it, when, or from where. Opening one enters that district and stands the visitor at the place
- * (after "Padharo"); a place the district does not have falls back to the normal spawn.
+ * Links to a place ("Bulao"): `https://…/p/<district>/<place>/`, a small static page made at build time (see
+ * `src/preview/pages.ts`) whose tags draw a card for the place in WhatsApp, Instagram or X, and which forwards a
+ * visitor at once to `/?at=<district>:<place>`, the address the app reads (and old links still carry). A link
+ * names a place and nothing else: not who shared it, when, or from where. Opening one enters that district and
+ * stands the visitor at the place (after "Padharo"); a place the district does not have falls back to the
+ * normal spawn.
  *
  * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `viewpoint`, `poster-<n>`; a bench or tapri is
  * `bench-<n>` / `tapri-<n>`, its number as the server counts seats (the map's `<district>:<n>` without the
@@ -27,8 +30,14 @@ export function linkId(item: Pick<MapTarget, 'id' | 'kind'>): string {
   return item.id
 }
 
-/** The link that stands whoever opens it at `place` in `district`. */
-export const placeUrl = (district: DistrictId, place: string) => `${SITE_URL}/?${PARAM}=${district}:${place}`
+/** The path of a place's preview page (see `src/preview/pages.ts`), from the site's root. */
+export const placePath = (district: DistrictId, place: string) => `/p/${district}/${place}/`
+
+/** Where that page sends a visitor on: the app, told the place by `?at=` (`readPlaceLink`). */
+export const placeForward = (district: DistrictId, place: string) => `/?${PARAM}=${district}:${place}`
+
+/** The link that stands whoever opens it at `place` in `district`: its preview page, which forwards them on. */
+export const placeUrl = (district: DistrictId, place: string) => `${SITE_URL}${placePath(district, place)}`
 
 /** The place a page's query string (`location.search`) links to, or null when it names none, or none sane. */
 export function readPlaceLink(search: string): { district: DistrictId; place: string } | null {
@@ -101,7 +110,8 @@ function besideProp(
 }
 
 /**
- * Where a link to `place` stands the visitor in a district, and the way they face: by a landmark where the
+ * Where a link to `place` stands the visitor in a district, and the way they face: by a landmark (facing its
+ * building) where the
  * auto-taxi sets riders down (in its ring, so its card opens), at the metro station, at a named viewpoint's
  * stair, by a bench or tapri (in
  * reach to sit) or in front of a poster wall, clear of everything. Null for a place the district does not have,
@@ -121,7 +131,10 @@ export function placeSpot(district: Pick<District, 'def' | 'colliders'>, place: 
   if (landmark) {
     const drop = TAXI[def.id].drops[landmark.id]
     if (!drop) return null
-    return { x: drop.x, z: drop.z, ry: Math.atan2(landmark.at.x - drop.x, landmark.at.z - drop.z) }
+    // facing the building (its footprint's middle), not `at`: a fort's `at` is its gate's ring, which the drop
+    // can stand beyond, and facing it would turn the visitor's back on the fort
+    const { minX, maxX, minZ, maxZ } = landmark.footprint
+    return { x: drop.x, z: drop.z, ry: Math.atan2((minX + maxX) / 2 - drop.x, (minZ + maxZ) / 2 - drop.z) }
   }
   const seat = /^(bench|tapri)-(\d+)$/.exec(place)
   if (seat) {

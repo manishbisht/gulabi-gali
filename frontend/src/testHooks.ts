@@ -38,6 +38,8 @@ export interface GgTestApi {
   setSnapshot(partial: Partial<CitySnapshot>): void
   /** Freezes the clock the sky runs on at an ISO instant, and repaints now. */
   setNow(iso: string): void
+  /** Hides (or shows again) every body: the player, the characters, other people (the preview pictures). */
+  hideFigures(on: boolean): void
   /** Pauses (or resumes) every walking character, so a test can aim at one that stands still. */
   freezeNpcs(on: boolean): void
   /** Each street animal: where it stands (metres), whether it follows, and where it is on the page (CSS px). */

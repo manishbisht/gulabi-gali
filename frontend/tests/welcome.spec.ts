@@ -53,6 +53,38 @@ test('a link to a landmark opens its district there, after Padharo, with its car
   expect(new URL(page.url()).searchParams.get('gg-test')).toBe('1')
 })
 
+test('a shared link is the place’s preview page: its card for the scrapers, and it forwards into the city there', async ({
+  page,
+}) => {
+  // what WhatsApp or Instagram reads (no script runs for them): the place's own title, line and picture
+  const preview = await page.request.get('/p/walled-city/hawa-mahal/')
+  expect(preview.ok()).toBe(true)
+  const html = await preview.text()
+  expect(html).toContain('<meta property="og:title" content="Hawa Mahal · Gulabi Gali" />')
+  expect(html).toContain(
+    '<meta property="og:image" content="https://gulabi-gali.manishbisht.me/og/walled-city-hawa-mahal.jpg" />',
+  )
+  expect(html).toContain(
+    '<meta property="og:url" content="https://gulabi-gali.manishbisht.me/p/walled-city/hawa-mahal/" />',
+  )
+  const image = await page.request.get('/og/walled-city-hawa-mahal.jpg')
+  expect(image.headers()['content-type']).toBe('image/jpeg')
+
+  // a person is sent straight on to the app with the place (and the test build's switch), then Padharo
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+  await page.route('**/api/count', (route) => route.fulfill({ json: { people: 0 } }))
+  await page.goto('/p/walled-city/hawa-mahal/?gg-test=1')
+  await page.waitForURL(
+    (url) => url.pathname === '/' && url.searchParams.get('at') === 'walled-city:hawa-mahal',
+  )
+  expect(new URL(page.url()).searchParams.get('gg-test')).toBe('1')
+  await page.getByRole('button', { name: 'Padharo!' }).tap()
+  await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+  expect(await district(page)).toBe('walled-city')
+  await expect(page.locator('section.landmark-card[aria-label="Hawa Mahal"]')).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('at')).toBeNull()
+})
+
 for (const [kind, at, button] of [
   ['a tapri', 'walled-city:tapri-0', '.bench-button'],
   ['a poster wall', 'university:poster-0', '.poster-button'],
@@ -85,6 +117,6 @@ test('"Bulao" on the map copies the link when there is no share sheet', async ({
   // every row's status line is there, empty; only the one pressed speaks
   await expect(map.getByRole('status').filter({ hasText: /\S/ })).toHaveText('Link copy ho gaya')
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain! https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
+    'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain! https://gulabi-gali.manishbisht.me/p/walled-city/hawa-mahal/',
   )
 })

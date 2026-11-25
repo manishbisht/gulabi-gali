@@ -19,7 +19,7 @@ import {
   type Reaction,
   type ServerMsg,
 } from '../net/protocol'
-import { loadOrCreateLook } from '../player/avatar'
+import { hideAvatars, loadOrCreateLook } from '../player/avatar'
 import { createAmbience } from '../audio/ambience'
 import { closeAudio } from '../audio/horn'
 import { DRAG_TURN } from '../player/camera'
@@ -487,6 +487,7 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           }
         }),
       freezeNpcs: npcs.freeze,
+      hideFigures: hideAvatars,
       animals: () =>
         animals.list().map((a) => {
           const p = new THREE.Vector3(a.x, 0.5, a.z).project(stage.camera)

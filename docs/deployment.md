@@ -283,14 +283,37 @@ already send.
 
 **Link preview.** `frontend/index.html` carries the description, Open Graph and Twitter tags that Instagram,
 WhatsApp and X read when someone shares the link, with `og:url` and `og:image` as absolute URLs on
-`https://gulabi-gali.manishbisht.me/`. The image is `frontend/public/og.png` (1200x630, a real render of the
-Walled City). To make it again after the city changes: `npm run og-image -w frontend` (it builds the site with
-test hooks, renders the street at 1200x630 at golden hour with the HUD hidden and a small wordmark, cuts it to
-a 256-colour palette with `sharp` (installed with the backend's test tools; without it the raw shot is written,
-which may be bigger than the 300 kB scrapers like), and writes it with `apple-touch-icon.png`; look at it before
-committing). If the domain changes, change the URLs in `index.html` with it. After deploying, paste the link into
-a WhatsApp chat to yourself, or Facebook's Sharing Debugger (Instagram uses the same scraper), to see the card;
-both cache a card for a while, so a changed image can take a day to show.
+`https://gulabi-gali.manishbisht.me/`. The image is `frontend/public/og/default.jpg` (1200x630, a real render of
+the Walled City with no one in it; see the place previews below). `npm run og-image -w frontend` still makes the
+home-screen icon `apple-touch-icon.png` (and the old `og.png`, which nothing points at now but a place preview
+made before its pictures exist: it has characters in it). If the domain changes, change the URLs in `index.html`
+and `SITE_URL` (`frontend/src/ui/inviteShare.ts`) with it. After deploying, paste the link into a WhatsApp chat to
+yourself, or Facebook's Sharing Debugger (Instagram uses the same scraper), to see the card; both cache a card for
+a while, so a changed image can take a day to show.
+
+**Place previews (`/p/<district>/<place>/`).** "Bulao" and the map share `https://gulabi-gali.manishbisht.me/p/
+<district>/<place>/`, a small static page per place that the build makes (`frontend/src/preview/`, emitted by
+`vite.config.ts` into `dist/p/…/index.html`) from the district definitions, so a new district or landmark gets its
+pages with nothing to do. Its tags give the card the place's name ("Hawa Mahal · Gulabi Gali"), one line about it
+and its picture; a person who opens it goes straight on to `/?at=<district>:<place>` (by a script: a crawler that
+followed a `<meta refresh>` would draw the home page's card instead), and the city opens there after Padharo!.
+Old `?at=` links still work. Anything else under `/p/` is GitHub Pages' usual 404. The pictures are
+`frontend/public/og/<district>-<landmark>.jpg` (each landmark), `<district>.jpg` (its benches, tapris, poster
+walls, metro and viewpoint) and `default.jpg`, all 1200x630 JPEGs of about 30 to 70 kB with no one in them (the
+player, the characters and other people are hidden for the shot). A place whose picture is missing (a new
+district or landmark) uses its district's, else `default.jpg`, until they are made. To make them again (after a
+district or landmark is added, or the city's look changes), on a Mac with Chrome:
+
+```sh
+npm run og-images -w frontend                  # every picture (a couple of minutes)
+npm run og-images -w frontend -- galta         # only those whose file name holds "galta"
+```
+
+It builds the site with test hooks, opens each place's link at 1200x630 at golden hour with the HUD hidden, steps
+back to take the landmark in, and writes the JPEGs. A landmark that needs another angle gets a line in `FRAMING`
+in `scripts/og-images.mjs` (`OG_FRAME='{"turn":960,"back":1500,"up":-100,"zoom":3}'` tries one without editing).
+Look at every picture before committing them (`src/preview/pages.test.ts` checks the size and that no stray file
+ships), then deploy as usual: the pages pick the pictures up at build time.
 
 **Cloudflare Web Analytics (optional, cookieless).** Page views and visitors, with no cookie and nothing stored
 on the phone. In the Cloudflare dashboard: Analytics & Logs, Web Analytics, Add a site, enter
@@ -347,10 +370,11 @@ empty.
 
 **Links to a place ("Bulao").** Landmark cards, the bench panel (both as a share icon) and every row of the map's
 place list have a "Bulao" button: the phone's share sheet (or, without one, the clipboard) with a short line and
-`https://gulabi-gali.manishbisht.me/?at=<district>:<place>`. The link names a place and nothing else, never who
-sent it. Opening it shows the welcome screen as usual; after Padharo! the city opens in that district with the
-visitor standing at the place, and the `at` part leaves the address bar. A place a district does not have opens
-at the usual spawn. Nothing to set.
+`https://gulabi-gali.manishbisht.me/p/<district>/<place>/`, the place's preview page (see "Place previews"
+above), which draws a card with the place's name and picture and forwards to `/?at=<district>:<place>`. The link
+names a place and nothing else, never who sent it. Opening it shows the welcome screen as usual; after Padharo!
+the city opens in that district with the visitor standing at the place, and the `at` part leaves the address bar.
+A place a district does not have opens at the usual spawn. Older `?at=` links keep working. Nothing to set.
 
 **Pre-launch checks**
 

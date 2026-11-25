@@ -278,6 +278,15 @@ export function buildAvatar(look: AvatarLook, { castShadow = true }: AvatarOptio
 }
 
 /**
+ * Hides (or shows again) every body drawn with the shared material: the player, the characters and other
+ * people. For the link previews' pictures, which have no one in them (scripts/og-images.mjs, a test hook).
+ */
+export function hideAvatars(hidden: boolean): void {
+  material ??= avatarMaterial()
+  material.visible = !hidden
+}
+
+/**
  * Frees the shared geometry and material. three hangs dispose listeners off every resource it renders,
  * tied to that renderer, so the owner of a stage calls this when the stage goes; the next `buildAvatar`
  * rebuilds what it needs.

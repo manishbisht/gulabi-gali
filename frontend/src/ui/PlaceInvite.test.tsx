@@ -47,7 +47,7 @@ it('"Bulao" opens the share sheet with a short line and the link to the place: n
   await act(async () => button().click())
   expect(share).toHaveBeenCalledWith({
     text: 'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain!',
-    url: 'https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
+    url: 'https://gulabi-gali.manishbisht.me/p/walled-city/hawa-mahal/',
   })
   quiet()
 })
@@ -59,7 +59,7 @@ it('a bench or tapri links by its kind and number', async () => {
   await act(async () => button().click())
   expect(share).toHaveBeenCalledWith({
     text: "Come to Chai stall 1 in Gulabi Gali — let's meet there!",
-    url: 'https://gulabi-gali.manishbisht.me/?at=walled-city:tapri-0',
+    url: 'https://gulabi-gali.manishbisht.me/p/walled-city/tapri-0/',
   })
 })
 
@@ -70,7 +70,7 @@ it('with no share sheet (or a failed one) it copies the line and link, and says 
   await mount()
   await act(async () => button().click())
   expect(writeText).toHaveBeenCalledWith(
-    'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain! https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
+    'Gulabi Gali mein Hawa Mahal pe aao — yahin milte hain! https://gulabi-gali.manishbisht.me/p/walled-city/hawa-mahal/',
   )
   expect(note()!.textContent).toBe('Link copy ho gaya')
   await act(async () => vi.advanceTimersByTime(4000))

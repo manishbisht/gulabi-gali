@@ -4,7 +4,8 @@ import { PLAYER_RADIUS } from '../player/player'
 import { BENCH_RANGE, benchesOf } from './benches'
 import { mapItems } from './cityMap'
 import { DISTRICTS, loadDistrict, type District } from './district'
-import { linkId, placeSpot, placeUrl, readPlaceLink } from './placeLink'
+import { SITE_URL } from '../ui/inviteShare'
+import { linkId, placeForward, placeSpot, placeUrl, readPlaceLink } from './placeLink'
 import { WALL_RANGE, wallDistance, wallsOf } from './posters'
 import type { AABB, Vec2 } from './types'
 import { STAIR_RANGE } from './rooftop'
@@ -16,21 +17,31 @@ const load = (id: DistrictId) => {
   return loaded.get(id)!
 }
 
+/** Where a link's preview page sends its visitor, read back as the app reads it. */
+const forwarded = (district: DistrictId, place: string) =>
+  readPlaceLink(new URL(placeForward(district, place), SITE_URL).search)
+
 const hits = (p: Vec2, r: number, c: AABB) =>
   p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r
 
 describe('a link to a place', () => {
-  it('is the site with ?at=<district>:<place>, and nothing else (nothing about who shared it)', () => {
+  it("is the place's preview page, /p/<district>/<place>/, and nothing else (nothing about who shared it)", () => {
     expect(placeUrl('walled-city', 'hawa-mahal')).toBe(
-      'https://gulabi-gali.manishbisht.me/?at=walled-city:hawa-mahal',
+      'https://gulabi-gali.manishbisht.me/p/walled-city/hawa-mahal/',
     )
-    expect(new URL(placeUrl('mi-road', 'bench-3')).searchParams.size).toBe(1)
+    const url = new URL(placeUrl('mi-road', 'bench-3'))
+    expect(url.search).toBe('')
+    expect(url.hash).toBe('')
   })
 
-  it('reads back what it wrote', () => {
-    expect(readPlaceLink(new URL(placeUrl('university', 'poster-1')).search)).toEqual({
+  it('reads back what the page forwards to, and the old ?at= links', () => {
+    expect(readPlaceLink(new URL(placeForward('university', 'poster-1'), SITE_URL).search)).toEqual({
       district: 'university',
       place: 'poster-1',
+    })
+    expect(readPlaceLink('?at=walled-city:hawa-mahal')).toEqual({
+      district: 'walled-city',
+      place: 'hawa-mahal',
     })
     expect(readPlaceLink('?at=malviya-nagar%3Ametro')).toEqual({ district: 'malviya-nagar', place: 'metro' })
   })
@@ -60,11 +71,11 @@ describe('a link to a place', () => {
 })
 
 describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot at that place', (id) => {
-  it('landmarks: by the landmark (its card opens), facing it', async () => {
+  it('landmarks: by the landmark (its card opens), facing its building', async () => {
     const { def, colliders } = await load(id)
     for (const l of def.landmarks) {
       const item = mapItems(def, []).find((i) => i.id === l.id)!
-      const back = readPlaceLink(new URL(placeUrl(id, linkId(item))).search)!
+      const back = forwarded(id, linkId(item))!
       expect(back).toEqual({ district: id, place: l.id })
       const spot = placeSpot(await load(id), back.place)!
       expect(spot, l.id).not.toBeNull()
@@ -73,13 +84,38 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
         l.id,
       ).toBe(false)
       expect(Math.hypot(spot.x - l.at.x, spot.z - l.at.z), l.id).toBeLessThanOrEqual(l.radius)
+      // facing the building itself (its footprint), not away from it: within 45 degrees of its middle, and
+      // looking straight ahead runs into it
+      const f = l.footprint
+      const mid = { x: (f.minX + f.maxX) / 2, z: (f.minZ + f.maxZ) / 2 }
+      const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
+      const to = { x: mid.x - spot.x, z: mid.z - spot.z }
+      const cos = (look.x * to.x + look.z * to.z) / Math.hypot(to.x, to.z)
+      expect(cos, l.id).toBeGreaterThan(Math.cos(Math.PI / 4))
+      const ahead = Array.from({ length: 300 }, (_, i) => ({
+        x: spot.x + look.x * i * 0.5,
+        z: spot.z + look.z * i * 0.5,
+      }))
+      expect(
+        ahead.some((p) => hits(p, 0, f)),
+        l.id,
+      ).toBe(true)
+      // the chase camera's whole line back (7 m), with a metre's margin, clear of every collider: it never sits
+      // in a wall behind the visitor
+      for (let d = 1; d <= 7; d++) {
+        const p = { x: spot.x - look.x * d, z: spot.z - look.z * d }
+        expect(
+          colliders.some((c) => hits(p, 1, c)),
+          `${l.id}: ${d} m behind`,
+        ).toBe(false)
+      }
     }
   })
 
   it('the metro: at the station', async () => {
     const { def, colliders } = await load(id)
     const item = mapItems(def, []).find((i) => i.kind === 'metro')!
-    const back = readPlaceLink(new URL(placeUrl(id, linkId(item))).search)!
+    const back = forwarded(id, linkId(item))!
     const spot = placeSpot(await load(id), back.place)!
     expect(colliders.some((c) => hits(spot, PLAYER_RADIUS, c))).toBe(false)
     expect(Math.hypot(spot.x - def.station.x, spot.z - def.station.z)).toBeLessThanOrEqual(STATION_RANGE)
@@ -93,7 +129,7 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
       expect(placeSpot(await load(id), 'viewpoint')).toBeNull()
       return
     }
-    const back = readPlaceLink(new URL(placeUrl(id, linkId(item!))).search)!
+    const back = forwarded(id, linkId(item!))!
     expect(back.place).toBe('viewpoint')
     const spot = placeSpot(await load(id), back.place)!
     expect(colliders.some((c) => hits(spot, PLAYER_RADIUS, c))).toBe(false)
@@ -119,7 +155,7 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
     expect(benches.length).toBeGreaterThan(0)
     for (const b of benches) {
       const item = mapItems(def, []).find((i) => i.id === b.id)!
-      const back = readPlaceLink(new URL(placeUrl(id, linkId(item))).search)!
+      const back = forwarded(id, linkId(item))!
       expect(back.place).toMatch(new RegExp(`^${b.kind}-\\d+$`))
       const spot = placeSpot(await load(id), back.place)!
       expect(spot, b.id).not.toBeNull()
@@ -137,7 +173,7 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
     const { def, colliders } = await load(id)
     for (const w of wallsOf(def)) {
       const item = mapItems(def, []).find((i) => i.id === `poster-${w.index}`)!
-      const back = readPlaceLink(new URL(placeUrl(id, linkId(item))).search)!
+      const back = forwarded(id, linkId(item))!
       const spot = placeSpot(await load(id), back.place)!
       expect(spot, item.id).not.toBeNull()
       expect(
