@@ -946,6 +946,10 @@ export const STRINGS = {
   /* Gali cricket (ui/Cricket.tsx): the pitch in the lane, one tap to swing. */
   cricketStart: { hi: 'Cricket khelo', en: 'Play cricket' },
   cricketLabel: { hi: 'Gali cricket', en: 'Gali cricket' },
+  /** Before the first ball: the bowler waits for this tap (or three seconds). */
+  cricketReady: { hi: 'Tap karke shuru karo', en: 'Tap to start' },
+  /** On "Cricket khelo" while the game's code is still arriving. */
+  cricketOpening: { hi: 'Khul raha hai…', en: 'Opening…' },
   cricketSwing: { hi: 'Balla ghumao', en: 'Swing the bat' },
   cricketStop: { hi: 'Khel band karo', en: 'Stop playing' },
   cricketDone: { hi: 'Bas, ho gaya', en: 'Done' },

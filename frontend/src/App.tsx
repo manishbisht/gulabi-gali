@@ -940,9 +940,10 @@ export default function App() {
                         type="button"
                         className="metro-button cricket-button"
                         aria-keyshortcuts="E"
+                        aria-busy={cricket.loading || undefined}
                         onClick={cricket.play}
                       >
-                        {t('cricketStart', lang)}
+                        {t(cricket.loading ? 'cricketOpening' : 'cricketStart', lang)}
                       </button>
                     )}
                   {animals.near &&
