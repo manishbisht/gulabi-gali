@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Stage } from '../engine/stage'
-import { KITE_COLOURS, kiteGeometry } from '../live/festivalFx'
+import { KITE_COLOURS, kiteGeometry } from '../live/kites'
 import { PALETTE } from '../world/palette'
 import type { Vec2 } from '../world/types'
 import { X_RANGE, Y_MAX, type PatangState } from './patang'
@@ -12,9 +12,23 @@ const EYE_BACK = 1.8
 /** The sky plane hangs this far in front of the camera, square on to it, so the kites fill any screen. */
 const DEPTH = 14
 
+/**
+ * Where the game's camera stands for a player at `at` with their feet `floor` metres up: `EYE_BACK` behind them
+ * along +z and `EYE_Y` above their feet. It looks along -z, up into the sky. Written into `out`.
+ */
+export function patangEye(at: Vec2, floor: number, out: { x: number; y: number; z: number }) {
+  out.x = at.x
+  out.y = floor + EYE_Y
+  out.z = at.z + EYE_BACK
+  return out
+}
+
 export interface PatangView {
-  /** Looks up from where the player stands, and draws the kites and strings of this moment. */
-  update(state: PatangState, at: Vec2): void
+  /**
+   * Looks up from where the player stands, their feet `floor` metres up (a roof's height on the rooftop
+   * viewpoint, 0 on the street), and draws the kites and strings of this moment.
+   */
+  update(state: PatangState, at: Vec2, floor?: number): void
   dispose(): void
 }
 
@@ -103,9 +117,10 @@ export function createPatangView(stage: Stage, rivals: number): PatangView {
   }
 
   return {
-    update(state, at) {
-      camera.position.set(at.x, EYE_Y, at.z + EYE_BACK)
-      target.set(at.x, EYE_Y + Math.sin(PITCH) * 10, at.z + EYE_BACK - Math.cos(PITCH) * 10)
+    update(state, at, floor = 0) {
+      patangEye(at, floor, camera.position)
+      const { x, y, z } = camera.position
+      target.set(x, y + Math.sin(PITCH) * 10, z - Math.cos(PITCH) * 10)
       camera.lookAt(target)
       camera.updateMatrixWorld()
       camera.getWorldDirection(forward)

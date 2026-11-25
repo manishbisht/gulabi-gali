@@ -222,6 +222,28 @@ sprites go (the scene fog alone carries the morning) and half the bulbs. (These 
 to 0.16: the same draws and the same work per frame.) Not measured: a real phone's fill rate
 under six large transparent sprites, which is what the lowest tier drops first.
 
+### Makar Sankranti
+
+Run 2026-11-25, same machine and spec (throttled Pixel 7, test-hooks build, local `wrangler dev` Worker), no
+residents. `DEVICE_PERF_SANKRANTI=1 npm run test:device` opens the Walled City with the Sankranti override and
+sets the clock to noon on 14 January 2027 under that day's sun, so the kites are up (`__gg.kites()`: 120 in the
+sky, 15 of them cut and drifting down, and 4 people flying theirs from the roofs, at tier 2), then walks for 8 s
+as before. "Walled City" is the same walk with no festival, on the same build.
+
+| Run                  | Walkable ms | Frames | p50 ms | p95 ms | p99 ms | Max ms | Over 33 ms | Tier after | Heap MB | Draw calls | Triangles | Geometries | Programs | Main thread ms/frame (task, script) |
+| -------------------- | ----------: | -----: | -----: | -----: | -----: | -----: | ---------: | ---------- | ------: | ---------: | --------: | ---------: | -------: | ----------------------------------- |
+| Walled City          |        1811 |    549 |   16.7 |   16.8 |   16.8 |    150 |          2 | 2          |     9.5 |         53 |    68,962 |         40 |       11 | 4.6, 3.0                            |
+| Sankranti, noon      |        1857 |    543 |   16.7 |   16.8 |   16.8 |     17 |          0 | 2          |    11.0 |         52 |    60,816 |         43 |       14 | 2.4, 1.7                            |
+
+Every target holds: walkable at 1.9 s, p50 16.7 ms, no frame over 33 ms, tier still 2. The kites, their strings
+and the flyers are three draw calls, three geometries and three shader programs (the flyers share the
+procession's dress-tint shader); the draw calls and triangles move with where the walk ends up looking, not with
+the kites (a kite is four triangles, its diamond and its tail; a flyer about 250). The kites are stepped at
+most 30 times a second, so the main thread's time per frame is within the run-to-run spread (this run's
+baseline was the slower of the two).
+The lowest tier draws 20 kites (2 cut), 2 flyers and no strings; at night there are none. Not measured: a real
+phone, and the kite fight itself from the rooftop (the same game as on the street, looking up from higher).
+
 ### Phase 3: Clerk mode
 
 Run 2026-11-14, same machine and spec, against two builds of the same commit with test hooks on: one with no

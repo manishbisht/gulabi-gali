@@ -105,6 +105,9 @@ export function skyParams(s: CitySnapshot, now: Date): SkyParams {
   }
 }
 
+/** Whether the sun is up (sunrise to sunset): `skyParams` puts it at the horizon or above only then. */
+export const daylight = (sky: Pick<SkyParams, 'sunElevationDeg'>): boolean => sky.sunElevationDeg >= 0
+
 /** Per-scene paint: a vertical gradient canvas for the backdrop, reused between updates. */
 interface Backdrop {
   canvas: HTMLCanvasElement

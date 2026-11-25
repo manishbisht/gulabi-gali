@@ -13,7 +13,10 @@ interface Props {
   line?: string
   /** A festival greeting, already in the current language. */
   banner?: string
-  /** A line under the banner while a procession is on the street, already in the current language. */
+  /**
+   * A line under the banner, already in the current language: while a procession is on the street, or on
+   * Sankranti the day's game.
+   */
   procession?: string
   /** Stamp progress as `N/total`; with every stamp the chip shows a shorter `✓ total`, its name the whole count. */
   stamps: string

@@ -136,8 +136,13 @@ export default function App() {
     if (wasPhoto.current && !photo) document.querySelector<HTMLElement>('.photo-button')?.focus()
     wasPhoto.current = !!photo
   }, [photo])
-  /** The kite fight, while one runs: where the player stood, and the stage and controls it borrows. */
-  const [kiteFrom, setKiteFrom] = useState<{ at: Vec2; stage: Stage; controls: Controls } | null>(null)
+  /**
+   * The kite fight, while one runs: where the player stood (and how high: up on a roof, the game looks up
+   * from there), and the stage and controls it borrows.
+   */
+  const [kiteFrom, setKiteFrom] = useState<{ at: Vec2; y: number; stage: Stage; controls: Controls } | null>(
+    null,
+  )
   const { npc: talking, tap: tapNpc, close: closeNpc, isOpen: npcOpen, step: stepNpc } = useNpcCard()
   const {
     open: meeting,
@@ -321,7 +326,9 @@ export default function App() {
   }, [residentId])
   const [override] = useState(() => festivalOverride(FESTIVALS))
   const festival = override ?? snapshot?.festival ?? null
-  const processionKey = processionLine(festival, here)
+  // the line under the greeting: a procession on the street, or on Sankranti the day's game (up on the roof)
+  const processionKey =
+    processionLine(festival, here) ?? (festival === 'sankranti' ? 'festivalSankrantiLine' : undefined)
   /** The city map (M, the place chip) and the compass to the place picked on it; not in a ride, kite fight or photo. */
   const map = useCityMap(entered && !ride && !taxi.riding && !kiteFrom && !photo)
   const { bind: bindMap, hide: hideMapPillar, blockedRef: mapBlockedRef } = map
@@ -835,17 +842,20 @@ export default function App() {
                     seated: !!bench.seat,
                     card: !!card,
                   }) &&
-                    !roof.up &&
+                    // on the street, and on Sankranti up on the rooftop viewpoint too (never mid-fade)
+                    !roof.fading &&
                     !near &&
                     !sheetOpen && (
                       <button
                         type="button"
                         className="metro-button patang-button"
                         onClick={() => {
-                          const at = session.current?.player()?.position()
+                          const player = session.current?.player()
+                          const at = player?.position()
                           const stage = stageRef.current
                           const controls = controlsRef.current
-                          if (at && stage && controls) setKiteFrom({ at, stage, controls })
+                          if (at && stage && controls)
+                            setKiteFrom({ at, y: player!.elevation(), stage, controls })
                         }}
                       >
                         {t('patangStart', lang)}
@@ -1068,6 +1078,7 @@ export default function App() {
           stage={kiteFrom.stage}
           controls={kiteFrom.controls}
           at={kiteFrom.at}
+          y={kiteFrom.y}
           onExit={() => setKiteFrom(null)}
         />
       )}

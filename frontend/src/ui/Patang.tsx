@@ -21,6 +21,8 @@ interface Props {
   controls: Controls
   /** Where the player stands: the camera looks up from here. */
   at: Vec2
+  /** How high their feet are: 0 on the street, a roof's height up on the rooftop viewpoint. */
+  y?: number
   onExit: () => void
 }
 
@@ -39,7 +41,7 @@ function stageEl(): HTMLElement | null {
  * leaves), and on the way out all of that is handed back. The simulation is `createPatang`; this file feeds
  * it input and draws it, and nothing here allocates per frame.
  */
-export function Patang({ lang, stage, controls, at, onExit }: Props) {
+export function Patang({ lang, stage, controls, at, y = 0, onExit }: Props) {
   const root = useRef<HTMLDivElement>(null)
   const again = useRef<HTMLButtonElement>(null)
   const onExitRef = useRef(onExit)
@@ -118,7 +120,7 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
     const off = stage.onFrame((dt) => {
       read()
       if (!paused) sim.update(input, dt)
-      view.update(s, at)
+      view.update(s, at, y)
       const left = Math.ceil(s.timeLeft)
       if (s.cutSeq !== shown.cuts) woKaata()
       if (left === shown.left && s.score === shown.score && s.over === shown.over && s.cutSeq === shown.cuts)
@@ -147,6 +149,7 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
         },
         score: () => s.score,
         rivals: () => s.rivals.length,
+        eyeY: () => stage.camera.position.y,
       }),
     })
     return () => {
@@ -164,10 +167,11 @@ export function Patang({ lang, stage, controls, at, onExit }: Props) {
           pause() {},
           score: () => 0,
           rivals: () => 0,
+          eyeY: () => 0,
         }),
       })
     }
-  }, [stage, at, round])
+  }, [stage, at, y, round])
 
   useEffect(() => {
     if (hud.over) again.current?.focus()

@@ -171,12 +171,39 @@ test('paints a hazy dusk with the lamps on', async ({ page }) => {
   expect(sky.nightLights).toBe(true)
 })
 
-test('kite sky on Sankranti', async ({ page }) => {
+test('kite sky on Sankranti: kites and rooftop flyers by day, none at night', async ({ page }) => {
+  // 14 January 2027 in Jaipur, the sun up 07:15 to 17:50 IST, whatever the live clock and weather say
+  const sun = { sunrise: '2027-01-14T01:45:00Z', sunset: '2027-01-14T12:20:00Z' }
+  await page.route('**/api/city*', (route) =>
+    route.fulfill({
+      json: {
+        fetchedAt: '2027-01-14T06:00:00Z',
+        tempC: 22,
+        condition: 'clear',
+        aqi: 90,
+        aqiBand: 'moderate',
+        ...sun,
+        festival: null,
+        stale: false,
+      },
+    }),
+  )
   await page.goto('/?gg-test=1&gg-festival=sankranti')
   await page.getByRole('button', { name: 'Padharo!' }).click()
   await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
   expect(await page.evaluate(() => window.__gg.festival())).toBe('sankranti')
-  await expect(page.getByText('Makar Sankranti mubarak! Aasmaan dekho')).toBeVisible()
+  await expect(page.getByText('Makar Sankranti mubarak!')).toBeVisible()
+  await expect(page.getByText('Chhat pe chalo, patang udao')).toBeVisible()
+  await page.evaluate((s) => window.__gg.setSnapshot(s), sun)
+  await page.evaluate(() => window.__gg.setNow('2027-01-14T06:30:00Z')) // noon
+  const day = await page.evaluate(() => window.__gg.kites())
+  const tier = await page.evaluate(() => window.__gg.quality())
+  expect(day.sky).toBe([20, 60, 120][tier])
+  expect(day.falling).toBeGreaterThan(0)
+  expect(day.flyers).toBeGreaterThanOrEqual(2)
+  await expect.poll(() => page.evaluate(() => window.__gg.renderInfo().calls)).toBeGreaterThan(0)
+  await page.evaluate(() => window.__gg.setNow('2027-01-14T16:30:00Z')) // 22:00 IST
+  expect(await page.evaluate(() => window.__gg.kites())).toEqual({ sky: 0, falling: 0, flyers: 0 })
 })
 
 test('New Year on MI Road: the greeting is up and the lit street draws without an error', async ({

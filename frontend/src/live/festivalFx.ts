@@ -4,7 +4,7 @@ import type { FestivalId } from '../net/protocol'
 import { FLOOR_H } from '../world/kit/parts'
 import type { District } from '../world/district'
 import type { BuildingSpec, BuildingStyle, StringLight } from '../world/types'
-import { PALETTE } from '../world/palette'
+import { createKiteSky, SKY_KITES } from './kites'
 import { createProcession, processionCount, type Procession, type ProcessionKind } from './procession'
 import type { SkyParams } from './sky'
 
@@ -12,7 +12,7 @@ type Tier = 0 | 1 | 2
 
 /** Particles drawn per quality tier (index 0 is the lowest tier); Gangaur and Teej have a procession instead. */
 const COUNTS: Partial<Record<FestivalId, readonly [number, number, number]>> = {
-  sankranti: [25, 60, 120],
+  sankranti: SKY_KITES,
   holi: [15, 40, 80],
   diwali: [60, 150, 300],
 }
@@ -30,10 +30,16 @@ export function festivalSky(sky: SkyParams, id: FestivalId | null, sunsetIso: st
 }
 
 export interface FestivalFx {
-  set(id: FestivalId | null, quality: Tier): void
+  /**
+   * Dresses the district for `id` at a quality tier. `day` (the sun up, by default) says whether Sankranti's
+   * kites are out: nobody flies one in the dark.
+   */
+  set(id: FestivalId | null, quality: Tier, day?: boolean): void
   update(dt: number): void
   /** Women and drummers in the procession now walking (Gangaur and Teej), 0 when there is none. */
   processionCount(): number
+  /** Sankranti's kites up now: in the sky (the cut ones among them), and people flying from the roofs. */
+  kites(): { sky: number; falling: number; flyers: number }
   /**
    * Walks a procession whatever the festival (null hands it back to the festival). Only the test hooks call it,
    * so the performance run can have Sankranti's kites and a procession up at once; a build without
@@ -43,18 +49,6 @@ export interface FestivalFx {
   dispose(): void
 }
 
-export const KITE_COLOURS = [
-  PALETTE.pink,
-  PALETTE.marigold,
-  PALETTE.teal,
-  PALETTE.terracotta,
-  PALETTE.white,
-  '#D6336C',
-]
-const KITE_LOW = 25
-const KITE_HIGH = 60
-const KITE_WIND = 1.8
-const STRING_ANCHOR = 12 // roughly a rooftop
 const HOLI_COLOURS = ['#E0408A', '#F2A81D', '#3AA6D8', '#6BBF4A', '#8E4FC9', '#F26B3A']
 const HOLI_RADIUS = 7
 const HOLI_RISE = 9
@@ -62,19 +56,6 @@ const HOLI_LIFE = 4
 const DIYA_SPACING = 2.2
 
 const rand = (n: number) => Math.random() * n
-
-/** A flat diamond with a short ragged tail, in the XY plane, facing +z. */
-export function kiteGeometry() {
-  const g = new THREE.BufferGeometry()
-  // diamond, then a thin tail quad hanging below it
-  const v = [
-    0, 0.8, 0, -0.55, 0.1, 0, 0, -0.9, 0, 0.55, 0.1, 0, -0.06, -0.9, 0, 0.06, -0.9, 0, 0.06, -2.4, 0, -0.06,
-    -2.4, 0,
-  ]
-  g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3))
-  g.setIndex([0, 1, 3, 1, 2, 3, 4, 7, 6, 4, 6, 5])
-  return g
-}
 
 export interface Diya {
   x: number
@@ -171,9 +152,10 @@ function wirePositions(strands: readonly StringLight[]): Float32Array {
 }
 
 /**
- * Festival dressing: Sankranti kites over the rooftops, Diwali diyas on the parapets, Holi colour
- * at the district's centre, New Year's string lights where the district hangs them (MI Road). Instanced
- * throughout and nothing allocates per frame. Under `prefers-reduced-motion` the string lights hold steady.
+ * Festival dressing: Sankranti kites over the rooftops and people flying them from the roofs (by day, see
+ * kites.ts), Diwali diyas on the parapets, Holi colour at the district's centre, New Year's string lights where
+ * the district hangs them (MI Road). Instanced throughout and nothing allocates per frame. Under
+ * `prefers-reduced-motion` the string lights and the kites hold steady.
  */
 export function createFestivalFx(
   stage: Stage,
@@ -188,43 +170,14 @@ export function createFestivalFx(
   const group = new THREE.Group()
   group.name = 'festival-fx'
   stage.scene.add(group)
-  const half = district.def.size / 2
   const dummy = new THREE.Object3D()
   const colour = new THREE.Color()
   const disposables: { dispose(): void }[] = []
   const track = <T extends { dispose(): void }>(d: T): T => (disposables.push(d), d)
 
-  // ---- kites
-  const MAX_KITES = COUNTS.sankranti![2]
-  const kiteMaterial = track(
-    new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, fog: false, color: '#ffffff' }),
-  )
-  const kites = new THREE.InstancedMesh(track(kiteGeometry()), kiteMaterial, MAX_KITES)
-  kites.frustumCulled = false
-  kites.visible = false
-  kites.name = 'kites'
-  const kx = new Float32Array(MAX_KITES)
-  const ky = new Float32Array(MAX_KITES)
-  const kz = new Float32Array(MAX_KITES)
-  const kphase = new Float32Array(MAX_KITES)
-  for (let i = 0; i < MAX_KITES; i++) {
-    kx[i] = rand(half * 2) - half
-    kz[i] = rand(half * 2) - half
-    ky[i] = KITE_LOW + rand(KITE_HIGH - KITE_LOW)
-    kphase[i] = rand(Math.PI * 2)
-    kites.setColorAt(i, colour.set(KITE_COLOURS[i % KITE_COLOURS.length]!))
-  }
-  const stringPos = new Float32Array(MAX_KITES * 6)
-  const stringGeometry = track(new THREE.BufferGeometry())
-  stringGeometry.setAttribute('position', new THREE.BufferAttribute(stringPos, 3))
-  const strings = new THREE.LineSegments(
-    stringGeometry,
-    track(new THREE.LineBasicMaterial({ color: '#F6EFE4', transparent: true, opacity: 0.45, fog: false })),
-  )
-  strings.frustumCulled = false
-  strings.visible = false
-  strings.name = 'kite-strings'
-  group.add(kites, strings)
+  // ---- kites: Sankranti's sky, and its flyers on the roofs
+  const kiteSky = createKiteSky(district.def, still)
+  group.add(kiteSky.group)
 
   // ---- holi puffs
   const MAX_PUFFS = COUNTS.holi![2]
@@ -357,18 +310,13 @@ export function createFestivalFx(
   let time = 0
 
   return {
-    set(next, quality) {
+    set(next, quality, day = true) {
       id = next
       setProcession(next, quality)
       const n = next ? festivalParticleCount(next, quality) : 0
-      kites.visible = next === 'sankranti'
-      strings.visible = next === 'sankranti' && quality > 0
+      kiteSky.set(next === 'sankranti' && day, quality)
       puffs.visible = next === 'holi'
       diyas.visible = next === 'diwali'
-      if (next === 'sankranti') {
-        kites.count = n
-        stringGeometry.setDrawRange(0, n * 2)
-      }
       if (next === 'holi') puffs.count = n
       if (next === 'diwali') diyas.count = Math.min(n, diyaSpots.length)
       if (bulbs && wire) {
@@ -392,28 +340,7 @@ export function createFestivalFx(
         }
         twinkling = twinkle
       } else if (id === 'sankranti') {
-        const n = kites.count
-        for (let i = 0; i < n; i++) {
-          let x = kx[i]! + KITE_WIND * dt
-          if (x > half) x -= half * 2
-          kx[i] = x
-          const sway = Math.sin(time * 0.9 + kphase[i]!)
-          const y = ky[i]! + sway * 1.2
-          dummy.position.set(x + sway * 0.8, y, kz[i]!)
-          dummy.rotation.set(0.35, Math.sin(time * 0.5 + kphase[i]!) * 0.5, sway * 0.25)
-          dummy.scale.setScalar(2.2)
-          dummy.updateMatrix()
-          kites.setMatrixAt(i, dummy.matrix)
-          const o = i * 6
-          stringPos[o] = x + sway * 0.8
-          stringPos[o + 1] = y - 0.5
-          stringPos[o + 2] = kz[i]!
-          stringPos[o + 3] = x - 14
-          stringPos[o + 4] = STRING_ANCHOR
-          stringPos[o + 5] = kz[i]! + 4
-        }
-        kites.instanceMatrix.needsUpdate = true
-        if (strings.visible) stringGeometry.attributes.position!.needsUpdate = true
+        kiteSky.update(dt)
       } else if (id === 'holi') {
         const n = puffs.count
         for (let i = 0; i < n; i++) {
@@ -433,6 +360,7 @@ export function createFestivalFx(
       }
     },
     processionCount: () => procession?.count ?? 0,
+    kites: kiteSky.counts,
     ...(import.meta.env.VITE_TEST_HOOKS === '1'
       ? {
           forceProcession(kind: ProcessionKind | null, quality: Tier) {
@@ -445,7 +373,7 @@ export function createFestivalFx(
       procession?.dispose()
       procession = null
       group.removeFromParent()
-      kites.dispose()
+      kiteSky.dispose()
       puffs.dispose()
       diyas.dispose()
       bulbs?.dispose()

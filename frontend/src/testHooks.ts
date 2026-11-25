@@ -26,6 +26,11 @@ export interface GgTestApi {
   sky(): SkyParams
   /** The Gangaur or Teej procession on the street: how many women and drummers walk in it (0 for none). */
   procession(): { count: number }
+  /**
+   * Sankranti's kites up now: in the sky (the cut ones drifting down among them), and people flying from the
+   * roofs. All 0 on another day, and at night.
+   */
+  kites(): { sky: number; falling: number; flyers: number }
   /** Forces a procession whatever the festival (null: the festival's own again); for the perf run. */
   forceProcession(kind: 'gangaur' | 'teej' | null): void
   /** What the renderer drew in the last frame, and what it holds: for the perf run. */
@@ -72,6 +77,8 @@ export interface GgTestApi {
     pause(on: boolean): void
     score(): number
     rivals(): number
+    /** How high the game's camera stands, in metres (0 when no game runs): above the roof when played up there. */
+    eyeY(): number
   }
 }
 

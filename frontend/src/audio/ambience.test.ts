@@ -89,6 +89,15 @@ it('plays festival drums only on a festival', () => {
   expect(mixFor('walled-city', DAY, 'holi').drums).toBe(1)
 })
 
+it('cheers from the roofs on Sankranti while the kites are up, never at night, on another day or the thin mix', () => {
+  expect(mixFor('walled-city', DAY, 'sankranti').cheers).toBe(1)
+  expect(mixFor('nahargarh', DAWN, 'sankranti').cheers).toBe(1)
+  expect(mixFor('walled-city', NIGHT, 'sankranti').cheers).toBe(0)
+  expect(mixFor('walled-city', DAY, 'holi').cheers).toBe(0)
+  expect(mixFor('walled-city', DAY, null).cheers).toBe(0)
+  expect(thinMix(mixFor('walled-city', DAY, 'sankranti')).cheers).toBe(0)
+})
+
 it('gives a district with no entry a quiet default, so a new one needs no code', () => {
   const m = mixFor('nowhere-yet', DAY, null)
   expect(m.murmur).toBe(0)
@@ -259,6 +268,28 @@ it('plays drums only on a festival, from the live festival', () => {
   vi.advanceTimersByTime(400)
   expect(c.gains.length).toBeGreaterThan(quiet)
   expect(c.sources).toBeGreaterThan(before)
+  a.dispose()
+})
+
+it('on Sankranti a far-off cheer goes up every so often, not at once, and stops with the sun', () => {
+  festival = 'sankranti'
+  const a = make('university') // no bazaar murmur: the only noise played here is a cheer
+  doc.fire('pointerdown')
+  const c = made[0]!
+  const noise = vi.spyOn(c, 'createBufferSource')
+  c.currentTime = 5
+  vi.advanceTimersByTime(400)
+  expect(noise).not.toHaveBeenCalled()
+  c.currentTime = 15 // 9 to 20 s after the first tick (14.5 s with this random)
+  vi.advanceTimersByTime(400)
+  expect(noise).toHaveBeenCalledTimes(1)
+  c.currentTime = 16
+  vi.advanceTimersByTime(400)
+  expect(noise).toHaveBeenCalledTimes(1) // not again so soon
+  sky = NIGHT
+  c.currentTime = 60
+  vi.advanceTimersByTime(400)
+  expect(noise).toHaveBeenCalledTimes(1)
   a.dispose()
 })
 
