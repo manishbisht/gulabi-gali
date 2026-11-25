@@ -86,6 +86,16 @@ describe('the words', () => {
     }
   })
 
+  it('every emoji is from Emoji 5 or older, so an Android 8 or 9 phone draws it', () => {
+    // each one's first code point, against the newest block Emoji 5 (2017) added to: U+1F9E6 and on came later
+    const EMOJI_5 = new Set(['☕', '🥟', '🥛', '🍦', '🍮', '🌶️', '🍲', '🥙'])
+    for (const dish of DISHES) {
+      expect(EMOJI_5.has(DISH_EMOJI[dish]), dish).toBe(true)
+      expect(DISH_EMOJI[dish].codePointAt(0)!, dish).toBeLessThan(0x1f9e6)
+    }
+    expect(new Set(Object.values(DISH_EMOJI)).size).toBe(DISHES.length)
+  })
+
   it('no prices: not a digit or a currency sign anywhere', () => {
     for (const dish of DISHES)
       for (const part of Object.values(DISH_TEXT[dish]))
@@ -143,7 +153,7 @@ describe('the stalls on the street (createSwaad)', () => {
     const camera = new THREE.PerspectiveCamera()
     camera.position.set(0, 3, 60)
     camera.updateMatrixWorld()
-    const hooks = { near: vi.fn(), tasted: vi.fn() }
+    const hooks = { near: vi.fn(), tasted: vi.fn(), isOpen: () => false, close: vi.fn() }
     const swaad = createSwaad({ district, host, camera, elevation: () => 0, blocked, hooks })
     return { host, hooks, swaad, emote: () => host.querySelector<HTMLElement>('.swaad-emote')! }
   }

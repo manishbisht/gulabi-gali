@@ -98,75 +98,93 @@ export function DarshanList({ ids, lang, name, streak = 0, dishes, onClose }: Pr
             </button>
           </div>
           {dishes && (
-            <div className="darshan-tabs" role="tablist" aria-label={t('swaadTabs', lang)}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'darshan'}
-                onClick={() => setTab('darshan')}
-              >
-                {t('swaadTabDarshan', lang, { n: ids.length, total: TOTAL_STAMPS })}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'swaad'}
-                onClick={() => setTab('swaad')}
-              >
-                {t('swaadTabSwaad', lang, { n: dishes.length, total: TOTAL_DISHES })}
-              </button>
+            <div
+              className="darshan-tabs"
+              role="tablist"
+              aria-label={t('swaadTabs', lang)}
+              onKeyDown={(e) => {
+                // Left and Right move between the two tabs, and focus goes with the choice (the one tab stop)
+                if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+                e.preventDefault()
+                const next = tab === 'darshan' ? 'swaad' : 'darshan'
+                setTab(next)
+                e.currentTarget.querySelector<HTMLElement>(`#darshan-tab-${next}`)?.focus()
+              }}
+            >
+              {(['darshan', 'swaad'] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  id={`darshan-tab-${id}`}
+                  aria-selected={tab === id}
+                  aria-controls="darshan-panel"
+                  tabIndex={tab === id ? 0 : -1}
+                  onClick={() => setTab(id)}
+                >
+                  {id === 'darshan'
+                    ? t('swaadTabDarshan', lang, { n: ids.length, total: TOTAL_STAMPS })
+                    : t('swaadTabSwaad', lang, { n: dishes.length, total: TOTAL_DISHES })}
+                </button>
+              ))}
             </div>
           )}
-          {swaad ? (
-            <SwaadList dishes={dishes} lang={lang} />
-          ) : (
-            <>
-              {darshanComplete(ids) && <DarshanBadge lang={lang} />}
-              <div className="darshan-card">
-                <button
-                  ref={make}
-                  type="button"
-                  className="darshan-card-make"
-                  disabled={busy}
-                  onClick={() => void makeCard()}
-                >
-                  {t('cardMake', lang)}
-                </button>
-                {flow.retry && (
+          <div
+            id="darshan-panel"
+            role={dishes ? 'tabpanel' : undefined}
+            aria-labelledby={dishes ? `darshan-tab-${tab}` : undefined}
+          >
+            {swaad ? (
+              <SwaadList dishes={dishes} lang={lang} />
+            ) : (
+              <>
+                {darshanComplete(ids) && <DarshanBadge lang={lang} />}
+                <div className="darshan-card">
                   <button
+                    ref={make}
                     type="button"
-                    className="darshan-card-make darshan-card-share"
-                    onClick={() => void again()}
+                    className="darshan-card-make"
+                    disabled={busy}
+                    onClick={() => void makeCard()}
                   >
-                    {t('shareAgain', lang)}
+                    {t('cardMake', lang)}
                   </button>
-                )}
-                {name && (
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={showName}
-                      onChange={(e) => setShowName(e.target.checked)}
-                    />
-                    {t('cardShowName', lang)}
-                  </label>
-                )}
-                {/* in the page from the start, so a screen reader hears its line change */}
-                <p className="darshan-card-note" role="status">
-                  {note}
-                </p>
-              </div>
-              <ul className="darshan-list" aria-label={t('darshanListLabel', lang)}>
-                {darshanEntries(ids, lang).map((e) => (
-                  <li key={e.id} data-id={e.id} data-got={e.got}>
-                    <strong>{e.got ? e.name : t('darshanLocked', lang)}</strong>
-                    <span className="darshan-district">{DISTRICT_NAMES[e.district][lang]}</span>
-                    {!e.got && <em>{e.riddle}</em>}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+                  {flow.retry && (
+                    <button
+                      type="button"
+                      className="darshan-card-make darshan-card-share"
+                      onClick={() => void again()}
+                    >
+                      {t('shareAgain', lang)}
+                    </button>
+                  )}
+                  {name && (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={showName}
+                        onChange={(e) => setShowName(e.target.checked)}
+                      />
+                      {t('cardShowName', lang)}
+                    </label>
+                  )}
+                  {/* in the page from the start, so a screen reader hears its line change */}
+                  <p className="darshan-card-note" role="status">
+                    {note}
+                  </p>
+                </div>
+                <ul className="darshan-list" aria-label={t('darshanListLabel', lang)}>
+                  {darshanEntries(ids, lang).map((e) => (
+                    <li key={e.id} data-id={e.id} data-got={e.got}>
+                      <strong>{e.got ? e.name : t('darshanLocked', lang)}</strong>
+                      <span className="darshan-district">{DISTRICT_NAMES[e.district][lang]}</span>
+                      {!e.got && <em>{e.riddle}</em>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
           <button type="button" className="auth-close" onClick={onClose}>
             {t('darshanClose', lang)}
           </button>

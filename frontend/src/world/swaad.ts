@@ -24,16 +24,19 @@ export const DISHES = [
 export type DishId = (typeof DISHES)[number]
 export const TOTAL_DISHES = DISHES.length
 
-/** What goes over the taster's head for a moment. */
+/**
+ * What goes over the taster's head for a moment. Each is from Emoji 5 (2017) or older, so an Android 8 or 9 phone
+ * draws it and not an empty box; they are likenesses, not portraits.
+ */
 export const DISH_EMOJI: Record<DishId, string> = {
   chai: '☕',
   kachori: '🥟',
   lassi: '🥛',
   kulfi: '🍦',
-  ghewar: '🥮',
+  ghewar: '🍮',
   'mirchi-vada': '🌶️',
   'dal-baati': '🍲',
-  golgappe: '🧆',
+  golgappe: '🥙',
 }
 
 /** A tapri that serves: where its prop stands in its district's def (the test holds each to a real tapri). */

@@ -711,8 +711,9 @@ function createLights(stage: Stage, district: District): DistrictSystem {
 }
 
 /**
- * E and taps: a landmark's stamp, the metro, a bench, a stall's dish (E only), a poster wall, an auto, the rooftop stair, the character
- * card and the person card, and last a street animal, in that order of priority, one card at a time; an open card keeps E to close itself. Seated, E stands the player up, and
+ * E and taps: a landmark's stamp, the metro, a bench, a stall's dish (E only: "Chakho", and E again closes its card), a poster
+ * wall, an auto, the rooftop stair, the character card and the person card, and last a street animal, in that order of
+ * priority, one card at a time; an open card keeps E to close itself, and a character's, person's or poster's card puts the dish's away. Seated, E stands the player up, and
  * the landmark and metro wait until they do; up on the roof, E comes down (a card that is up closes first). A tap, not a drag: the pointer barely moved. Taps that start on the joystick, card or HUD buttons never reach the
  * canvas, since those capture their own pointers.
  *
@@ -875,17 +876,25 @@ function createInteraction(
       const card = chatting || meeting || postering
       const seated = sitting?.seated() ?? false
       landmarkNear = hooks.track(pos, district.def.landmarks, pressed && !card && !seated) !== null
+      // the dish card (Jaipur ka Swaad) keeps E to close itself, as any card does; another card opening puts it away
+      const dish = hooks.swaad?.isOpen() ?? false
+      if (dish && card) hooks.swaad!.close()
+      const dishClose = pressed && dish && !card && !seated && !landmarkNear
+      if (dishClose) hooks.swaad!.close()
       // E by the station opens the metro, unless a landmark's or a character's card has it
       const metro = hooks.trackStation(
         pos,
         district.def.station,
-        pressed && !landmarkNear && !card && !seated,
+        pressed && !landmarkNear && !card && !seated && !dishClose,
       )
       // E by a bench sits there (seated, it stands up), unless a card or the metro has it
-      const bench = !!sitting && pressed && !card && (seated || (!landmarkNear && !metro && sitting.near()))
+      const bench =
+        !!sitting && pressed && !card && !dishClose && (seated || (!landmarkNear && !metro && sitting.near()))
       if (bench) sitting.toggle()
       // E by a stall that serves tastes its dish ("Chakho"): just below sitting, above everything after it
-      const taste = pressed && !card && !seated && !landmarkNear && !metro && !bench && swaad.taste()
+      const taste =
+        dishClose ||
+        (pressed && !card && !seated && !landmarkNear && !metro && !bench && !dish && swaad.taste())
       // E by a poster wall opens the composer, unless anything above has it or a poster's own UI is up
       const wall =
         pressed && !card && !seated && !landmarkNear && !metro && !bench && !taste && posters?.near() != null
@@ -947,6 +956,8 @@ function createInteraction(
         !hooks.personCard.isOpen()
       )
         animals.call(pos)
+      // a character's or a person's card that opened on this frame's E takes the dish card's place
+      if (dish && !card && (hooks.npcCard.isOpen() || hooks.personCard.isOpen())) hooks.swaad!.close()
     },
     dispose() {
       canvas.removeEventListener('pointerdown', onDown)

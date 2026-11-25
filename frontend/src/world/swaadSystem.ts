@@ -14,6 +14,10 @@ export interface SwaadHooks {
   near(serving: Serving | null): void
   /** The player just tasted there; `first` when the dish is new to their list. */
   tasted(serving: Serving, first: boolean): void
+  /** Whether the dish card is up: then E closes it, and tastes nothing. */
+  isOpen(): boolean
+  /** Puts the dish card away (E, or another card opening over it). */
+  close(): void
 }
 
 export interface Swaad {

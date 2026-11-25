@@ -1,8 +1,67 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { enterCity } from './support/city'
 
 /** A small phone, held upright. */
-test.use({ viewport: { width: 360, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+const PHONE = { width: 360, height: 740 }
+test.use({ viewport: PHONE, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+/** Room kept against the screen's right edge and foot: CI's fonts run a few px wider than a Mac's. */
+const SLACK = 10
+
+/** Each item whole on the screen with `SLACK` to spare, and none on another (hud.spec.ts's `sideBySide`). */
+async function sideBySide(items: Record<string, Locator>) {
+  for (const item of Object.values(items)) await expect(item).toBeVisible()
+  const boxes = await Promise.all(
+    Object.entries(items).map(async ([k, l]) => [k, (await l.boundingBox())!] as const),
+  )
+  for (const [k, b] of boxes) {
+    expect.soft(b.x, `${k} left`).toBeGreaterThanOrEqual(0)
+    expect.soft(b.x + b.width, `${k} right`).toBeLessThanOrEqual(PHONE.width - SLACK)
+    expect.soft(b.y + b.height, `${k} bottom`).toBeLessThanOrEqual(PHONE.height - SLACK)
+  }
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const [ka, a] = boxes[i]!
+      const [kb, b] = boxes[j]!
+      const apart =
+        a.x + a.width <= b.x + 0.5 ||
+        b.x + b.width <= a.x + 0.5 ||
+        a.y + a.height <= b.y + 0.5 ||
+        b.y + b.height <= a.y + 0.5
+      expect.soft(apart, `${ka} overlaps ${kb}`).toBe(true)
+    }
+}
+
+for (const [lang, enter, tasteName, sitName, close] of [
+  ['hi', 'Padharo!', 'Chakho', 'Baitho', 'Mazaa aa gaya'],
+  ['en', 'Come in', 'Taste it', 'Sit here', 'Delicious!'],
+] as const)
+  test(`on a small phone (${lang}) the joystick, "${sitName}" and "${tasteName}" fit, and then the dish card beside the joystick`, async ({
+    page,
+  }) => {
+    await page.route('**/api/city*', (route) => route.abort())
+    // the city offline, as in hud.spec.ts: a live district would pull a teleported player back
+    await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+    await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
+    await page.goto('/?gg-test=1')
+    await page.getByRole('button', { name: enter }).click()
+    await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+    await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), GHEWAR)
+    const joystick = page.locator('.joystick')
+    const taste = page.getByRole('button', { name: tasteName, exact: true })
+    const sit = page.getByRole('button', { name: sitName, exact: true })
+    await sideBySide({ joystick, sit, taste })
+    for (const button of [taste, sit]) expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+
+    await taste.click()
+    const card = page.getByRole('region', { name: 'Ghewar' })
+    await expect(card).toBeVisible()
+    await expect(sit).toBeHidden()
+    // the card slides up for 220 ms: measure where it comes to rest
+    await card.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+    await sideBySide({ joystick, card })
+    expect((await card.boundingBox())!.width).toBeGreaterThanOrEqual(180)
+    await expect(card.getByRole('button', { name: close })).toBeInViewport({ ratio: 1 })
+  })
 
 /** Johari Bazaar's tapri at (5.8, -40), its counter facing -x: it serves ghewar. */
 const GHEWAR = { x: 5.8 - 2, z: -40 }
@@ -11,40 +70,28 @@ test('a stall serves: "Chakho" gives the dish, the vendor\'s line and a note, an
   page,
 }, info) => {
   await page.route('**/api/city*', (route) => route.abort()) // no live weather in this run
+  // the city offline, as in hud.spec.ts: a live district would pull a teleported player back
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
   await enterCity(page)
   await page.evaluate(({ x, z }) => window.__gg.teleport(x, z), GHEWAR)
 
   const taste = page.getByRole('button', { name: 'Chakho', exact: true })
-  await expect(taste).toBeVisible()
-  // beside "Baitho", both whole on the phone and thumb-sized
-  const sit = page.getByRole('button', { name: 'Baitho', exact: true })
-  await expect(sit).toBeVisible()
-  for (const button of [taste, sit]) {
-    const box = (await button.boundingBox())!
-    expect(box.x).toBeGreaterThanOrEqual(0)
-    expect(box.x + box.width).toBeLessThanOrEqual(360)
-    expect(box.y + box.height).toBeLessThanOrEqual(740)
-    expect(box.height).toBeGreaterThanOrEqual(44)
-  }
-
   await taste.click()
   const card = page.getByRole('region', { name: 'Ghewar' })
   await expect(card).toContainText('Teej aur Sankranti')
   await expect(card).toContainText('Johari Bazaar')
-  // the card has the row beside the joystick to itself: whole on the phone, and wide enough to read
-  await expect(sit).toBeHidden()
-  await expect
-    .poll(async () => {
-      const box = (await card.boundingBox())!
-      return box.x >= 0 && box.x + box.width <= 360 && box.y + box.height <= 740 && box.width >= 180
-    })
-    .toBe(true)
-  await expect(card.getByRole('button', { name: 'Mazaa aa gaya' })).toBeInViewport({ ratio: 1 })
   await page.screenshot({ path: info.outputPath('swaad-card.png') })
   // the dish over the player's own head, for a moment
   await expect(page.locator('.swaad-emote')).toBeVisible()
   await expect(page.locator('.swaad-emote')).toBeHidden()
   expect(await page.evaluate(() => localStorage.getItem('gg-tasted'))).toBe('["ghewar"]')
+
+  // E with the card up closes it, and tastes nothing more
+  await page.keyboard.press('e')
+  await expect(card).toBeHidden()
+  await expect(taste).toBeVisible()
+  await taste.click()
+  await expect(card).toBeVisible()
 
   // walking off puts the card away
   await page.evaluate(() => window.__gg.teleport(0, 40))
@@ -73,6 +120,8 @@ test('a stall serves: "Chakho" gives the dish, the vendor\'s line and a note, an
 
 test('in English, and the list survives a reload; all eight earn the closing line', async ({ page }) => {
   await page.route('**/api/city*', (route) => route.abort())
+  // the city offline, as in hud.spec.ts: a live district would pull a teleported player back
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
   await page.addInitScript(() => {
     localStorage.setItem('gg-lang', 'en')
     if (!localStorage.getItem('gg-tasted'))

@@ -55,6 +55,33 @@ it('the Darshan sheet has a second tab: all eight dishes, where each is served, 
   expect(host.querySelectorAll('li')).toHaveLength(14)
 })
 
+it('the tabs are a tablist: one tab stop, Left and Right switch and carry focus, and the panel is named by its tab', async () => {
+  const host = await mount(<DarshanList ids={[]} dishes={['chai']} lang="en" onClose={() => {}} />)
+  const key = (k: string) =>
+    act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }))
+    })
+  const panel = host.querySelector('[role="tabpanel"]')!
+  expect(tab(host, 0).getAttribute('aria-controls')).toBe(panel.id)
+  expect(tab(host, 1).getAttribute('aria-controls')).toBe(panel.id)
+  expect(panel.getAttribute('aria-labelledby')).toBe(tab(host, 0).id)
+  expect([tab(host, 0).tabIndex, tab(host, 1).tabIndex]).toEqual([0, -1])
+
+  tab(host, 0).focus()
+  await key('ArrowRight')
+  expect(document.activeElement).toBe(tab(host, 1))
+  expect(tab(host, 1).getAttribute('aria-selected')).toBe('true')
+  expect([tab(host, 0).tabIndex, tab(host, 1).tabIndex]).toEqual([-1, 0])
+  expect(panel.getAttribute('aria-labelledby')).toBe(tab(host, 1).id)
+  expect(panel.querySelectorAll('li')).toHaveLength(8)
+  await key('ArrowRight') // two tabs: it wraps
+  expect(document.activeElement).toBe(tab(host, 0))
+  await key('ArrowLeft')
+  expect(document.activeElement).toBe(tab(host, 1))
+  await key('a') // any other key is left alone
+  expect(tab(host, 1).getAttribute('aria-selected')).toBe('true')
+})
+
 it('a finished list gets a warm line, in Hinglish by default', async () => {
   const host = await mount(<DarshanList ids={[]} dishes={[...DISHES]} lang="hi" onClose={() => {}} />)
   await act(async () => tab(host, 1).click())
@@ -66,6 +93,7 @@ it('a finished list gets a warm line, in Hinglish by default', async () => {
 it('without a tasting list the sheet is the Darshan list alone', async () => {
   const host = await mount(<DarshanList ids={[]} lang="en" onClose={() => {}} />)
   expect(host.querySelector('[role="tablist"]')).toBeNull()
+  expect(host.querySelector('[role="tabpanel"]')).toBeNull()
   expect(host.querySelectorAll('li')).toHaveLength(14)
 })
 
@@ -99,8 +127,14 @@ it('useSwaad: a taste opens the card and grows the list; walking off, or to anot
   expect(swaad.near).toBe(kulfi)
   expect(swaad.card).toBeNull()
   storage.set('gg-tasted', '["kulfi"]')
+  expect(swaad.hooks.isOpen()).toBe(false)
   await act(async () => swaad.hooks.tasted(kulfi, true))
   expect(swaad.card).toBe(kulfi)
+  expect(swaad.hooks.isOpen()).toBe(true)
+  await act(async () => swaad.hooks.close()) // the session's E
+  expect(swaad.card).toBeNull()
+  expect(swaad.hooks.isOpen()).toBe(false)
+  await act(async () => swaad.hooks.tasted(kulfi, false))
   expect(swaad.have).toEqual(['kulfi'])
   await act(async () => swaad.hooks.near(kulfi)) // still there
   expect(swaad.card).toBe(kulfi)
