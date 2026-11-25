@@ -111,14 +111,11 @@ export function placeSpot(district: Pick<District, 'def' | 'colliders'>, place: 
   const { def, colliders } = district
   if (place === 'metro') return { x: def.station.x, z: def.station.z, ry: 0 }
   if (place === 'viewpoint') {
-    // at the stair's foot, where E climbs, facing out the way the building (and the view from it) looks
+    // at the stair's foot, where E climbs, facing as coming down the stair does (see RoofDef.foot)
     const { roof } = def
     if (!roof || !def.roofName) return null
-    return {
-      x: roof.stair.x,
-      z: roof.stair.z,
-      ry: Math.atan2(roof.out.x, roof.out.z),
-    }
+    const foot = roof.foot ?? roof.out
+    return { x: roof.stair.x, z: roof.stair.z, ry: Math.atan2(foot.x, foot.z) }
   }
   const landmark = def.landmarks.find((l) => l.id === place)
   if (landmark) {

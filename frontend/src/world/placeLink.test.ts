@@ -100,7 +100,16 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
     const roof = def.roof!
     expect(Math.hypot(spot.x - roof.stair.x, spot.z - roof.stair.z)).toBeLessThanOrEqual(STAIR_RANGE)
     const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
-    expect(look.x * roof.out.x + look.z * roof.out.z).toBeGreaterThan(0.99)
+    const foot = roof.foot ?? roof.out
+    expect(look.x * foot.x + look.z * foot.z).toBeGreaterThan(0.99)
+    // open ground both ways: nothing a step ahead to stare into, and room behind for the camera
+    for (const d of [-3, -1.5, 1.5, 3]) {
+      const p = { x: spot.x + look.x * d, z: spot.z + look.z * d }
+      expect(
+        colliders.some((c) => hits(p, PLAYER_RADIUS, c)),
+        `${d} m along the facing`,
+      ).toBe(false)
+    }
   })
 
   it('benches and tapris: in reach to sit ("Baitho" shows), in the clear', async () => {

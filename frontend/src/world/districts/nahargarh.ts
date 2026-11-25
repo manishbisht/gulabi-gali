@@ -4,7 +4,7 @@ import { DISTRICT_NAMES } from '../districtNames'
 import { buildCityBelow } from '../landmarks/cityBelow'
 import { buildNahargarhFort, NAHARGARH_FORT } from '../landmarks/nahargarhFort'
 import { roofAt } from '../rooftop'
-import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec } from '../types'
+import type { BuildingSpec, DistrictDef, LandmarkDef, NpcDef, Paving, PropSpec, RoofDef } from '../types'
 import { centred, createFill, grow, rect, wall, type Facing } from './layout'
 
 /*
@@ -200,6 +200,9 @@ const npcs: NpcDef[] = [
   },
 ]
 
+/** `roof`, faced along the open ground beside the stair (its `side`) at the stair's foot. */
+const alongTheTerrace = (roof: RoofDef): RoofDef => ({ ...roof, foot: roof.side })
+
 const nahargarh: DistrictDef = {
   id: 'nahargarh',
   name: DISTRICT_NAMES.nahargarh,
@@ -241,8 +244,11 @@ const nahargarh: DistrictDef = {
     { x: -27.5, z: -17 },
     { x: -50, z: 7.5 },
   ],
-  /** The bastion on the terrace: its roof looks west, over the parapet, at the city below. */
-  roof: roofAt(buildings, BASTION, 1),
+  /**
+   * The bastion on the terrace: its roof looks west, over the parapet, at the city below. At the stair's foot the
+   * parapet is a step in front, so there the player faces along the terrace instead (see RoofDef.foot).
+   */
+  roof: alongTheTerrace(roofAt(buildings, BASTION, 1)),
   roofName: { hi: t('sunsetPoint', 'hi'), en: t('sunsetPoint', 'en') },
   ridgeWest: -HALF,
   scenery: () => buildCityBelow(-HALF, HALF),

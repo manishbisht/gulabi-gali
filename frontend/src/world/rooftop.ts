@@ -246,7 +246,8 @@ export function createRooftop(opts: {
   // up there, the player and the view turn to `roof.view`; at the foot, the player faces the street
   const dx = roof.view.x - roof.landing.x
   const dz = roof.view.z - roof.landing.z
-  const facing = Math.atan2(roof.out.x, roof.out.z)
+  const foot = roof.foot ?? roof.out
+  const facing = Math.atan2(foot.x, foot.z)
   const viewing = Math.atan2(dx, dz)
   const looking = Math.atan2(-dx, -dz)
   let near = false

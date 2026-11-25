@@ -77,6 +77,12 @@ export interface RoofDef {
   out: Vec2
   /** Out of the side wall the stair stands against (unit). */
   side: Vec2
+  /**
+   * The way the player faces at the stair's foot (coming down, or sent there by a link): `out` by default, the
+   * street the building fronts. Where the front looks over a parapet a step away (Nahargarh's bastion), `side`,
+   * along the open ground, so the camera behind them is not pressed into the bastion and the wall fills nothing.
+   */
+  foot?: Vec2
   /** The stair's flight beside that wall: a collider. Its low end is at the front. */
   flight: AABB
   /** How far back the flight runs from its low end. */
