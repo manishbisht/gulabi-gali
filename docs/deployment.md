@@ -481,7 +481,9 @@ Nothing to set, no secret, no migration. Deploy in the usual order: the Worker, 
   quietly dropped, never a strike, and a page draws only the kinds it knows: a new kind can ship site first
   or Worker first.
 - No Durable Object time is added while nobody emotes; an emote costs one message in, a small write to the
-  socket's attachment, and one small message out per socket in range. No timer, no alarm, no storage.
+  socket's attachment, and one small message out per socket in range; if the sender has a move waiting, the district sends the
+  waiting batch of moves early so the start point arrives first (one extra pass over the sockets, at most 42 a
+  minute per sender). No timer, no alarm, no storage.
 
 ## 2h. The city answers back (cricket, touchables, Swaad, shows, emotes): what changes at deploy
 

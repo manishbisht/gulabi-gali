@@ -529,7 +529,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       send(kind) {
         // where the emote begins, exactly, before the emote itself: the others end it by a step from there
         presence?.moveNow()
-        told = presence?.emote(kind) ?? false
+        // an emote past the allowance is not shown, but the one before it may still be: keep its stop owed
+        told = (presence?.emote(kind) ?? false) || told
       },
       ended() {
         // where they stand now, and (if the street was told of the emote) that it is over

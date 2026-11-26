@@ -635,12 +635,24 @@ export default function App() {
     taxi.riding ||
     !!kiteFrom ||
     !!cricket.game ||
+    showCardUp ||
     !!bench.seat ||
     map.open ||
     roof.up
   // no cricket from photo mode, a ride, under a sheet or the map, or in a kite fight (E knows nothing of those)
   const cricketBlocked =
-    sheetUp || !!swaad.card || !!photo || !!ride || fading || taxi.riding || !!kiteFrom || map.open
+    sheetUp ||
+    !!swaad.card ||
+    !!photo ||
+    !!ride ||
+    fading ||
+    taxi.riding ||
+    !!kiteFrom ||
+    map.open ||
+    // a slow load must not open the game on someone who sat down, took the wheel or went up meanwhile
+    !!bench.seat ||
+    drive.driving ||
+    roof.up
   const { blockedRef: cricketBlockedRef } = cricket
   useEffect(() => {
     cricketBlockedRef.current = cricketBlocked
@@ -907,7 +919,13 @@ export default function App() {
             <InstallHint
               lang={lang}
               busy={
-                typeof place === 'string' || bandarBlocked || !!photo || fading || roof.fading || taxi.dark
+                typeof place === 'string' ||
+                bandarBlocked ||
+                !!photo ||
+                fading ||
+                roof.fading ||
+                taxi.dark ||
+                emotes.open
               }
             />
           </>
