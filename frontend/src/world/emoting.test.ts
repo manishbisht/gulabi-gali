@@ -308,11 +308,41 @@ describe("someone else's emote", () => {
     expect(emoting.playing().others).toEqual([])
   })
 
-  it('the last steps they took before it, arriving just after, do not end it', () => {
+  it("their page's word that it stopped ends it at once, with no step: sat, then a game began where they stood", () => {
+    const { emoting, tick, marks, figure } = street()
+    emoting.heard('dev:asha', 'sit')
+    tick(2)
+    expect(figure().position.y).toBeCloseTo(-0.45)
+    emoting.heard('dev:asha', 'stop')
+    expect(emoting.playing().others).toEqual([])
+    tick(1 / 60)
+    expect(figure().position.y).toBe(0)
+    expect(figure().rotation.x).toBe(0)
+    expect(marks()).toEqual([])
+    // a stop for nobody playing, or nobody at all, is nothing
+    emoting.heard('dev:asha', 'stop')
+    emoting.heard('dev:stranger', 'stop')
+    expect(emoting.playing().others).toEqual([])
+  })
+
+  it('sat, then nudged within the first moments: the step does not count yet, and the stop ends it all the same', () => {
+    expect(SETTLE_S).toBeLessThanOrEqual(0.2)
+    const { emoting, people, tick } = street()
+    emoting.heard('dev:asha', 'sit')
+    tick(0.05)
+    // their nudge, 0.1 s after they sat: inside the time a step is not yet counted
+    people.apply({ t: 'moves', m: [['dev:asha', 3.06, 0, 0]] })
+    tick(0.05)
+    expect(emoting.playing().others).toHaveLength(1)
+    emoting.heard('dev:asha', 'stop')
+    expect(emoting.playing().others).toEqual([])
+  })
+
+  it('a move that arrives just after the emote it was sent before does not end it', () => {
     const { emoting, people, tick } = street()
     emoting.heard('dev:asha', 'wave')
     tick(0.05)
-    // their page's last move before the emote, held back by its throttle and the district's batch
+    // where the emote began, overtaken on the way (a Worker that does not send it first)
     people.apply({ t: 'moves', m: [['dev:asha', 3.3, 0, 0]] })
     tick(0.05)
     expect(emoting.playing().others).toHaveLength(1)
