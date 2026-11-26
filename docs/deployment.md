@@ -483,6 +483,42 @@ Nothing to set, no secret, no migration. Deploy in the usual order: the Worker, 
 - No Durable Object time is added while nobody emotes; an emote costs one message in, a small write to the
   socket's attachment, and one small message out per socket in range. No timer, no alarm, no storage.
 
+## 2h. The city answers back (cricket, touchables, Swaad, shows, emotes): what changes at deploy
+
+Nothing to set, no secret, no migration, no new binding. Deploy in the usual order: the Worker
+(`npx wrangler deploy` from `backend/`), then dispatch the `pages` workflow. This release ships together with 2g.
+
+- **The Worker changes only for emotes** (2g): one new district-socket frame. Worker first, so a resident's
+  first emote is passed on rather than answered `invalid`.
+- **Everything else is the site alone.** Gali cricket, the things you can touch, Jaipur ka Swaad and the street
+  shows are drawn and decided on the page and kept in `localStorage` (`gg-cricket-best`, `gg-tasted`,
+  `gg-shows-seen`): no request, no socket frame, no row. The cricket game and the shows are lazy chunks.
+- **"Aaj ka Darshan" has five more kinds of goal** (`cricket`, `touch`, `swaad`, `show`, `emote`). The server
+  never learns which goal a day had, only that the day was done, so it needs nothing. Adding kinds reshuffles
+  which goal falls on which day (thirteen kinds now, not eight). For as long as a phone holds a page from before
+  this release, that page and a fresh one can name different goals for the same day; either way the day counts
+  once, and the streak is the server's. It ends at that phone's next load.
+- **New link-preview pages**: `/p/<district>/cricket/` for the three districts with a pitch (and the shows'
+  `/p/<district>/show-<kind>/`). They use the district's picture; no `og-images` run is needed.
+- **To roll back, roll back the site first, then the Worker** (the emote frame, as in 2g). Rolling back the site
+  alone is always safe: an older page ignores `gg-tasted`, `gg-shows-seen` and `gg-cricket-best`, and they are
+  there again when the release returns.
+
+**Real-phone checks**
+
+- [ ] Play gali cricket by touch on a real phone (Walled City, a few steps east of where you arrive): "Cricket
+      khelo", tap to swing. A well-timed tap can be a six; the bat's sound is in time with the tap; the innings
+      ends and "Ek aur baari" starts another. Try it on the cheapest phone to hand as well.
+- [ ] Listen to each show's tune with the sound on: the kathputli (Walled City or Amer), the ravanhatta (MI Road
+      or Nahargarh), and the dancers in University in the evening (an hour before sunset to two hours after).
+      Each should sound like music, sit over the city sounds without clipping, and stop when the tab is hidden.
+- [ ] Emote between two phones signed in as two residents standing near each other: "Mood dikhao" → "Naacho" on
+      one shows over that person on the other; "Baith jao" stays until they walk. As a guest on a third phone:
+      their emote plays on their own screen only.
+- [ ] Ring the bell at Galta Ji and work a hand pump: one soft ring, water for a moment.
+- [ ] "Chakho" at any chai tapri: the card fits beside the joystick, and the dish is in "Jaipur ka Swaad".
+- [ ] On a 360 px wide phone, stand by a tapri and open the emote wheel: nothing covers "Chakho" or "Baitho".
+
 ## 3. Budget alerts
 
 Cloudflare dashboard, Notifications, Add:

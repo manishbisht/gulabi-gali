@@ -627,16 +627,27 @@ pe der tak dabao aur save karo" and a small download link; anywhere else it down
 ### Aaj ka Darshan: one small goal a day (`today.ts`, `frontend/src/world/today.ts`, `useToday.ts`)
 
 One goal a day, the same for everyone on a given IST day (so friends can talk about it), picked from the date
-alone: the kinds (`darshan`, `tapri`, `ride`, `auto`, `photo`, `roof`, `map`, `animal`, ids stable) come once
-each in every run of eight days, shuffled from the run's number and never the same two days running; a darshan
+alone: the kinds (`darshan`, `tapri`, `ride`, `auto`, `photo`, `roof`, `map`, `animal`, then the things to do,
+`cricket`, `touch`, `swaad`, `show`, `emote`; ids stable, new ones only ever appended) come once each in every
+run of thirteen days, shuffled from the run's number and never the same two days running; a darshan
 day's landmark goes round the stamps in order, one per run. Adding a kind or a stamp reshuffles the whole
 schedule, past days included; that is harmless, since a record keeps only the day a goal was done, never which
 goal. Every goal can be done alone, as a ghost, on a quiet
 day: reach a landmark's ring, a tapri or bench in reach (no sitting: a ghost cannot), a metro or bus ride that
 arrives, an auto ride that reaches its stop, a photo taken, up on a rooftop, a place picked on the map, a dog or
-cat coming along or a cow's namaste. Nothing asks for another person, and the bandar is left out (it can be
-switched off, and takes only headgear). The hooks that already know each moment emit it once on a tiny bus
-(`world/deeds.ts`); `useToday` listens. Nothing polls or runs per frame. One timer turns the day at IST midnight
+cat coming along or a cow's namaste; an innings of gali cricket played out (any score), a bell, a pump or a
+diya touched or an animal fed or petted (pigeons flying up do not count: that happens by walking past), any dish
+tasted, any street show watched to its end, any emote played. Nothing asks for another person, and the bandar is
+left out (it can be switched off, and takes only headgear). A goal must be doable at any hour wherever the player
+is told to go: cricket and the shows are in some districts only, so their goals name the districts
+(`CRICKET_DISTRICTS`, `SHOW_DISTRICTS` in `todayText.ts`, held to the district defs by a test), and the show goal
+names only the kathputli and the ravanhatta, never the evening's dancers (who still count if watched). The hooks
+that already know each moment emit it once on a tiny bus (`world/deeds.ts`); the five things to do each have a
+DOM-free listener of their own (`onCricketPlayed`, `onTouched`, `onTasted`, `onShowWatched`, `onEmoted`), joined
+to the bus in one place (`world/funDeeds.ts`), so no feature knows of the day's goal; `useToday` listens.
+The server never learns which goal a day had (it keeps only the day), so a new kind needs no Worker change, and a
+page cached from before simply picks from the kinds it knows. The one place an id comes from outside is the test
+URL's `gg-today`, where an unknown id is no goal (`goalById` answers null) and the day's own stands. Nothing polls or runs per frame. One timer turns the day at IST midnight
 and arms itself again if it fires early; since a timer does not run while a phone sleeps or a page is frozen, the
 day is also read afresh when the page shows again (`visibilitychange`, `pageshow`) and at every deed, so a deed
 after midnight is matched against the new day's goal.
@@ -696,8 +707,8 @@ solid (`touchableBoxes.ts`, added to the district's colliders); the pigeons are 
 - **Diyas**: "Diya jalao" lights the next of five, only while the live sky's sun is down (`daylight(sky)`
   false: sunset to sunrise). Lit ones stay lit for the visit (`TouchMemory`, in memory: a reload starts dark).
 
-E and a tap reach them just above the animals in the priority order: ... > character or person card > a
-touchable > an animal. The street animals have a second small button beside "Saath chalo": "Roti khilao" for
+E and a tap reach them just above the animals in the priority order (the whole order is under "E's priority
+order" below). The street animals have a second small button beside "Saath chalo": "Roti khilao" for
 the cow (she chews for 3 s and a line says so) and "Pyaar karo" for a dog or cat (it wriggles, and an emote
 shows over it: `petEmote.ts`, one DOM node moved by projection). Following is unchanged.
 
@@ -708,6 +719,95 @@ has no water and no flicker or pecking. The sounds (`audio/touch.ts`) are oscill
 page's one audio context, follow `gg-sound`, and play nothing in a hidden tab. Every touch calls
 `touched(kind)` (`world/touched.ts`: `bell`, `pump`, `pigeons`, `diyas`, `feed`, `pet`), which anything on the
 page can listen to with `onTouched`.
+
+#### Gali cricket (`frontend/src/world/cricketPitch.ts`, `games/cricket.ts`, `ui/Cricket.tsx`)
+
+A district has a pitch when its def says where (`DistrictDef.cricket`: the brick stumps and the kid who bowls, 6
+to 8 m apart along a lane); the Walled City, MI Road and Malviya Nagar have one, and another is data only. What
+stands in the street all day is two meshes on one material (the chalk and bricks, and the bowler) and two small
+colliders. Within `PITCH_RANGE` (2.5 m) of the line between stumps and bowler, "Cricket khelo" (or E) opens the
+game, a lazy chunk (`ui/lazyCricket.tsx`, warmed on coming near) with its own camera at the batter's eye
+(`games/cricketView.ts`), as the kite fight has.
+
+The game is a pure, seeded simulation (`games/cricket.ts`): the same seed and the same taps at the same moments
+are the same innings at any frame rate. One tap swings; runs are timing alone (6, 4, 2, 1 by how near the tap was
+to the ball reaching the bat, with a wider six on a slow phone and a touch's tap taken 50 ms early), a miss at
+the stumps or a catch is out. An innings is three overs or three outs, about a minute; a broken window ("Arre!")
+at most once. The best score is `gg-cricket-best`; the share line names the score and nothing else. Under
+`prefers-reduced-motion` the innings plays the same without the shake and flourish; tier 0 draws fewer fielders.
+Its sounds are oscillators on the page's one audio context and follow `gg-sound`. Escape or the close button
+leaves, and the player is back where they stood. A round that ends calls `cricketPlayed(runs)`; leaving early
+does not. Nothing is sent. The pitch is on the map (🏏, place id `cricket`), and a link to it stands the visitor
+behind the stumps.
+
+#### Jaipur ka Swaad (`frontend/src/world/swaad.ts`, `swaadSystem.ts`, `useSwaad.ts`)
+
+Eight dishes (chai, pyaaz kachori, lassi, kulfi, ghewar, mirchi vada, dal baati, golgappe; all vegetarian), each
+on the counter of a few of the tapris the districts already have (`SWAAD_STALLS`; a test holds each to a real
+tapri and no tapri to two dishes). Chai is in every district; the rest are spread so the whole list takes most of
+the city, and Galta Ji, a temple town, pours only chai and lassi. Within `SERVE_RANGE` (3.5 m, a step wider than
+"Baitho") a "Chakho" button shows beside "Baitho": the vendor says a line, the dish's emoji shows over the
+player's head for 3 s (the reactions' DOM mark, nothing added to the scene) and a small card gives two lines
+about the dish and where in Jaipur it is loved. No money, and no real shop is named.
+
+The list "Jaipur ka Swaad n/8" opens from a chip beside Darshan (the same sheet pattern); it is `gg-tasted` on
+this device, for a guest and a resident alike: not synced, not on the server. Every taste calls
+`tasted(dish)`, which `onTasted` listeners hear with whether it was a first. Seated, at a wheel or up on a roof
+nothing is served.
+
+#### Street shows (`frontend/src/world/shows.ts`, `frontend/src/shows/`)
+
+A kathputli stage (Walled City, Amer), a ravanhatta player (MI Road, Nahargarh) and a troupe of kalbelia-style
+dancers with a dholak (the arts centre's square in University, from an hour before sunset to two hours after):
+each where its district's def puts it (`DistrictDef.shows`, one of a kind per district). `world/shows.ts` is the
+small part every page carries (where, when, names, colliders); the figures, the tunes and the performance are a
+lazy chunk (`src/shows/`) fetched on entering a district that has one.
+
+A show holds an idle pose until the player is within `NEAR_M` (8 m), plays for 25 to 27 s, and stops when they go
+beyond `STAY_M` (14 m); one at a time. The first time each kind is seen (`gg-shows-seen`) a small card says two
+lines about the craft; "Taali bajao" is on the card and, after it, one of the street's buttons until 8 s past the
+last note (the performers bow). A show takes no key. Figures are rigid instanced pieces on the procession's
+material (three or four draw calls a show, fewer pieces at tier 0, no draw past 90 m, no per-frame allocation);
+under `prefers-reduced-motion` they hold their pose and only the music plays. The tunes (`shows/music.ts`) are
+written here as short phrases, played with oscillators on the page's one audio context through their own bus;
+the ambience steps back under them, and they follow `gg-sound` and stop in a hidden tab. A performance watched
+from first note to last without going beyond `STAY_M` calls `showWatched(kind)`. Shows are on the map (🎭) and
+have links (`show-<kind>`), which stand a visitor where the audience stands. Nothing is sent: nobody else sees
+whether a show is playing for you.
+
+#### Emotes
+
+The one thing here that is sent. See "Emotes others can see" under Launch and grow.
+
+#### Where the things to do stand
+
+Each of the four placed features keeps clear of the street's older prompts in its own test. One more test
+(`world/funPlaces.test.ts`) holds them clear of one another in every district, read from the defs with each
+feature's own reach constant: the pitch (its strip, `PITCH_RANGE`), every touchable (`TOUCH_RANGE`), every show
+(its ground, `SHOW_RADIUS`, and its watch spot) and every serving stall (`SERVE_RANGE`) never overlap, and no
+flock of pigeons (`STARTLE_RANGE`) is on a pitch, a show's ground or where a show is watched from. On a 360 px
+phone the buttons that can still meet (the emote chip and its wheel with each of the others, "Taali bajao" with
+"Baitho") are measured together in `tests/fun.spec.ts`.
+
+#### E's priority order
+
+One key, one answer (`createInteraction` in `world/session.ts`). Seated, E stands the player up; on a roof it
+comes down; an open card keeps E to close itself. Otherwise, the first of these in reach:
+
+1. a landmark (its card and stamp)
+2. the metro or bus stop
+3. a bench or tapri ("Baitho")
+4. a serving stall's dish ("Chakho"; E again closes its card)
+5. a poster wall
+6. a parked auto
+7. the rooftop stair
+8. a character's or a person's card
+9. the cricket pitch ("Cricket khelo")
+10. a touchable (bell, pump, diyas)
+11. a street animal
+
+Shows take no key (they start by walking up, and the clap is a button), and emotes have their own (G, then 1 to
+5). The placement tests keep most of these from ever being in reach together; the order decides the rest.
 
 ## Launch readiness
 
@@ -743,7 +843,8 @@ names a person.
 
 ### First-visit hint (`frontend/src/ui/FirstHint.tsx`)
 
-After Padharo!, a first-time visitor sees three short steps (walk, sit on a chai bench, meet someone), worded
+After Padharo!, a first-time visitor sees three short steps (walk, sit on a chai bench, meet someone) and, under
+them, one line pointing at things to do ("chai chakho, ghanti bajao, cricket khelo"). The steps are worded
 for their input: joystick on a touch screen, WASD or arrow keys with a keyboard and mouse
 (`matchMedia('(pointer: coarse)')`). The walk step also says how to look around: drag the street, or press Q
 and R. It is a non-modal dialog in the HUD's flow, under its top block (so it

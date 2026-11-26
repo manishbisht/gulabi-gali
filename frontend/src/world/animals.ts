@@ -22,9 +22,9 @@ import type { AABB, DistrictDef, Vec2 } from './types'
  * karo": it wriggles, and an emote shows over it, see petEmote.ts). On a metro ride the follower waits at the old
  * district's station, in `StationMemory`, and rejoins if the player is back within `WAIT_MS`.
  *
- * Priority of E (see `createInteraction`): landmark > metro > bench > poster wall > auto > character or person
- * card > a touchable (a bell, a pump, diyas: touchables.ts) > animal. An animal only has the key when nothing
- * else wants it.
+ * Priority of E (see `createInteraction`): landmark > metro > bench > a stall's dish ("Chakho") > poster wall >
+ * auto > rooftop stair > character or person card > the cricket pitch > a touchable (a bell, a pump, diyas:
+ * touchables.ts) > animal. An animal only has the key when nothing else wants it.
  */
 
 export type AnimalKind = 'dog' | 'cat' | 'cow'
