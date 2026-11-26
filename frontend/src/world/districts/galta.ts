@@ -298,6 +298,16 @@ const galta: DistrictDef = {
     { x: 11, z: 70 },
     { x: 11, z: 94 },
   ],
+  /**
+   * What answers a touch (touchables.ts): a bell on the path before the main temple and one before the Surya Mandir on the ridge, diyas on
+   * the gorge floor north of the temple, and the pigeons on the open ground by the bus stand.
+   */
+  touchables: [
+    { kind: 'bell', at: { x: 12.5, z: 12 }, rot: 90 },
+    { kind: 'bell', at: { x: -80, z: -40 }, rot: 270 },
+    { kind: 'diyas', at: { x: 14, z: -12 }, rot: 90 },
+    { kind: 'pigeons', at: { x: -10, z: 76 } },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

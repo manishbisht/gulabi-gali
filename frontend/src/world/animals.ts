@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import { seeded } from './districts/layout'
 import { bakeHex, merge } from './kit/parts'
+import { playTouch, type TouchSound } from '../audio/touch'
 import { moveWithCollision } from './collision'
+import { touched } from './touched'
 import type { QualityTier } from '../engine/stage'
 import type { DistrictId } from '../net/protocol'
 import type { AABB, DistrictDef, Vec2 } from './types'
@@ -15,11 +17,14 @@ import type { AABB, DistrictDef, Vec2 } from './types'
  * Calling one ("Saath chalo", or E) makes it the follower: it trails the player at `FOLLOW_GAP`, trots at
  * twice the pace when it is more than `TROT_FROM` behind (an auto leaves it behind) and is set down behind
  * the player when it is more than `SNAP_FROM` behind. One follows at a time; calling another sends the first
- * home. The cow never follows, and answers with a line. On a metro ride the follower waits at the old
+ * home. The cow never follows, and answers with a line. Beside "Saath chalo" there is a kindness for each: the
+ * cow can be fed a roti ("Roti khilao": she chews it over, and a line says so) and a dog or cat petted ("Pyaar
+ * karo": it wriggles, and an emote shows over it, see petEmote.ts). On a metro ride the follower waits at the old
  * district's station, in `StationMemory`, and rejoins if the player is back within `WAIT_MS`.
  *
  * Priority of E (see `createInteraction`): landmark > metro > bench > poster wall > auto > character or person
- * card > animal. An animal only has the key when nothing else wants it.
+ * card > a touchable (a bell, a pump, diyas: touchables.ts) > animal. An animal only has the key when nothing
+ * else wants it.
  */
 
 export type AnimalKind = 'dog' | 'cat' | 'cow'
@@ -31,12 +36,24 @@ export interface AnimalInfo {
 }
 /** What the animals tell React; each is called only when its news changes. */
 export interface AnimalHooks {
-  /** The animal (visible, and not the follower) nearest within reach, or null. */
+  /**
+   * The animal (visible, and not the follower) nearest within reach; with none, the follower itself when it is
+   * within reach (it can be petted, not called); or null.
+   */
   near(a: AnimalInfo | null): void
   /** The one following the player, or null. */
   following(a: AnimalInfo | null): void
-  /** A passing line: the cow's `line` (0 to COW_LINES - 1), or an animal left waiting at the station. */
-  notice(n: { kind: 'cow'; line: number } | { kind: 'waiting'; name: string }): void
+  /**
+   * A passing line: the cow's `line` (0 to COW_LINES - 1), an animal left waiting at the station, the cow fed a
+   * roti (`line` 0 to FED_LINES - 1), or a dog or cat petted (no line: the emote over it says it).
+   */
+  notice(
+    n:
+      | { kind: 'cow'; line: number }
+      | { kind: 'waiting'; name: string }
+      | { kind: 'fed'; line: number }
+      | { kind: 'pet'; animal: AnimalInfo },
+  ): void
 }
 export type CallResult = { kind: 'follow'; animal: AnimalInfo } | { kind: 'cow'; line: number } | null
 
@@ -53,6 +70,11 @@ export const SNAP_FROM = 40
 export const WAIT_MS = 10 * 60_000
 /** How many cow lines there are (`animalCow1`...). */
 export const COW_LINES = 4
+/** How many lines there are for a cow fed a roti (`animalFed1`...). */
+export const FED_LINES = 3
+/** The cow chews a roti this long, and a petted dog or cat wriggles this long, in seconds: one at a time. */
+export const CHEW_S = 3
+export const PET_S = 1.6
 
 const FOLLOW_SPEED = 4.4 // a little over walking, so it keeps up
 const HOME_SPEED = 2.5
@@ -234,6 +256,8 @@ interface Animal extends Mover {
   /** Walk-cycle phase, advanced while it moves. */
   phase: number
   moving: boolean
+  /** Seconds left of chewing a roti (the cow) or of wriggling at a pat (a dog, a cat). */
+  busy: number
   /** Its place among its own kind (the instance), which tier 0 uses to halve the street. */
   slot: number
   visible: boolean
@@ -259,6 +283,18 @@ export interface Animals {
    * and the last follower goes home; the cow answers with a line and stays.
    */
   call(pos: Vec2, id?: AnimalId): CallResult
+  /**
+   * "Roti khilao": feeds the cow `id` (or the nearest animal, if it is the cow) within reach of `pos`. She chews
+   * for `CHEW_S` and a line says so; null while she is still chewing, or when no cow is in reach.
+   */
+  feed(pos: Vec2, id?: AnimalId): { line: number } | null
+  /**
+   * "Pyaar karo": pets the dog or cat `id` (or the nearest) within reach of `pos`. It wriggles for `PET_S`;
+   * null while it still is, or when none is in reach. It goes on wandering or following as before.
+   */
+  pet(pos: Vec2, id?: AnimalId): AnimalInfo | null
+  /** Where `id` stands now: fills `out` and answers true, or false when it is not drawn. Allocates nothing. */
+  at(id: AnimalId, out: Vec2): boolean
   /** Sends the follower back to where it lives. */
   sendHome(): void
   following(): AnimalId | null
@@ -278,6 +314,10 @@ export interface AnimalOptions {
   memory?: StationMemory
   hooks?: AnimalHooks
   quality?: QualityTier
+  /** Defaults to the browser's `prefers-reduced-motion`: then a fed cow and a petted animal hold still. */
+  reducedMotion?: boolean
+  /** The sounds (a petted cat's purr); the page's audio by default. */
+  play?(sound: TouchSound): void
 }
 
 /** FNV-1a: the district id as a seed. */
@@ -309,6 +349,7 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
     stuck: 0,
     phase: rand() * 6,
     moving: false,
+    busy: 0,
     slot,
     visible: true,
   })
@@ -345,6 +386,11 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
   let frozen = false
   let quality: QualityTier = opts.quality ?? 2
   let cowLine = 0
+  let fedLine = 0
+  const play = opts.play ?? ((s: TouchSound) => void playTouch(s))
+  const still =
+    opts.reducedMotion ??
+    (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
   let disposed = false
 
   const byId = (id: AnimalId) => animals.find((a) => a.info.id === id)
@@ -485,9 +531,18 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       const i = counts[a.info.kind]++
       const bob = a.moving ? Math.abs(Math.sin(a.phase)) * 0.07 : 0
       position.set(a.x, bob, a.z)
-      quat.setFromAxisAngle(UP, a.ry)
+      // a petted dog wags its whole self, a cat leans in slowly, and a cow with a roti sways as she chews
+      const lively = a.busy > 0 && !still
+      const wag = !lively
+        ? 0
+        : a.info.kind === 'dog'
+          ? Math.sin(a.busy * 24) * 0.18
+          : a.info.kind === 'cat'
+            ? Math.sin(a.busy * 9) * 0.12
+            : Math.sin(a.busy * 7) * 0.03
+      quat.setFromAxisAngle(UP, a.ry + wag)
       const s = a.visible ? 1 : 0
-      scale.set(s, s, s)
+      scale.set(s, lively && a.info.kind === 'cow' ? s * (1 + Math.sin(a.busy * 14) * 0.012) : s, s)
       meshes[a.info.kind].setMatrixAt(i, matrix.compose(position, quat, scale))
     }
     for (const kind of ['dog', 'cat', 'cow'] as const) meshes[kind].instanceMatrix.needsUpdate = true
@@ -508,6 +563,11 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
     return best
   }
 
+  /** Who the buttons are for: the nearest other animal in reach, else the follower if it is. */
+  const inReach = (pos: Vec2): Animal | null =>
+    nearestAnimal(pos, CALL_RANGE) ??
+    (follower && Math.hypot(follower.x - pos.x, follower.z - pos.z) <= CALL_RANGE ? follower : null)
+
   return {
     update(dt, player) {
       for (const a of animals) {
@@ -525,9 +585,10 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
         else if (a.mode === 'home') stepHome(a, dt)
         else stepWander(a, dt)
         if (a.moving) a.phase += dt * 11
+        if (a.busy > 0) a.busy = Math.max(0, a.busy - dt)
       }
       write()
-      const near = nearestAnimal(player, CALL_RANGE)
+      const near = inReach(player)
       const id = near?.info.id ?? null
       if (id !== nearId) {
         nearId = id
@@ -560,6 +621,37 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       }
       setFollower(a)
       return { kind: 'follow', animal: a.info }
+    },
+    feed(pos, id) {
+      const a = id ? byId(id) : nearestAnimal(pos, CALL_RANGE)
+      if (!a || !a.visible || a.info.kind !== 'cow') return null
+      if (Math.hypot(a.x - pos.x, a.z - pos.z) > CALL_RANGE + 0.5 || a.busy > 0) return null
+      a.busy = CHEW_S
+      const line = fedLine++ % FED_LINES
+      hooks?.notice({ kind: 'fed', line })
+      touched('feed')
+      return { line }
+    },
+    pet(pos, id) {
+      const a = id ? byId(id) : inReach(pos)
+      if (!a || !a.visible || a.info.kind === 'cow') return null
+      if (Math.hypot(a.x - pos.x, a.z - pos.z) > CALL_RANGE + 0.5 || a.busy > 0) return null
+      a.busy = PET_S
+      hooks?.notice({ kind: 'pet', animal: a.info })
+      // a cat purrs; a dog's answer is its wag
+      if (a.info.kind === 'cat') play('purr')
+      touched('pet')
+      return a.info
+    },
+    at(id, out) {
+      for (let i = 0; i < animals.length; i++) {
+        const a = animals[i]!
+        if (a.info.id !== id) continue
+        out.x = a.x
+        out.z = a.z
+        return a.visible
+      }
+      return false
     },
     sendHome: () => setFollower(null),
     following: () => follower?.info.id ?? null,

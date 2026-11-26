@@ -7,6 +7,7 @@ import { PALETTE } from './palette'
 import { buildProps, type ParkedAutos } from './props'
 import { buildRoof } from './rooftop'
 import { buildSignposts } from './signposts'
+import { touchableColliders } from './touchableBoxes'
 import type { AABB, DistrictDef, Paving, Vec2 } from './types'
 
 /** The seven districts, in the order the travel sheet lists them: the metro's four, then the bus's three. */
@@ -35,7 +36,7 @@ export interface District {
   def: DistrictDef
   /** Everything the district draws, lights included. Add it to the scene. */
   root: THREE.Group
-  /** Buildings, landmark footprints, props and an outer boundary. */
+  /** Buildings, landmark footprints, props, the standing touchables and an outer boundary. */
   colliders: AABB[]
   /** The parked autos, which can be driven away. */
   autos: ParkedAutos
@@ -100,6 +101,8 @@ export async function loadDistrict(id: DistrictId): Promise<District> {
   const signs = buildSignposts(def)
   root.add(signs.group)
   colliders.push(...signs.colliders)
+  // the bells, pumps and diya stands are drawn by the session (touchables.ts); they are solid from here
+  colliders.push(...touchableColliders(def.touchables))
   if (def.roof) {
     root.add(buildRoof(def.roof))
     colliders.push(def.roof.flight)

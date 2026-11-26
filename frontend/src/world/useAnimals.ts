@@ -7,11 +7,15 @@ const NOTICE_MS = 3500
 
 /** The cow's lines, by `line`: she answers a different one each time. */
 const COW_KEYS: StringKey[] = ['animalCow1', 'animalCow2', 'animalCow3', 'animalCow4']
+/** What is said of a cow fed a roti, by `line`. */
+const FED_KEYS: StringKey[] = ['animalFed1', 'animalFed2', 'animalFed3']
 
 /** What the animal UI asks of the city session. */
 export interface AnimalActions {
   callAnimal(): void
   animalHome(): void
+  feedAnimal(): void
+  petAnimal(): void
 }
 
 /** A passing line: which string, and what goes in it. */
@@ -40,10 +44,16 @@ export function useAnimals() {
         if (animal) emitDeed({ kind: 'animal' })
       },
       notice(n) {
-        if (n.kind === 'cow') emitDeed({ kind: 'animal' })
+        if (n.kind !== 'waiting') emitDeed({ kind: 'animal' })
+        // a pat has no line: the emote over the animal says it
+        if (n.kind === 'pet') return
         clearTimeout(timer.current)
         setNotice(
-          n.kind === 'cow' ? { key: COW_KEYS[n.line]! } : { key: 'animalWaiting', vars: { name: n.name } },
+          n.kind === 'cow'
+            ? { key: COW_KEYS[n.line]! }
+            : n.kind === 'fed'
+              ? { key: FED_KEYS[n.line]! }
+              : { key: 'animalWaiting', vars: { name: n.name } },
         )
         timer.current = setTimeout(() => setNotice(null), NOTICE_MS)
       },
@@ -54,6 +64,8 @@ export function useAnimals() {
   const bind = useCallback((a: AnimalActions | null) => void (actions.current = a), [])
   const call = useCallback(() => actions.current?.callAnimal(), [])
   const home = useCallback(() => actions.current?.animalHome(), [])
+  const feed = useCallback(() => actions.current?.feedAnimal(), [])
+  const pet = useCallback(() => actions.current?.petAnimal(), [])
 
-  return { near, following, notice, hooks, bind, call, home }
+  return { near, following, notice, hooks, bind, call, home, feed, pet }
 }

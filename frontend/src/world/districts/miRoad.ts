@@ -275,6 +275,15 @@ const miRoad: DistrictDef = {
     { x: 17, z: 54.5 },
     { x: -18, z: 54.5 },
   ],
+  /**
+   * What answers a touch (touchables.ts): a hand pump on the road's north pavement, the pigeons on the walk before Albert Hall (they are
+   * famous there), and diyas beside the garden walk.
+   */
+  touchables: [
+    { kind: 'pump', at: { x: -14, z: 46 } },
+    { kind: 'pigeons', at: { x: 0, z: 11 } },
+    { kind: 'diyas', at: { x: 14, z: 19.5 }, rot: 90 },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [

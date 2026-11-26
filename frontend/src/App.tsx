@@ -33,6 +33,7 @@ import { EmoteWheel } from './ui/EmoteWheel'
 import { useBench, type BenchNotice } from './world/useBench'
 import { useAnimals } from './world/useAnimals'
 import { useSwaad } from './world/useSwaad'
+import { TOUCH_KEYS, useTouchables } from './world/useTouchables'
 import { hasBandar } from './world/bandar'
 import { bandarText, useBandar } from './world/useBandar'
 import { useCricket } from './world/useCricket'
@@ -184,6 +185,9 @@ export default function App() {
   useEffect(() => {
     if (cricket.near) warmCricket()
   }, [cricket.near])
+  /** The bell, pump or diya stand in reach. */
+  const touch = useTouchables()
+  const { hooks: touchHooks, bind: bindTouch } = touch
   /** The Galta bandar: its passing line and its switch. */
   const bandar = useBandar()
   const { hooks: bandarHooks } = bandar
@@ -411,6 +415,7 @@ export default function App() {
         taxi: taxiHooks,
         animals: animalHooks,
         swaad: swaadHooks,
+        touchables: touchHooks,
         bandar: bandarHooks,
         roof: roofHooks,
         reactions: reactionHooks,
@@ -431,6 +436,7 @@ export default function App() {
     bindTaxi(city)
     bindAnimals(city)
     bindSwaad(city)
+    bindTouch(city)
     bindRoof(city)
     bindReactions(city)
     bindMap({ session: city, stage })
@@ -443,6 +449,7 @@ export default function App() {
       bindMap(null)
       bindReactions(null)
       bindRoof(null)
+      bindTouch(null)
       bindAnimals(null)
       bindSwaad(null)
       bindTaxi(null)
@@ -484,6 +491,8 @@ export default function App() {
     bindAnimals,
     swaadHooks,
     bindSwaad,
+    touchHooks,
+    bindTouch,
     bindMap,
     bindShows,
     roofHooks,
@@ -1028,7 +1037,24 @@ export default function App() {
                         {t(cricket.loading ? 'cricketOpening' : 'cricketStart', lang)}
                       </button>
                     )}
+                  {/* a bell, a pump or diyas in reach: before an animal, as E has it */}
+                  {touch.near &&
+                    !drive.near &&
+                    !nearStation &&
+                    !bench.near &&
+                    !bench.seat &&
+                    !posters.near &&
+                    !near &&
+                    !sheetOpen &&
+                    !card &&
+                    !roof.up &&
+                    !roof.fading && (
+                      <button type="button" className="metro-button touch-button" onClick={touch.touch}>
+                        {t(TOUCH_KEYS[touch.near.kind], lang)}
+                      </button>
+                    )}
                   {animals.near &&
+                    !touch.near &&
                     !drive.near &&
                     !nearStation &&
                     !bench.near &&
@@ -1037,9 +1063,26 @@ export default function App() {
                     !near &&
                     !sheetOpen &&
                     !card && (
-                      <button type="button" className="metro-button animal-button" onClick={animals.call}>
-                        {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
-                      </button>
+                      // two small buttons side by side: come along (or a namaste), and a kindness
+                      <>
+                        {/* the follower is already along: it can be petted, not called */}
+                        {animals.near.id !== animals.following?.id && (
+                          <button
+                            type="button"
+                            className="metro-button animal-button small-button"
+                            onClick={animals.call}
+                          >
+                            {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="metro-button animal-button small-button"
+                          onClick={animals.near.kind === 'cow' ? animals.feed : animals.pet}
+                        >
+                          {t(animals.near.kind === 'cow' ? 'animalFeed' : 'animalPet', lang)}
+                        </button>
+                      </>
                     )}
                   {/* a street show is on (or just over): the clap, unless its own card is up and has it */}
                   {shows.clapFor && !showCardUp && !bench.seat && !near && !sheetOpen && !card && (

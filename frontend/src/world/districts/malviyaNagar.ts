@@ -170,6 +170,14 @@ const malviyaNagar: DistrictDef = {
     { x: 34, z: 50 },
     { x: -10, z: 50 },
   ],
+  /**
+   * What answers a touch (touchables.ts): a hand pump by the road, the pigeons on the plaza, and diyas in the green.
+   */
+  touchables: [
+    { kind: 'pump', at: { x: 18, z: 40 } },
+    { kind: 'pigeons', at: { x: 0, z: 32 } },
+    { kind: 'diyas', at: { x: -12, z: 18 } },
+  ],
   /** Where the street dogs, cats and the district's cow live: open ground, clear of every collider. */
   animals: {
     dogs: [
