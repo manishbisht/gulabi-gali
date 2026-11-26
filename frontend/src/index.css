@@ -766,6 +766,23 @@ button {
   display: contents;
 }
 
+/*
+ * With a mouse there is no joystick (Joystick.tsx draws none), so the stick's column is empty: the chip takes its
+ * own place in the bottom row, and its five open in a line beside it, instead of hanging over the buttons there.
+ */
+@media (pointer: fine) {
+  .stick-column {
+    align-self: flex-end;
+  }
+
+  .emote-wheel {
+    position: static;
+    width: auto;
+    flex-wrap: nowrap;
+    pointer-events: auto;
+  }
+}
+
 .emote-chip,
 .emote-kind {
   flex: none;
