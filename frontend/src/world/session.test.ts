@@ -697,6 +697,14 @@ describe('emotes', () => {
     tick(1 / 30)
     tick(1 / 30)
     expect(figure.position.y).toBe(0)
+    // she sits again, and her page says she got up (a game began where she sat): up at once, with no step
+    ws.say({ t: 'emote', from: 'dev:asha', kind: 'sit' })
+    tick(1)
+    expect(figure.position.y).toBeCloseTo(-0.45)
+    ws.say({ t: 'emote', from: 'dev:asha', kind: 'stop' })
+    tick(1 / 30)
+    expect(figure.position.y).toBe(0)
+    expect(marks()).toEqual([])
     // nobody the street lists, a kind from a newer server, a frame with nothing in it: all let go
     ws.say({ t: 'emote', from: 'dev:stranger', kind: 'dance' })
     ws.say({ t: 'emote', from: 'dev:asha', kind: 'cartwheel' } as unknown as ServerMsg)
@@ -732,7 +740,39 @@ describe('emotes', () => {
     expect(document.querySelectorAll('.emote:not([hidden])')).toHaveLength(0)
     expect(moves()).toHaveLength(before + 1)
     expect(moves().at(-1)).toMatchObject({ x: x + 0.1, z })
-    expect(sentEmotes()).toHaveLength(1)
+    // and that it is over, in so many words: where they stand first, then the stop
+    expect(sentEmotes()).toEqual([
+      { t: 'emote', kind: 'sit' },
+      { t: 'emote', kind: 'stop' },
+    ])
+    expect(ws.sent.slice(-2).map((s) => (JSON.parse(s) as { t: string }).t)).toEqual(['move', 'emote'])
+    // once: nothing more is said while they stand there
+    tick(1 / 60)
+    tick(1 / 60)
+    expect(sentEmotes()).toHaveLength(2)
+    session.dispose()
+  })
+
+  it('an emote whose time is simply up sends no stop, and nor does one the street was never told of', async () => {
+    const { session, ws, welcome, sentEmotes, tick } = await onStreet(false)
+    ws.onopen?.()
+    // a ghost: the emote stays here, and so does its end
+    welcome(false)
+    const player = session.player()!
+    const { x, z } = player.position()
+    expect(session.emote('sit')).toBe(true)
+    tick(1 / 60)
+    player.teleport(x + 0.2, z)
+    tick(1 / 60)
+    expect(sentEmotes()).toEqual([])
+    // seen now: a wave that runs its time
+    welcome(true)
+    tick(1 / 60)
+    expect(session.emote('wave')).toBe(true)
+    tick(1)
+    tick(5)
+    expect(document.querySelectorAll('.emote:not([hidden])')).toHaveLength(0)
+    expect(sentEmotes()).toEqual([{ t: 'emote', kind: 'wave' }])
     session.dispose()
   })
 
@@ -748,11 +788,16 @@ describe('emotes', () => {
     expect(live.session.emote('selfie')).toBe(true)
     live.tick(1 / 30)
     expect(marks()).toBe(1)
-    busy = true // the kite fight begins
+    busy = true // the kite fight begins, where they stand: no step will ever say the pose is over
     live.tick(1 / 30)
     expect(marks()).toBe(0)
     expect(live.session.emote('selfie')).toBe(false)
-    expect(ws.sent.filter((s) => s.includes('"emote"'))).toHaveLength(1)
+    // so the street is told in so many words, once
+    live.tick(1 / 30)
+    expect(ws.sent.filter((s) => s.includes('"emote"')).map((s) => JSON.parse(s) as unknown)).toEqual([
+      { t: 'emote', kind: 'selfie' },
+      { t: 'emote', kind: 'stop' },
+    ])
     busy = false
     expect(live.session.emote('selfie')).toBe(true)
     live.session.dispose()

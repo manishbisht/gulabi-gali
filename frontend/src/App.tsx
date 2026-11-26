@@ -684,9 +684,11 @@ export default function App() {
 
   /**
    * EMOTES: BUSY. The one place that says a game or a ride has the player: add any new one here (a cricket
-   * round, say) with `||`. While it is true no emote begins and one that is playing ends, on the page and for
-   * everyone watching; the session reads it through `emoteBusyRef` and adds what it sees itself (a bench seat,
-   * the wheel, the taxi). Photo mode is deliberately not here: a pose holds for the picture.
+   * round, say) with `||`. While it is true no emote begins, and one that is playing ends: on this page at
+   * once, and for everyone watching as soon as the street's `stop` reaches them (the session sends it when an
+   * emote it told the street of ends early). The session reads this through `emoteBusyRef` and adds what it
+   * sees itself (a bench seat, the wheel, the taxi). Photo mode is deliberately not here: a pose holds for the
+   * picture.
    */
   const emoteBusy = !!kiteFrom || !!cricket.game || !!ride || fading || roof.fading
   useEffect(() => {

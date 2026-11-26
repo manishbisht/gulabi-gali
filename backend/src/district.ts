@@ -23,6 +23,8 @@ import {
   REACTIONS,
   EMOTE_KINDS,
   EMOTE_PER_MINUTE,
+  EMOTE_STOP,
+  EMOTE_STOPS_PER_MINUTE,
   type BenchLine,
   type ClientMsg,
   type DistrictId,
@@ -297,7 +299,7 @@ export function parseClientMsg(text: string): ClientMsg | null {
       // Any short word is a good frame, known or not: a newer page's kind must never count as a strike (five
       // would close its socket). `emote` drops the ones this Worker does not know. Nothing else is read.
       return typeof m.kind === 'string' && m.kind.length <= MAX_EMOTE_KIND
-        ? { t: 'emote', kind: m.kind as EmoteKind }
+        ? { t: 'emote', kind: m.kind as EmoteKind | typeof EMOTE_STOP }
         : null
     case 'ping':
       return { t: 'ping' }
@@ -436,6 +438,8 @@ interface Seat {
 interface EmoteSpend {
   since: number
   n: number
+  /** Stops (`EMOTE_STOP`) in the same minute; left out until there is one. */
+  stops?: number
 }
 
 const fullLanes = (now: number): Record<Lane, Bucket> => ({
@@ -1375,25 +1379,42 @@ export class DistrictDO extends DurableObject<Env> {
    * yet), for a muted one, for a kind this Worker does not know (a newer page's: the frame parsed, so it is
    * no strike), and past `EMOTE_PER_MINUTE` in the minute that began with their first.
    *
+   * `EMOTE_STOP` (their emote ended early) goes by the same rules to the same sockets, from the same people
+   * only. It spends nothing of `EMOTE_PER_MINUTE`; it has its own count in the same minute,
+   * `EMOTE_STOPS_PER_MINUTE`, so it cannot be a way round the cap.
+   *
+   * A move of the sender's still waiting in the batch is sent out first, so every socket hears where the emote
+   * begins (or ended) before the emote itself: pages measure its end from that point.
+   *
    * Nothing is stored and no timer is armed: the allowance is two numbers in the socket's attachment (and in
    * `emoteSpent`, for a new socket of the same person), so this never keeps the object from sleeping.
    */
-  private emote(ws: WebSocket, seat: Seat, kind: EmoteKind, now: number): void {
+  private emote(ws: WebSocket, seat: Seat, kind: EmoteKind | typeof EMOTE_STOP, now: number): void {
     const from = seat.userId
-    if (!(EMOTE_KINDS as readonly string[]).includes(kind)) return
+    const stop = kind === EMOTE_STOP
+    if (!stop && !(EMOTE_KINDS as readonly string[]).includes(kind)) return
     if (!seat.person || !from || !seat.shown || !seat.pos || this.trust.get(from)?.hidden) return
     if (this.muted(from, now)) return
     const live = (s: EmoteSpend | undefined) => (s && now - s.since < EMOTE_WINDOW_MS ? s : undefined)
     const [mine, known] = [live(seat.emotes), live(this.emoteSpent.get(from))]
     // whichever remembers more: the attachment after a sleep, the map after a reconnect
-    const spent = mine && known ? (mine.n >= known.n ? mine : known) : (mine ?? known ?? { since: now, n: 0 })
-    if (spent.n >= EMOTE_PER_MINUTE) return
-    const next = { since: spent.since, n: spent.n + 1 }
+    const all = (s: EmoteSpend) => s.n + (s.stops ?? 0)
+    const spent: EmoteSpend =
+      mine && known ? (all(mine) >= all(known) ? mine : known) : (mine ?? known ?? { since: now, n: 0 })
+    const stops = spent.stops ?? 0
+    if (stop ? stops >= EMOTE_STOPS_PER_MINUTE : spent.n >= EMOTE_PER_MINUTE) return
+    const next: EmoteSpend = stop
+      ? { since: spent.since, n: spent.n, stops: stops + 1 }
+      : { since: spent.since, n: spent.n + 1, ...(stops && { stops }) }
     // senders long quiet are forgotten whenever anyone emotes: the map never outgrows a minute's senders
     for (const [id, s] of this.emoteSpent) if (now - s.since >= EMOTE_WINDOW_MS) this.emoteSpent.delete(id)
     this.emoteSpent.set(from, next)
     seat.emotes = next
     this.write(ws, seat)
+    if (this.dirty.has(ws)) {
+      if (this.batch) clearTimeout(this.batch)
+      this.flush()
+    }
     const text = JSON.stringify({ t: 'emote', from, kind } satisfies ServerMsg)
     const reach = INTEREST_M * INTEREST_M
     for (const other of this.sockets()) {

@@ -58,6 +58,7 @@ const asha: LivePerson = {
 const NEW_FRAMES = [
   { t: 'emote', from: 'dev:asha', kind: 'dance' },
   { t: 'emote', from: 'dev:asha', kind: 'sit' },
+  { t: 'emote', from: 'dev:asha', kind: 'stop' },
   { t: 'emote', from: 'dev:nobody-here', kind: 'wave' },
   { t: 'emote', from: 'dev:asha', kind: 'a-kind-from-the-future' },
   { t: 'emote' },

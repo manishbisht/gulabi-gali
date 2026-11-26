@@ -10,6 +10,7 @@ import { createWeatherFx } from '../live/weatherFx'
 import { getPosters } from '../net/api'
 import { connectLive, type LiveConn, type LiveState } from '../net/live'
 import {
+  EMOTE_STOP,
   REACT_RANGE_M,
   type ClientMsg,
   type DistrictId,
@@ -516,6 +517,8 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
           posterHooks!.left()
         },
       })
+    /** Whether the street was told of the emote the player is playing: only then is it told that it ended. */
+    let told = false
     const emoting = createEmoting({
       host: bubbleHost,
       camera: stage.camera,
@@ -526,9 +529,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       send(kind) {
         // where the emote begins, exactly, before the emote itself: the others end it by a step from there
         presence?.moveNow()
-        presence?.emote(kind)
+        told = presence?.emote(kind) ?? false
       },
-      ended: () => presence?.moveNow(),
+      ended() {
+        // where they stand now, and (if the street was told of the emote) that it is over
+        presence?.moveNow()
+        if (told) presence?.emoteStop()
+        told = false
+      },
     })
     // one live socket per tab: `leave` above closed the last district's before this one opens
     presence =
@@ -1114,8 +1122,13 @@ type Presence = DistrictSystem & {
   react(to: string, kind: Reaction): ReactionRefusal | null
   /** Says where the player stands at once, past the socket's throttle (an emote begins or ends there). */
   moveNow(): void
-  /** Tells the street the player plays `kind`: only a resident others can see, on an open socket, within the allowance. */
-  emote(kind: EmoteKind): void
+  /**
+   * Tells the street the player plays `kind`: only a resident others can see, on an open socket, within the
+   * allowance. True when it went.
+   */
+  emote(kind: EmoteKind): boolean
+  /** Tells the street the player's emote ended before its time. */
+  emoteStop(): void
 }
 
 /**
@@ -1285,8 +1298,12 @@ function createPresence(
     moveNow: () => sendMove(player.position(), true),
     emote(kind) {
       // a ghost's is their own page's alone; past the allowance the server would drop it anyway
-      if (!visible || conn.state() !== 'open' || !emoteAllowance.take(Date.now())) return
+      if (!visible || conn.state() !== 'open' || !emoteAllowance.take(Date.now())) return false
       conn.send({ t: 'emote', kind })
+      return true
+    },
+    emoteStop() {
+      if (visible && conn.state() === 'open') conn.send({ t: 'emote', kind: EMOTE_STOP })
     },
     dispose() {
       conn.close() // its 'closed' stops the stale timer

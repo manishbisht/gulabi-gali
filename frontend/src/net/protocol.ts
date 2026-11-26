@@ -295,8 +295,9 @@ export type ClientMsg =
   /**
    * The sender plays an emote where they stand (see `EMOTE_KINDS`). A `kind` the server does not know (a newer
    * page's) is dropped without a word, never a bad frame; only a `kind` that is not a short string is one.
+   * `EMOTE_STOP` says the sender's emote ended before its time.
    */
-  | { t: 'emote'; kind: EmoteKind }
+  | { t: 'emote'; kind: EmoteKind | typeof EMOTE_STOP }
   | { t: 'ping' }
 
 export type ServerMsg =
@@ -349,9 +350,9 @@ export type ServerMsg =
   /**
    * `from` plays an emote where they stand (see `EMOTE_KINDS`): sent to the sockets that hear `from`'s moves
    * (within 60 m, blocked neither way), never to `from`. Never stored; a page that does not know the kind, or
-   * the message, ignores it.
+   * the message, ignores it. `EMOTE_STOP`: `from`'s emote ended before its time; end it now.
    */
-  | { t: 'emote'; from: string; kind: EmoteKind }
+  | { t: 'emote'; from: string; kind: EmoteKind | typeof EMOTE_STOP }
 
 /** A line said at a bench, as each sitter hears it (and as the district keeps it, in memory only). */
 export type BenchLine = Omit<Extract<ServerMsg, { t: 'bench' }>, 't' | 'bench'>
@@ -383,13 +384,19 @@ export type ReactRefusal = 'far' | 'wait' | 'gone' | 'ghost' | 'muted'
  * Emotes: a resident others can see dances, claps, sits down, poses for a selfie or waves, where they stand, and
  * everyone who is being sent their moves sees it. Nothing of one is ever stored. A ghost's, a hidden person's
  * and a muted one's are never passed on (their own page still plays it), nor is one past `EMOTE_PER_MINUTE`
- * in a minute, counted from the first of them: all dropped without a word. The sender's next step ends it on
- * every page (there is no message for that), so `sit` lasts until they walk on; someone who arrives later
- * does not see an emote that began before they came.
+ * in a minute, counted from the first of them: all dropped without a word. `sit` lasts until the sitter walks
+ * on. An emote that ends before its time (a step, a bench, a game beginning) is told with one more `emote`
+ * frame of kind `EMOTE_STOP`, passed on by the same rules; it costs nothing of `EMOTE_PER_MINUTE` and has its
+ * own cap, `EMOTE_STOPS_PER_MINUTE`, in the same minute. The sender's next step ends it on every page too, so a
+ * lost stop leaves nobody sitting for long. Someone who arrives later does not see an emote that began before
+ * they came.
  */
 export const EMOTE_KINDS = ['dance', 'clap', 'sit', 'selfie', 'wave'] as const
 export type EmoteKind = (typeof EMOTE_KINDS)[number]
 export const EMOTE_PER_MINUTE = 12
+/** Not one of `EMOTE_KINDS` (nobody picks it): the word that an emote ended early. */
+export const EMOTE_STOP = 'stop'
+export const EMOTE_STOPS_PER_MINUTE = 30
 
 /**
  * How the server may end a district socket. A replaced socket lost to a newer one for the same person (another

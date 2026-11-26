@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { EMOTE_KINDS, EMOTE_PER_MINUTE, type EmoteKind } from '../net/protocol'
+import { EMOTE_KINDS, EMOTE_PER_MINUTE, EMOTE_STOP, type EmoteKind } from '../net/protocol'
 import { createEmotes } from './emotes'
 import type { People } from './people'
 import type { Vec2 } from './types'
@@ -31,10 +31,12 @@ const OTHERS_STEP_M = 0.02
 /** Standing: the player moved less than this since the last frame. */
 const STILL_M = 1e-4
 /**
- * Someone else's emote can arrive ahead of the last steps they took before it (their page sends moves at most
- * ten a second, and the district batches them): for this long after it arrives, a step does not end it.
+ * For this long after someone else's emote arrives, a step of theirs does not end it. Their page says where
+ * the emote begins just before it and the district passes that on first, so this covers only what order
+ * cannot: a page or a Worker from before that was so, and frames that overtake each other across a reconnect.
+ * An emote that really ends inside it is ended by its `EMOTE_STOP`.
  */
-export const SETTLE_S = 0.5
+export const SETTLE_S = 0.2
 /** Other people's emotes posed at once; one more takes the place of the one that has played longest. */
 const OTHERS = 12
 /** The player's own, in the marks' pool: no person's id is empty. */
@@ -137,7 +139,10 @@ export interface Emoting {
    * standing, since the next step is what ends it for everyone.
    */
   play(kind: EmoteKind): boolean
-  /** The district socket's word that `from` plays `kind`: only someone the street lists, and a kind we know. */
+  /**
+   * The district socket's word that `from` plays `kind`: only someone the street lists, and a kind we know.
+   * `EMOTE_STOP` ends the one `from` is playing, at once.
+   */
   heard(from: unknown, kind: unknown): void
   /** What plays now: the player's own, and other people's. Allocates; for tests. */
   playing(): { self: EmoteKind | null; others: { id: string; kind: EmoteKind }[] }
@@ -168,8 +173,9 @@ export interface EmotingOptions {
    */
   send(kind: EmoteKind): void
   /**
-   * The player's own emote ended before its time (a step, or `can` turned false): the street must be told
-   * where they stand now, at once, since that move is the only word that it ended.
+   * The player's own emote ended before its time (a step, or `can` turned false): the street must be told so
+   * (`EMOTE_STOP`), and where they stand now, at once. Not called when its time is simply up: every page
+   * counts that for itself.
    */
   ended?(): void
   /** Reduced motion, asked as each emote begins. */
@@ -182,7 +188,7 @@ const prefersStill = () =>
 /**
  * Emotes on the street: the player's own, and those of the people the district socket says are playing one.
  * Each is a mark over the head (the reactions' pooled DOM nodes) and a pose of the whole figure (`emotePose`),
- * until its time is up or its person takes a step: nothing says "stopped", their next move does. A frame costs
+ * until its time is up, its person's page says it stopped (`EMOTE_STOP`) or they take a step. A frame costs
  * a few floats per emote and allocates nothing; nothing is added to the scene, so there is nothing to dispose
  * but the marks.
  */
@@ -249,7 +255,13 @@ export function createEmoting(opts: EmotingOptions): Emoting {
       return true
     },
     heard(from, kind) {
-      if (typeof from !== 'string' || !isEmoteKind(kind)) return
+      if (typeof from !== 'string') return
+      if (kind === EMOTE_STOP) {
+        const playing = others.find((s) => s.id === from)
+        if (playing) release(playing)
+        return
+      }
+      if (!isEmoteKind(kind)) return
       const r = people?.get(from)
       // nobody the street lists (a block, a ghost, the player themself), or someone at a wheel: not drawn
       if (!r || r.person.v === 'auto') return

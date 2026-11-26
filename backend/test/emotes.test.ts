@@ -2,7 +2,13 @@ import { applyD1Migrations, env, evictDurableObject, runInDurableObject } from '
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { EMOTE_WINDOW_MS, INTEREST_M, MAX_BAD_FRAMES, parseClientMsg } from '../src/district'
 import type { Env } from '../src/env'
-import { EMOTE_KINDS, EMOTE_PER_MINUTE, type DistrictId } from '../src/protocol'
+import {
+  EMOTE_KINDS,
+  EMOTE_PER_MINUTE,
+  EMOTE_STOP,
+  EMOTE_STOPS_PER_MINUTE,
+  type DistrictId,
+} from '../src/protocol'
 import { api, closeAll, devId, live, login, resident, type LiveClient } from './helpers'
 
 const testEnv = env as unknown as Env & { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }
@@ -324,6 +330,116 @@ describe('emotes', () => {
     expect(after.awake).toBeNull()
   })
 
+  it('a stop goes exactly where the emote went: near residents and a ghost watching, never the sender, nobody far or blocked', async () => {
+    expect(EMOTE_STOP).toBe('stop')
+    expect((EMOTE_KINDS as readonly string[]).includes(EMOTE_STOP)).toBe(false)
+    const d: DistrictId = 'mi-road'
+    const ta = await resident('Stop Asha')
+    const a = await live(d, { token: ta })
+    a.send({ t: 'move', x: -40, z: -40, ry: 0 })
+    await a.sync()
+    const b = await walker('Stop Bina', d, -38, -40)
+    const far = await walker('Stop Faraway', d, -40 + INTEREST_M + 1, -40)
+    const blocked = await walker('Stop Blocked', d, -39, -39)
+    const ghost = await live(d)
+    ghost.send({ t: 'move', x: -37, z: -40, ry: 0 })
+    await ghost.sync()
+    expect((await block(ta, devId('Stop Blocked'))).status).toBe(204)
+    await blocked.next('leave', (m) => m.id === devId('Stop Asha'))
+    const marks = [a, b, ghost, far, blocked].map((s) => s.mark())
+    a.send({ t: 'emote', kind: 'sit' })
+    a.send({ t: 'emote', kind: EMOTE_STOP })
+    const want = [
+      { t: 'emote', from: devId('Stop Asha'), kind: 'sit' },
+      { t: 'emote', from: devId('Stop Asha'), kind: 'stop' },
+    ]
+    await b.next('emote', (m) => m.kind === EMOTE_STOP, marks[1])
+    await ghost.next('emote', (m) => m.kind === EMOTE_STOP, marks[2])
+    expect(b.all('emote', marks[1])).toEqual(want)
+    expect(ghost.all('emote', marks[2])).toEqual(want)
+    expect(await emotesSeen(far, marks[3])).toEqual([])
+    expect(await emotesSeen(blocked, marks[4])).toEqual([])
+    await a.sync()
+    expect(a.messages.slice(marks[0]).filter((m) => m.t !== 'pong')).toEqual([])
+  })
+
+  it('a stop is taken only from someone who may emote: a ghost, a hidden and a muted person send none', async () => {
+    const d: DistrictId = 'university'
+    const b = await walker('Stopless Bina', d, -40, -40)
+    const anon = await live(d)
+    const th = await resident('Stopless Hema')
+    const tm = await resident('Stopless Mohan')
+    await sql('UPDATE users SET hidden = 1 WHERE id = ?', devId('Stopless Hema'))
+    await sql('UPDATE users SET muted_until = ? WHERE id = ?', Date.now() + 3600_000, devId('Stopless Mohan'))
+    const hidden = await live(d, { token: th })
+    const muted = await live(d, { token: tm })
+    const from = b.mark()
+    for (const s of [anon, hidden, muted]) {
+      s.send({ t: 'move', x: -39, z: -40, ry: 0 })
+      await s.sync()
+      const mark = s.mark()
+      s.send({ t: 'emote', kind: EMOTE_STOP })
+      await s.sync()
+      expect(s.messages.slice(mark).filter((m) => m.t !== 'pong')).toEqual([])
+    }
+    expect(await emotesSeen(b, from)).toEqual([])
+  })
+
+  it(`stops cost nothing of the ${EMOTE_PER_MINUTE} a minute, and have their own cap of ${EMOTE_STOPS_PER_MINUTE}`, async () => {
+    expect(EMOTE_STOPS_PER_MINUTE).toBe(30)
+    const d: DistrictId = 'malviya-nagar'
+    const a = await walker('Capped Asha', d, 60, 60)
+    const b = await walker('Capped Bina', d, 62, 60)
+    const fb = b.mark()
+    const seen = async (kind: 'stop' | 'emote') =>
+      (await emotesSeen(b, fb)).filter((m) => (m.kind === EMOTE_STOP) === (kind === 'stop')).length
+    // in step with the socket's own allowance of frames (20 at once, 10 a second): batches, each waited for
+    const sendStops = async (n: number) => {
+      for (let i = 0; i < n; i += 8) {
+        for (let j = i; j < Math.min(n, i + 8); j++) a.send({ t: 'emote', kind: EMOTE_STOP })
+        await a.sync()
+        await new Promise((r) => setTimeout(r, 900))
+      }
+    }
+    await sendStops(EMOTE_STOPS_PER_MINUTE)
+    expect(await seen('stop')).toBe(EMOTE_STOPS_PER_MINUTE)
+    // thirty stops on, every emote of the minute is still theirs to spend
+    for (let i = 0; i < 8; i++) a.send({ t: 'emote', kind: 'clap' })
+    await a.sync()
+    await new Promise((r) => setTimeout(r, 900))
+    for (let i = 8; i < EMOTE_PER_MINUTE + 2; i++) a.send({ t: 'emote', kind: 'clap' })
+    await a.sync()
+    expect(await seen('emote')).toBe(EMOTE_PER_MINUTE)
+    // and the thirty-first stop of the minute is dropped, without a word
+    const fa = a.mark()
+    await sendStops(3)
+    expect(await seen('stop')).toBe(EMOTE_STOPS_PER_MINUTE)
+    expect(a.messages.slice(fa).filter((m) => m.t !== 'pong')).toEqual([])
+    expect(a.closes).toEqual([])
+    // the minute over, both are back
+    await later(d, EMOTE_WINDOW_MS + 1000, async () => {
+      const mark = b.mark()
+      a.send({ t: 'emote', kind: 'sit' })
+      a.send({ t: 'emote', kind: EMOTE_STOP })
+      await b.next('emote', (m) => m.kind === EMOTE_STOP, mark)
+      expect(b.all('emote', mark).map((m) => m.kind)).toEqual(['sit', 'stop'])
+    })
+  }, 30_000)
+
+  it('where the emote begins is heard before the emote: a move still waiting in the batch goes out first', async () => {
+    const d: DistrictId = 'nahargarh'
+    const a = await walker('Order Asha', d, 40, 40)
+    const b = await walker('Order Bina', d, 42, 40)
+    const fb = b.mark()
+    a.send({ t: 'move', x: 40.03, z: 40, ry: 0 })
+    a.send({ t: 'emote', kind: 'sit' })
+    await b.next('emote', undefined, fb)
+    const heard = b.messages.slice(fb).filter((m) => m.t === 'moves' || m.t === 'emote')
+    // the emote is the last word, and the one before it is where she stood as it began
+    expect(heard.at(-1)!.t).toBe('emote')
+    expect(heard.at(-2)).toEqual({ t: 'moves', m: [[devId('Order Asha'), 40.03, 40, 0]] })
+  })
+
   it("the allowance fits the socket's attachment: the largest seat there can be, emotes and all, still saves (the limit is 2,048 bytes)", async () => {
     const d: DistrictId = 'amer'
     const a = await walker('Roomy Asha', d, 30, 30)
@@ -361,7 +477,7 @@ describe('emotes', () => {
         bench: { id: 'b'.repeat(64), seat: 3 },
         ip: 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff',
         place: 9999,
-        emotes: { since: 1_800_000_000_123, n: EMOTE_PER_MINUTE },
+        emotes: { since: 1_800_000_000_123, n: EMOTE_PER_MINUTE, stops: EMOTE_STOPS_PER_MINUTE },
       }
       const bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length
       // the real test is the runtime's own: it throws past its limit
@@ -380,6 +496,6 @@ describe('emotes', () => {
     // as JSON (a little more than the runtime's own encoding of the same seat): under the limit, with room
     expect(sizes.worst).toBeLessThan(2048)
     // what emotes add to every resident's seat
-    expect(sizes.emotes).toBeLessThan(48)
+    expect(sizes.emotes).toBeLessThan(60)
   })
 })

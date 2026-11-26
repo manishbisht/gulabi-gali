@@ -1025,8 +1025,8 @@ covers nothing beside the joystick. The Escape that shuts the wheel goes no furt
 **Where.** One rule, in the session (`can`, in `session.ts`): on foot on the street, not seated at a bench, at
 the wheel or in a taxi, and not `busy`. `busy` is the page's word for what the session cannot see: a metro
 ride, the kite fight, a fade (`emoteBusy` in `App.tsx`, the one place a new game such as a cricket round is
-added). Where the rule says no, no emote begins, the chip is not shown, and an emote that is playing ends, for
-everyone. Photo mode is the one exception, on purpose: it has no HUD, so none begins there, but a pose already
+added). Where the rule says no, no emote begins, the chip is not shown, and an emote that is playing ends: on
+the player's page at once, and for everyone watching when its `stop` reaches them (see Ending). Photo mode is the one exception, on purpose: it has no HUD, so none begins there, but a pose already
 held stays, so "Selfie pose" (or a seat on the ground) can be photographed. An emote is played standing: while
 the player is walking none begins (nothing is sent, `emoted` is not called), since the next step is what ends
 it.
@@ -1058,24 +1058,32 @@ more than 24 in any 60 s). The page keeps the same count (12 in any minute, per 
 it. Nothing of an emote is stored, in D1 or in storage, and it arms no timer and no alarm: the allowance is two
 numbers in the socket's attachment (and in memory by user id, so a new socket of the same person does not
 refill it), so an emote never keeps a district awake as a reaction does for its minute. A person who leaves a
-district that then sleeps comes back to a fresh allowance; that is accepted. The allowance adds about 41
-bytes to a seat; the largest seat there can be is about 1.4 kB as JSON, under the attachment's 2,048 bytes
-(`backend/test/emotes.test.ts`).
+district that then sleeps comes back to a fresh allowance; that is accepted. The allowance (emotes and
+stops) adds under 60 bytes to a seat; the largest seat there can be is about 1.4 kB as JSON, under the
+attachment's 2,048 bytes (`backend/test/emotes.test.ts`).
 
-**Ending.** No message says an emote stopped. Each plays for its few seconds (`EMOTE_SECONDS`); sitting lasts
-until the sitter walks on. The sender's next step ends it on every page: theirs once they are more than 5 cm
-from where it began, and the others' when that person's next `moves` shows them more than 2 cm from where
-they stood (for the first half second after an emote arrives a step does not count, since the mover's last
-steps before it can arrive after it). So that both measure from the same point, the page says exactly where
-the player stands as an emote begins, and again the moment it ends early, with a move that skips the socket's
-throttle and its 5 cm least step (`LiveConn.send(move, true)`): a nudge can never end an emote here and leave
-it playing for everyone else. Someone who comes into range, or
-connects, after an emote began is not told of it: a late joiner sees a sitter standing until they sit again.
+**Ending.** Each plays for its few seconds (`EMOTE_SECONDS`), which every page counts for itself; sitting
+lasts until the sitter walks on. An emote that ends before its time, for any reason (a step of more than 5 cm
+from where it began, a bench seat, the wheel, a taxi, `busy` turning true), is told: the page sends
+`{t: 'emote', kind: 'stop'}` if the street was told of the emote, the district passes it on by the same rules
+to the same sockets, and each page ends that person's emote at once. A stop spends nothing of the 12 a
+minute; it has its own cap in the same minute (`EMOTE_STOPS_PER_MINUTE`, 30, also in the attachment), and is
+taken only from someone who may emote. Moves end it too, so a stop that is lost or capped leaves nobody
+sitting for long: the others end it when that person's next `moves` shows them more than 2 cm from where they
+stood. So that both sides measure from the same point, the page says exactly where the player stands as an
+emote begins, and again as it ends early, with a move that skips the socket's throttle and its 5 cm least
+step (`LiveConn.send(move, true)`), and the district sends a waiting move of the sender's out before the emote
+itself. For 0.2 s after an emote arrives a step does not count (`SETTLE_S`: for pages and frames that do not
+keep that order); an emote that really ends inside that time is ended by its stop. One case is left: a
+resident past their 12 a minute still plays their own, which nobody was shown, so nothing is told of its end
+either. Someone who comes into range, or connects, after an emote began is not told of it: a late joiner sees
+a sitter standing until they sit again.
 
 **Old pages.** The Worker deploys first, so pages built before emotes get `emote` frames they do not know. An
 unknown `t` falls through that page's whole chain (`people.apply`, `sitting.apply`) untouched: nothing throws
 and nothing is drawn (`net/emoteCompat.test.ts` runs the old chain). So sending is not gated behind a client
-capability, and an old page simply does not see emotes.
+capability, and an old page simply does not see emotes. `stop` is one more kind: a page or a Worker from
+before it lets it go as any kind it does not know (no strike, nothing drawn), and moves still end the emote.
 
 `emoted(kind)` (in `emoting.ts`) is called once each time the player plays one, seen or not; `onEmoted` listens.
 
