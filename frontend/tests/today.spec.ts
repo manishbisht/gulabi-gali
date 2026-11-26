@@ -80,6 +80,69 @@ test("a ghost's goal of the day: the chip and its sheet say it, a photo does it,
   await expect(en).toContainText('3 days in a row · longest 3')
 })
 
+test('an emote day is done by any emote, alone and as a ghost; a taste day at a stall', async ({ page }) => {
+  await page.routeWebSocket(/\/api\/districts\/[^/]+\/live/, () => {})
+  await enter(page, 'emote')
+  const chip = page.locator('.today-chip')
+  await expect(chip).toHaveAttribute(
+    'title',
+    'Aaj ka Darshan: Mood dikhao: naacho, taali bajao ya haath hilao',
+  )
+  await page.getByRole('button', { name: 'Mood dikhao', exact: true }).click()
+  await page.getByRole('group', { name: 'Mood dikhao' }).getByRole('button', { name: 'Haath hilao' }).click()
+  await expect(page.locator('.today-toast')).toHaveText('Aaj ka Darshan ho gaya!')
+  await expect(chip).toHaveAttribute('data-done', '')
+
+  // another day, another goal: Johari Bazaar's tapri serves ghewar
+  await page.evaluate(() => localStorage.removeItem('gg-today'))
+  await enter(page, 'swaad')
+  await expect(chip).toHaveAttribute('title', 'Aaj ka Darshan: Kisi tapri pe Jaipur ka koi swaad chakho')
+  await expect(chip).not.toHaveAttribute('data-done')
+  await page.evaluate(() => window.__gg.teleport(3.8, -40))
+  await page.getByRole('button', { name: 'Chakho', exact: true }).click()
+  await expect(page.locator('.today-toast')).toHaveText('Aaj ka Darshan ho gaya!')
+  await expect(chip).toHaveAttribute('data-done', '')
+})
+
+for (const [lang, come, goal, line] of [
+  [
+    'hi',
+    'Padharo!',
+    'show',
+    'Aaj ka Darshan: Gulabi Shahar, Amer, MI Road ya Nahargarh mein gali ka koi khel poora dekho',
+  ],
+  [
+    'en',
+    'Come in',
+    'cricket',
+    "Today's Darshan: Play an innings of gali cricket in Pink City, MI Road or Malviya Nagar",
+  ],
+] as const)
+  test(`the longest goal (${lang}) says where on the welcome screen, and the way in is still on the phone's screen`, async ({
+    page,
+  }) => {
+    await page.addInitScript((l) => localStorage.setItem('gg-lang', l), lang)
+    await page.goto(`/?gg-test=1&gg-today=${goal}`)
+    const intro = page.locator('.intro-today')
+    await expect(intro).toHaveText(line)
+    const box = (await intro.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(360)
+    expect(await intro.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await expect(page.getByRole('button', { name: come })).toBeInViewport({ ratio: 1 })
+    // and the sheet says how
+    await page.getByRole('button', { name: come }).click()
+    await page.waitForFunction(() => (window as { __gg?: unknown }).__gg !== undefined)
+    await page.locator('.today-chip').click()
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toContainText(
+      lang === 'hi' ? 'ravanhatta MI Road aur Nahargarh mein' : 'Any score counts',
+    )
+    const s = (await sheet.boundingBox())!
+    expect(s.x + s.width).toBeLessThanOrEqual(360)
+    expect(s.y + s.height).toBeLessThanOrEqual(740)
+  })
+
 test('a darshan day is done by reaching that landmark: a link straight to it does it, stamp or no stamp', async ({
   page,
 }) => {
