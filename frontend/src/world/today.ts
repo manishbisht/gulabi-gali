@@ -10,8 +10,24 @@ import { STAMPS } from './stamps'
  * push, no reminder; the chip just shows the day's goal and whether it is done.
  */
 
-/** What a goal asks. `darshan` names a landmark (a stamp id); the rest are things any district has. */
-export type GoalKind = 'darshan' | 'tapri' | 'ride' | 'auto' | 'photo' | 'roof' | 'map' | 'animal'
+/**
+ * What a goal asks. `darshan` names a landmark (a stamp id). `cricket` and `show` are in some districts only
+ * (`todayText.ts` says which, in the goal's own words); the rest are things any district has.
+ */
+export type GoalKind =
+  | 'darshan'
+  | 'tapri'
+  | 'ride'
+  | 'auto'
+  | 'photo'
+  | 'roof'
+  | 'map'
+  | 'animal'
+  | 'cricket'
+  | 'touch'
+  | 'swaad'
+  | 'show'
+  | 'emote'
 
 /**
  * The kinds, in a fixed order the daily pick shuffles. Their ids are stable: never renamed, only added to. Adding
@@ -27,6 +43,11 @@ export const GOAL_KINDS: readonly GoalKind[] = [
   'roof',
   'map',
   'animal',
+  'cricket',
+  'touch',
+  'swaad',
+  'show',
+  'emote',
 ]
 
 /** A day's goal. `id` is the kind, or `darshan:<stamp>` for a landmark. */
@@ -40,7 +61,9 @@ export interface Goal {
 /**
  * Something the player just did, from the existing events (see `deeds.ts`): reaching a landmark's ring, a
  * tapri or bench in reach, a metro or bus ride arrived, an auto ride ended at its stop, a photo taken, up on a
- * rooftop, a place picked on the map, a street animal befriended.
+ * rooftop, a place picked on the map, a street animal befriended; and the things to do (see `funDeeds.ts`): an
+ * innings of gali cricket played out, something touched (a bell, a pump, a diya, an animal fed or petted), a
+ * dish tasted, a street show watched to its end, an emote played.
  */
 export type Deed = { kind: 'darshan'; stamp: string } | { kind: Exclude<GoalKind, 'darshan'> }
 

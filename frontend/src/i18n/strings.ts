@@ -1246,6 +1246,50 @@ export const STRINGS = {
     hi: 'Kutte ya billi ko "Saath chalo" bolo, ya gaay ko namaste karo.',
     en: 'Ask a dog or a cat to "Come along", or greet a cow.',
   },
+  /* The things to do. Cricket and the shows are in some districts only, so their goals say where ({places}). */
+  todayGoalCricket: {
+    hi: '{places} mein gali cricket ki ek paari khelo',
+    en: 'Play an innings of gali cricket in {places}',
+  },
+  todayHintCricket: {
+    hi: 'Gali mein chalk se bani pitch dhoondo, "Cricket khelo" dabao aur paari poori khelo. Run jitne bhi banein, chalega.',
+    en: 'Find the chalked pitch in a lane, press "Play cricket" and bat the innings out. Any score counts.',
+  },
+  todayGoalTouch: {
+    hi: 'Ghanti bajao, hand pump chalao ya kisi jaanwar ko pyaar karo',
+    en: 'Ring a bell, work a hand pump or be kind to a street animal',
+  },
+  todayHintTouch: {
+    hi: 'Har mohalle mein kuch na kuch hai. Gaay ko roti khilana bhi chalega, aur sooraj dhalne ke baad diya jalana bhi.',
+    en: 'Every neighbourhood has something. Feeding the cow a roti counts too, and so does lighting a diya after sunset.',
+  },
+  todayGoalSwaad: {
+    hi: 'Kisi tapri pe Jaipur ka koi swaad chakho',
+    en: 'Taste something of Jaipur at a stall',
+  },
+  todayHintSwaad: {
+    hi: 'Jo tapri kuch parosti hai, uske paas "Chakho" aata hai. Chai har mohalle mein milti hai.',
+    en: 'A stall that serves shows "Taste it" as you walk up. There is chai in every neighbourhood.',
+  },
+  todayGoalShow: {
+    hi: '{places} mein gali ka koi khel poora dekho',
+    en: 'Watch a street show to the end in {places}',
+  },
+  todayHintShow: {
+    hi: 'Kathputli {kathputli} mein hai, ravanhatta {ravanhatta} mein. Paas jaate hi shuru hota hai; aakhri sur tak wahin ruko.',
+    en: 'The kathputli is in {kathputli}, the ravanhatta in {ravanhatta}. It begins as you walk up; stay close until the last note.',
+  },
+  todayGoalEmote: {
+    hi: 'Mood dikhao: naacho, taali bajao ya haath hilao',
+    en: 'Show a mood: dance, clap or wave',
+  },
+  todayHintEmote: {
+    hi: 'Neeche 🙌 dabao (keyboard pe G) aur koi ek chuno. Akele mein bhi chalega.',
+    en: 'Press 🙌 at the bottom (G on a keyboard) and pick one. It counts even with nobody around.',
+  },
+  /** Joins the last of a list of districts in those goals. */
+  todayOr: { hi: 'ya', en: 'or' },
+  todayAnd: { hi: 'aur', en: 'and' },
   todayDone: { hi: 'Aaj ka ho gaya ✓', en: 'Done for today ✓' },
   todayPending: {
     hi: 'Abhi baaki hai. Koi jaldi nahi.',

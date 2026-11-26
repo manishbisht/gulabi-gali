@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { putToday } from '../net/api'
 import type { TodayRecord } from '../net/protocol'
 import { onDeed } from './deeds'
+import { listenForFun } from './funDeeds'
 import {
   advance,
   goalFor,
@@ -168,6 +169,9 @@ export function useToday(account: TodayAccount | null, visible: boolean, overrid
       }),
     [mark, refreshDay],
   )
+
+  // the things to do (cricket, a touch, a taste, a show, an emote) say so as deeds while the goal is listening
+  useEffect(() => listenForFun(), [])
 
   // the toast's time runs only while it can be seen (not in photo mode, not mid-ride)
   useEffect(() => {

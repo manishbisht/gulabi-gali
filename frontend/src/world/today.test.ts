@@ -88,8 +88,38 @@ describe('the goal of the day', () => {
       expect(goalById(bad)).toBeNull()
   })
 
-  it('never asks for another person, a sign-in or the monkey', () => {
-    expect(GOAL_KINDS).toEqual(['darshan', 'tapri', 'ride', 'auto', 'photo', 'roof', 'map', 'animal'])
+  it('never asks for another person, a sign-in or the monkey; kinds are only ever added at the end', () => {
+    expect(GOAL_KINDS).toEqual([
+      'darshan',
+      'tapri',
+      'ride',
+      'auto',
+      'photo',
+      'roof',
+      'map',
+      'animal',
+      // the things to do (2026-11): after the first eight, whose ids an older page still knows
+      'cricket',
+      'touch',
+      'swaad',
+      'show',
+      'emote',
+    ])
+  })
+
+  it("a day's goal is the date's alone: these days stay as they are until a kind or a stamp is added", () => {
+    const ids = ['2026-11-26', '2026-11-27', '2026-11-28', '2026-12-01', '2027-01-14'].map(
+      (d) => goalFor(d).id,
+    )
+    expect(ids).toEqual(['map', 'touch', 'photo', 'roof', 'animal'])
+  })
+
+  it('an id this page does not know (a newer page wrote the link, an older one reads it) is no goal, and nothing breaks', () => {
+    for (const later of ['juggle', 'cricket:lords', 'show:dancers', 'darshan:', ':', 'emote:wave', 'CRICKET'])
+      expect(goalById(later)).toBeNull()
+    // the five new ones are goals now
+    for (const kind of ['cricket', 'touch', 'swaad', 'show', 'emote'])
+      expect(goalById(kind)).toEqual({ id: kind, kind })
   })
 })
 
@@ -102,7 +132,16 @@ describe('doing it', () => {
     { kind: 'roof' },
     { kind: 'map' },
     { kind: 'animal' },
+    { kind: 'cricket' },
+    { kind: 'touch' },
+    { kind: 'swaad' },
+    { kind: 'show' },
+    { kind: 'emote' },
   ]
+  it('every kind but darshan has its deed here', () => {
+    expect(kinds.map((d) => d.kind)).toEqual(GOAL_KINDS.filter((k) => k !== 'darshan'))
+  })
+
   it('each kind is done by its own deed and no other', () => {
     for (const d of kinds) {
       const goal = goalById(d.kind)!
