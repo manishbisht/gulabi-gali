@@ -55,6 +55,8 @@ function kindLine(p: SharedPlace, district: string): string {
       return `The ${p.name.en.toLowerCase()} for ${district} in Gulabi Gali, a walkable, low-poly Jaipur.`
     case 'show':
       return `${SHOW_LINES[p.place] ?? 'A street show'} in ${district}, Gulabi Gali: walk up and it plays for you.`
+    case 'cricket':
+      return `A chalked gali cricket pitch in ${district}, Gulabi Gali: walk up, take the bat and play an innings.`
     case 'viewpoint':
       return `Climb to the ${p.name.en.toLowerCase()} in ${district}, Gulabi Gali, and look out over Jaipur.`
     case 'bench':

@@ -1,7 +1,8 @@
 import type { DistrictId } from '../net/protocol'
 import { SITE_URL } from '../ui/inviteShare'
 import { benchesOf, type Pose } from './benches'
-import type { MapTarget } from './cityMap'
+import { CRICKET_ID, type MapTarget } from './cityMap'
+import { pitchFrame } from './cricketPitch'
 import { PLAYER_RADIUS } from '../player/player'
 import { DISTRICTS, type District } from './district'
 import { wallsOf } from './posters'
@@ -17,7 +18,7 @@ import type { AABB, Vec2 } from './types'
  * stands the visitor at the place (after "Padharo"); a place the district does not have falls back to the
  * normal spawn.
  *
- * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `viewpoint`, `show-<kind>`, `poster-<n>`; a bench or tapri is
+ * Place ids are the map's (see `mapItems`): a landmark's id, `metro`, `viewpoint`, `show-<kind>`, `cricket`, `poster-<n>`; a bench or tapri is
  * `bench-<n>` / `tapri-<n>`, its number as the server counts seats (the map's `<district>:<n>` without the
  * district, which the link already says).
  */
@@ -60,6 +61,9 @@ export function dropPlaceLink(): void {
   url.searchParams.delete(PARAM)
   history.replaceState(history.state, '', url)
 }
+
+/** How far behind the stumps a link to the cricket pitch stands someone: within reach of "Cricket khelo". */
+export const PITCH_BACK = 1.5
 
 /** How far out from a bench's or tapri's middle a link may stand someone: all within reach to sit. */
 const SEAT_OUT = [1.6, 1.9, 2.2] as const
@@ -114,7 +118,7 @@ function besideProp(
  * Where a link to `place` stands the visitor in a district, and the way they face: by a landmark (facing its
  * building) where the
  * auto-taxi sets riders down (in its ring, so its card opens), at the metro station, at a named viewpoint's
- * stair, by a bench or tapri (in
+ * stair, before a street show, behind the stumps of the cricket pitch, by a bench or tapri (in
  * reach to sit) or in front of a poster wall, clear of everything. Null for a place the district does not have,
  * or (never, in the districts as built: see the tests) one with no clear spot by it.
  */
@@ -142,6 +146,15 @@ export function placeSpot(district: Pick<District, 'def' | 'colliders'>, place: 
   if (show) {
     const spot = watchSpot(show)
     return clear(spot.x, spot.z, colliders) ? spot : null
+  }
+  // the cricket pitch: behind the stumps, where the batter would stand, looking down the strip at the bowler
+  // (the pitch's own placement keeps that ground clear), and in reach of "Cricket khelo"
+  if (place === CRICKET_ID) {
+    if (!def.cricket) return null
+    const f = pitchFrame(def.cricket)
+    const x = f.x - f.fx * PITCH_BACK
+    const z = f.z - f.fz * PITCH_BACK
+    return clear(x, z, colliders) ? { x, z, ry: Math.atan2(f.fx, f.fz) } : null
   }
   const seat = /^(bench|tapri)-(\d+)$/.exec(place)
   if (seat) {

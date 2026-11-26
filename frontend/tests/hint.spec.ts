@@ -37,6 +37,7 @@ test.describe('a first visit', () => {
       const close = hint.getByRole('button', { name: 'Samajh gaye, chalo!' })
       await expect(close).toBeFocused()
       await expect(hint).toContainText('joystick') // a touch screen gets the touch wording
+      await expect(hint).toContainText('chai chakho, ghanti bajao, cricket khelo') // and one line of things to do
 
       // nothing of the HUD's is under it: not a chip at the top, not a button or the joystick at the bottom
       const card = await box(hint)

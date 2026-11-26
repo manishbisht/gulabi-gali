@@ -14,7 +14,8 @@ function stageEl(): HTMLElement | null {
 
 /**
  * Three short steps for a first visit, under the HUD once the city is open: how to walk (the joystick on a
- * touch screen, the keys with a keyboard and mouse), sitting on a chai bench, and meeting someone. Not modal:
+ * touch screen, the keys with a keyboard and mouse), sitting on a chai bench, and meeting someone; then one line
+ * saying there are things to do (taste, touch, play). Not modal:
  * the street stays walkable and tappable under it. Focus goes to its button, and to the street when it closes
  * (the button, or Escape). Closed once, `gg-hinted` keeps it closed.
  */
@@ -55,6 +56,7 @@ export function FirstHint({ lang }: { lang: Lang }) {
         <li>{t(touch ? 'hintSitTouch' : 'hintSitKeys', lang)}</li>
         <li>{t(touch ? 'hintMeetTouch' : 'hintMeetMouse', lang)}</li>
       </ol>
+      <p className="first-hint-more">{t('hintMore', lang)}</p>
       <button ref={button} type="button" className="first-hint-close" onClick={close}>
         {t('hintClose', lang)}
       </button>

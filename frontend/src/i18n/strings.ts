@@ -125,6 +125,7 @@ export const STRINGS = {
     hi: 'Link bhej nahi paye. Phir se try karo.',
     en: "Couldn't share the link. Try again.",
   },
+  mapCricket: { hi: 'Gali cricket ki pitch', en: 'Gali cricket pitch' },
   mapBench: { hi: 'Bench {n}', en: 'Bench {n}' },
   mapTapri: { hi: 'Chai ki tapri {n}', en: 'Chai stall {n}' },
   mapPoster: { hi: 'Poster ki deewar {n}', en: 'Poster wall {n}' },
@@ -1000,6 +1001,11 @@ export const STRINGS = {
   hintMeetMouse: {
     hi: 'Kisi insaan pe click karo, phir "Milna hai" se request bhejo.',
     en: 'Click a person, then "Say hello" to send them a request.',
+  },
+  /** One line under the three steps: there are things to do (the stalls, the touchables, gali cricket). */
+  hintMore: {
+    hi: 'Gali mein aur bhi bahut kuch hai: chai chakho, ghanti bajao, cricket khelo.',
+    en: 'There is plenty more in the gali: taste the chai, ring a bell, play cricket.',
   },
   hintClose: { hi: 'Samajh gaye, chalo!', en: "Got it, let's go" },
   patangStart: { hi: 'Patang udao', en: 'Fly a kite' },

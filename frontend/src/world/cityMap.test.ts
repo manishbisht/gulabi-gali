@@ -166,6 +166,24 @@ it('privacy: the map shows only people drawn on the street now; never a ghost, a
   people.dispose()
 })
 
+it('a district with a gali cricket pitch has it on its map, at the middle of the strip; one without has none', () => {
+  expect(mapItems(walledCity, []).filter((i) => i.kind === 'cricket')).toEqual([
+    {
+      id: 'cricket',
+      kind: 'cricket',
+      name: { hi: 'Gali cricket ki pitch', en: 'Gali cricket pitch' },
+      at: {
+        x: (walledCity.cricket!.stumps.x + walledCity.cricket!.bowler.x) / 2,
+        z: walledCity.cricket!.stumps.z,
+      },
+    },
+  ])
+  expect(mapItems(galta, []).some((i) => i.kind === 'cricket')).toBe(false)
+  // every id on a map is its own
+  const ids = mapItems(walledCity, []).map((i) => i.id)
+  expect(new Set(ids).size).toBe(ids.length)
+})
+
 it("a district's street shows are on its map by kind, named in both languages; where there is none, none", () => {
   const show = mapItems(walledCity, []).filter((i) => i.kind === 'show')
   expect(show).toEqual([

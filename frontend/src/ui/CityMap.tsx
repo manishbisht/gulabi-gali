@@ -38,12 +38,13 @@ const GLYPH: Record<MapItemKind, string> = {
   metro: 'M',
   viewpoint: '☀',
   show: '🎭',
+  cricket: '🏏',
   bench: '▬',
   tapri: '☕',
   poster: '▤',
 }
 /** In the page, landmarks first (a screen reader meets them before the benches); CSS stacks them on top. */
-const ORDER: MapItemKind[] = ['landmark', 'metro', 'viewpoint', 'show', 'tapri', 'bench', 'poster']
+const ORDER: MapItemKind[] = ['landmark', 'metro', 'viewpoint', 'show', 'cricket', 'tapri', 'bench', 'poster']
 /** Seats (benches and tapris) listed with the landmarks; the rest fold away under "more". */
 const NEAR_SEATS = 3
 
@@ -51,7 +52,7 @@ const NEAR_SEATS = 3
  * The district from above (north up), drawn from its definition: paving, buildings, landmarks, the metro,
  * benches and tapris, poster walls, you with your heading, and the people the street shows as plain dots.
  * Every place is a button: picking one makes it the compass's target. Every place also has a thumb-sized row in
- * the list under the map, nearest first: the landmarks, the metro, the street shows (🎭) and the nearest seats, then the other seats
+ * the list under the map, nearest first: the landmarks, the metro, the street shows (🎭), the cricket pitch (🏏) and the nearest seats, then the other seats
  * and the poster walls folded away. A 22 px dot among its neighbours is no target for a thumb. Each row has
  * "Bulao" beside it: a link to that place to send someone.
  */
@@ -83,6 +84,7 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
       i.kind === 'metro' ||
       i.kind === 'viewpoint' ||
       i.kind === 'show' ||
+      i.kind === 'cricket' ||
       nearSeats.includes(i),
   )
   const more = byDistance.filter((i) => !listed.includes(i))
@@ -97,8 +99,8 @@ export function CityMap({ def, stamped, read, target, lang, onPick, onClose }: P
         data-target={i.id === target || undefined}
         onClick={() => onPick(i)}
       >
-        {/* a street show's row carries its mark, as its dot on the map does */}
-        {i.kind === 'show' && <span aria-hidden="true">{GLYPH.show} </span>}
+        {/* a street show's row, and the cricket pitch's, carries its mark, as its dot on the map does */}
+        {(i.kind === 'show' || i.kind === 'cricket') && <span aria-hidden="true">{GLYPH[i.kind]} </span>}
         {view ? t('mapAway', lang, { name: label(i), m: Math.round(away(i)) }) : label(i)}
       </button>
       <PlaceInvite district={def.id} place={i} lang={lang} className="map-invite" />

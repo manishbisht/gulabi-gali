@@ -6,7 +6,7 @@ import { linkId } from '../world/placeLink'
 /** A place a link can name: one row of a district's map, under the id its link uses. */
 export interface SharedPlace {
   district: DistrictId
-  /** As in the link (`linkId`): a landmark's id, `metro`, `viewpoint`, `bench-<n>`, `tapri-<n>`, `poster-<n>`. */
+  /** As in the link (`linkId`): a landmark's id, `metro`, `viewpoint`, `show-<kind>`, `cricket`, `bench-<n>`, `tapri-<n>`, `poster-<n>`. */
   place: string
   kind: MapItemKind
   name: { hi: string; en: string }

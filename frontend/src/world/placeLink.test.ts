@@ -3,9 +3,10 @@ import type { DistrictId } from '../net/protocol'
 import { PLAYER_RADIUS } from '../player/player'
 import { BENCH_RANGE, benchesOf } from './benches'
 import { mapItems } from './cityMap'
+import { PITCH_RANGE, pitchColliders, pitchDistance } from './cricketPitch'
 import { DISTRICTS, loadDistrict, type District } from './district'
 import { SITE_URL } from '../ui/inviteShare'
-import { linkId, placeForward, placeSpot, placeUrl, readPlaceLink } from './placeLink'
+import { linkId, PITCH_BACK, placeForward, placeSpot, placeUrl, readPlaceLink } from './placeLink'
 import { WALL_RANGE, wallDistance, wallsOf } from './posters'
 import { NEAR_M, showColliders, showsOf } from './shows'
 import type { AABB, Vec2 } from './types'
@@ -180,6 +181,40 @@ describe.each(DISTRICTS)('%s: every place on its map round-trips to a clear spot
     for (const kind of ['kathputli', 'ravanhatta', 'dancers'])
       if (!showsOf(def).some((s) => s.kind === kind))
         expect(placeSpot(await load(id), `show-${kind}`)).toBeNull()
+  })
+
+  it('the cricket pitch: behind the stumps, in reach to play, looking down the strip; no place where there is none', async () => {
+    const { def, colliders } = await load(id)
+    const items = mapItems(def, []).filter((i) => i.kind === 'cricket')
+    if (!def.cricket) {
+      expect(items).toEqual([])
+      expect(placeSpot(await load(id), 'cricket')).toBeNull()
+      return
+    }
+    expect(items).toHaveLength(1)
+    const back = forwarded(id, linkId(items[0]!))!
+    expect(back).toEqual({ district: id, place: 'cricket' })
+    const spot = placeSpot(await load(id), back.place)!
+    expect(spot).not.toBeNull()
+    // clear of the street and of the pitch's own stumps and bowler (they are among the colliders)
+    for (const c of pitchColliders(def.cricket))
+      expect(colliders.some((o) => o.minX === c.minX && o.minZ === c.minZ)).toBe(true)
+    for (const c of colliders) expect(hits(spot, PLAYER_RADIUS, c)).toBe(false)
+    // "Cricket khelo" is offered there
+    expect(pitchDistance(def.cricket, spot)).toBeCloseTo(PITCH_BACK)
+    expect(pitchDistance(def.cricket, spot)).toBeLessThan(PITCH_RANGE - 0.5)
+    // facing the bowler, the stumps before them
+    const look = { x: Math.sin(spot.ry), z: Math.cos(spot.ry) }
+    const to = { x: def.cricket.bowler.x - spot.x, z: def.cricket.bowler.z - spot.z }
+    expect((look.x * to.x + look.z * to.z) / Math.hypot(to.x, to.z)).toBeGreaterThan(0.99)
+    // the chase camera's line back (7 m), with a metre's margin, clear of every collider
+    for (let d = 1; d <= 7; d++) {
+      const p = { x: spot.x - look.x * d, z: spot.z - look.z * d }
+      expect(
+        colliders.some((c) => hits(p, 1, c)),
+        `${d} m behind`,
+      ).toBe(false)
+    }
   })
 
   it('benches and tapris: in reach to sit ("Baitho" shows), in the clear', async () => {

@@ -50,6 +50,7 @@ it('is a modal dialog named "Map", drawn from the district: its paving, every bu
     walledCity.landmarks.length +
       1 +
       showsOf(walledCity).length +
+      1 + // the gali cricket pitch
       benchesOf(walledCity).length +
       wallsOf(walledCity).length,
   )

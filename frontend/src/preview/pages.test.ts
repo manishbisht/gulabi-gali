@@ -133,6 +133,25 @@ describe('the link preview pages', () => {
     }
   })
 
+  it('a gali cricket pitch has a page too, in the districts that have one', () => {
+    const pitches = places.filter((p) => p.kind === 'cricket')
+    expect(pitches.map((p) => `${p.district}/${p.place}`)).toEqual([
+      'walled-city/cricket',
+      'mi-road/cricket',
+      'malviya-nagar/cricket',
+    ])
+    const meta = metaOf(previewPage(pitches[1]!, has).html)
+    expect(unescape(meta.get('og:title')!)).toBe('Gali cricket ki pitch, MI Road–Raja Park · Gulabi Gali')
+    expect(unescape(meta.get('og:description')!)).toBe(
+      'A chalked gali cricket pitch in MI Road & Raja Park, Gulabi Gali: walk up, take the bat and play an innings. Aao, yahin milte hain!',
+    )
+    for (const p of pitches)
+      expect(
+        unescape(metaOf(previewPage(p, has).html).get('og:description')!).length,
+        p.district,
+      ).toBeLessThanOrEqual(160)
+  })
+
   it('names the landmark, in Hinglish and English where they differ, with a line about it', () => {
     const page = (place: string) => metaOf(pages[places.findIndex((p) => p.place === place)]!.html)
     expect(page('hawa-mahal').get('og:title')).toBe('Hawa Mahal · Gulabi Gali')

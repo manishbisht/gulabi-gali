@@ -429,8 +429,9 @@ button {
   color: var(--plum);
 }
 
-/* A street show (kathputli, ravanhatta, the evening's dancers): its mask on cream, over the seats */
-.map-item[data-kind='show'] {
+/* A street show (kathputli, ravanhatta, the evening's dancers) and the gali cricket pitch: its mark on cream, over the seats */
+.map-item[data-kind='show'],
+.map-item[data-kind='cricket'] {
   z-index: 2;
   width: 26px;
   height: 26px;
@@ -2480,6 +2481,12 @@ small.words-hint {
   display: grid;
   gap: 4px;
   font-size: 0.95rem;
+}
+
+/* one line under the steps: the things to do */
+.first-hint-more {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
 }
 
 .first-hint-close {

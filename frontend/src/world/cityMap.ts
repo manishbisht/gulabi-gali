@@ -15,9 +15,13 @@ import type { AABB, DistrictDef, Vec2 } from './types'
 /** Within this many metres of a target, it has been reached and the compass clears. */
 export const ARRIVE_M = 6
 
-export type MapItemKind = 'landmark' | 'metro' | 'viewpoint' | 'show' | 'bench' | 'tapri' | 'poster'
+export type MapItemKind =
+  'landmark' | 'metro' | 'viewpoint' | 'show' | 'cricket' | 'bench' | 'tapri' | 'poster'
 /** The kinds there are many of in a district, numbered in their names. */
 type Numbered = 'bench' | 'tapri' | 'poster'
+
+/** The cricket pitch's id on the map and in a link: a district has one at most. */
+export const CRICKET_ID = 'cricket'
 
 /** A place on the map that can be picked as the compass's target. */
 export interface MapTarget {
@@ -49,8 +53,8 @@ const named = (kind: Numbered, n?: number): Record<Lang, string> => ({
 
 /**
  * Every place on a district's map: its landmarks (with `stamped`), the metro, a named rooftop viewpoint (at its
- * stair), its street shows (the evening's dancers too, by day: the name says when), its benches and tapris, its
- * poster walls.
+ * stair), its street shows (the evening's dancers too, by day: the name says when), its gali cricket pitch (at
+ * the middle of the strip, under the id `cricket`), its benches and tapris, its poster walls.
  */
 export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[] {
   const count = { bench: 0, tapri: 0 }
@@ -74,6 +78,19 @@ export function mapItems(def: DistrictDef, stamped: readonly string[]): MapItem[
       name: { hi: t(SHOW_TEXT[s.kind].name, 'hi'), en: t(SHOW_TEXT[s.kind].name, 'en') },
       at: s.at,
     })),
+    ...(def.cricket
+      ? [
+          {
+            id: CRICKET_ID,
+            kind: 'cricket',
+            name: { hi: t('mapCricket', 'hi'), en: t('mapCricket', 'en') },
+            at: {
+              x: (def.cricket.stumps.x + def.cricket.bowler.x) / 2,
+              z: (def.cricket.stumps.z + def.cricket.bowler.z) / 2,
+            },
+          } satisfies MapItem,
+        ]
+      : []),
     ...benchesOf(def).map((b): MapItem => ({
       id: b.id,
       kind: b.kind,

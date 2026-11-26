@@ -41,6 +41,23 @@ it('on a first visit: a non-modal dialog with three steps, the keys for a keyboa
   expect(document.activeElement).toBe(d.querySelector('button'))
 })
 
+it('under the steps, one line points at things to do, in either language', () => {
+  mount('hi')
+  let more = dialog()!.querySelector('.first-hint-more')!
+  expect(more.textContent).toBe('Gali mein aur bhi bahut kuch hai: chai chakho, ghanti bajao, cricket khelo.')
+  // a line, not a fourth step: the title still says three
+  expect(dialog()!.querySelectorAll('li')).toHaveLength(3)
+  expect(more.compareDocumentPosition(dialog()!.querySelector('button')!)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  )
+  act(() => root.render(<></>))
+  mount('en')
+  more = dialog()!.querySelector('.first-hint-more')!
+  expect(more.textContent).toBe(
+    'There is plenty more in the gali: taste the chai, ring a bell, play cricket.',
+  )
+})
+
 it('the keyboard line says Shift jogs, in either language', () => {
   mount('en')
   expect(dialog()!.querySelector('li')!.textContent).toMatch(/Hold Shift to jog/)
