@@ -489,18 +489,18 @@ The plan is `docs/superpowers/plans/2026-11-14-phase-4-extras.md`; the schema is
 `backend/migrations/0003_posters.sql`. Two pieces touch the server: the posters, and one flag on the `move`
 message for autos. Everything else is local to the page.
 
-| What           | Frontend                                                                                             | Server                                                                                           |
-| -------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved/posterHidden`, D1 `posters`, `poster_owners` |
-| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                                                       |
-| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                                                             |
-| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                                                             |
-| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                                                       |
-| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                                                             |
-| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                                                             |
-| Reactions      | `world/useReactions.ts`, `world/emotes.ts`, `ui/PersonCard.tsx`, `ui/ReactionToast.tsx`              | `react` / `react-no` frames, `DistrictDO.react` (memory only; see Launch and grow)               |
+| What           | Frontend                                                                                             | Server                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Poster walls   | `world/posters.ts`, `world/usePosters.ts`, `ui/PosterComposer.tsx`, `ui/PosterCard.tsx`              | `posters.ts`, `DistrictDO.posterAdded/posterRemoved/posterHidden`, D1 `posters`, `poster_owners`     |
+| Autos          | `player/vehicle.ts`, `world/driving.ts`, `world/useDrive.ts`, `ui/DriveButtons.tsx`, `audio/horn.ts` | `v: 'auto'` on `move` (a faster speed cap)                                                           |
+| Metro ride     | `world/metroRide.ts`, `ui/MetroRide.tsx`, `world/useTravel.ts`                                       | none                                                                                                 |
+| Street animals | `world/animals.ts`, `world/useAnimals.ts`                                                            | none                                                                                                 |
+| Processions    | `live/procession.ts`, drawn by `live/festivalFx.ts`                                                  | none (the festival comes from `/api/city`)                                                           |
+| Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                                                                 |
+| Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                                                                 |
+| Reactions      | `world/useReactions.ts`, `world/emotes.ts`, `ui/PersonCard.tsx`, `ui/ReactionToast.tsx`              | `react` / `react-no` frames, `DistrictDO.react` (memory only; see Launch and grow)                   |
 | Emotes         | `world/emoting.ts`, `world/useEmotes.ts`, `ui/EmoteWheel.tsx` (marks: `world/emotes.ts`)             | `emote` frames, `DistrictDO.emote` (nothing stored, no timer; the allowance rides in the attachment) |
-| City sounds    | `audio/ambience.ts` (synthesised; follows the sound switch)                                          | none                                                                                             |
+| City sounds    | `audio/ambience.ts` (synthesised; follows the sound switch)                                          | none                                                                                                 |
 
 `world/session.ts` builds each district's systems on enter (animals, the bandar, autos, the poster walls, the
 sky with its festival effects) and disposes them on leave, as for phase 2.

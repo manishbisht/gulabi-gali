@@ -248,7 +248,8 @@ phone, and the kite fight itself from the rooftop (the same game as on the stree
 
 ### Low-end Android: every district
 
-Run 2026-11-25, same machine (Apple M3 Pro, installed Chrome 158, headless, ANGLE/Metal), test-hooks build against
+Run 2026-11-26 (with gali cricket, the touchables, Jaipur ka Swaad, the street shows and emotes in the build), same
+machine (Apple M3 Pro, installed Chrome 158, headless, ANGLE/Metal), test-hooks build against
 a local `wrangler dev` Worker, no residents, no festival. `npm run test:device:lowend` (`DEVICE_PERF_LOWEND=1`): a small
 cheap phone, 360 x 740 CSS px at DPR 2 with a Redmi 9A's Chrome user agent, the CPU slowed 6x, no network throttle (it
 measures drawing, not loading). Every district in `src/world/district.ts`'s `DISTRICTS` (read from the file, so a
@@ -259,20 +260,41 @@ device pixels; draw calls and triangles are the walk's last frame (`__gg.renderI
 
 | District      | From tier | Walkable ms | Frames (12 s) | p50 ms | p95 ms | Over 33 ms | Tier after | Buffer   | Draw calls | Triangles | Textures | Programs | Heap MB | Main thread ms/frame (task, script) |
 | ------------- | --------: | ----------: | ------------: | -----: | -----: | ---------: | ---------: | -------- | ---------: | --------: | -------: | -------: | ------: | ----------------------------------- |
-| Walled City   |         2 |        1505 |           724 |   16.7 |   16.8 |          1 |          2 | 720x1480 |         51 |    67,836 |        4 |       11 |     9.3 | 3.9, 2.6                            |
-|               |         0 |        1543 |           725 |   16.7 |   16.7 |          0 |          0 | 360x740  |         30 |    34,970 |        2 |        7 |    13.4 | 3.2, 1.8                            |
-| MI Road       |         2 |        1144 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         45 |    47,956 |        4 |       11 |     8.9 | 3.3, 2.2                            |
-|               |         0 |        1012 |           725 |   16.7 |   16.7 |          0 |          0 | 360x740  |         25 |    23,082 |        2 |        7 |    10.8 | 3.3, 1.9                            |
-| University    |         2 |         960 |           723 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         38 |    24,880 |        3 |       10 |     9.6 | 2.5, 1.8                            |
-|               |         0 |         791 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         21 |    10,968 |        1 |        6 |     9.0 | 1.8, 1.1                            |
-| Malviya Nagar |         2 |         969 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         44 |    31,420 |        4 |       11 |    11.5 | 3.5, 2.5                            |
-|               |         0 |         912 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         24 |    14,066 |        2 |        7 |     8.9 | 2.2, 1.4                            |
-| Amer          |         2 |         978 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         36 |    29,870 |        4 |       11 |     9.9 | 3.3, 2.0                            |
-|               |         0 |         891 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         19 |    11,614 |        2 |        7 |     9.5 | 2.3, 1.2                            |
-| Nahargarh     |         2 |         871 |           723 |   16.7 |   16.8 |          0 |          2 | 720x1480 |         31 |    21,152 |        3 |       11 |    10.8 | 2.3, 1.6                            |
-|               |         0 |         869 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         18 |    11,674 |        1 |        6 |    10.7 | 2.5, 1.6                            |
-| Galta Ji      |         2 |         992 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         39 |    30,196 |        4 |       13 |    10.2 | 3.4, 2.1                            |
-|               |         0 |        1339 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         27 |    23,538 |        2 |        9 |    11.1 | 2.4, 1.3                            |
+| Walled City   |         2 |        1650 |           725 |   16.7 |   16.7 |          1 |          2 | 720x1480 |         62 |    66,776 |        4 |       16 |    12.4 | 4.4, 3.0                            |
+|               |         0 |        1146 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         40 |    36,760 |        2 |       12 |    12.8 | 3.4, 2.1                            |
+| MI Road       |         2 |        1114 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         54 |    48,648 |        4 |       16 |    10.8 | 3.7, 2.6                            |
+|               |         0 |        1023 |           723 |   16.7 |   16.8 |          0 |          0 | 360x740  |         34 |    24,540 |        2 |       12 |    13.0 | 1.6, 1.1                            |
+| University    |         2 |         841 |           724 |   16.7 |   16.8 |          0 |          2 | 720x1480 |         45 |    26,790 |        3 |       14 |    11.2 | 3.0, 2.2                            |
+|               |         0 |         888 |           722 |   16.7 |   16.7 |          0 |          0 | 360x740  |         27 |    11,918 |        1 |       10 |    10.9 | 2.2, 1.5                            |
+| Malviya Nagar |         2 |         990 |           723 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         50 |    31,218 |        4 |       15 |    11.1 | 3.5, 2.6                            |
+|               |         0 |         967 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         30 |    15,016 |        2 |       11 |    11.2 | 2.2, 1.5                            |
+| Amer          |         2 |         906 |           723 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         44 |    29,740 |        4 |       16 |     9.9 | 1.9, 1.3                            |
+|               |         0 |         872 |           723 |   16.7 |   16.7 |          0 |          0 | 360x740  |         27 |    13,272 |        2 |       12 |    10.3 | 2.0, 1.2                            |
+| Nahargarh     |         2 |         993 |           723 |   16.7 |   16.8 |          0 |          2 | 720x1480 |         40 |    21,650 |        3 |       15 |    12.1 | 3.0, 2.2                            |
+|               |         0 |         937 |           724 |   16.7 |   16.8 |          0 |          0 | 360x740  |         27 |    13,132 |        1 |       11 |    10.0 | 2.8, 1.9                            |
+| Galta Ji      |         2 |        1133 |           724 |   16.7 |   16.7 |          0 |          2 | 720x1480 |         46 |    32,730 |        4 |       16 |    10.5 | 4.3, 2.8                            |
+|               |         0 |        1113 |           725 |   16.7 |   16.7 |          0 |          0 | 360x740  |         32 |    24,696 |        2 |       12 |    12.1 | 4.2, 2.5                            |
+
+**What changed on 2026-11-26 (the things to do).** Against the 2026-11-25 table, frame times did not move: p50
+16.7 ms in every district at both tiers, at most 1 frame of about 725 over 33 ms, the tier kept, heap 10 to 13 MB
+(it was 9 to 13). What did go up is what is drawn. Draw calls at tier 2: Walled City 51 to 62, MI Road 45 to 54,
+University 38 to 45, Malviya Nagar 44 to 50, Amer 36 to 44, Nahargarh 31 to 40, Galta Ji 39 to 46; at tier 0 by 6
+to 10 a district (Walled City 30 to 40). That is the touchables (up to seven calls), a pitch (two), an idle show in
+view (three or four), each drawn again in the shadow pass at tier 2. Shader programs rose from 10 to 13 to 14 to
+16 at tier 2 and from 6 or 7 to 10 to 12 at tier 0. Triangles at tier 2 run from 2% fewer to 8% more (the walk's last frame looks at
+a slightly different street each run); at tier 0 they are 5 to 14% more (Amer 11.6k to 13.3k). So tier 0 is still
+thinner than tier 2 (30 to 40% fewer draw calls, where it was 31 to 47%), but by less than before, and the
+new draw calls are the cost a GPU-bound phone will feel.
+
+The 20x paragraph and "What it shows" below are the 2026-11-25 run's and were not measured again; their draw-call
+and program counts are the old ones.
+
+One caveat on this table: it is the second of two runs. The machine was busy with other work (load average 13 to 17) and the first run drew the Walled City, MI Road, University and Malviya Nagar at 30 fps (p50 33.3 ms, 45 to 61
+frames of about 360 over 33 ms, the tier stepping from 2 to 0), then Amer, Nahargarh and Galta Ji at 60 with no
+frame over. Run again three minutes later, with the load falling, all seven held 60 fps as tabled. Main-thread
+time was 2 to 4 ms a frame in both, so the slow half was not script; it is most likely this machine's GPU being
+shared, but one clean run out of two is not proof, and the four districts that slowed are the four with the most
+new draw calls. The real-phone check in deployment 2h is what settles it.
 
 The same run with the CPU slowed 20x (`DEVICE_PERF_CPU=20`), to look for the point where the main thread alone would
 push the tier down: walkable 2.5 to 5.4 s, p50 still 16.7 ms in every district, 0 to 4 frames over 33 ms of about
