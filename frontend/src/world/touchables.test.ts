@@ -202,6 +202,20 @@ describe('the diyas', () => {
     t.dispose()
   })
 
+  it('flicker only while the player is within 50 m: from further off the stand is left as drawn', () => {
+    const { t, run, mesh } = make({ night: () => true })
+    t.touch(me)
+    const flames = mesh('touchables-flame').instanceMatrix
+    run(0.2, me)
+    const near = flames.version
+    run(0.2, me)
+    expect(flames.version).toBeGreaterThan(near)
+    const far = flames.version
+    run(1, { x: DIYAS.x, z: 60 })
+    expect(flames.version).toBe(far)
+    t.dispose()
+  })
+
   it('stay lit for the visit: leaving the district and coming back finds them burning', () => {
     const memory = createTouchMemory()
     const first = make({ night: () => true, memory })
@@ -279,6 +293,10 @@ describe('the pigeons', () => {
     expect(highest).toBeGreaterThan(0)
     expect(m.state('pigeons').active).toBe(true)
     expect(m.shown('touchables-wing')).toBe(0)
+    // out of the way and the player still among them: nothing is rewritten
+    const drawn = m.mesh('touchables-pigeon').instanceMatrix.version
+    m.run(1, among)
+    expect(m.mesh('touchables-pigeon').instanceMatrix.version).toBe(drawn)
     // every bird moved away from the player, by the same short step
     const moved = places(m).map((p, i) => p.distanceTo(before[i]!))
     for (const d of moved) expect(d).toBeCloseTo(1.5, 5)

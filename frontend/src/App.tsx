@@ -928,13 +928,16 @@ export default function App() {
                     !card && (
                       // two small buttons side by side: come along (or a namaste), and a kindness
                       <>
-                        <button
-                          type="button"
-                          className="metro-button animal-button small-button"
-                          onClick={animals.call}
-                        >
-                          {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
-                        </button>
+                        {/* the follower is already along: it can be petted, not called */}
+                        {animals.near.id !== animals.following?.id && (
+                          <button
+                            type="button"
+                            className="metro-button animal-button small-button"
+                            onClick={animals.call}
+                          >
+                            {t(animals.near.kind === 'cow' ? 'animalGreetCow' : 'animalCall', lang)}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="metro-button animal-button small-button"

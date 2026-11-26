@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { seeded } from './districts/layout'
 import { bakeHex, merge } from './kit/parts'
+import { playTouch, type TouchSound } from '../audio/touch'
 import { moveWithCollision } from './collision'
 import { touched } from './touched'
 import type { QualityTier } from '../engine/stage'
@@ -35,7 +36,10 @@ export interface AnimalInfo {
 }
 /** What the animals tell React; each is called only when its news changes. */
 export interface AnimalHooks {
-  /** The animal (visible, and not the follower) nearest within reach, or null. */
+  /**
+   * The animal (visible, and not the follower) nearest within reach; with none, the follower itself when it is
+   * within reach (it can be petted, not called); or null.
+   */
   near(a: AnimalInfo | null): void
   /** The one following the player, or null. */
   following(a: AnimalInfo | null): void
@@ -312,6 +316,8 @@ export interface AnimalOptions {
   quality?: QualityTier
   /** Defaults to the browser's `prefers-reduced-motion`: then a fed cow and a petted animal hold still. */
   reducedMotion?: boolean
+  /** The sounds (a petted cat's purr); the page's audio by default. */
+  play?(sound: TouchSound): void
 }
 
 /** FNV-1a: the district id as a seed. */
@@ -381,6 +387,7 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
   let quality: QualityTier = opts.quality ?? 2
   let cowLine = 0
   let fedLine = 0
+  const play = opts.play ?? ((s: TouchSound) => void playTouch(s))
   const still =
     opts.reducedMotion ??
     (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -556,6 +563,11 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
     return best
   }
 
+  /** Who the buttons are for: the nearest other animal in reach, else the follower if it is. */
+  const inReach = (pos: Vec2): Animal | null =>
+    nearestAnimal(pos, CALL_RANGE) ??
+    (follower && Math.hypot(follower.x - pos.x, follower.z - pos.z) <= CALL_RANGE ? follower : null)
+
   return {
     update(dt, player) {
       for (const a of animals) {
@@ -576,7 +588,7 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
         if (a.busy > 0) a.busy = Math.max(0, a.busy - dt)
       }
       write()
-      const near = nearestAnimal(player, CALL_RANGE)
+      const near = inReach(player)
       const id = near?.info.id ?? null
       if (id !== nearId) {
         nearId = id
@@ -621,11 +633,13 @@ export function createAnimals(def: DistrictDef, scene: THREE.Object3D, opts: Ani
       return { line }
     },
     pet(pos, id) {
-      const a = id ? byId(id) : nearestAnimal(pos, CALL_RANGE)
+      const a = id ? byId(id) : inReach(pos)
       if (!a || !a.visible || a.info.kind === 'cow') return null
       if (Math.hypot(a.x - pos.x, a.z - pos.z) > CALL_RANGE + 0.5 || a.busy > 0) return null
       a.busy = PET_S
       hooks?.notice({ kind: 'pet', animal: a.info })
+      // a cat purrs; a dog's answer is its wag
+      if (a.info.kind === 'cat') play('purr')
       touched('pet')
       return a.info
     },

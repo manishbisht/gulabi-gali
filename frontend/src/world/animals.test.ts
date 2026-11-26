@@ -56,6 +56,7 @@ const make = (
     memory?: ReturnType<typeof createStationMemory>
     hooks?: AnimalHooks
     reducedMotion?: boolean
+    play?: (sound: string) => void
   } = {},
 ) => {
   const scene = new THREE.Group()
@@ -392,6 +393,40 @@ describe('a kindness for each animal', () => {
     expect(a.pet({ x: 0, z: 6.5 })).toMatchObject({ kind: 'cat' })
     expect(a.pet({ x: 0, z: -4.5 })).toBeNull()
     off()
+    a.dispose()
+  })
+
+  it('a petted cat purrs; a dog does not', () => {
+    const play = vi.fn()
+    const { a } = make({ play })
+    a.freeze(true)
+    expect(a.pet({ x: 1, z: 0 })).toMatchObject({ kind: 'dog' })
+    expect(play).not.toHaveBeenCalled()
+    expect(a.pet({ x: 0, z: 6.5 })).toMatchObject({ kind: 'cat' })
+    expect(play.mock.calls).toEqual([['purr']])
+    a.dispose()
+  })
+
+  it('the follower can be petted too: in reach with no other animal nearer to hand, the buttons are for it', () => {
+    const h = hooks()
+    const { a } = make({ hooks: h })
+    a.freeze(true)
+    const me = { x: 1, z: 0 }
+    a.call(me)
+    const id = a.following()!
+    // out along the street, away from everyone else: the follower is the one in reach
+    walk(a, me, { x: 40, z: 0 }, 12)
+    expect(h.near).toHaveBeenLastCalledWith(expect.objectContaining({ id }))
+    expect(a.pet(me)).toMatchObject({ id })
+    expect(a.following()).toBe(id) // petted, and still along
+    // "Saath chalo" and E are not for it: there is nobody else to call
+    expect(a.call(me)).toBeNull()
+    expect(a.nearest(me, CALL_RANGE)).toBeNull()
+    // beside another animal, the buttons are for that one
+    walk(a, me, { x: 4, z: 6.5 }, 12)
+    expect(h.near).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'walled-city-cat-1' }))
+    walk(a, me, me, PET_S + 0.2)
+    expect(a.pet(me)).toMatchObject({ id: 'walled-city-cat-1' })
     a.dispose()
   })
 

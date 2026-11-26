@@ -121,7 +121,12 @@ export function playTouch(kind: TouchSound, deps: TouchSoundDeps = {}): boolean 
   if (!enabled() || hidden()) return false
   const c = (deps.context ?? (() => sharedAudio() as AmbientCtx | null))()
   if (!c) return false
-  if (c.state !== 'running') void c.resume().catch(() => {})
+  if (c.state !== 'running') {
+    void c.resume().catch(() => {})
+    // the pigeons go up from a walk, not a tap: a context that is not running yet (iOS, before its first
+    // counted gesture) would play their clatter late, whenever it woke. Better silent.
+    if (kind === 'pigeons') return false
+  }
   SOUNDS[kind](c, c.currentTime, deps.random ?? Math.random)
   return true
 }

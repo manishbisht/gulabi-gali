@@ -60,7 +60,7 @@ const SPREAD = 1.8
 const ORBIT = 3.2
 /** Under reduced motion they step this far away from the player instead. */
 const ASIDE = 1.5
-/** A flock further than this from the player is not moved at all. */
+/** A flock further than this from the player is not moved at all, nor a lit stand's flames. */
 const IDLE_BEYOND = 50
 const SWING_S = 3
 const DROPS = 5
@@ -515,6 +515,8 @@ export function createTouchables(
     } else {
       // out of the way while the player is among them, home again once they have gone
       const gone = d > STARTLE_RANGE + REARM_BEYOND
+      // already out of the way, and the player still among them: as drawn
+      if (!gone && fl.k === 1) return
       fl.k = gone ? Math.max(0, fl.k - dt / 1.2) : Math.min(1, fl.k + dt / 0.6)
       if (gone && fl.k === 0) {
         fl.mode = 'ground'
@@ -548,7 +550,14 @@ export function createTouchables(
           f.t += dt
           if (f.t > (f.info.kind === 'bell' ? SWING_S : PUMP_S)) f.t = -1
           writeFixed(f)
-        } else if (f.lit > 0 && !still && quality > 0) writeFlames(f)
+        } else if (
+          f.lit > 0 &&
+          !still &&
+          quality > 0 &&
+          // the flicker is not worth an upload from the far side of the district
+          Math.hypot(f.x - player.x, f.z - player.z) <= IDLE_BEYOND
+        )
+          writeFlames(f)
       }
       for (let i = 0; i < flocks.length; i++) stepFlock(flocks[i]!, dt, player)
       const near = nearest(player, TOUCH_RANGE)

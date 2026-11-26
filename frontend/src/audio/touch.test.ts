@@ -74,14 +74,26 @@ it('is silent, and does not throw, where there is no audio', () => {
   expect(playTouch('pump', deps(null))).toBe(false)
 })
 
-it('wakes a suspended context (the touch follows a tap), and makes the noise once per context', () => {
+it('wakes a suspended context (the touch follows a tap), and makes the noise once per context', async () => {
   const c = new Fake()
   c.state = 'suspended'
   expect(playTouch('pump', deps(c))).toBe(true)
   expect(c.resume).toHaveBeenCalled()
-  playTouch('pigeons', deps(c))
+  await Promise.resolve() // it is running now
+  expect(playTouch('pigeons', deps(c))).toBe(true)
   playTouch('diya', deps(c))
   expect(c.buffers).toBe(1)
+})
+
+it('the pigeons make no late clatter: with the context not running yet, they stay silent', () => {
+  const c = new Fake()
+  c.state = 'suspended'
+  expect(playTouch('pigeons', deps(c))).toBe(false)
+  expect(c.started).toHaveLength(0)
+  expect(c.resume).toHaveBeenCalled()
+  // running, they are heard
+  expect(playTouch('pigeons', deps(c))).toBe(true)
+  expect(c.started.length).toBeGreaterThan(0)
 })
 
 it('the bell is one ring: three partials and nothing repeating', () => {

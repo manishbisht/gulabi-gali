@@ -130,9 +130,18 @@ const SLACK = 10
 /** Each item whole on the screen (with `SLACK` to spare on the right), a thumb's size, and none on another. */
 async function fits(items: Record<string, Locator>) {
   for (const item of Object.values(items)) await expect(item).toBeVisible()
-  const boxes = await Promise.all(
-    Object.entries(items).map(async ([k, l]) => [k, (await l.boundingBox())!] as const),
-  )
+  // A button that appears a moment after another (the follower trotting into reach) pushes that one up a row:
+  // measure once the row has settled, which is two readings alike.
+  const read = async () =>
+    Promise.all(Object.entries(items).map(async ([k, l]) => [k, (await l.boundingBox())!] as const))
+  let boxes = await read()
+  await expect
+    .poll(async () => {
+      const was = JSON.stringify(boxes)
+      boxes = await read()
+      return JSON.stringify(boxes) === was
+    })
+    .toBe(true)
   for (const [k, b] of boxes) {
     expect.soft(b.x, `${k} left`).toBeGreaterThanOrEqual(0)
     expect.soft(b.x + b.width, `${k} right`).toBeLessThanOrEqual(PHONE.width - SLACK)
@@ -158,6 +167,7 @@ test.describe('on a small phone', () => {
   const COPY = {
     hi: {
       call: 'Saath chalo',
+      home: 'Ghar jao',
       pet: 'Pyaar karo',
       greet: 'Gaay ko namaste',
       feed: 'Roti khilao',
@@ -165,6 +175,7 @@ test.describe('on a small phone', () => {
     },
     en: {
       call: 'Come along',
+      home: 'Go home',
       pet: 'Pet',
       greet: 'Greet the cow',
       feed: 'Feed a roti',
@@ -197,6 +208,16 @@ test.describe('on a small phone', () => {
           page.evaluate(() => window.__gg.animals().find((a) => a.id === 'walled-city-dog-0')!.following),
         )
         .toBe(true)
+
+      // away from every other animal the follower is the one in reach: a pat for it, and the way home
+      const home = page.getByRole('button', { name: COPY[lang].home, exact: true })
+      await standBy(page, { x: 2, z: 70 })
+      await fits({ joystick, pet, home })
+      await expect(call).toHaveCount(0)
+      // with it in tow beside a cat: three buttons (come along, a pat, and the follower's way home)
+      const cat = await page.evaluate(() => window.__gg.animals().find((a) => a.id === 'walled-city-cat-0')!)
+      await page.evaluate(({ x, z }) => window.__gg.teleport(x, z + 1.6), cat)
+      await fits({ joystick, call, pet, home })
 
       await standBy(page, BELL, 1.6)
       await fits({ joystick, bell: page.getByRole('button', { name: COPY[lang].bell, exact: true }) })
