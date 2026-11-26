@@ -284,7 +284,7 @@ test.describe('by metro', () => {
     await expect(page.getByRole('button', { name: 'Metro', exact: true })).toBeVisible()
     await page.reload()
     await page.getByRole('button', { name: 'Padharo!' }).click()
-    await expect.poll(() => page.evaluate(() => window.__gg?.district())).toBe('mi-road')
+    await expect.poll(() => page.evaluate(() => window.__gg?.district?.())).toBe('mi-road')
     await expect(page.getByRole('button', { name: /Naksha · MI Road–Raja Park/ })).toBeVisible()
   })
 })
