@@ -172,6 +172,8 @@ const REACT_WINDOW_MS = 60_000
  * cannot be used to learn anything about the target.
  */
 export const REACT_INBOUND_PER_MINUTE = 6
+/** An emote kind in a frame: longer than any we know, or a later Worker is likely to. */
+const MAX_EMOTE_KIND = 16
 /** The window `EMOTE_PER_MINUTE` counts over, from a sender's first emote in it. */
 export const EMOTE_WINDOW_MS = 60_000
 /** The exact ping a client sends, answered at the edge without waking a hibernating object. */
@@ -292,8 +294,9 @@ export function parseClientMsg(text: string): ClientMsg | null {
         : null
     }
     case 'emote':
-      // only a kind we know: anything else is a bad frame, and nothing but the kind is read
-      return (EMOTE_KINDS as readonly unknown[]).includes(m.kind)
+      // Any short word is a good frame, known or not: a newer page's kind must never count as a strike (five
+      // would close its socket). `emote` drops the ones this Worker does not know. Nothing else is read.
+      return typeof m.kind === 'string' && m.kind.length <= MAX_EMOTE_KIND
         ? { t: 'emote', kind: m.kind as EmoteKind }
         : null
     case 'ping':
@@ -1369,13 +1372,15 @@ export class DistrictDO extends DurableObject<Env> {
    * included, as they see the street), and never back to the sender, whose page already plays it. Dropped
    * without a word (the page plays its own regardless, so nothing is told) for anyone who is not a listed
    * resident on the street (a ghost, someone waiting in line, a hidden person, one who has not stepped out
-   * yet), for a muted one, and past `EMOTE_PER_MINUTE` in the minute that began with their first.
+   * yet), for a muted one, for a kind this Worker does not know (a newer page's: the frame parsed, so it is
+   * no strike), and past `EMOTE_PER_MINUTE` in the minute that began with their first.
    *
    * Nothing is stored and no timer is armed: the allowance is two numbers in the socket's attachment (and in
    * `emoteSpent`, for a new socket of the same person), so this never keeps the object from sleeping.
    */
   private emote(ws: WebSocket, seat: Seat, kind: EmoteKind, now: number): void {
     const from = seat.userId
+    if (!(EMOTE_KINDS as readonly string[]).includes(kind)) return
     if (!seat.person || !from || !seat.shown || !seat.pos || this.trust.get(from)?.hidden) return
     if (this.muted(from, now)) return
     const live = (s: EmoteSpend | undefined) => (s && now - s.since < EMOTE_WINDOW_MS ? s : undefined)

@@ -1,6 +1,6 @@
 import { applyD1Migrations, env, evictDurableObject, runInDurableObject } from 'cloudflare:test'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { EMOTE_WINDOW_MS, INTEREST_M, parseClientMsg } from '../src/district'
+import { EMOTE_WINDOW_MS, INTEREST_M, MAX_BAD_FRAMES, parseClientMsg } from '../src/district'
 import type { Env } from '../src/env'
 import { EMOTE_KINDS, EMOTE_PER_MINUTE, type DistrictId } from '../src/protocol'
 import { api, closeAll, devId, live, login, resident, type LiveClient } from './helpers'
@@ -58,16 +58,20 @@ describe('emote frames', () => {
       })
   })
 
-  it('turns away every other kind as a bad frame', () => {
+  it('a kind it does not know is still a good frame (a newer page may send one): any short word parses', () => {
+    for (const kind of ['kiss', 'namaste', 'Dance', '__proto__', '', 'x'.repeat(16)])
+      expect(parseClientMsg(JSON.stringify({ t: 'emote', kind })), kind).toEqual({ t: 'emote', kind })
+  })
+
+  it('only a kind that is no short word is a bad frame', () => {
     for (const bad of [
-      '{"t":"emote","kind":"kiss"}',
-      '{"t":"emote","kind":"namaste"}',
       '{"t":"emote"}',
       '{"t":"emote","kind":5}',
       '{"t":"emote","kind":null}',
+      '{"t":"emote","kind":true}',
       '{"t":"emote","kind":["dance"]}',
-      '{"t":"emote","kind":"Dance"}',
-      '{"t":"emote","kind":"__proto__"}',
+      '{"t":"emote","kind":{"toString":"dance"}}',
+      `{"t":"emote","kind":"${'x'.repeat(17)}"}`,
     ])
       expect(parseClientMsg(bad), bad).toBeNull()
   })
@@ -92,14 +96,23 @@ describe('emotes', () => {
     expect(a.messages.slice(marks[0]).filter((m) => m.t !== 'pong')).toEqual([])
   })
 
-  it('an unknown kind is refused as a bad frame, and reaches nobody', async () => {
+  it('an unknown kind reaches nobody and is no strike: a newer page can send any number and keep its socket', async () => {
     const d: DistrictId = 'walled-city'
     const a = await walker('Odd Asha', d, 20, 20)
     const b = await walker('Odd Bina', d, 22, 20)
     const [fa, fb] = [a.mark(), b.mark()]
-    a.raw('{"t":"emote","kind":"kiss"}')
-    expect(await a.next('error', undefined, fa)).toEqual({ t: 'error', code: 'invalid' })
+    // more than the bad frames in a row that would close a socket, with nothing good in between
+    for (let i = 0; i < MAX_BAD_FRAMES + 2; i++) a.raw('{"t":"emote","kind":"cartwheel"}')
+    await a.sync()
+    expect(a.messages.slice(fa).filter((m) => m.t !== 'pong')).toEqual([])
+    expect(a.closes).toEqual([])
     expect(await emotesSeen(b, fb)).toEqual([])
+    // and the socket is as good as ever: one they both know goes through
+    a.send({ t: 'emote', kind: 'clap' })
+    await b.next('emote', undefined, fb)
+    // a kind that is not a word at all is a bad frame, as ever
+    a.raw('{"t":"emote","kind":5}')
+    expect(await a.next('error', undefined, fa)).toEqual({ t: 'error', code: 'invalid' })
   })
 
   it(`go only as far as moves do: ${INTEREST_M} m from the sender, and not to a socket that has not said where it is`, async () => {
@@ -176,6 +189,11 @@ describe('emotes', () => {
     await m.sync()
     expect(m.messages.slice(fm).filter((x) => x.t !== 'pong')).toEqual([])
     expect(await emotesSeen(b, fb)).toEqual([])
+    // the control: the mute lifted (and the district told, as the admin route tells it), the next one arrives
+    await sql('UPDATE users SET muted_until = NULL WHERE id = ?', devId('Mute Mohan'))
+    await stub(d).refresh(devId('Mute Mohan'), 'mute')
+    m.send({ t: 'emote', kind: 'wave' })
+    expect(await b.next('emote', undefined, fb)).toEqual({ t: 'emote', from: devId('Mute Mohan'), kind: 'wave' })
   })
 
   it('blocks keep both ways apart: neither the one who blocked nor the one blocked sees the other emote', async () => {
@@ -304,5 +322,64 @@ describe('emotes', () => {
     expect(after.kept).toEqual([])
     expect(after.alarm).toBe(alarm)
     expect(after.awake).toBeNull()
+  })
+
+  it("the allowance fits the socket's attachment: the largest seat there can be, emotes and all, still saves (the limit is 2,048 bytes)", async () => {
+    const d: DistrictId = 'amer'
+    const a = await walker('Roomy Asha', d, 30, 30)
+    a.send({ t: 'emote', kind: 'clap' })
+    await a.sync()
+    const sizes = await runInDurableObject(stub(d), (_instance, state) => {
+      const ws = state
+        .getWebSockets()
+        .find((s) => (s.deserializeAttachment() as { userId?: string }).userId === devId('Roomy Asha'))!
+      const real = ws.deserializeAttachment() as Record<string, unknown>
+      // every field at its largest: the longest id, a 24-point name and an 80-point status of four-byte
+      // emoji, a look with every option set, an auto, a bench, an IPv6 address, a flood, and a spent allowance
+      const face = {
+        id: 'u'.repeat(64),
+        name: '🪷'.repeat(24),
+        look: { skin: 4, outfit: 'sandstone', head: 'dupatta', tone: 7, hat: 99, hatC: 99, dup: 99, dupC: 99, hair: 99 },
+        status: '🪷'.repeat(80),
+      }
+      const worst = {
+        ...real,
+        userId: face.id,
+        person: face,
+        shown: true,
+        closed: true,
+        pos: { x: -999.99, z: -999.99, ry: -6.283, v: 'auto', at: 1_800_000_000_123, budget: 23.999999999999996 },
+        seen: 1_800_000_000_123,
+        bad: 4,
+        lanes: {
+          move: { tokens: 14.999999999999998, at: 1_800_000_000_123 },
+          status: { tokens: 0.9999999999999999, at: 1_800_000_000_123 },
+          say: { tokens: 0.9999999999999999, at: 1_800_000_000_123 },
+          other: { tokens: 19.999999999999996, at: 1_800_000_000_123 },
+        },
+        flood: { since: 1_800_000_000_123, at: 1_800_000_000_123 },
+        bench: { id: 'b'.repeat(64), seat: 3 },
+        ip: 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff',
+        place: 9999,
+        emotes: { since: 1_800_000_000_123, n: EMOTE_PER_MINUTE },
+      }
+      const bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length
+      // the real test is the runtime's own: it throws past its limit
+      let saved = true
+      try {
+        ws.serializeAttachment(worst)
+      } catch {
+        saved = false
+      }
+      const back = saved ? bytes(ws.deserializeAttachment()) : 0
+      ws.serializeAttachment(real)
+      return { saved, worst: bytes(worst), back, emotes: bytes({ emotes: worst.emotes }), real: bytes(real) }
+    })
+    expect(sizes.saved, `worst case ${sizes.worst} bytes as JSON`).toBe(true)
+    expect(sizes.back).toBe(sizes.worst)
+    // as JSON (a little more than the runtime's own encoding of the same seat): under the limit, with room
+    expect(sizes.worst).toBeLessThan(2048)
+    // what emotes add to every resident's seat
+    expect(sizes.emotes).toBeLessThan(48)
   })
 })

@@ -20,8 +20,16 @@ export const EMOTE_SECONDS: Record<EmoteKind, number> = {
   selfie: 3,
   wave: 2.4,
 }
-/** A step this long ends an emote: the same least step the socket bothers to send. */
+/** A step this long from where it began ends the player's own emote. */
 const STEP_M = 0.05
+/**
+ * And someone else's, by less: their page says exactly where the emote began as it begins and where they
+ * stand as it ends (see `EmotingOptions.send`, `ended`), so their first step off shows as at least `STEP_M`
+ * less the server's rounding to a centimetre. Anything past this is that step.
+ */
+const OTHERS_STEP_M = 0.02
+/** Standing: the player moved less than this since the last frame. */
+const STILL_M = 1e-4
 /**
  * Someone else's emote can arrive ahead of the last steps they took before it (their page sends moves at most
  * ten a second, and the district batches them): for this long after it arrives, a step does not end it.
@@ -124,8 +132,9 @@ export function createEmoteAllowance(perMinute = EMOTE_PER_MINUTE) {
 
 export interface Emoting {
   /**
-   * Plays `kind` on the player, here and now, and passes it to `send`. False (and nothing happens) when the
-   * player cannot emote now (`can`).
+   * Plays `kind` on the player, here and now, and passes it to `send`. False (and nothing happens: nothing
+   * sent, `emoted` not called) when the player cannot emote now (`can`), or is walking: an emote is played
+   * standing, since the next step is what ends it for everyone.
    */
   play(kind: EmoteKind): boolean
   /** The district socket's word that `from` plays `kind`: only someone the street lists, and a kind we know. */
@@ -147,10 +156,22 @@ export interface EmotingOptions {
   }
   /** The others on the street; null offline, where only the player's own play. */
   people: Pick<People, 'get'> | null
-  /** Whether the player may emote now: on foot, not seated at a bench, at the wheel or in a taxi. */
+  /**
+   * Whether the player may emote now: on foot, not seated at a bench, at the wheel, in a taxi, a ride or a
+   * game. Asked as one begins and every frame one plays: when it turns false, the emote ends.
+   */
   can(): boolean
-  /** Tells the street (a resident others can see, on an open socket); a ghost's stays here. */
+  /**
+   * Tells the street (a resident others can see, on an open socket); a ghost's stays here. It must first say
+   * exactly where the player stands (a move that does not wait for the socket's throttle), so the others
+   * measure the emote's end from the same point this page does.
+   */
   send(kind: EmoteKind): void
+  /**
+   * The player's own emote ended before its time (a step, or `can` turned false): the street must be told
+   * where they stand now, at once, since that move is the only word that it ended.
+   */
+  ended?(): void
   /** Reduced motion, asked as each emote begins. */
   still?(): boolean
 }
@@ -181,6 +202,10 @@ export function createEmoting(opts: EmotingOptions): Emoting {
   }))
   /** Where the player stands this frame, for the mark over their own head. */
   const here = { x: 0, z: 0 }
+  /** Whether the last frame moved the player (NaN until the first frame: standing). */
+  let walking = false
+  let lastX = NaN
+  let lastZ = NaN
   const at = (id: string, out: THREE.Vector3) => {
     if (id === SELF) {
       out.set(here.x, player.elevation(), here.z)
@@ -209,7 +234,7 @@ export function createEmoting(opts: EmotingOptions): Emoting {
 
   return {
     play(kind) {
-      if (!opts.can()) return false
+      if (walking || !opts.can()) return false
       const pos = player.position()
       mine.kind = kind
       mine.t = 0
@@ -248,15 +273,15 @@ export function createEmoting(opts: EmotingOptions): Emoting {
     update(dt, pos) {
       here.x = pos.x
       here.z = pos.z
+      walking = Math.abs(pos.x - lastX) > STILL_M || Math.abs(pos.z - lastZ) > STILL_M
+      lastX = pos.x
+      lastZ = pos.z
       if (mine.kind !== null) {
         mine.t += dt
-        if (
-          !opts.can() ||
-          Math.abs(pos.x - mine.x) > STEP_M ||
-          Math.abs(pos.z - mine.z) > STEP_M ||
-          mine.t >= EMOTE_SECONDS[mine.kind]
-        )
+        if (!opts.can() || Math.abs(pos.x - mine.x) > STEP_M || Math.abs(pos.z - mine.z) > STEP_M) {
           rest()
+          opts.ended?.()
+        } else if (mine.t >= EMOTE_SECONDS[mine.kind]) rest()
         else {
           emotePose(mine.kind, mine.t, mine.still, pose)
           player.setPose(pose.y, pose.spin, pose.lean, pose.sway)
@@ -280,8 +305,8 @@ export function createEmoting(opts: EmotingOptions): Emoting {
         }
         if (
           v === 'auto' ||
-          Math.abs(x - slot.x) > STEP_M ||
-          Math.abs(z - slot.z) > STEP_M ||
+          Math.abs(x - slot.x) > OTHERS_STEP_M ||
+          Math.abs(z - slot.z) > OTHERS_STEP_M ||
           slot.t >= EMOTE_SECONDS[slot.kind]
         ) {
           release(slot)

@@ -474,10 +474,12 @@ Nothing to set, no secret, no migration. Deploy in the usual order: the Worker, 
 - **The Worker** learns one district-socket frame, `emote`, and starts passing emotes on. Until the site is
   out nobody sends one. A page from before the site build that is sent one ignores it (an unknown frame falls
   through its handlers; `frontend/src/net/emoteCompat.test.ts`), so the order does not matter for safety.
-- **The site against an older Worker** (a rollback of the Worker alone): each emote a resident sends is
-  answered `invalid`, as any unknown frame is, and five in a row with no other frame between would close the
-  socket (it reconnects). A walking page's moves come between, but **to roll back, roll back the site first,
-  then the Worker**, as in 2f.
+- **The site against a Worker from before emotes** (a rollback of the Worker alone): each emote a resident
+  sends is answered `invalid`, as any unknown frame is, and five in a row with no other frame between would
+  close the socket (it reconnects). A walking page's moves come between, but **to roll back, roll back the site first, then the Worker**, as in 2f.
+- **Later emote kinds need no order.** From this Worker on, a kind it does not know is a good frame that is
+  quietly dropped, never a strike, and a page draws only the kinds it knows: a new kind can ship site first
+  or Worker first.
 - No Durable Object time is added while nobody emotes; an emote costs one message in, a small write to the
   socket's attachment, and one small message out per socket in range. No timer, no alarm, no storage.
 

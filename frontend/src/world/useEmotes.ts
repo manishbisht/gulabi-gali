@@ -4,8 +4,8 @@ import { EMOTE_KINDS, type EmoteKind } from '../net/protocol'
 /**
  * The emote wheel as the page sees it: whether it is open, and picking one (which plays it and closes the
  * wheel). `can`: the player may emote now (on foot on the street); when not, the wheel is shut and the keys do
- * nothing. Keys: G opens and closes it, 1 to 5 pick while it is open and Escape shuts it; never while a text
- * field has the keys or a dialog is up.
+ * nothing. Keys: G opens and closes it, 1 to 5 pick while it is open and Escape shuts it (and that Escape goes
+ * no further); never while a text field has the keys or a dialog is up.
  */
 export function useEmotes(can: boolean, play: (kind: EmoteKind) => boolean) {
   const [wanted, setOpen] = useState(false)
@@ -29,12 +29,18 @@ export function useEmotes(can: boolean, play: (kind: EmoteKind) => boolean) {
       if (document.querySelector('[role="dialog"]')) return
       if (e.code === 'KeyG') return setOpen((was) => !was)
       if (!open) return
-      if (e.code === 'Escape') return setOpen(false)
+      if (e.code === 'Escape') {
+        // this Escape shut the wheel and nothing else: no hint, card or sheet behind it hears it too
+        e.preventDefault()
+        e.stopPropagation()
+        return setOpen(false)
+      }
       const kind = /^Digit[1-9]$/.test(e.code) ? EMOTE_KINDS[Number(e.code.slice(5)) - 1] : undefined
       if (kind) pick(kind)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // on the way down (capture), so stopping an Escape here keeps it from every listener below
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [can, open, pick])
 
   const toggle = useCallback(() => setOpen((was) => !was), [])

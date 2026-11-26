@@ -98,6 +98,25 @@ it('G opens and shuts it, 1 to 5 pick while it is open, Escape shuts it', () => 
   expect(kinds()).toHaveLength(0)
 })
 
+it("the Escape that shuts the wheel goes no further; with the wheel shut, Escape is everyone else's", () => {
+  show()
+  const heard = vi.fn()
+  window.addEventListener('keydown', heard)
+  key('KeyG')
+  heard.mockClear()
+  const esc = new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true, cancelable: true })
+  act(() => void document.body.dispatchEvent(esc))
+  expect(kinds()).toHaveLength(0)
+  expect(heard).not.toHaveBeenCalled()
+  expect(esc.defaultPrevented).toBe(true)
+  // shut: the next Escape is not the wheel's, and passes untouched
+  const next = new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true, cancelable: true })
+  act(() => void document.body.dispatchEvent(next))
+  expect(heard).toHaveBeenCalledTimes(1)
+  expect(next.defaultPrevented).toBe(false)
+  window.removeEventListener('keydown', heard)
+})
+
 it('the keys keep out of a text field, a shortcut with a modifier, a held key and an open dialog', () => {
   show()
   const input = document.body.appendChild(document.createElement('input'))

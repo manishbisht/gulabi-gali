@@ -50,6 +50,30 @@ function live(onMsg = vi.fn(), onReplaced = vi.fn(), token = async (): Promise<s
   return { conn, onMsg, onReplaced }
 }
 
+it('a move that must not wait goes past the throttle and the least step, unless it says nothing new', async () => {
+  const { conn } = live()
+  await vi.advanceTimersByTimeAsync(0)
+  last().open()
+  const moves = () => last().sent.filter((s) => s.includes('"move"')).map((s) => JSON.parse(s) as { x: number })
+  conn.send({ t: 'move', x: 1, z: 0, ry: 0 })
+  expect(moves()).toHaveLength(1)
+  // 3 cm on, a moment later: the throttle and the least step both hold an ordinary move back
+  conn.send({ t: 'move', x: 1.03, z: 0, ry: 0 })
+  expect(moves()).toHaveLength(1)
+  conn.send({ t: 'move', x: 1.03, z: 0, ry: 0 }, true)
+  expect(moves().map((m) => m.x)).toEqual([1, 1.03])
+  // exactly what was last sent: nothing to say, even in a hurry
+  conn.send({ t: 'move', x: 1.03, z: 0, ry: 0 }, true)
+  expect(moves()).toHaveLength(2)
+  // and the throttle counts from it, as from any move (a ghost's socket here: 2 a second)
+  conn.send({ t: 'move', x: 2, z: 0, ry: 0 })
+  expect(moves()).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(500)
+  conn.send({ t: 'move', x: 2, z: 0, ry: 0 })
+  expect(moves().map((m) => m.x)).toEqual([1, 1.03, 2])
+  conn.close()
+})
+
 it('builds the socket URL from the API base, with the token only when there is one', () => {
   expect(liveUrl('mi-road', null)).toBe('ws://127.0.0.1:8787/api/districts/mi-road/live')
   expect(liveUrl('mi-road', 'a b')).toBe('ws://127.0.0.1:8787/api/districts/mi-road/live?token=a%20b')

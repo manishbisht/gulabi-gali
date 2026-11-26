@@ -706,6 +706,57 @@ describe('emotes', () => {
     expect(document.querySelectorAll('.emote')).toHaveLength(0)
   })
 
+  it('says exactly where it begins and where it ends: a 5 cm nudge that ends it here is told to the street at once', async () => {
+    const { session, ws, welcome, sentEmotes, tick } = await onStreet(true)
+    ws.onopen?.()
+    welcome(true)
+    const player = session.player()!
+    const moves = () =>
+      ws.sent.filter((s) => s.includes('"move"')).map((s) => JSON.parse(s) as { x: number; z: number })
+    const { x, z } = player.position()
+    // 4 cm on from the point the welcome's move said: too small a step for the socket to bother with
+    player.teleport(x + 0.04, z)
+    tick(1 / 60)
+    tick(1 / 60)
+    expect(moves()).toHaveLength(1)
+    // the emote says where it begins first, then itself
+    expect(session.emote('sit')).toBe(true)
+    expect(moves().at(-1)).toMatchObject({ x: x + 0.04, z })
+    expect(ws.sent.slice(-2).map((s) => (JSON.parse(s) as { t: string }).t)).toEqual(['move', 'emote'])
+    tick(1 / 60)
+    // 6 cm more, within the same tenth of a second: it ends here, and the street is told now, not later
+    const before = moves().length
+    player.teleport(x + 0.1, z)
+    tick(1 / 60)
+    expect(document.querySelectorAll('.emote:not([hidden])')).toHaveLength(0)
+    expect(moves()).toHaveLength(before + 1)
+    expect(moves().at(-1)).toMatchObject({ x: x + 0.1, z })
+    expect(sentEmotes()).toHaveLength(1)
+    session.dispose()
+  })
+
+  it('a game or a ride the page says is on (`emotes.busy`) lets none begin and ends the one playing; photo mode is not one', async () => {
+    let busy = false
+    const live = openLive(async () => 'tok', { emotes: { busy: () => busy } })
+    loads[0]!.resolve(fakeDistrict(walledCity))
+    await settle()
+    const ws = sockets()[0]!
+    ws.onopen?.()
+    ws.say({ t: 'welcome', you: { id: 'dev:me', visible: true }, people: [] })
+    const marks = () => document.querySelectorAll('.emote:not([hidden])').length
+    expect(live.session.emote('selfie')).toBe(true)
+    live.tick(1 / 30)
+    expect(marks()).toBe(1)
+    busy = true // the kite fight begins
+    live.tick(1 / 30)
+    expect(marks()).toBe(0)
+    expect(live.session.emote('selfie')).toBe(false)
+    expect(ws.sent.filter((s) => s.includes('"emote"'))).toHaveLength(1)
+    busy = false
+    expect(live.session.emote('selfie')).toBe(true)
+    live.session.dispose()
+  })
+
   it('there is no emote from a bench seat', async () => {
     const { session, ws, welcome, sentEmotes } = await onStreet(true)
     ws.onopen?.()

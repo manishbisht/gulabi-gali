@@ -137,6 +137,12 @@ export interface SessionHooks {
   roof?: RoofHooks
   /** Greetings: one that reached the player, one of theirs that went, or one refused (see useReactions). Needs `presence`. */
   reactions?: ReactionHooks
+  /**
+   * Emotes: `busy` is true while something the session cannot see has the player (a ride's coach, the kite
+   * fight, any other game): no emote begins, and one that is playing ends. Photo mode is not busy: a pose
+   * holds for the picture.
+   */
+  emotes?: { busy(): boolean }
 }
 
 export interface CitySessionOptions {
@@ -455,8 +461,14 @@ export function createCitySession(opts: CitySessionOptions): CitySession {
       camera: stage.camera,
       player,
       people,
-      can: () => !player.driving() && !taxi.riding() && !sitting?.seated(),
-      send: (kind) => presence?.emote(kind),
+      // the one rule for where an emote may begin and go on (App's chip follows the same, see `canEmote`)
+      can: () => !player.driving() && !taxi.riding() && !sitting?.seated() && !hooks.emotes?.busy(),
+      send(kind) {
+        // where the emote begins, exactly, before the emote itself: the others end it by a step from there
+        presence?.moveNow()
+        presence?.emote(kind)
+      },
+      ended: () => presence?.moveNow(),
     })
     // one live socket per tab: `leave` above closed the last district's before this one opens
     presence =
@@ -970,6 +982,8 @@ type Presence = DistrictSystem & {
   send(m: ClientMsg): void
   open(): boolean
   react(to: string, kind: Reaction): ReactionRefusal | null
+  /** Says where the player stands at once, past the socket's throttle (an emote begins or ends there). */
+  moveNow(): void
   /** Tells the street the player plays `kind`: only a resident others can see, on an open socket, within the allowance. */
   emote(kind: EmoteKind): void
 }
@@ -1036,7 +1050,7 @@ function createPresence(
   const offQuality = stage.onQuality(shadows)
   /** Reused for every frame's move: the socket copies what it sends. */
   const move: Extract<ClientMsg, { t: 'move' }> = { t: 'move', x: 0, z: 0, ry: 0 }
-  const sendMove = (pos: Vec2) => {
+  const sendMove = (pos: Vec2, now = false) => {
     if (taxi.riding()) return
     move.x = pos.x
     move.z = pos.z
@@ -1045,7 +1059,7 @@ function createPresence(
     move.v = player.driving() ? 'auto' : undefined
     // a jog asks for the jog's allowance, so a stall while jogging is not pulled back (never relayed)
     move.pace = player.jogging() ? 'jog' : undefined
-    conn.send(move)
+    conn.send(move, now)
   }
   const onMsg = (m: ServerMsg) => {
     if (m.t === 'error' && m.code === 'too-fast') return player.teleport(m.x, m.z, m.ry)
@@ -1138,6 +1152,7 @@ function createPresence(
       conn.send({ t: 'react', to, kind })
       return null
     },
+    moveNow: () => sendMove(player.position(), true),
     emote(kind) {
       // a ghost's is their own page's alone; past the allowance the server would drop it anyway
       if (!visible || conn.state() !== 'open' || !emoteAllowance.take(Date.now())) return

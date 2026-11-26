@@ -292,7 +292,10 @@ export type ClientMsg =
   | { t: 'status'; text: string }
   /** A greeting to the resident `to`, with no chat (see `REACTIONS`). Any other `kind` is a bad frame. */
   | { t: 'react'; to: string; kind: Reaction }
-  /** The sender plays an emote where they stand (see `EMOTE_KINDS`). Any other `kind` is a bad frame. */
+  /**
+   * The sender plays an emote where they stand (see `EMOTE_KINDS`). A `kind` the server does not know (a newer
+   * page's) is dropped without a word, never a bad frame; only a `kind` that is not a short string is one.
+   */
   | { t: 'emote'; kind: EmoteKind }
   | { t: 'ping' }
 

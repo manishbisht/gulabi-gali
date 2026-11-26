@@ -112,6 +112,7 @@ const asha: LivePerson = {
 }
 
 function street(over: { can?: () => boolean; still?: () => boolean; offline?: boolean } = {}) {
+  const ended = vi.fn()
   const scene = new THREE.Scene()
   const people = createPeople(scene)
   people.apply({ t: 'welcome', you: { id: 'dev:me', visible: true }, people: [asha] })
@@ -134,6 +135,7 @@ function street(over: { can?: () => boolean; still?: () => boolean; offline?: bo
     people: over.offline ? null : people,
     can: over.can ?? (() => true),
     send,
+    ended,
     still: over.still ?? (() => false),
   })
   /** A frame, as the session runs one: the people first, then the emotes. */
@@ -144,7 +146,7 @@ function street(over: { can?: () => boolean; still?: () => boolean; offline?: bo
   const marks = () =>
     [...host.querySelectorAll<HTMLElement>('.emote')].filter((el) => !el.hidden).map((el) => el.textContent)
   const figure = () => people.get('dev:asha')!.avatar
-  return { people, emoting, player, send, tick, marks, at, figure, host }
+  return { people, emoting, player, send, ended, tick, marks, at, figure, host }
 }
 
 describe("the player's own emote", () => {
@@ -183,6 +185,55 @@ describe("the player's own emote", () => {
     tick(1 / 60)
     expect(emoting.playing().self).toBeNull()
     expect(player.setPose).toHaveBeenLastCalledWith(0, 0, 0, 0)
+  })
+
+  it('is played standing: while the player walks none begins, nothing is sent and the hook is not called', () => {
+    const { emoting, send, tick, marks, at } = street()
+    const heard = vi.fn()
+    const off = onEmoted(heard)
+    tick(1 / 60)
+    // the stick is held: each frame moves them on
+    for (let i = 0; i < 3; i++) {
+      at.x += 4 / 60
+      tick(1 / 60)
+      expect(emoting.play('sit'), `frame ${i}`).toBe(false)
+    }
+    expect(send).not.toHaveBeenCalled()
+    expect(heard).not.toHaveBeenCalled()
+    expect(emoting.playing().self).toBeNull()
+    expect(marks()).toEqual([])
+    // let go: the next frame finds them standing, and it plays
+    tick(1 / 60)
+    expect(emoting.play('sit')).toBe(true)
+    expect(send).toHaveBeenCalledExactlyOnceWith('sit')
+    off()
+  })
+
+  it('says so when it ends early (a step, or somewhere it may not go on), and not when its time is simply up', () => {
+    let ok = true
+    const { emoting, ended, tick, at } = street({ can: () => ok })
+    emoting.play('wave')
+    tick(EMOTE_SECONDS.wave + 0.1)
+    expect(emoting.playing().self).toBeNull()
+    expect(ended).not.toHaveBeenCalled()
+    // the smallest step that ends one: just past 5 cm from where it began
+    emoting.play('sit')
+    tick(1)
+    at.x += 0.05
+    tick(1 / 60)
+    expect(emoting.playing().self).toBe('sit')
+    at.x += 0.002
+    tick(1 / 60)
+    expect(emoting.playing().self).toBeNull()
+    expect(ended).toHaveBeenCalledTimes(1)
+    tick(1 / 60)
+    emoting.play('sit')
+    ok = false
+    tick(1 / 60)
+    expect(ended).toHaveBeenCalledTimes(2)
+    // and only once each
+    tick(1 / 60)
+    expect(ended).toHaveBeenCalledTimes(2)
   })
 
   it('cannot start, and does not go on, where the player may not emote (a bench, a wheel, a taxi)', () => {
@@ -241,6 +292,20 @@ describe("someone else's emote", () => {
     tick(1 / 60)
     expect(figure().position.y).toBe(0)
     expect(figure().rotation.x).toBe(0)
+  })
+
+  it("ends on the smallest step their page ends its own by, as the server rounds it: 5 cm less a centimetre's rounding", () => {
+    const { emoting, people, tick } = street()
+    emoting.heard('dev:asha', 'sit')
+    tick(SETTLE_S + 0.1)
+    // the same point said again (a reconnect's first move) is no step
+    people.apply({ t: 'moves', m: [['dev:asha', 3, 0, 0]] })
+    tick(1 / 60)
+    expect(emoting.playing().others).toHaveLength(1)
+    // 5.2 cm from where it began, heard as 4.5 cm at the worst rounding at both ends
+    people.apply({ t: 'moves', m: [['dev:asha', 3.045, 0, 0]] })
+    tick(1 / 60)
+    expect(emoting.playing().others).toEqual([])
   })
 
   it('the last steps they took before it, arriving just after, do not end it', () => {

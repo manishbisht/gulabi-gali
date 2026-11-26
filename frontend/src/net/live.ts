@@ -19,8 +19,12 @@ const PING = '{"t":"ping"}'
 export type LiveState = 'connecting' | 'open' | 'closed'
 
 export interface LiveConn {
-  /** Sent only while open. A `move` may be held back by the throttle; the next one carries the news. */
-  send(m: ClientMsg): void
+  /**
+   * Sent only while open. A `move` may be held back by the throttle; the next one carries the news. `now`: a
+   * move that must not wait (an emote begins or ends where the player stands): it goes at once, however small
+   * the step and however soon after the last, unless it says exactly what the last one sent did.
+   */
+  send(m: ClientMsg, now?: boolean): void
   /** For good: no reconnect follows. */
   close(): void
   /** `connecting` covers the wait before a reconnect; `closed` is only ever final. */
@@ -160,14 +164,18 @@ export function connectLive(opts: LiveOptions): LiveConn {
   void open()
 
   return {
-    send(m) {
+    send(m, urgent = false) {
       if (state !== 'open' || !ws) return
       if (m.t === 'move') {
         const now = Date.now()
-        if (now - sentAt < moveMs) return
-        const moved = Math.hypot(m.x - sentX, m.z - sentZ)
-        // NaN (nothing sent yet) compares false both ways, so the first move always goes
-        if (moved <= MOVE_MIN_M && turn(m.ry, sentRy) <= MOVE_MIN_TURN && m.v === sentV) return
+        if (urgent) {
+          if (m.x === sentX && m.z === sentZ && m.ry === sentRy && m.v === sentV) return
+        } else {
+          if (now - sentAt < moveMs) return
+          const moved = Math.hypot(m.x - sentX, m.z - sentZ)
+          // NaN (nothing sent yet) compares false both ways, so the first move always goes
+          if (moved <= MOVE_MIN_M && turn(m.ry, sentRy) <= MOVE_MIN_TURN && m.v === sentV) return
+        }
         sentAt = now
         sentX = m.x
         sentZ = m.z

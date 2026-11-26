@@ -249,6 +249,8 @@ export default function App() {
   /** The city session, while the stage is up; it re-paints the sky when a new snapshot lands. */
   const session = useRef<CitySession | null>(null)
   const playEmote = useCallback((kind: EmoteKind) => session.current?.emote(kind) ?? false, [])
+  /** Whether something the session cannot see has the player (see `emoteBusy` below, where it is decided). */
+  const emoteBusyRef = useRef(false)
   useEffect(() => session.current?.repaint(), [snapshot])
   const lookKey = profileLook && figureKey(profileLook)
   useEffect(() => {
@@ -391,6 +393,7 @@ export default function App() {
         bandar: bandarHooks,
         roof: roofHooks,
         reactions: reactionHooks,
+        emotes: { busy: () => emoteBusyRef.current },
         place: (def) => {
           setPlace(def ? def.name : 'failed')
           if (def) setHere(def.id)
@@ -606,18 +609,22 @@ export default function App() {
       />
     )
 
-  /** Emotes (the chip over the joystick, G): on foot on the street, not in a game, a ride or photo mode. */
+  /**
+   * EMOTES: BUSY. The one place that says a game or a ride has the player: add any new one here (a cricket
+   * round, say) with `||`. While it is true no emote begins and one that is playing ends, on the page and for
+   * everyone watching; the session reads it through `emoteBusyRef` and adds what it sees itself (a bench seat,
+   * the wheel, the taxi). Photo mode is deliberately not here: a pose holds for the picture.
+   */
+  const emoteBusy = !!kiteFrom || !!ride || fading || roof.fading
+  useEffect(() => {
+    emoteBusyRef.current = emoteBusy
+  }, [emoteBusy])
+  /**
+   * The chip over the joystick, and G: wherever the session lets an emote begin (not busy, not seated, not at
+   * the wheel or in a taxi), and not in photo mode, which has no HUD (a pose already held stays for the photo).
+   */
   const canEmote =
-    entered &&
-    typeof place !== 'string' &&
-    !drive.driving &&
-    !bench.seat &&
-    !kiteFrom &&
-    !photo &&
-    !ride &&
-    !taxi.riding &&
-    !fading &&
-    !roof.fading
+    entered && typeof place !== 'string' && !emoteBusy && !drive.driving && !bench.seat && !taxi.riding && !photo
   const emotes = useEmotes(canEmote, playEmote)
 
   /** "Bulao" (as an icon: the cards' rows are full) for a place in the district the player is in, by its map id. */
