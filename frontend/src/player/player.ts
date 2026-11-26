@@ -47,7 +47,16 @@ export type Pilot = (dt: number, to: Pose) => void
 /** Owns the avatar and the chase camera: input (the view's turn first), then collision, then avatar and camera. */
 export function createPlayer({ scene, camera, controls, look, colliders, occluders }: Options) {
   let avatar = buildAvatar(look)
+  // the heading first, then a pose's lean and sway about the body's own axes (see `setPose`)
+  avatar.rotation.order = 'YXZ'
   scene.add(avatar)
+  /**
+   * An emote's pose, drawn over the body and nothing more (see world/emoting.ts): `heading()` and the point the
+   * server is told never include it, and the camera does not ride its bob.
+   */
+  const pose = { y: 0, spin: 0 }
+  /** Faces the body along `ry`, under whatever turn a pose adds. */
+  const face = (ry: number) => void (avatar.rotation.y = ry + pose.spin)
   /** Up on a roof (see world/rooftop.ts): the body stands at `y`, and only `walls` hold it in. */
   let floor: Floor | null = null
   /** What the camera keeps out of: on a roof, all but the building underfoot (its footprint holds the player). */
@@ -78,13 +87,25 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     }
     // at the wheel the view comes back round behind the auto (it faces `heading`) when left alone
     follow.update(avatar.position, dt, driving && frame ? vehicle.heading + Math.PI : undefined)
+    avatar.position.y += pose.y
   }
   sync(0)
 
   return {
     position: (): Vec2 => ({ ...pos }),
     /** Which way the avatar faces, in radians about y (0 faces +z). */
-    heading: (): number => avatar.rotation.y,
+    heading: (): number => avatar.rotation.y - pose.spin,
+    /**
+     * Draws the body `y` metres up (or down), turned `spin` on from its heading, leaning `lean` and swaying
+     * `sway` (radians): an emote's pose. All zeros stands it straight again. Called every frame of an emote, so
+     * it allocates nothing.
+     */
+    setPose(y: number, spin: number, lean: number, sway: number) {
+      avatar.position.y += y - pose.y
+      avatar.rotation.set(lean, avatar.rotation.y - pose.spin + spin, sway)
+      pose.y = y
+      pose.spin = spin
+    },
     /**
      * Where the camera looks: yaw (0 along -z, positive turned left) and pitch (positive up), in radians, and
      * its zoom (its distance as a multiple of the usual one).
@@ -93,9 +114,9 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
     /** Stands the player at (x, z), facing `ry` if given. */
     teleport(x: number, z: number, ry?: number) {
       pos = { x, z }
-      if (ry !== undefined) avatar.rotation.y = ry
+      if (ry !== undefined) face(ry)
       // a correction from the server stops a driven auto where it is put
-      if (driving) vehicle.reset(x, z, avatar.rotation.y)
+      if (driving) vehicle.reset(x, z, avatar.rotation.y - pose.spin)
       sync(1) // dt of 1 s: the camera is effectively there too
     },
     /** Turns the view to look the way a heading `ry` faces (as `teleport` takes it); a `teleport` after snaps it. */
@@ -125,7 +146,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       driving = true
       pos = { x, z }
       vehicle.reset(x, z, ry)
-      avatar.rotation.y = vehicle.heading
+      face(vehicle.heading)
       if (!ride) {
         ride = new THREE.Mesh(buildAutoGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true }))
         ride.castShadow = true
@@ -144,7 +165,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       next(0, steer)
       pos = { x: steer.x, z: steer.z }
       vehicle.reset(steer.x, steer.z, steer.ry)
-      avatar.rotation.y = vehicle.heading
+      face(vehicle.heading)
       // the shortest turn round to behind the auto (it faces `heading`, the view looks along -z at yaw 0)
       const back = vehicle.heading + Math.PI - follow.yaw()
       follow.turn(Math.atan2(Math.sin(back), Math.cos(back)), 0)
@@ -175,7 +196,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
       const old = avatar
       avatar = buildAvatar(next)
       avatar.position.copy(old.position)
-      avatar.rotation.copy(old.rotation)
+      avatar.rotation.copy(old.rotation) // its order too
       avatar.visible = old.visible
       scene.remove(old) // shared geometry and material: nothing to dispose
       scene.add(avatar)
@@ -190,13 +211,13 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         pos.x = steer.x
         pos.z = steer.z
         vehicle.reset(steer.x, steer.z, steer.ry)
-        avatar.rotation.y = vehicle.heading
+        face(vehicle.heading)
       } else if (driving) {
         // the stick is the wheel and the pedal here, not a direction on the street
         const want = vehicle.update(controls.drive(), dt)
         moveWithCollision(pos, want, colliders, AUTO_RADIUS, pos)
         vehicle.commit(pos.x, pos.z)
-        avatar.rotation.y = vehicle.heading
+        face(vehicle.heading)
       } else {
         const input = controls.move()
         if (input.x === 0 && input.z === 0) return sync(dt, true)
@@ -212,7 +233,7 @@ export function createPlayer({ scene, camera, controls, look, colliders, occlude
         const speed = jogged ? JOG_SPEED : WALK_SPEED
         const step = { x: dx * speed * dt, z: dz * speed * dt }
         pos = moveWithCollision(pos, step, floor ? floor.walls : colliders, PLAYER_RADIUS)
-        avatar.rotation.y = Math.atan2(dx, dz)
+        face(Math.atan2(dx, dz))
       }
       sync(dt, true)
     },

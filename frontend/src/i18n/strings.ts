@@ -1279,6 +1279,13 @@ export const STRINGS = {
   holdDownload: { hi: 'Download karo', en: 'Download' },
   /** The share sheet refused a picture that took a while to make: a fresh tap here opens it. */
   shareAgain: { hi: 'Share karo', en: 'Share' },
+  /** Emotes: the chip over the joystick and its five (see world/emoting.ts). Others near see a resident's. */
+  emoteOpen: { hi: 'Mood dikhao', en: 'Show a mood' },
+  emoteDance: { hi: 'Naacho', en: 'Dance' },
+  emoteClap: { hi: 'Taali', en: 'Clap' },
+  emoteSit: { hi: 'Baith jao', en: 'Sit down' },
+  emoteSelfie: { hi: 'Selfie pose', en: 'Selfie pose' },
+  emoteWave: { hi: 'Haath hilao', en: 'Wave' },
   holdAlt: { hi: 'Aapki banayi tasveer', en: 'The picture you made' },
   holdClose: { hi: 'Band karo', en: 'Close' },
   /* Real phones (src/pwa): the home-screen hint, and the welcome screen's note inside an app's own browser. */

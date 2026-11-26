@@ -499,6 +499,7 @@ message for autos. Everything else is local to the page.
 | Kite fight     | `games/patang.ts`, `games/patangView.ts`, `ui/Patang.tsx`                                            | none                                                                                             |
 | Galta bandar   | `world/bandar.ts`, `world/useBandar.ts`                                                              | none                                                                                             |
 | Reactions      | `world/useReactions.ts`, `world/emotes.ts`, `ui/PersonCard.tsx`, `ui/ReactionToast.tsx`              | `react` / `react-no` frames, `DistrictDO.react` (memory only; see Launch and grow)               |
+| Emotes         | `world/emoting.ts`, `world/useEmotes.ts`, `ui/EmoteWheel.tsx` (marks: `world/emotes.ts`)             | `emote` frames, `DistrictDO.emote` (nothing stored, no timer; the allowance rides in the attachment) |
 | City sounds    | `audio/ambience.ts` (synthesised; follows the sound switch)                                          | none                                                                                             |
 
 `world/session.ts` builds each district's systems on enter (animals, the bandar, autos, the poster walls, the
@@ -882,6 +883,70 @@ page keeps, in memory only, whom it greeted (so the card rests its buttons as th
 it in the last five minutes: the third greeting from the same person in that time turns the toast into a block
 offer ("Block karo"), which goes through the same `BlockConfirm` as anywhere else (with "also report") and
 stays up until it is used, dismissed or 10 s pass.
+
+### Emotes others can see (`DistrictDO.emote`, `frontend/src/world/emoting.ts`)
+
+One chip over the joystick's corner ("Mood dikhao", or G) opens five thumb-sized buttons above the stick:
+Naacho, Taali, Baith jao, Selfie pose, Haath hilao (1 to 5 on a keyboard; Escape shuts it). The chip is out of
+the bottom row's layout and never wider than the stick's column, so it adds nothing to the HUD's top rows and
+covers nothing beside the joystick. The Escape that shuts the wheel goes no further.
+
+**Where.** One rule, in the session (`can`, in `session.ts`): on foot on the street, not seated at a bench, at
+the wheel or in a taxi, and not `busy`. `busy` is the page's word for what the session cannot see: a metro
+ride, the kite fight, a fade (`emoteBusy` in `App.tsx`, the one place a new game such as a cricket round is
+added). Where the rule says no, no emote begins, the chip is not shown, and an emote that is playing ends, for
+everyone. Photo mode is the one exception, on purpose: it has no HUD, so none begins there, but a pose already
+held stays, so "Selfie pose" (or a seat on the ground) can be photographed. An emote is played standing: while
+the player is walking none begins (nothing is sent, `emoted` is not called), since the next step is what ends
+it.
+
+**What is drawn.** The figures are one merged mesh each, with no limbs to pose, so an emote is the existing kind
+of mark over the head (the reactions' pooled DOM nodes, `emotes.ts`) plus a pose of the whole body
+(`emotePose`): a slow ghoomar turn (two turns, a small rise on the beat), a clapping bounce, a seat lowered onto
+the ground, a lean back for the selfie, a sway for the wave. With `prefers-reduced-motion` nothing turns,
+bounces or sways: only the held poses (the seat, the lean) are kept, with the mark. The player's own pose is
+drawn over the body only (`Player.setPose`): the heading and the point told to the server never include it, and
+the camera does not ride the bob. Others' are set on the avatar inside each person's body group, after
+`people.update` has put the body where it stands. A frame costs a few floats per emote and allocates nothing;
+nothing is added to the scene, at most 12 others are posed at once, and leaving a district disposes only the
+marks. There is nothing to thin at quality tier 0.
+
+**Who sees it.** The player's own plays at once, always, for a ghost too. Only a resident others can see (as
+the socket's last welcome said) sends `{t: 'emote', kind}`; the district passes `{t: 'emote', from, kind}` to
+exactly the sockets that are sent that person's moves: they have said where they are, stand within 60 m
+(`INTEREST_M`) of the sender's last accepted point, and are blocked neither way with them (ghosts watching
+included, as they see the street), and never back to the sender. The page draws it only for someone its street
+lists and a kind it knows.
+
+**Rules, all on the server.** Everything that may not go is dropped without a word, since the sender's page
+plays its own regardless and there is nothing to tell: a kind this Worker does not know (any string of up to
+16 characters is a good frame, so a newer page's new kind is never a strike; only a `kind` that is not a short
+string is `invalid`), a ghost, someone waiting in line, a hidden person, a resident who has not stepped onto
+the street, a muted one, and anything past `EMOTE_PER_MINUTE` (12) in the minute that began with the sender's first (so never
+more than 24 in any 60 s). The page keeps the same count (12 in any minute, per visit) and does not send past
+it. Nothing of an emote is stored, in D1 or in storage, and it arms no timer and no alarm: the allowance is two
+numbers in the socket's attachment (and in memory by user id, so a new socket of the same person does not
+refill it), so an emote never keeps a district awake as a reaction does for its minute. A person who leaves a
+district that then sleeps comes back to a fresh allowance; that is accepted. The allowance adds about 41
+bytes to a seat; the largest seat there can be is about 1.4 kB as JSON, under the attachment's 2,048 bytes
+(`backend/test/emotes.test.ts`).
+
+**Ending.** No message says an emote stopped. Each plays for its few seconds (`EMOTE_SECONDS`); sitting lasts
+until the sitter walks on. The sender's next step ends it on every page: theirs once they are more than 5 cm
+from where it began, and the others' when that person's next `moves` shows them more than 2 cm from where
+they stood (for the first half second after an emote arrives a step does not count, since the mover's last
+steps before it can arrive after it). So that both measure from the same point, the page says exactly where
+the player stands as an emote begins, and again the moment it ends early, with a move that skips the socket's
+throttle and its 5 cm least step (`LiveConn.send(move, true)`): a nudge can never end an emote here and leave
+it playing for everyone else. Someone who comes into range, or
+connects, after an emote began is not told of it: a late joiner sees a sitter standing until they sit again.
+
+**Old pages.** The Worker deploys first, so pages built before emotes get `emote` frames they do not know. An
+unknown `t` falls through that page's whole chain (`people.apply`, `sitting.apply`) untouched: nothing throws
+and nothing is drawn (`net/emoteCompat.test.ts` runs the old chain). So sending is not gated behind a client
+capability, and an old page simply does not see emotes.
+
+`emoted(kind)` (in `emoting.ts`) is called once each time the player plays one, seen or not; `onEmoted` listens.
 
 ### City sounds (`frontend/src/audio/ambience.ts`)
 

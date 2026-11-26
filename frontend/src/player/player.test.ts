@@ -288,3 +288,50 @@ it('on autopilot (the auto-taxi) the auto goes where the pilot says, not the sti
   player.dispose()
   controls.dispose()
 })
+
+describe("an emote's pose", () => {
+  it('is drawn on the body only: the heading told to the server never turns with it, and the camera does not bob', () => {
+    const scene = new THREE.Scene()
+    const controls = createControls(new EventTarget() as unknown as Window)
+    const camera = new THREE.PerspectiveCamera()
+    const player = createPlayer({
+      scene,
+      camera,
+      controls,
+      look: { skin: 0, outfit: 'pink', head: 'none' },
+      colliders: [],
+    })
+    player.teleport(3, 4, 1)
+    const body = scene.children[0] as THREE.Mesh
+    const eye = camera.position.clone()
+    player.setPose(-0.45, 2, -0.1, 0.2)
+    expect(player.heading()).toBeCloseTo(1)
+    expect(body.rotation.y).toBeCloseTo(3)
+    expect(body.rotation.x).toBeCloseTo(-0.1)
+    expect(body.rotation.z).toBeCloseTo(0.2)
+    expect(body.position.y).toBeCloseTo(-0.45)
+    // frames go by with the stick at rest: the pose holds, the heading and the point do not drift
+    for (let i = 0; i < 5; i++) player.update(1 / 60)
+    expect(player.heading()).toBeCloseTo(1)
+    expect(body.position.y).toBeCloseTo(-0.45)
+    expect(player.position()).toEqual({ x: 3, z: 4 })
+    expect(camera.position.y).toBeCloseTo(eye.y)
+    // a new pose replaces the old, it does not add to it
+    player.setPose(0.05, 0.5, 0, 0)
+    expect(body.rotation.y).toBeCloseTo(1.5)
+    expect(body.position.y).toBeCloseTo(0.05)
+    // a teleport faces the body where it says, under the pose
+    player.teleport(0, 0, 2)
+    expect(player.heading()).toBeCloseTo(2)
+    // a change of look keeps the pose, and standing straight again leaves the body as it was
+    player.setLook({ skin: 4, outfit: 'teal', head: 'safa' })
+    const next = scene.children[0] as THREE.Mesh
+    expect(next.rotation.y).toBeCloseTo(2.5)
+    player.setPose(0, 0, 0, 0)
+    expect(next.rotation.toArray().slice(0, 3)).toEqual([0, 2, 0])
+    expect(next.position.y).toBe(0)
+    expect(player.heading()).toBe(2)
+    player.dispose()
+    controls.dispose()
+  })
+})
